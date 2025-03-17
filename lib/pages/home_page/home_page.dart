@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
+import '../../shared/widgets/add_issue_dialog.dart';
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -21,7 +23,7 @@ class _HomePageState extends State<HomePage>
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 1500),
       vsync: this,
     )..repeat();
   }
@@ -39,7 +41,7 @@ class _HomePageState extends State<HomePage>
       hasBeenEvaluated = true;
     });
     // Stop animation when evaluated
-    _animationController.stop();
+    //_animationController.stop();
   }
 
   @override
@@ -179,7 +181,22 @@ class _HomePageState extends State<HomePage>
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          _showAddIssueDialog(context);
+          showDialog(
+            context: context,
+            builder: (context) {
+              return AddIssueDialog(
+                onSubmit: (issue, details) {
+                  // Handle submission here
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Problema aggiunto: $issue'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                },
+              );
+            },
+          );
         },
         backgroundColor: Colors.blue,
         child: const Icon(Icons.add),
@@ -199,113 +216,5 @@ class _HomePageState extends State<HomePage>
       // Solid green or red after evaluation
       return isObjectOK ? Colors.green : Colors.red;
     }
-  }
-
-  void _showAddIssueDialog(BuildContext context) {
-    // List of preset issues
-    final List<String> presetIssues = [
-      'Superficie danneggiata',
-      'Dimensioni errate',
-      'Problemi di assemblaggio',
-      'Colore non conforme',
-      'Componente mancante',
-      'Altro'
-    ];
-
-    String? selectedIssue;
-    String additionalInfo = '';
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Aggiungi Problema',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Seleziona il tipo di problema:'),
-                    const SizedBox(height: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade400),
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        hint: const Text("Seleziona un problema"),
-                        value: selectedIssue,
-                        underline: Container(),
-                        items: presetIssues
-                            .map<DropdownMenuItem<String>>((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
-                        onChanged: (String? value) {
-                          setState(() {
-                            selectedIssue = value;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Informazioni aggiuntive:'),
-                    const SizedBox(height: 8),
-                    TextField(
-                      decoration: InputDecoration(
-                        hintText: "Descrivi il problema in dettaglio",
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                      ),
-                      maxLines: 3,
-                      onChanged: (value) {
-                        additionalInfo = value;
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Annulla'),
-                ),
-                ElevatedButton(
-                  onPressed: selectedIssue == null
-                      ? null
-                      : () {
-                          // Here you would normally save the issue
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content:
-                                  Text('Problema aggiunto: $selectedIssue'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
-                          Navigator.of(context).pop();
-
-                          // After adding an issue, mark the object as defective
-                          _evaluateObject(false);
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    disabledBackgroundColor: Colors.grey,
-                  ),
-                  child: const Text('Aggiungi'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 }

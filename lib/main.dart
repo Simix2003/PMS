@@ -1,20 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'pages/dashboard/dashboard.dart';
-import 'package:simple_secure_storage/simple_secure_storage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  if (kIsWeb) {
-    await SimpleSecureStorage.initialize(WebInitializationOptions(
-      keyPassword: 'S3cur3Master36!2025',
-      encryptionSalt: 'IXMonitorSalt123!',
-    ));
-  } else {
-    await SimpleSecureStorage.initialize();
-  }
-
+  print('Running MyApp');
   runApp(const MyApp());
 }
 
@@ -23,6 +12,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('Building MyApp');
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'IX-Monitor',

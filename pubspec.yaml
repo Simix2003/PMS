@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   simple_secure_storage: ^0.3.2
   awesome_dialog: ^3.2.1
+  localstorage: ^5.0.0
 
 dev_dependencies:
   flutter_test:

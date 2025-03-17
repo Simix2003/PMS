@@ -1,9 +1,20 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 
 class AddIssueDialog extends StatefulWidget {
   final void Function(String issue, String details) onSubmit;
+  final bool isEditing;
+  final String? initialIssue;
+  final String? initialDetails;
 
-  const AddIssueDialog({super.key, required this.onSubmit});
+  const AddIssueDialog({
+    super.key,
+    required this.onSubmit,
+    this.isEditing = false,
+    this.initialIssue,
+    this.initialDetails,
+  });
 
   @override
   State<AddIssueDialog> createState() => _AddIssueDialogState();
@@ -23,11 +34,18 @@ class _AddIssueDialogState extends State<AddIssueDialog> {
   String additionalInfo = '';
 
   @override
+  void initState() {
+    super.initState();
+    selectedIssue = widget.initialIssue;
+    additionalInfo = widget.initialDetails ?? '';
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text(
-        'Aggiungi Problema',
-        style: TextStyle(fontWeight: FontWeight.bold),
+      title: Text(
+        widget.isEditing ? 'Modifica Problema' : 'Aggiungi Problema',
+        style: const TextStyle(fontWeight: FontWeight.bold),
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -47,8 +65,7 @@ class _AddIssueDialogState extends State<AddIssueDialog> {
                 hint: const Text("Seleziona un problema"),
                 value: selectedIssue,
                 underline: Container(),
-                items:
-                    presetIssues.map<DropdownMenuItem<String>>((String value) {
+                items: presetIssues.map((String value) {
                   return DropdownMenuItem<String>(
                     value: value,
                     child: Text(value),
@@ -65,6 +82,7 @@ class _AddIssueDialogState extends State<AddIssueDialog> {
             const Text('Informazioni aggiuntive:'),
             const SizedBox(height: 8),
             TextField(
+              controller: TextEditingController(text: additionalInfo),
               decoration: InputDecoration(
                 hintText: "Descrivi il problema in dettaglio",
                 border: OutlineInputBorder(
@@ -95,7 +113,7 @@ class _AddIssueDialogState extends State<AddIssueDialog> {
             backgroundColor: Colors.blue,
             disabledBackgroundColor: Colors.grey,
           ),
-          child: const Text('Aggiungi'),
+          child: Text(widget.isEditing ? 'Salva' : 'Aggiungi'),
         ),
       ],
     );

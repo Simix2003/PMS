@@ -1,7 +1,20 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'pages/dashboard/dashboard.dart';
+import 'package:simple_secure_storage/simple_secure_storage.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  if (kIsWeb) {
+    await SimpleSecureStorage.initialize(WebInitializationOptions(
+      keyPassword: 'S3cur3Master36!2025',
+      encryptionSalt: 'IXMonitorSalt123!',
+    ));
+  } else {
+    await SimpleSecureStorage.initialize();
+  }
+
   runApp(const MyApp());
 }
 

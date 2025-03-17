@@ -39,6 +39,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _addIssue(String type, String details) {
+    if (type.trim().isEmpty) return;
     setState(() {
       _issues.add({'type': type, 'details': details});
     });
@@ -46,6 +47,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _removeIssue(int index) {
+    if (index < 0 || index >= _issues.length) return;
     setState(() {
       _issues.removeAt(index);
     });
@@ -53,6 +55,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _editIssue(int index, String newType, String newDetails) {
+    if (index < 0 || index >= _issues.length) return;
+    if (newType.trim().isEmpty) return;
     setState(() {
       _issues[index] = {'type': newType, 'details': newDetails};
     });
@@ -62,19 +66,21 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadLocalData() async {
     final loaded = await StorageService.loadIssues();
     setState(() {
-      _issues = loaded;
+      _issues = loaded.where((e) => e.containsKey('type')).toList();
     });
   }
 
   void _openEditDialog(int index) {
+    if (index < 0 || index >= _issues.length) return;
     final issue = _issues[index];
+
     showDialog(
       context: context,
       builder: (context) {
         return AddIssueDialog(
           isEditing: true,
-          initialIssue: issue['type'],
-          initialDetails: issue['details'],
+          initialIssue: issue['type'] ?? '',
+          initialDetails: issue['details'] ?? '',
           onSubmit: (newIssue, newDetails) {
             _editIssue(index, newIssue, newDetails);
           },
@@ -157,7 +163,6 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
           ),
-          // INVIA BUTTON
           if (hasBeenEvaluated && !isObjectOK)
             Positioned(
               bottom: 20,
@@ -167,7 +172,6 @@ class _HomePageState extends State<HomePage> {
                   if (_issues.isEmpty) {
                     showAddIssueWarningDialog(context);
                   } else {
-                    // Temporary action: print object number + issues
                     print('Object Number: $objectNumber');
                     print('Issues: $_issues');
                   }
@@ -178,13 +182,13 @@ class _HomePageState extends State<HomePage> {
                 ),
                 label: const Text('Invia'),
                 style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                    textStyle: const TextStyle(fontSize: 24),
-                    backgroundColor:
-                        _issues.isEmpty ? Colors.grey : Colors.blue,
-                    foregroundColor:
-                        _issues.isEmpty ? Colors.grey.shade800 : Colors.white),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  textStyle: const TextStyle(fontSize: 24),
+                  backgroundColor: _issues.isEmpty ? Colors.grey : Colors.blue,
+                  foregroundColor:
+                      _issues.isEmpty ? Colors.grey.shade800 : Colors.white,
+                ),
               ),
             ),
         ],

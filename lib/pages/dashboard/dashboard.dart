@@ -28,15 +28,15 @@ class _DashboardState extends State<Dashboard> {
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Stazioni',
+            icon: Icon(Icons.feedback),
+            label: 'Difetti',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.search),
             label: 'Dettagli Oggetto',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart),
+            icon: Icon(Icons.data_exploration),
             label: 'Analisi Dati',
           ),
         ],

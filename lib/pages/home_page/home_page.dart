@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../shared/utils/storage.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
-import '../../shared/widgets/add_issue_dialog.dart';
 import '../../shared/widgets/issue_card.dart';
 
 class HomePage extends StatefulWidget {

@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  rive_common
   simple_secure_storage_linux
   webcrypto
 )

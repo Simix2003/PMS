@@ -48,53 +48,56 @@ class _AddIssueDialogState extends State<AddIssueDialog> {
         style: const TextStyle(fontWeight: FontWeight.bold),
       ),
       content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Seleziona il tipo di problema:'),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12.0),
-              child: DropdownButton<String>(
-                isExpanded: true,
-                hint: const Text("Seleziona un problema"),
-                value: selectedIssue,
-                underline: Container(),
-                items: presetIssues.map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: (String? value) {
-                  setState(() {
-                    selectedIssue = value;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text('Informazioni aggiuntive:'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: TextEditingController(text: additionalInfo),
-              decoration: InputDecoration(
-                hintText: "Descrivi il problema in dettaglio",
-                border: OutlineInputBorder(
+        child: SizedBox(
+          width: 400, // <-- Increase this value as you like!
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Seleziona il tipo di problema:'),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400),
                   borderRadius: BorderRadius.circular(8.0),
                 ),
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  hint: const Text("Seleziona un problema"),
+                  value: selectedIssue,
+                  underline: Container(),
+                  items: presetIssues.map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                  onChanged: (String? value) {
+                    setState(() {
+                      selectedIssue = value;
+                    });
+                  },
+                ),
               ),
-              maxLines: 3,
-              onChanged: (value) {
-                additionalInfo = value;
-              },
-            ),
-          ],
+              const SizedBox(height: 16),
+              const Text('Informazioni aggiuntive:'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: TextEditingController(text: additionalInfo),
+                decoration: InputDecoration(
+                  hintText: "Descrivi il problema in dettaglio",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                ),
+                maxLines: 3,
+                onChanged: (value) {
+                  additionalInfo = value;
+                },
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -112,8 +115,11 @@ class _AddIssueDialogState extends State<AddIssueDialog> {
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.blue,
             disabledBackgroundColor: Colors.grey,
+            foregroundColor: Colors.white,
           ),
-          child: Text(widget.isEditing ? 'Salva' : 'Aggiungi'),
+          child: Text(
+            widget.isEditing ? 'Salva' : 'Aggiungi',
+          ),
         ),
       ],
     );

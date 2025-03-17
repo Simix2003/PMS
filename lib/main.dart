@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'pages/home_page/home_page.dart';
+import 'pages/dashboard/dashboard.dart';
 
 void main() {
   runApp(const MyApp());
@@ -11,13 +11,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'IX-Monitor',
       debugShowCheckedModeBanner: false,
+      title: 'IX-Monitor',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const HomePage(),
+      home: const Dashboard(),
     );
   }
 }

@@ -1,4 +1,5 @@
 import asyncio
+import re
 from asyncua import Client, ua
 from datetime import timedelta, datetime
 
@@ -18,6 +19,12 @@ class OPCClient:
 
     async def _find_node(self, node, path_parts):
         for part in path_parts:
+            array_index = None
+            array_match = re.match(r"(.+)\[(\d+)]", part)
+            if array_match:
+                part = array_match.group(1)  # variable name
+                array_index = int(array_match.group(2)) - 1  # TIA index -1 for OPCUA
+
             children = await node.get_children()
             found = False
             for child in children:
@@ -27,7 +34,14 @@ class OPCClient:
                     found = True
                     break
             if not found:
-                raise Exception(f"❌ Path element '{part}' not found inside '{node}'")
+                raise Exception(f"❌ Path element '{part}' not found in {node}")
+
+            if array_index is not None:
+                # Browse array elements and match adjusted index
+                array_children = await node.get_children()
+                if array_index < 0 or array_index >= len(array_children):
+                    raise Exception(f"❌ Index [{array_index + 1}] out of bounds in {node}")
+                node = array_children[array_index]
         return node
 
     async def _find_db(self, db_name):
@@ -54,10 +68,16 @@ class OPCClient:
         raise Exception(f"DB '{db_name}' not found!")
 
     async def read(self, db_name, var_path):
-        db_node = await self._find_db(db_name)
-        path_parts = var_path.split(".")
-        var_node = await self._find_node(db_node, path_parts)
-        return await self._recursive_read(var_node)
+        try:
+            db_node = await self._find_db(db_name)
+            path_parts = var_path.split(".")
+            var_node = await self._find_node(db_node, path_parts)
+            value = await self._recursive_read(var_node)
+            #print(f"🔎 READ: {db_name}.{var_path} = {value}")
+            return value
+        except Exception as e:
+            print(f"❌ READ FAILED: {db_name}.{var_path} | Error: {e}")
+            return None
 
     async def _recursive_read(self, node):
         node_class = await node.read_node_class()
@@ -75,19 +95,24 @@ class OPCClient:
             raise Exception("Unsupported node class")
 
     async def write(self, db_name, var_path, var_type, value):
-        db_node = await self._find_db(db_name)
-        path_parts = var_path.split(".")
-        var_node = await self._find_node(db_node, path_parts)
-        ua_value = self._convert_to_ua(var_type, value)
-        await var_node.write_value(ua_value)
-        print(f"✅ WROTE: {db_name}.{var_path} = {value}")
+        try:
+            db_node = await self._find_db(db_name)
+            path_parts = var_path.split(".")
+            var_node = await self._find_node(db_node, path_parts)
+            ua_value = self._convert_to_ua(var_type, value)
+            await var_node.write_value(ua_value)
+            #print(f"✅ WROTE: {db_name}.{var_path} = {value}")
+            return True
+        except Exception as e:
+            print(f"❌ WRITE FAILED: {db_name}.{var_path} | Error: {e}")
+            return False
 
     async def batch_read(self, db_name, var_paths):
-        print(f"🚀 Batch Reading {len(var_paths)} variables from {db_name}")
+        #print(f"🚀 Batch Reading {len(var_paths)} variables from {db_name}")
         return {path: await self.read(db_name, path) for path in var_paths}
 
     async def batch_write(self, db_name, writes):
-        print(f"🚀 Batch Writing {len(writes)} variables to {db_name}")
+        #print(f"🚀 Batch Writing {len(writes)} variables to {db_name}")
         for item in writes:
             await self.write(db_name, item["var_path"], item["var_type"], item["value"])
 

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../shared/utils/storage.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
 import '../../shared/widgets/issue_card.dart';
@@ -15,12 +14,11 @@ class _HomePageState extends State<HomePage> {
   final String objectNumber = 'ObjectNumber';
   bool isObjectOK = false;
   bool hasBeenEvaluated = false;
-  List<Map<String, String>> _issues = [];
+  final List<Map<String, String>> _issues = [];
 
   @override
   void initState() {
     super.initState();
-    _loadLocalData();
   }
 
   void _evaluateObject(bool isOK) {
@@ -35,7 +33,6 @@ class _HomePageState extends State<HomePage> {
       hasBeenEvaluated = false;
       _issues.clear();
     });
-    StorageService.clearIssues();
   }
 
   void _addIssue(String type, String details) {
@@ -43,7 +40,6 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _issues.add({'type': type, 'details': details});
     });
-    StorageService.saveIssues(_issues);
   }
 
   void _removeIssue(int index) {
@@ -51,7 +47,6 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _issues.removeAt(index);
     });
-    StorageService.saveIssues(_issues);
   }
 
   void _editIssue(int index, String newType, String newDetails) {
@@ -59,14 +54,6 @@ class _HomePageState extends State<HomePage> {
     if (newType.trim().isEmpty) return;
     setState(() {
       _issues[index] = {'type': newType, 'details': newDetails};
-    });
-    StorageService.saveIssues(_issues);
-  }
-
-  Future<void> _loadLocalData() async {
-    final loaded = await StorageService.loadIssues();
-    setState(() {
-      _issues = loaded.where((e) => e.containsKey('type')).toList();
     });
   }
 

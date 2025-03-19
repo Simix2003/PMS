@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
-import '../../shared/widgets/issue_card.dart';
+import 'package:http/http.dart' as http;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -11,7 +11,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final String objectNumber = 'ObjectNumber';
+  String objectId = "";
   bool isObjectOK = false;
   bool hasBeenEvaluated = false;
   final List<Map<String, String>> _issues = [];
@@ -19,6 +19,22 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _subscribeToPLC();
+  }
+
+  void _subscribeToPLC() async {
+    final url = Uri.parse('http://192.168.1.132:8000/subscribe/M308');
+
+    try {
+      final response = await http.post(url);
+      if (response.statusCode == 200) {
+        print('Subscribed successfully: ${response.body}');
+      } else {
+        print('Subscription failed: ${response.body}');
+      }
+    } catch (e) {
+      print('Error subscribing: $e');
+    }
   }
 
   void _evaluateObject(bool isOK) {
@@ -33,47 +49,6 @@ class _HomePageState extends State<HomePage> {
       hasBeenEvaluated = false;
       _issues.clear();
     });
-  }
-
-  void _addIssue(String type, String details) {
-    if (type.trim().isEmpty) return;
-    setState(() {
-      _issues.add({'type': type, 'details': details});
-    });
-  }
-
-  void _removeIssue(int index) {
-    if (index < 0 || index >= _issues.length) return;
-    setState(() {
-      _issues.removeAt(index);
-    });
-  }
-
-  void _editIssue(int index, String newType, String newDetails) {
-    if (index < 0 || index >= _issues.length) return;
-    if (newType.trim().isEmpty) return;
-    setState(() {
-      _issues[index] = {'type': newType, 'details': newDetails};
-    });
-  }
-
-  void _openEditDialog(int index) {
-    if (index < 0 || index >= _issues.length) return;
-    final issue = _issues[index];
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AddIssueDialog(
-          isEditing: true,
-          initialIssue: issue['type'] ?? '',
-          initialDetails: issue['details'] ?? '',
-          onSubmit: (newIssue, newDetails) {
-            _editIssue(index, newIssue, newDetails);
-          },
-        );
-      },
-    );
   }
 
   @override
@@ -91,13 +66,14 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ObjectCard(
-                  objectNumber: objectNumber,
-                  isObjectOK: isObjectOK,
-                  hasBeenEvaluated: hasBeenEvaluated,
-                  onReset: _resetEvaluation,
-                  onEvaluate: _evaluateObject,
-                ),
+                if (objectId.isNotEmpty)
+                  ObjectCard(
+                    objectId: objectId,
+                    isObjectOK: isObjectOK,
+                    hasBeenEvaluated: hasBeenEvaluated,
+                    onReset: _resetEvaluation,
+                    onEvaluate: _evaluateObject,
+                  ),
                 const SizedBox(height: 24),
                 if (hasBeenEvaluated && !isObjectOK) ...[
                   Row(
@@ -110,42 +86,9 @@ class _HomePageState extends State<HomePage> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle,
-                            color: Colors.blue, size: 48),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) {
-                              return AddIssueDialog(
-                                onSubmit: (issue, details) {
-                                  _addIssue(issue, details);
-                                },
-                              );
-                            },
-                          );
-                        },
-                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (_issues.isEmpty)
-                    const Text(
-                      'Nessun problema aggiunto.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ..._issues.asMap().entries.map((entry) {
-                    int idx = entry.key;
-                    Map<String, String> issue = entry.value;
-                    return IssueCard(
-                      issueType: issue['type'] ?? 'Sconosciuto',
-                      details: issue['details'] ?? '',
-                      onDelete: () => _removeIssue(idx),
-                      onEdit: () => _openEditDialog(idx),
-                    );
-                  }).toList(),
-                ] else if (hasBeenEvaluated && isObjectOK) ...[
-                  const Center(),
                 ],
               ],
             ),
@@ -159,7 +102,7 @@ class _HomePageState extends State<HomePage> {
                   if (_issues.isEmpty) {
                     showAddIssueWarningDialog(context);
                   } else {
-                    print('Object Number: $objectNumber');
+                    print('Object Number: $objectId');
                     print('Issues: $_issues');
                   }
                 },

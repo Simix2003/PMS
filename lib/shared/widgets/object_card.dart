@@ -7,16 +7,12 @@ class ObjectCard extends StatefulWidget {
   final String objectId;
   final bool isObjectOK;
   final bool hasBeenEvaluated;
-  final VoidCallback onReset;
-  final void Function(bool isOk) onEvaluate;
 
   const ObjectCard({
     super.key,
     required this.objectId,
     required this.isObjectOK,
     required this.hasBeenEvaluated,
-    required this.onReset,
-    required this.onEvaluate,
   });
 
   @override
@@ -129,30 +125,6 @@ class _ObjectCardState extends State<ObjectCard>
                         color: Colors.orange,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: () => widget.onEvaluate(true),
-                          icon: const Icon(Icons.check_circle),
-                          label: const Text('Pezzo OK'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: () => widget.onEvaluate(false),
-                          icon: const Icon(Icons.error),
-                          label: const Text('Pezzo Difettoso'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
                   ] else ...[
                     Text(
                       'Stato: ${widget.isObjectOK ? 'Pezzo OK' : 'Pezzo Difettoso'}',
@@ -160,14 +132,6 @@ class _ObjectCardState extends State<ObjectCard>
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: widget.isObjectOK ? Colors.green : Colors.red,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: widget.onReset,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Ricomincia Valutazione'),
                       ),
                     ),
                   ],

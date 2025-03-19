@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 class ObjectCard extends StatefulWidget {
-  final String objectNumber;
+  final String objectId;
   final bool isObjectOK;
   final bool hasBeenEvaluated;
   final VoidCallback onReset;
@@ -12,7 +12,7 @@ class ObjectCard extends StatefulWidget {
 
   const ObjectCard({
     super.key,
-    required this.objectNumber,
+    required this.objectId,
     required this.isObjectOK,
     required this.hasBeenEvaluated,
     required this.onReset,
@@ -112,7 +112,7 @@ class _ObjectCardState extends State<ObjectCard>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    widget.objectNumber,
+                    widget.objectId,
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w600,

@@ -1,22 +1,36 @@
 import asyncio
 from functools import partial
+from fastapi import FastAPI
 from controllers.plc import OPCClient
+import uvicorn
+from contextlib import asynccontextmanager
+
+opc = OPCClient("opc.tcp://192.168.1.1:4840")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # STARTUP logic
+    await opc.connect()
+    yield
+    # SHUTDOWN logic
+    await opc.disconnect()
+
+app = FastAPI(lifespan=lifespan)
 
 async def on_value_change(opc, node, val, data):
-    # Only react when BOOL becomes True
     if isinstance(val, bool) and val is True:
-        print(f"✅ Condition met! {node} = {val}")
-        nested = await opc.read("DB_READ", "TEST.Esito_Scarto.Difetti.Saldatura.Stringa_F[1].String_Ribbon[10]")
-        print(f"Nested value: {nested}")
+        moduloId = await opc.read("SLS Interblocchi", "Da Bottero A CapGemini.M308_QG2.Id_Modulo")
+        print(f"ID Modulo value: {moduloId}")
     else:
         print(f"⚠️ Ignoring {node} = {val}")
 
-async def main():
-    opc = OPCClient("opc.tcp://192.168.1.1:4840")
-    await opc.connect()
-    
-    await opc.subscribe("DB_READ", "TEST.Esito_Scarto.pezzoKO", partial(on_value_change, opc))
-    await asyncio.sleep(20)
-    await opc.disconnect()
+@app.post("/subscribe/M308")
+async def subscribe():
+    try:
+        await opc.subscribe("SLS Interblocchi", "Da Bottero A CapGemini.M308_QG2.Inizio Lavorazione in Automatico", partial(on_value_change, opc))
+        return {"status": "Subscribed to M308!"}
+    except Exception as e:
+        return {"status": "Failed", "error": str(e)}
 
-asyncio.run(main())
+if __name__ == "__main__":
+    uvicorn.run("service:app", host="0.0.0.0", port=8000)

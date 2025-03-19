@@ -132,13 +132,34 @@ class OPCClient:
         if node_class == ua.NodeClass.Variable:
             value = await node.read_value()
             return value
+
         elif node_class == ua.NodeClass.Object:
-            struct = {}
+            # Check if it looks like a Siemens STRING
             children = await node.get_children()
+            browse_names = [await c.read_browse_name() for c in children]
+            names = [b.Name for b in browse_names]
+
+            if "Length" in names and "Data" in names:
+                # Detected a Siemens STRING Struct
+                length_node = [c for c in children if (await c.read_browse_name()).Name == "Length"][0]
+                data_node = [c for c in children if (await c.read_browse_name()).Name == "Data"][0]
+
+                length = await length_node.read_value()
+                data = await data_node.read_value()
+
+                if isinstance(data, list):
+                    string_value = ''.join([chr(c) for c in data[:length] if c != 0])
+                    return string_value
+                else:
+                    return ""
+
+            # Generic STRUCT fallback
+            struct = {}
             for child in children:
                 browse = await child.read_browse_name()
                 struct[browse.Name] = await self._recursive_read(child)
             return struct
+
         else:
             raise Exception("Unsupported node class")
 

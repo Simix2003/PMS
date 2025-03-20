@@ -1,9 +1,9 @@
-// ignore_for_file: deprecated_member_use, must_be_immutable
+// ignore_for_file: deprecated_member_use, must_be_immutable, use_build_context_synchronously
 
 import 'dart:convert';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
 
 class ObjectCard extends StatefulWidget {
   final String objectId;
@@ -23,55 +23,16 @@ class ObjectCard extends StatefulWidget {
   State<ObjectCard> createState() => _ObjectCardState();
 }
 
-class _ObjectCardState extends State<ObjectCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    );
-    if (!widget.hasBeenEvaluated) {
-      _animationController.repeat();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant ObjectCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.hasBeenEvaluated != oldWidget.hasBeenEvaluated) {
-      if (!widget.hasBeenEvaluated) {
-        _animationController.repeat();
-      } else {
-        _animationController.stop();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  Color _getBorderColor() {
-    if (!widget.hasBeenEvaluated) {
-      final value = math.sin(_animationController.value * math.pi * 2);
-      final intensity = (value + 1) / 2;
-      return Color.lerp(
-        Colors.yellow.shade400,
-        Colors.yellow.shade700,
-        intensity,
-      )!;
-    } else {
-      return widget.isObjectOK ? Colors.green : Colors.red;
-    }
-  }
+class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
+  bool _isHoveringOK = false;
+  bool _isHoveringKO = false;
 
   void _sendOutcome(BuildContext context, String outcome) async {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      widget.hasBeenEvaluated = false;
+    });
+
     final response = await http.post(
       Uri.parse('http://192.168.1.132:8000/api/set_outcome'),
       headers: {'Content-Type': 'application/json'},
@@ -89,136 +50,171 @@ class _ObjectCardState extends State<ObjectCard>
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Errore nel mandare l'esito al PLC")),
+        SnackBar(
+          content: Row(
+            children: const [
+              Icon(Icons.error_outline, color: Colors.white),
+              SizedBox(width: 10),
+              Text("Errore nel mandare l'esito al PLC"),
+            ],
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
       );
+      setState(() {
+        widget.hasBeenEvaluated = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animationController,
-      builder: (context, child) {
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: _getBorderColor().withOpacity(0.6),
-                blurRadius: 10,
-                spreadRadius: 3,
+    Color? glowColor;
+    if (widget.hasBeenEvaluated) {
+      glowColor = widget.isObjectOK ? Colors.green : Colors.red;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: glowColor ?? Colors.grey.shade300,
+          width: 3,
+        ),
+        boxShadow: glowColor != null
+            ? [
+                BoxShadow(
+                  color: glowColor,
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                ),
+              ]
+            : [],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Production Unit',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                      color: Colors.grey.shade600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.memory, color: Colors.blueGrey, size: 20),
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.objectId,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
-          child: Card(
-            elevation: 4,
-            margin: EdgeInsets.zero,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: _getBorderColor(),
-                width: 2.5,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Pezzo in Produzione:',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.objectId,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (!widget.hasBeenEvaluated) ...[
-                    const Text(
-                      'Stato: In valutazione',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.orange,
-                      ),
-                    ),
-                  ] else ...[
-                    Text(
-                      'Stato: ${widget.isObjectOK ? 'Pezzo OK' : 'Pezzo Difettoso'}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: widget.isObjectOK ? Colors.green : Colors.red,
-                      ),
-                    ),
-                  ],
-                  if (!widget.hasBeenEvaluated) ...[
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        // KO Button (LEFT)
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => _sendOutcome(context, "scarto"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              padding: const EdgeInsets.symmetric(vertical: 24),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text(
-                              "KO",
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // OK Button (RIGHT)
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => _sendOutcome(context, "buona"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              padding: const EdgeInsets.symmetric(vertical: 24),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text(
-                              "OK",
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
+
+          const SizedBox(height: 16),
+
+          // Status text
+          Text(
+            widget.hasBeenEvaluated
+                ? (widget.isObjectOK ? "Status: Unità OK" : "Status: Unità KO")
+                : "Status: Attesa validazione",
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
             ),
           ),
-        );
-      },
+
+          if (!widget.hasBeenEvaluated) ...[
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                // KO Button
+                Expanded(
+                  child: _buildFlatButton(
+                    label: "KO",
+                    icon: Icons.close_rounded,
+                    color: Colors.red,
+                    onPressed: () => _sendOutcome(context, "scarto"),
+                    isHovering: _isHoveringKO,
+                    onHoverChanged: (value) =>
+                        setState(() => _isHoveringKO = value),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // OK Button
+                Expanded(
+                  child: _buildFlatButton(
+                    label: "OK",
+                    icon: Icons.check_rounded,
+                    color: Colors.green,
+                    onPressed: () => _sendOutcome(context, "buona"),
+                    isHovering: _isHoveringOK,
+                    onHoverChanged: (value) =>
+                        setState(() => _isHoveringOK = value),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFlatButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+    required bool isHovering,
+    required Function(bool) onHoverChanged,
+  }) {
+    return MouseRegion(
+      onEnter: (_) => onHoverChanged(true),
+      onExit: (_) => onHoverChanged(false),
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(
+          icon,
+          color: Colors.white,
+          size: 18,
+        ),
+        label: Text(label, style: TextStyle(color: Colors.white)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          elevation: isHovering ? 4 : 0,
+        ),
+      ),
     );
   }
 }

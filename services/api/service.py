@@ -1,13 +1,12 @@
 from functools import partial
 import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi import APIRouter, Request
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from controllers.plc import OPCClient
 import uvicorn
 from contextlib import asynccontextmanager
-import asyncio
 
 opc = OPCClient("opc.tcp://192.168.1.1:4840")
 
@@ -167,13 +166,72 @@ async def get_issues(channel_id: str, path: str = "Dati.Esito.Esito_Scarto.Difet
         items = []
         for child in children:
             browse_name = await child.read_browse_name()
+            name = browse_name.Name.lower()
             node_class = await child.read_node_class()
-            node_type = "item" if node_class.value == 2 else "folder"
+            node_type = "folder"  # default
+
+            # Read value & datatype
+            try:
+                value = await child.read_value()
+            except:
+                value = None
+
+            # Skip "riserva" bools!
+            if "riserva" in name and isinstance(value, bool):
+                continue
+
+            if isinstance(value, bool):
+                node_type = "bool"
+            elif isinstance(value, list):
+                node_type = "folder"
+            elif "ExtensionObject" in str(type(value)):
+                node_type = "folder"
+            else:
+                node_type = "folder"
+
             items.append({"name": browse_name.Name, "type": node_type})
 
         return {"path": path, "items": items}
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
+
+@app.post("/api/set_issues")
+async def set_issues(request: Request):
+    data = await request.json()
+    channel_id = data.get("channel_id")
+    object_id = data.get("object_id")
+    issues = data.get("issues", [])
+
+    # 1️⃣ Map to correct DB based on channel_id
+    db_map = {
+        "M308": "SLS M308_QG2 DB User",
+        "M309": "SLS M309_QG2 DB User",
+        "M326": "SLS M326_RW1 DB User"
+    }
+
+    if channel_id not in db_map:
+        return JSONResponse(status_code=400, content={"error": "Invalid channel_id"})
+
+    db_name = db_map[channel_id]
+
+    # 2️⃣ Write each issue
+    for issue_path in issues:
+        split_index = issue_path.find("Dati.")
+        if split_index == -1:
+            print(f"❌ Invalid path: {issue_path}")
+            continue
+
+        relative_path = issue_path[split_index:]  # "Dati.Esito...."
+        path_parts = relative_path.split(".")
+
+        success = await opc.write(db_name, relative_path, "bool", True)
+
+        if not success:
+            print(f"❌ WRITE FAILED: {db_name}.{relative_path}")
+
+    await opc.write(db_name, "Dati.Esito.Esito_Scarto.Compilato Su Ipad_Scarto presente", "bool", True)
+
+    return {"status": "ok"}
 
 @app.post("/api/set_outcome")
 async def set_outcome(request: Request):

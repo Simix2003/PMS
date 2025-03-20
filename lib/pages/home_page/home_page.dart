@@ -4,6 +4,8 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../issue_selector.dart';
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -112,32 +114,63 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (objectId.isNotEmpty)
-                  ObjectCard(
-                    objectId: objectId,
-                    isObjectOK: isObjectOK,
-                    hasBeenEvaluated: hasBeenEvaluated,
-                  ),
-                const SizedBox(height: 24),
-                if (hasBeenEvaluated && !isObjectOK) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Seleziona i problemi rilevati:',
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (objectId.isNotEmpty) ...[
+                    ObjectCard(
+                      objectId: objectId,
+                      isObjectOK: isObjectOK,
+                      hasBeenEvaluated: hasBeenEvaluated,
+                      selectedChannel: selectedChannel,
+                    ),
+                    const SizedBox(height: 24),
+                  ] else ...[
+                    const Center(
+                      child: Text(
+                        'Nessun oggetto in produzione al momento.',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          color: Colors.grey,
+                          fontStyle: FontStyle.italic,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ],
-            ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  if (hasBeenEvaluated && !isObjectOK) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Seleziona i problemi rilevati:',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.arrow_forward),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (ctx) => IssueSelectorPage(
+                                  channelId: selectedChannel,
+                                  onIssueSelected: (issuePath) {
+                                    setState(() {
+                                      _issues.add({"issue": issuePath});
+                                    });
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ]),
           ),
           if (hasBeenEvaluated && !isObjectOK)
             Positioned(

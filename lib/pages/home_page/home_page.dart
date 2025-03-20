@@ -28,6 +28,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   bool isConnecting = true;
 
+  bool issuesSubmitted = false;
+
   final GlobalKey<IssueSelectorWidgetState> _issueSelectorKey =
       GlobalKey<IssueSelectorWidgetState>();
 
@@ -62,6 +64,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           setState(() {
             objectId = decoded['objectId'] ?? '';
             hasBeenEvaluated = false;
+            issuesSubmitted = decoded['issuesSubmitted'] ?? false;
             _issues.clear();
           });
         } else if (decoded['trigger'] == false) {
@@ -69,6 +72,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             objectId = "";
             isObjectOK = false;
             hasBeenEvaluated = false;
+            issuesSubmitted = false;
             _issues.clear();
           });
         }
@@ -114,6 +118,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         isObjectOK = false;
         hasBeenEvaluated = false;
         _issues.clear();
+        issuesSubmitted = false;
         _connectWebSocket();
       });
     }
@@ -142,6 +147,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       setState(() {
         _issues.clear();
       });
+
+      issuesSubmitted = true;
       _issueSelectorKey.currentState?.resetSelection();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -263,6 +270,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             isObjectOK: isObjectOK,
                             hasBeenEvaluated: hasBeenEvaluated,
                             selectedChannel: selectedChannel,
+                            issuesSubmitted: issuesSubmitted,
+                            onIssuesLoaded: (loadedIssues) {
+                              setState(() {
+                                _issues.clear();
+                                _issues.addAll(loadedIssues);
+                                issuesSubmitted =
+                                    false; // this triggers IssueSelector to appear
+                              });
+
+                              // Defer restore after widget is built
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                _issueSelectorKey.currentState
+                                    ?.restoreSelection(loadedIssues);
+                              });
+                            },
                           ),
                           const SizedBox(height: 24),
                         ] else ...[
@@ -288,7 +310,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           ),
                           const SizedBox(height: 24),
                         ],
-                        if (hasBeenEvaluated && !isObjectOK) ...[
+                        if (hasBeenEvaluated &&
+                            !isObjectOK &&
+                            !issuesSubmitted) ...[
                           const Text(
                             'Seleziona i problemi rilevati',
                             style: TextStyle(
@@ -311,6 +335,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               });
                             },
                           ),
+                        ] else if (hasBeenEvaluated &&
+                            !isObjectOK &&
+                            issuesSubmitted) ...[
+                          const SizedBox(height: 40),
+                          Center(
+                            child: Text(
+                              'ANDARE A PREMERE PULSANTE KO FISICO',
+                              style: TextStyle(fontSize: 36),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
                         ],
                       ],
                     ),

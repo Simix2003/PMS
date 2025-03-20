@@ -10,6 +10,8 @@ class ObjectCard extends StatefulWidget {
   bool isObjectOK;
   bool hasBeenEvaluated;
   String selectedChannel;
+  final bool issuesSubmitted;
+  final Function(List<String>) onIssuesLoaded;
 
   ObjectCard({
     super.key,
@@ -17,6 +19,8 @@ class ObjectCard extends StatefulWidget {
     required this.isObjectOK,
     required this.hasBeenEvaluated,
     required this.selectedChannel,
+    required this.issuesSubmitted,
+    required this.onIssuesLoaded,
   });
 
   @override
@@ -68,6 +72,42 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
       setState(() {
         widget.hasBeenEvaluated = false;
       });
+    }
+  }
+
+  void _loadIssuesFromPLC() async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevent closing by tapping outside
+      builder: (BuildContext context) {
+        return const Center(
+          child: CircularProgressIndicator(),
+        );
+      },
+    );
+
+    try {
+      final response = await http.get(
+        Uri.parse(
+            'http://192.168.1.132:8000/api/get_issues?channel_id=${widget.selectedChannel}&object_id=${widget.objectId}'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<String> loadedIssues =
+            List<String>.from(data['selected_issues']);
+
+        widget.onIssuesLoaded(loadedIssues);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Errore nel caricare i difetti dal PLC")),
+        );
+      }
+    } finally {
+      // Always remove loading indicator
+      Navigator.of(context, rootNavigator: true).pop();
     }
   }
 
@@ -135,6 +175,36 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
               ),
             ],
           ),
+
+          if (widget.hasBeenEvaluated &&
+              !widget.isObjectOK &&
+              widget.issuesSubmitted)
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton.icon(
+                onPressed: _loadIssuesFromPLC,
+                icon: const Icon(
+                  Icons.refresh,
+                  color: Colors.white,
+                  size: 28, // Bigger icon
+                ),
+                label: const Text(
+                  "Modifica difetti",
+                  style: TextStyle(
+                    fontSize: 28, // Bigger text
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 4, // optional subtle shadow
+                ),
+              ),
+            ),
 
           const SizedBox(height: 16),
 

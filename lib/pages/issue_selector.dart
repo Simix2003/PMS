@@ -107,16 +107,15 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   Widget _buildImageForLevel() {
     final currentFolder = pathStack.isNotEmpty ? pathStack.last : 'default';
 
-    // Normalize the folder name to a filename-safe format
+    // Normalize folder name to asset file naming convention
     final folderImageName =
         currentFolder.split('.').last.toLowerCase().replaceAll(' ', '_');
 
-    // Fallback to default if image not found
     return Image.asset(
-      'images/$folderImageName.png',
+      '/images/$folderImageName.jpg',
       fit: BoxFit.cover,
       errorBuilder: (context, error, stackTrace) {
-        return Image.asset('images/default.png', fit: BoxFit.cover);
+        return Image.asset('assets/images/default.jpg', fit: BoxFit.cover);
       },
     );
   }
@@ -124,6 +123,13 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   void resetSelection() {
     setState(() {
       selectedPaths.clear();
+    });
+  }
+
+  void restoreSelection(List<String> issues) {
+    print("🔄 Restoring selection for issues: $issues");
+    setState(() {
+      selectedPaths = issues.toSet();
     });
   }
 
@@ -286,12 +292,20 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
               color: Colors.grey.shade100,
               border: Border.all(color: Colors.grey.shade300),
             ),
-            //child: ClipRRect(
-            //  borderRadius: BorderRadius.circular(12),
-            //  child: _buildImageForLevel(),
-            //),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(
+                    maxHeight: 475,
+                    maxWidth: double.infinity,
+                  ),
+                  child: _buildImageForLevel(),
+                ),
+              ),
+            ),
           ),
-        ),
+        )
       ],
     );
   }

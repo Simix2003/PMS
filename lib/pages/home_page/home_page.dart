@@ -26,8 +26,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String selectedChannel = "M308"; // Default selection
   final List<String> availableChannels = ["M308", "M309", "M326"];
 
-  late AnimationController _pulseController;
-  late AnimationController _connectingController;
   bool isConnecting = true;
 
   final GlobalKey<IssueSelectorWidgetState> _issueSelectorKey =
@@ -36,16 +34,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-
-    _connectingController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
 
     _connectWebSocket();
   }
@@ -165,8 +153,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void dispose() {
     channel?.sink.close();
-    _pulseController.dispose();
-    _connectingController.dispose();
     super.dispose();
   }
 

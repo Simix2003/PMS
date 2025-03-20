@@ -198,8 +198,6 @@ class OPCClient:
             return ua.DataValue(ua.Variant(str(value), ua.VariantType.String))
         elif var_type == "char":
             return ua.DataValue(ua.Variant(str(value)[0], ua.VariantType.SByte))
-        elif var_type == "time":
-            return ua.DataValue(ua.Variant(timedelta(milliseconds=value), ua.VariantType.Duration))
         elif var_type == "dtl":
             return ua.DataValue(ua.Variant(datetime.fromisoformat(value), ua.VariantType.DateTime))
         elif var_type.startswith("array["):

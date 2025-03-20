@@ -1,9 +1,13 @@
-import asyncio
 from functools import partial
+import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from controllers.plc import OPCClient
 import uvicorn
 from contextlib import asynccontextmanager
+import asyncio
 
 opc = OPCClient("opc.tcp://192.168.1.1:4840")
 
@@ -28,6 +32,15 @@ async def lifespan(app: FastAPI):
     await opc.disconnect()
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # You can restrict this to your frontend IP in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # ---------------- CONFIG ----------------
 CHANNELS = {
@@ -93,51 +106,22 @@ async def on_trigger_change(opc, channel_id, node, val, data):
     if not isinstance(val, bool):
         return
 
-    print(f"✅ Trigger on {channel_id} -> val: {val}")
-    paths = CHANNELS[channel_id]
-    object_id = ""
-
     if val is True:
-        object_id = await opc.read("SLS Interblocchi", paths["id_modulo_path"])
-        print(f"📦 Id_Modulo = {object_id}")
-
-        # ➕ Subscribe to fine lavorazione signals dynamically
-        fine_buona_sub = await opc.subscribe(
-            "SLS Interblocchi",
-            paths["fine_buona_path"],
-            partial(on_fine_lavorazione, opc, channel_id, object_id, "buona")
-        )
-
-        fine_scarto_sub = await opc.subscribe(
-            "SLS Interblocchi",
-            paths["fine_scarto_path"],
-            partial(on_fine_lavorazione, opc, channel_id, object_id, "scarto")
-        )
-
-        fine_subscriptions[channel_id] = [fine_buona_sub, fine_scarto_sub]
-
-    await broadcast(channel_id, {
-        "trigger": val,
-        "objectId": object_id,
-        "outcome": None
-    })
-
-async def on_fine_lavorazione(opc, channel_id, object_id, outcome, node, val, data):
-    if isinstance(val, bool) and val is True:
-        print(f"🏁 Fine lavorazione {outcome} on {channel_id} | objectId={object_id}")
-        
-        # 🔄 Broadcast to Flutter
+        object_id = await opc.read("SLS Interblocchi", CHANNELS[channel_id]["id_modulo_path"])
         await broadcast(channel_id, {
-            "trigger": None,
+            "trigger": True,
             "objectId": object_id,
-            "outcome": outcome
+            "outcome": None
         })
 
-        # 🧹 Cleanup fine lavorazione subscriptions
-        if channel_id in fine_subscriptions:
-            for sub_id in fine_subscriptions[channel_id]:
-                await opc.unsubscribe(sub_id)
-            del fine_subscriptions[channel_id]
+    elif val is False:
+        # 🚩 Object finished, go back to idle state
+        print(f"🟡 Trigger on {channel_id} set to FALSE, resetting clients...")
+        await broadcast(channel_id, {
+            "trigger": False,
+            "objectId": None,
+            "outcome": None
+        })
 
 # ---------------- ROUTES ----------------
 
@@ -161,6 +145,68 @@ async def websocket_endpoint(websocket: WebSocket, channel_id: str):
         print(f"⚠️ Client disconnected from {channel_id}")
     finally:
         subscriptions[channel_id].remove(websocket)
+
+@app.get("/api/issues/{channel_id}")
+async def get_issues(channel_id: str, path: str = "Dati.Esito.Esito_Scarto.Difetti"):
+    if channel_id not in CHANNELS:
+        return JSONResponse(status_code=404, content={"error": "Invalid channel"})
+
+    db_map = {
+        "M308": "SLS M308_QG2 DB User",
+        "M309": "SLS M309_QG2 DB User",
+        "M326": "SLS M326_RW1 DB User"
+    }
+    db_name = db_map[channel_id]
+
+    try:
+        db_node = await opc._find_db(db_name)
+        path_parts = path.split(".")
+        target_node = await opc._find_node(db_node, path_parts)
+        children = await target_node.get_children()
+
+        items = []
+        for child in children:
+            browse_name = await child.read_browse_name()
+            node_class = await child.read_node_class()
+            node_type = "item" if node_class.value == 2 else "folder"
+            items.append({"name": browse_name.Name, "type": node_type})
+
+        return {"path": path, "items": items}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+
+@app.post("/api/set_outcome")
+async def set_outcome(request: Request):
+    data = await request.json()
+    channel_id = data.get("channel_id")
+    object_id = data.get("object_id")
+    outcome = data.get("outcome")  # "buona" or "scarto"
+
+    if channel_id not in CHANNELS or outcome not in ["buona", "scarto"]:
+        return JSONResponse(status_code=400, content={"error": "Invalid data"})
+
+    # Read current Object ID from PLC (authoritative source)
+    current_object_id = await opc.read("SLS Interblocchi", CHANNELS[channel_id]["id_modulo_path"])
+
+    if str(current_object_id) != str(object_id):
+        return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
+
+    # Proceed to write to PLC
+    path = CHANNELS[channel_id]["fine_buona_path"] if outcome == "buona" else CHANNELS[channel_id]["fine_scarto_path"]
+    success = await opc.write("SLS Interblocchi", path, "bool", True)
+
+    if success:
+        print(f"✅ Outcome '{outcome.upper()}' written for object {object_id} on {channel_id}")
+
+        # Broadcast result to ALL active clients for this channel
+        await broadcast(channel_id, {
+            "trigger": None,
+            "objectId": object_id,
+            "outcome": outcome
+        })
+        return {"status": "ok"}
+    else:
+        return JSONResponse(status_code=500, content={"error": "PLC write failed"})
 
 # ---------------- MAIN ----------------
 

@@ -74,6 +74,7 @@ async def send_initial_state(websocket: WebSocket, channel_id: str):
     trigger_value = await opc.read("SLS Interblocchi", paths["trigger_path"])
     object_id = ""
     outcome = None
+    issues_submitted = False
 
     if trigger_value is True:
         object_id = await opc.read("SLS Interblocchi", paths["id_modulo_path"])
@@ -86,18 +87,55 @@ async def send_initial_state(websocket: WebSocket, channel_id: str):
         elif fine_scarto is True:
             outcome = "scarto"
 
+        # NEW: Read "Compilato Su Ipad_Scarto presente" from the DB to set issuesSubmitted
+        db_map = {
+            "M308": "SLS M308_QG2 DB User",
+            "M309": "SLS M309_QG2 DB User",
+            "M326": "SLS M326_RW1 DB User"
+        }
+        db_name = db_map[channel_id]
+        issues_value = await opc.read(db_name, "Dati.Esito.Esito_Scarto.Compilato Su Ipad_Scarto presente")
+        if issues_value is True:
+            issues_submitted = True
+
     await websocket.send_json({
         "trigger": trigger_value,
         "objectId": object_id,
-        "outcome": outcome
+        "outcome": outcome,
+        "issuesSubmitted": issues_submitted
     })
-
 async def broadcast(channel_id: str, message: dict):
     for ws in list(subscriptions.get(channel_id, [])):
         try:
             await ws.send_json(message)
         except:
             subscriptions[channel_id].remove(ws)
+
+async def scan_issues(node, base_path):
+    selected = []
+    children = await node.get_children()
+
+    for child in children:
+        browse_name = await child.read_browse_name()
+        name = browse_name.Name
+        full_path = f"{base_path}.{name}"
+
+        try:
+            value = await child.read_value()
+        except:
+            value = None
+
+        # 📦 If it is a struct or folder, go deeper
+        if not isinstance(value, bool):
+            deeper = await scan_issues(child, full_path)
+            selected.extend(deeper)
+        else:
+            print(f"➡️ {full_path} = {value}")
+            if value is True:
+                selected.append(full_path)
+                print(f"✅ Selected: {full_path}")
+
+    return selected
 
 # ---------------- PLC EVENTS ----------------
 
@@ -107,19 +145,31 @@ async def on_trigger_change(opc, channel_id, node, val, data):
 
     if val is True:
         object_id = await opc.read("SLS Interblocchi", CHANNELS[channel_id]["id_modulo_path"])
+
+        # NEW: Also read issuesSubmitted when broadcasting trigger = True
+        db_map = {
+            "M308": "SLS M308_QG2 DB User",
+            "M309": "SLS M309_QG2 DB User",
+            "M326": "SLS M326_RW1 DB User"
+        }
+        db_name = db_map[channel_id]
+        issues_value = await opc.read(db_name, "Dati.Esito.Esito_Scarto.Compilato Su Ipad_Scarto presente")
+        issues_submitted = issues_value is True
+
         await broadcast(channel_id, {
             "trigger": True,
             "objectId": object_id,
-            "outcome": None
+            "outcome": None,
+            "issuesSubmitted": issues_submitted
         })
 
     elif val is False:
-        # 🚩 Object finished, go back to idle state
         print(f"🟡 Trigger on {channel_id} set to FALSE, resetting clients...")
         await broadcast(channel_id, {
             "trigger": False,
             "objectId": None,
-            "outcome": None
+            "outcome": None,
+            "issuesSubmitted": False
         })
 
 # ---------------- ROUTES ----------------
@@ -232,6 +282,35 @@ async def set_issues(request: Request):
     await opc.write(db_name, "Dati.Esito.Esito_Scarto.Compilato Su Ipad_Scarto presente", "bool", True)
 
     return {"status": "ok"}
+
+@app.get("/api/get_issues")
+async def get_selected_issues(channel_id: str, path: str = "Dati.Esito.Esito_Scarto.Difetti"):
+    if channel_id not in CHANNELS:
+        return JSONResponse(status_code=404, content={"error": "Invalid channel"})
+
+    db_map = {
+        "M308": "SLS M308_QG2 DB User",
+        "M309": "SLS M309_QG2 DB User",
+        "M326": "SLS M326_RW1 DB User"
+    }
+    db_name = db_map[channel_id]
+
+    try:
+        await opc.write(db_name, "Dati.Esito.Esito_Scarto.Compilato Su Ipad_Scarto presente", "bool", False)
+        db_node = await opc._find_db(db_name)
+        path_parts = path.split(".")
+        target_node = await opc._find_node(db_node, path_parts)
+
+        print(f"🔍 Scanning {db_name}.{path} recursively for TRUE values...")
+
+        selected_issues = await scan_issues(target_node, path)
+
+        print(f"📤 Sending selected issues: {selected_issues}")
+        return {"selected_issues": selected_issues}
+    except Exception as e:
+        print(f"❌ Error during OPC scan: {e}")
+        return JSONResponse(status_code=400, content={"error": str(e)})
+
 
 @app.post("/api/set_outcome")
 async def set_outcome(request: Request):

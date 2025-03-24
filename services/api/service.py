@@ -170,13 +170,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         autocommit=False
     )
     print("🟢 MySQL connected!")
-    
-    #plc_ip, plc_slot, pc_ip, pc_port, station_configs = load_station_configs("C:/IX-Monitor/stations.ini")
-    #for station, params in station_configs.items():
-    #    plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot)
-    #    plc_connections[station] = plc_conn
-    #    asyncio.create_task(background_task(plc_conn, params, station))
-    #    print(f"🚀 Background task created for {station}")
+
+    # Init PLC connections from INI config
+    plc_ip, plc_slot, pc_ip, pc_port, station_configs = load_station_configs("C:/IX-Monitor/stations.ini")
+
+    for station, params in station_configs.items():
+        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot)
+        plc_connections[station] = plc_conn
+        asyncio.create_task(background_task(plc_conn, params, station))
+        print(f"🚀 Background task created for {station}")
 
     yield
 
@@ -690,21 +692,34 @@ def load_station_configs(file_path):
     return plc_ip, plc_slot, pc_ip, pc_port, station_configs
 
 # ---------------- BACKGROUND TASK ----------------
-async def background_task(plc_connection, params, station):
+async def background_task(plc_connection: PLCConnection, params, station):
     print(f"[{station}] Starting background task.")
-    prev_trigger = False  # To detect changes (rising/falling edge)
+    prev_trigger = False
 
     while True:
         try:
-            trigger_conf = CHANNELS[station]["trigger"]
-            trigger_value = await asyncio.to_thread(plc_connection.read_bool, trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"])
+            # If PLC disconnected, retry before continuing
+            if not plc_connection.connected:
+                print(f"⚠️ PLC disconnected for {station}, attempting reconnect...")
+                if not plc_connection.reconnect(retries=3, delay=5):
+                    print(f"❌ PLC reconnection failed for {station}, notifying clients.")
+                    await broadcast(station, {"plc_status": "PLC_UNAVAILABLE"})
+                    await asyncio.sleep(10)  # Wait before next retry
+                    continue
+                else:
+                    print(f"✅ PLC reconnected for {station}!")
 
-            # Detect change in trigger
+            # --- Normal operation ---
+            trigger_conf = CHANNELS[station]["trigger"]
+            trigger_value = await asyncio.to_thread(
+                plc_connection.read_bool, 
+                trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
+            )
+
             if trigger_value != prev_trigger:
                 prev_trigger = trigger_value
                 await on_trigger_change(plc_connection, station, None, trigger_value, None)
 
-            # Your existing fine_buona / fine_scarto logic
             fb_conf = CHANNELS[station]["fine_buona"]
             fs_conf = CHANNELS[station]["fine_scarto"]
             fine_buona = await asyncio.to_thread(plc_connection.read_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"])
@@ -713,20 +728,29 @@ async def background_task(plc_connection, params, station):
             if (fine_buona or fine_scarto) and not passato_flags[station]:
                 print(f"[{station}] Processing data (trigger detected)")
                 data_inizio = trigger_timestamps.get(station)
-                print('Data INIZIOOOOO: ', data_inizio)
                 result = await read_data(plc_connection, station, richiesta_ok=fine_buona, richiesta_ko=fine_scarto, data_inizio=data_inizio)
                 if result:
                     passato_flags[station] = True
-                    print(f"[{station}] Data ready! ✅ Inserting into MySQL...")
+                    print(f"[{station}] ✅ Inserting into MySQL...")
                     insert_production_data(result, station, mysql_connection)
-                    print(f"[{station}] Data inserted successfully!")
+                    print(f"[{station}] 🟢 Data inserted successfully!")
 
             await asyncio.sleep(1)
+
         except Exception as e:
-            logging.error(f"[{station}] Error in background task: {str(e)}")
+            logging.error(f"[{station}] 🔴 Error in background task: {str(e)}")
+            plc_connection.connected = False  # Mark as disconnected, so next loop tries reconnect
             await asyncio.sleep(5)
 
 # ---------------- ROUTES ----------------
+            
+@app.get("/api/plc_status")
+async def plc_status():
+    statuses = {}
+    for station, plc_conn in plc_connections.items():
+        statuses[station] = "CONNECTED" if plc_conn.connected else "DISCONNECTED"
+    return statuses
+
 @app.websocket("/ws/{channel_id}")
 async def websocket_endpoint(websocket: WebSocket, channel_id: str):
     if channel_id not in CHANNELS:
@@ -734,16 +758,27 @@ async def websocket_endpoint(websocket: WebSocket, channel_id: str):
         return
 
     await websocket.accept()
+    await websocket.send_json({"handshake": True})
     print(f"📲 Client subscribed to {channel_id}")
 
     subscriptions.setdefault(channel_id, set()).add(websocket)
 
-    if channel_id not in plc_connections:
-        print(f"❌ No PLC connection found for {channel_id}, closing socket.")
+    plc_connection = plc_connections.get(channel_id)
+
+    if not plc_connection:
+        print(f"❌ No PLC connection object found for {channel_id}. Closing socket.")
         await websocket.close()
         return
 
-    plc_connection = plc_connections[channel_id]
+    # 🔄 Auto-reconnect logic if PLC is disconnected
+    if not plc_connection.connected:
+        print(f"⚠️ PLC for {channel_id} is currently disconnected. Trying to reconnect for the WebSocket...")
+        if not plc_connection.reconnect(retries=3, delay=5):
+            print(f"❌ Failed to reconnect PLC for {channel_id}. Closing socket.")
+            await websocket.close()
+            return
+        else:
+            print(f"✅ PLC reconnected successfully for {channel_id}!")
 
     await send_initial_state(websocket, channel_id, plc_connection)
 

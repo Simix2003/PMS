@@ -25,7 +25,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final ip = prefs.getString('backend_ip');
     final port = prefs.getString('backend_port');
     setState(() {
-      _currentIP = ip ?? '192.168.0.100';
+      _currentIP = ip ?? '172.16.176.235';
       _currentPort = port ?? '8000';
       _ipController.text = ip ?? '';
       _portController.text = port ?? '';

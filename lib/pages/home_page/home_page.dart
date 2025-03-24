@@ -141,6 +141,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
 
     if (response.statusCode == 200) {
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Issues sent successfully")),
       );
@@ -151,6 +152,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       issuesSubmitted = true;
       _issueSelectorKey.currentState?.resetSelection();
     } else {
+      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: ${response.body}")),
       );

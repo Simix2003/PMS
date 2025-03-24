@@ -28,13 +28,12 @@ class ObjectCard extends StatefulWidget {
 }
 
 class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
-  bool _isHoveringOK = false;
   bool _isHoveringKO = false;
 
   void _sendOutcome(BuildContext context, String outcome) async {
     HapticFeedback.mediumImpact();
     setState(() {
-      widget.hasBeenEvaluated = false;
+      widget.hasBeenEvaluated = true;
     });
 
     final response = await http.post(
@@ -72,42 +71,6 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
       setState(() {
         widget.hasBeenEvaluated = false;
       });
-    }
-  }
-
-  void _loadIssuesFromPLC() async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false, // Prevent closing by tapping outside
-      builder: (BuildContext context) {
-        return const Center(
-          child: CircularProgressIndicator(),
-        );
-      },
-    );
-
-    try {
-      final response = await http.get(
-        Uri.parse(
-            'http://192.168.1.132:8000/api/get_issues?channel_id=${widget.selectedChannel}&object_id=${widget.objectId}'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List<String> loadedIssues =
-            List<String>.from(data['selected_issues']);
-
-        widget.onIssuesLoaded(loadedIssues);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Errore nel caricare i difetti dal PLC")),
-        );
-      }
-    } finally {
-      // Always remove loading indicator
-      Navigator.of(context, rootNavigator: true).pop();
     }
   }
 
@@ -182,7 +145,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
             Align(
               alignment: Alignment.centerRight,
               child: ElevatedButton.icon(
-                onPressed: _loadIssuesFromPLC,
+                onPressed: () {},
                 icon: const Icon(
                   Icons.refresh,
                   color: Colors.white,
@@ -237,18 +200,6 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // OK Button
-                Expanded(
-                  child: _buildFlatButton(
-                    label: "OK",
-                    icon: Icons.check_rounded,
-                    color: Colors.green,
-                    onPressed: () => _sendOutcome(context, "buona"),
-                    isHovering: _isHoveringOK,
-                    onHoverChanged: (value) =>
-                        setState(() => _isHoveringOK = value),
-                  ),
-                ),
               ],
             ),
           ],

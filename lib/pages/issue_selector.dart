@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class IssueSelectorWidget extends StatefulWidget {
   final String channelId;
@@ -25,10 +26,13 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   late AnimationController _loadingController;
   bool isLoading = true;
   late AnimationController _pulseController;
+  String? _currentIP;
+  String? _currentPort;
 
   @override
   void initState() {
     super.initState();
+    _loadSavedConfig();
     _loadingController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -49,6 +53,16 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     super.dispose();
   }
 
+  Future<void> _loadSavedConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ip = prefs.getString('backend_ip');
+    final port = prefs.getString('backend_port');
+    setState(() {
+      _currentIP = ip ?? '192.168.0.100';
+      _currentPort = port ?? '8000';
+    });
+  }
+
   Future<void> _fetchCurrentPath() async {
     setState(() {
       isLoading = true;
@@ -56,7 +70,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
     final currentPath = pathStack.join(".");
     final url = Uri.parse(
-        'http://192.168.1.132:8000/api/issues/${widget.channelId}?path=$currentPath');
+        'http://$_currentIP:$_currentPort/api/issues/${widget.channelId}?path=$currentPath');
 
     try {
       final response = await http.get(url);

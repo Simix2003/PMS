@@ -1,13 +1,14 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
 import '../issue_selector.dart';
+import '../settings/settings_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -16,12 +17,18 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+enum ConnectionStatus { connecting, online, offline, retrying }
+
+ConnectionStatus connectionStatus = ConnectionStatus.connecting;
+
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String objectId = "";
   bool isObjectOK = false;
   bool hasBeenEvaluated = false;
   final Set<String> _issues = {};
   WebSocketChannel? channel;
+  String? _currentIP;
+  String? _currentPort;
 
   String selectedChannel = "M308"; // Default selection
   final List<String> availableChannels = ["M308", "M309", "M326"];
@@ -36,25 +43,34 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _startup();
+  }
+
+  Future<void> _startup() async {
+    _loadSavedConfig();
+
+    //wait 3 seconds
+    await Future.delayed(const Duration(seconds: 3));
 
     _connectWebSocket();
   }
 
   void _connectWebSocket() {
     setState(() {
-      isConnecting = true;
+      connectionStatus = ConnectionStatus.connecting;
     });
 
     // Close existing channel if present
     channel?.sink.close();
+
     channel = WebSocketChannel.connect(
-      Uri.parse('ws://192.168.1.132:8000/ws/$selectedChannel'),
+      Uri.parse('ws://$_currentIP:$_currentPort/ws/$selectedChannel'),
     );
 
     channel!.stream.listen(
       (message) {
         setState(() {
-          isConnecting = false;
+          connectionStatus = ConnectionStatus.online;
         });
 
         final decoded = jsonDecode(message);
@@ -80,7 +96,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         if (decoded['outcome'] != null) {
           final outcome = decoded['outcome']; // "buona" or "scarto"
           print("Outcome from PLC: $outcome");
-          // You can use this to auto-set `isObjectOK = true/false`
           setState(() {
             isObjectOK = (outcome == "buona");
             hasBeenEvaluated = true;
@@ -88,23 +103,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         }
       },
       onDone: () {
-        setState(() {
-          isConnecting = false;
-        });
+        _retryWebSocket();
       },
       onError: (error) {
-        setState(() {
-          isConnecting = false;
-        });
+        _retryWebSocket();
       },
     );
+  }
 
-    // Set a timeout for the connection status
-    Future.delayed(const Duration(seconds: 3), () {
+  void _retryWebSocket() {
+    setState(() {
+      connectionStatus = ConnectionStatus.retrying;
+    });
+
+    Future.delayed(const Duration(seconds: 10), () {
       if (mounted) {
-        setState(() {
-          isConnecting = false;
-        });
+        _connectWebSocket();
       }
     });
   }
@@ -131,7 +145,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
 
     final response = await http.post(
-      Uri.parse('http://192.168.1.132:8000/api/set_issues'),
+      Uri.parse('http://$_currentIP:$_currentPort/api/set_issues'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'channel_id': selectedChannel,
@@ -159,10 +173,58 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _loadSavedConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ip = prefs.getString('backend_ip');
+    final port = prefs.getString('backend_port');
+    setState(() {
+      _currentIP = ip ?? '192.168.0.100';
+      _currentPort = port ?? '8000';
+    });
+  }
+
   @override
   void dispose() {
     channel?.sink.close();
     super.dispose();
+  }
+
+  Widget _buildConnectionStatus() {
+    Color color;
+    String text;
+
+    switch (connectionStatus) {
+      case ConnectionStatus.connecting:
+        color = Colors.blue;
+        text = "🔄 Connecting...";
+        break;
+      case ConnectionStatus.online:
+        color = Colors.green;
+        text = "✅ Connected";
+        break;
+      case ConnectionStatus.retrying:
+        color = Colors.orange;
+        text = "⚠️ Offline - Retrying in 10s...";
+        break;
+      case ConnectionStatus.offline:
+        color = Colors.red;
+        text = "❌ Offline";
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      color: color.withOpacity(0.1),
+      child: Center(
+        child: Text(
+          text,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -182,6 +244,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         backgroundColor: Colors.white,
         elevation: 1,
         actions: [
+          // Dropdown for channel selection
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: DropdownButtonHideUnderline(
@@ -217,6 +280,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             ),
           ),
+          // Settings Icon Button
+          IconButton(
+            icon: const Icon(Icons.settings, color: Colors.black87),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsPage()),
+              );
+            },
+          ),
         ],
       ),
       body: SafeArea(
@@ -224,6 +297,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
+              _buildConnectionStatus(),
               if (isConnecting)
                 Container(
                   margin: const EdgeInsets.only(bottom: 16),
@@ -287,6 +361,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                     ?.restoreSelection(loadedIssues);
                               });
                             },
+                            currentIP: _currentIP!,
+                            currentPort: _currentPort!,
                           ),
                           const SizedBox(height: 24),
                         ] else ...[

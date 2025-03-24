@@ -29,6 +29,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   WebSocketChannel? channel;
   String? _currentIP;
   String? _currentPort;
+  String plcStatus = "CHECKING"; // or values like "CONNECTED", "DISCONNECTED"
 
   String selectedChannel = "M308"; // Default selection
   final List<String> availableChannels = ["M308", "M309", "M326"];
@@ -47,15 +48,36 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _startup() async {
-    _loadSavedConfig();
-
-    //wait 3 seconds
-    await Future.delayed(const Duration(seconds: 3));
-
+    await _loadSavedConfig();
     _connectWebSocket();
+    _fetchPLCStatus();
+  }
+
+  void _fetchPLCStatus() async {
+    if (_currentIP == null || _currentPort == null) return;
+
+    try {
+      final response = await http
+          .get(Uri.parse('http://$_currentIP:$_currentPort/api/plc_status'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          plcStatus = data[selectedChannel] ?? "UNKNOWN";
+        });
+      } else {
+        setState(() {
+          plcStatus = "ERROR";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        plcStatus = "ERROR";
+      });
+    }
   }
 
   void _connectWebSocket() {
+    print("🔄 Connecting to WebSocket...");
     setState(() {
       connectionStatus = ConnectionStatus.connecting;
     });
@@ -75,6 +97,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
         final decoded = jsonDecode(message);
         print('🔔 Message on $selectedChannel: $decoded');
+
+        _fetchPLCStatus();
+
+        if (decoded['handshake'] == true) {
+          setState(() {
+            connectionStatus = ConnectionStatus.online;
+          });
+        }
 
         if (decoded['trigger'] == true) {
           setState(() {
@@ -102,9 +132,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           });
         }
       },
-      onDone: () {
-        _retryWebSocket();
-      },
+      onDone: () {},
       onError: (error) {
         _retryWebSocket();
       },
@@ -126,6 +154,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void _onChannelChange(String? newChannel) {
     if (newChannel != null && newChannel != selectedChannel) {
       setState(() {
+        _fetchPLCStatus();
         // Reset UI data when switching station
         selectedChannel = newChannel;
         objectId = "";
@@ -178,7 +207,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final ip = prefs.getString('backend_ip');
     final port = prefs.getString('backend_port');
     setState(() {
-      _currentIP = ip ?? '192.168.0.100';
+      _currentIP = ip ?? '172.16.176.235';
       _currentPort = port ?? '8000';
     });
   }
@@ -189,42 +218,56 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  Widget _buildConnectionStatus() {
-    Color color;
-    String text;
-
-    switch (connectionStatus) {
-      case ConnectionStatus.connecting:
-        color = Colors.blue;
-        text = "🔄 Connecting...";
-        break;
-      case ConnectionStatus.online:
-        color = Colors.green;
-        text = "✅ Connected";
-        break;
-      case ConnectionStatus.retrying:
-        color = Colors.orange;
-        text = "⚠️ Offline - Retrying in 10s...";
-        break;
-      case ConnectionStatus.offline:
-        color = Colors.red;
-        text = "❌ Offline";
-    }
-
+  Widget _buildStatusBadge(String label, Color color) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      color: color.withOpacity(0.1),
-      child: Center(
-        child: Text(
-          text,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.bold,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.6)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.circle, color: color, size: 10),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
           ),
-        ),
+        ],
       ),
     );
+  }
+
+  Color _getPCColor() {
+    switch (connectionStatus) {
+      case ConnectionStatus.online:
+        return Colors.green;
+      case ConnectionStatus.connecting:
+        return Colors.orange;
+      case ConnectionStatus.retrying:
+        return Colors.orange;
+      case ConnectionStatus.offline:
+        return Colors.red;
+    }
+  }
+
+  Color _getPLCColor() {
+    switch (plcStatus) {
+      case "CONNECTED":
+        return Colors.green;
+      case "DISCONNECTED":
+        return Colors.red;
+      case "ERROR":
+      case "UNKNOWN":
+      default:
+        return Colors.orange;
+    }
   }
 
   @override
@@ -232,29 +275,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: const Text(
-          'DIFETTI',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
-            color: Colors.black87,
-            letterSpacing: 1.0,
-          ),
-        ),
         backgroundColor: Colors.white,
         elevation: 1,
+        title: Row(
+          children: [
+            const Text(
+              'DIFETTI',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 20,
+                color: Colors.black87,
+                letterSpacing: 1.0,
+              ),
+            ),
+            const SizedBox(width: 12),
+            _buildStatusBadge("PC", _getPCColor()),
+            _buildStatusBadge("PLC", _getPLCColor()),
+          ],
+        ),
         actions: [
-          // Dropdown for channel selection
+          // Dropdown + settings button (keep them as you have)
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: selectedChannel,
                 icon: const Icon(Icons.arrow_drop_down, color: Colors.black87),
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontSize: 14,
-                ),
+                style: const TextStyle(color: Colors.black87, fontSize: 14),
                 items: availableChannels.map((channel) {
                   return DropdownMenuItem(
                     value: channel,
@@ -280,7 +327,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             ),
           ),
-          // Settings Icon Button
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.black87),
             onPressed: () {
@@ -297,7 +343,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              _buildConnectionStatus(),
               if (isConnecting)
                 Container(
                   margin: const EdgeInsets.only(bottom: 16),

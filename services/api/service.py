@@ -171,12 +171,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     print("🟢 MySQL connected!")
     
-    plc_ip, plc_slot, station_configs = load_station_configs("C:/IX-Monitor/stations.ini")
-    for station, params in station_configs.items():
-        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot)
-        plc_connections[station] = plc_conn
-        asyncio.create_task(background_task(plc_conn, params, station))
-        print(f"🚀 Background task created for {station}")
+    #plc_ip, plc_slot, pc_ip, pc_port, station_configs = load_station_configs("C:/IX-Monitor/stations.ini")
+    #for station, params in station_configs.items():
+    #    plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot)
+    #    plc_connections[station] = plc_conn
+    #    asyncio.create_task(background_task(plc_conn, params, station))
+    #    print(f"🚀 Background task created for {station}")
 
     yield
 
@@ -668,6 +668,9 @@ def load_station_configs(file_path):
 
     plc_ip = config.get("PLC", "IP")
     plc_slot = config.getint("PLC", "SLOT")
+
+    pc_ip = config.get("PC", "IP")
+    pc_port = config.getint("PC", "PORT")
     station_configs = {}
 
     for section in config.sections():
@@ -684,7 +687,7 @@ def load_station_configs(file_path):
                 "Lettura_Bit": config.getint(section, "Lettura_Bit"),
             }
 
-    return plc_ip, plc_slot, station_configs
+    return plc_ip, plc_slot, pc_ip, pc_port, station_configs
 
 # ---------------- BACKGROUND TASK ----------------
 async def background_task(plc_connection, params, station):
@@ -735,7 +738,11 @@ async def websocket_endpoint(websocket: WebSocket, channel_id: str):
 
     subscriptions.setdefault(channel_id, set()).add(websocket)
 
-    # Use the GLOBAL connection
+    if channel_id not in plc_connections:
+        print(f"❌ No PLC connection found for {channel_id}, closing socket.")
+        await websocket.close()
+        return
+
     plc_connection = plc_connections[channel_id]
 
     await send_initial_state(websocket, channel_id, plc_connection)

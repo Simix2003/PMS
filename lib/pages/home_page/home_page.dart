@@ -2,13 +2,12 @@
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ix_monitor/pages/object_details/object_details_page.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
 import '../issue_selector.dart';
-import '../settings/settings_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -27,8 +26,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool hasBeenEvaluated = false;
   final Set<String> _issues = {};
   WebSocketChannel? channel;
-  String? _currentIP;
-  String? _currentPort;
+
   String plcStatus = "CHECKING"; // or values like "CONNECTED", "DISCONNECTED"
 
   String selectedChannel = "M308"; // Default selection
@@ -48,17 +46,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _startup() async {
-    await _loadSavedConfig();
     _connectWebSocket();
     _fetchPLCStatus();
   }
 
   void _fetchPLCStatus() async {
-    if (_currentIP == null || _currentPort == null) return;
-
     try {
-      final response = await http
-          .get(Uri.parse('http://$_currentIP:$_currentPort/api/plc_status'));
+      final response =
+          await http.get(Uri.parse('http://172.20.10.10:8000/api/plc_status'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
@@ -86,57 +81,61 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     channel?.sink.close();
 
     channel = WebSocketChannel.connect(
-      Uri.parse('ws://$_currentIP:$_currentPort/ws/$selectedChannel'),
+      Uri.parse('ws://172.20.10.10:8000/ws/$selectedChannel'),
     );
 
-    channel!.stream.listen(
-      (message) {
-        setState(() {
-          connectionStatus = ConnectionStatus.online;
-        });
-
-        final decoded = jsonDecode(message);
-        print('🔔 Message on $selectedChannel: $decoded');
-
-        _fetchPLCStatus();
-
-        if (decoded['handshake'] == true) {
+    if (channel != null) {
+      channel!.stream.listen(
+        (message) {
           setState(() {
             connectionStatus = ConnectionStatus.online;
           });
-        }
 
-        if (decoded['trigger'] == true) {
-          setState(() {
-            objectId = decoded['objectId'] ?? '';
-            hasBeenEvaluated = false;
-            issuesSubmitted = decoded['issuesSubmitted'] ?? false;
-            _issues.clear();
-          });
-        } else if (decoded['trigger'] == false) {
-          setState(() {
-            objectId = "";
-            isObjectOK = false;
-            hasBeenEvaluated = false;
-            issuesSubmitted = false;
-            _issues.clear();
-          });
-        }
+          final decoded = jsonDecode(message);
+          print('🔔 Message on $selectedChannel: $decoded');
 
-        if (decoded['outcome'] != null) {
-          final outcome = decoded['outcome']; // "buona" or "scarto"
-          print("Outcome from PLC: $outcome");
-          setState(() {
-            isObjectOK = (outcome == "buona");
-            hasBeenEvaluated = true;
-          });
-        }
-      },
-      onDone: () {},
-      onError: (error) {
-        _retryWebSocket();
-      },
-    );
+          _fetchPLCStatus();
+
+          if (decoded['handshake'] == true) {
+            setState(() {
+              connectionStatus = ConnectionStatus.online;
+            });
+          }
+
+          if (decoded['trigger'] == true) {
+            setState(() {
+              objectId = decoded['objectId'] ?? '';
+              hasBeenEvaluated = false;
+              issuesSubmitted = decoded['issuesSubmitted'] ?? false;
+              _issues.clear();
+            });
+          } else if (decoded['trigger'] == false) {
+            setState(() {
+              objectId = "";
+              isObjectOK = false;
+              hasBeenEvaluated = false;
+              issuesSubmitted = false;
+              _issues.clear();
+            });
+          }
+
+          if (decoded['outcome'] != null) {
+            final outcome = decoded['outcome']; // "buona" or "scarto"
+            print("Outcome from PLC: $outcome");
+            setState(() {
+              isObjectOK = (outcome == "buona");
+              hasBeenEvaluated = true;
+            });
+          }
+        },
+        onDone: () {},
+        onError: (error) {
+          _retryWebSocket();
+        },
+      );
+    } else {
+      print("🔄 Channel is null");
+    }
   }
 
   void _retryWebSocket() {
@@ -174,7 +173,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
 
     final response = await http.post(
-      Uri.parse('http://$_currentIP:$_currentPort/api/set_issues'),
+      Uri.parse('http://172.20.10.10:8000/api/set_issues'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'channel_id': selectedChannel,
@@ -200,16 +199,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         SnackBar(content: Text("Error: ${response.body}")),
       );
     }
-  }
-
-  Future<void> _loadSavedConfig() async {
-    final prefs = await SharedPreferences.getInstance();
-    final ip = prefs.getString('backend_ip');
-    final port = prefs.getString('backend_port');
-    setState(() {
-      _currentIP = ip ?? '172.16.176.235';
-      _currentPort = port ?? '8000';
-    });
   }
 
   @override
@@ -327,196 +316,190 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.settings, color: Colors.black87),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsPage()),
-              );
-            },
-          ),
         ],
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              if (isConnecting)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.blueGrey.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blueGrey.shade200),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        "Connessione a $selectedChannel...",
-                        style: TextStyle(
-                          color: Colors.blueGrey.shade800,
-                          fontSize: 12,
-                          letterSpacing: 0.5,
+        child: selectedChannel == "M326"
+            ? M326HomePage(context)
+            : Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    if (isConnecting)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.blueGrey.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blueGrey.shade200),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              "Connessione a $selectedChannel...",
+                              style: TextStyle(
+                                color: Colors.blueGrey.shade800,
+                                fontSize: 12,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (objectId.isNotEmpty) ...[
-                          ObjectCard(
-                            objectId: objectId,
-                            isObjectOK: isObjectOK,
-                            hasBeenEvaluated: hasBeenEvaluated,
-                            selectedChannel: selectedChannel,
-                            issuesSubmitted: issuesSubmitted,
-                            onIssuesLoaded: (loadedIssues) {
-                              setState(() {
-                                _issues.clear();
-                                _issues.addAll(loadedIssues);
-                                issuesSubmitted =
-                                    false; // this triggers IssueSelector to appear
-                              });
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (objectId.isNotEmpty) ...[
+                                ObjectCard(
+                                  objectId: objectId,
+                                  isObjectOK: isObjectOK,
+                                  hasBeenEvaluated: hasBeenEvaluated,
+                                  selectedChannel: selectedChannel,
+                                  issuesSubmitted: issuesSubmitted,
+                                  onIssuesLoaded: (loadedIssues) {
+                                    setState(() {
+                                      _issues.clear();
+                                      _issues.addAll(loadedIssues);
+                                      issuesSubmitted =
+                                          false; // this triggers IssueSelector to appear
+                                    });
 
-                              // Defer restore after widget is built
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                _issueSelectorKey.currentState
-                                    ?.restoreSelection(loadedIssues);
-                              });
-                            },
-                            currentIP: _currentIP!,
-                            currentPort: _currentPort!,
-                          ),
-                          const SizedBox(height: 24),
-                        ] else ...[
-                          Center(
-                            child: Column(
-                              children: [
-                                const Icon(
-                                  Icons.timer_outlined,
-                                  color: Colors.grey,
-                                  size: 32,
+                                    // Defer restore after widget is built
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                      _issueSelectorKey.currentState
+                                          ?.restoreSelection(loadedIssues);
+                                    });
+                                  },
                                 ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Nessun oggetto in produzione',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey.shade700,
-                                    fontWeight: FontWeight.w400,
+                                const SizedBox(height: 24),
+                              ] else ...[
+                                Center(
+                                  child: Column(
+                                    children: [
+                                      const Icon(
+                                        Icons.timer_outlined,
+                                        color: Colors.grey,
+                                        size: 32,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'Nessun oggetto in produzione',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade700,
+                                          fontWeight: FontWeight.w400,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
+                                const SizedBox(height: 24),
                               ],
-                            ),
+                              if (hasBeenEvaluated &&
+                                  !isObjectOK &&
+                                  !issuesSubmitted) ...[
+                                const Text(
+                                  'Seleziona i problemi rilevati',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                IssueSelectorWidget(
+                                  key: _issueSelectorKey, // pass key
+                                  channelId: selectedChannel,
+                                  onIssueSelected: (issuePath) {
+                                    setState(() {
+                                      if (_issues.contains(issuePath)) {
+                                        _issues.remove(issuePath);
+                                      } else {
+                                        _issues.add(issuePath);
+                                      }
+                                    });
+                                  },
+                                ),
+                              ] else if (hasBeenEvaluated &&
+                                  !isObjectOK &&
+                                  issuesSubmitted) ...[
+                                const SizedBox(height: 40),
+                                Center(
+                                  child: Text(
+                                    'ANDARE A PREMERE PULSANTE KO FISICO',
+                                    style: TextStyle(fontSize: 36),
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                              ],
+                            ],
                           ),
-                          const SizedBox(height: 24),
-                        ],
-                        if (hasBeenEvaluated &&
-                            !isObjectOK &&
-                            !issuesSubmitted) ...[
-                          const Text(
-                            'Seleziona i problemi rilevati',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          IssueSelectorWidget(
-                            key: _issueSelectorKey, // pass key
-                            channelId: selectedChannel,
-                            onIssueSelected: (issuePath) {
-                              setState(() {
-                                if (_issues.contains(issuePath)) {
-                                  _issues.remove(issuePath);
-                                } else {
-                                  _issues.add(issuePath);
-                                }
-                              });
-                            },
-                          ),
-                        ] else if (hasBeenEvaluated &&
-                            !isObjectOK &&
-                            issuesSubmitted) ...[
-                          const SizedBox(height: 40),
-                          Center(
-                            child: Text(
-                              'ANDARE A PREMERE PULSANTE KO FISICO',
-                              style: TextStyle(fontSize: 36),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (hasBeenEvaluated && !isObjectOK)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: _issues.isNotEmpty ? _submitIssues : null,
-                        icon: Icon(
-                          Icons.send,
-                          size: 26,
-                          color: _issues.isNotEmpty
-                              ? Colors.white
-                              : Colors.grey.shade400,
-                        ), // bigger icon
-                        label: const Text(
-                          'INVIA',
-                          style: TextStyle(
-                            fontSize: 18, // bigger text
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _issues.isNotEmpty
-                              ? Colors.blueAccent
-                              : Colors.grey.shade400,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 32, vertical: 20), // more padding
-                          elevation: _issues.isNotEmpty ? 6 : 0,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    if (hasBeenEvaluated && !isObjectOK)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed:
+                                  _issues.isNotEmpty ? _submitIssues : null,
+                              icon: Icon(
+                                Icons.send,
+                                size: 26,
+                                color: _issues.isNotEmpty
+                                    ? Colors.white
+                                    : Colors.grey.shade400,
+                              ), // bigger icon
+                              label: const Text(
+                                'INVIA',
+                                style: TextStyle(
+                                  fontSize: 18, // bigger text
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _issues.isNotEmpty
+                                    ? Colors.blueAccent
+                                    : Colors.grey.shade400,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 32,
+                                    vertical: 20), // more padding
+                                elevation: _issues.isNotEmpty ? 6 : 0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
-            ],
-          ),
-        ),
+              ),
       ),
     );
   }

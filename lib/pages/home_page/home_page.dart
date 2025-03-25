@@ -1,8 +1,8 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:ix_monitor/pages/object_details/object_details_page.dart';
+import 'package:ix_monitor/pages/object_details/m326_page.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -18,7 +18,7 @@ class HomePage extends StatefulWidget {
 
 enum ConnectionStatus { connecting, online, offline, retrying }
 
-ConnectionStatus connectionStatus = ConnectionStatus.connecting;
+ConnectionStatus connectionStatus = ConnectionStatus.offline;
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String objectId = "";
@@ -27,17 +27,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final Set<String> _issues = {};
   WebSocketChannel? channel;
 
+  bool cicloIniziato = false;
+  bool pezzoOK = false;
+  bool pezzoKO = false;
+
   String plcStatus = "CHECKING"; // or values like "CONNECTED", "DISCONNECTED"
 
   String selectedChannel = "M308"; // Default selection
   final List<String> availableChannels = ["M308", "M309", "M326"];
 
-  bool isConnecting = true;
-
   bool issuesSubmitted = false;
 
   final GlobalKey<IssueSelectorWidgetState> _issueSelectorKey =
       GlobalKey<IssueSelectorWidgetState>();
+
+  final TextEditingController _objectIdController = TextEditingController();
 
   @override
   void initState() {
@@ -53,7 +57,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void _fetchPLCStatus() async {
     try {
       final response =
-          await http.get(Uri.parse('http://172.20.10.10:8000/api/plc_status'));
+          await http.get(Uri.parse('http://192.168.0.10:8000/api/plc_status'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
@@ -81,7 +85,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     channel?.sink.close();
 
     channel = WebSocketChannel.connect(
-      Uri.parse('ws://172.20.10.10:8000/ws/$selectedChannel'),
+      Uri.parse('ws://192.168.0.10:8000/ws/$selectedChannel'),
     );
 
     if (channel != null) {
@@ -107,6 +111,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               objectId = decoded['objectId'] ?? '';
               hasBeenEvaluated = false;
               issuesSubmitted = decoded['issuesSubmitted'] ?? false;
+              cicloIniziato = true;
               _issues.clear();
             });
           } else if (decoded['trigger'] == false) {
@@ -115,6 +120,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               isObjectOK = false;
               hasBeenEvaluated = false;
               issuesSubmitted = false;
+              cicloIniziato = false;
               _issues.clear();
             });
           }
@@ -123,6 +129,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             final outcome = decoded['outcome']; // "buona" or "scarto"
             print("Outcome from PLC: $outcome");
             setState(() {
+              pezzoOK = (outcome == "buona");
+              pezzoKO = (outcome == "scarto");
               isObjectOK = (outcome == "buona");
               hasBeenEvaluated = true;
             });
@@ -130,6 +138,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         },
         onDone: () {},
         onError: (error) {
+          connectionStatus = ConnectionStatus.offline;
           _retryWebSocket();
         },
       );
@@ -173,7 +182,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
 
     final response = await http.post(
-      Uri.parse('http://172.20.10.10:8000/api/set_issues'),
+      Uri.parse('http://192.168.0.10:8000/api/set_issues'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'channel_id': selectedChannel,
@@ -183,7 +192,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
 
     if (response.statusCode == 200) {
-      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Issues sent successfully")),
       );
@@ -194,7 +202,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       issuesSubmitted = true;
       _issueSelectorKey.currentState?.resetSelection();
     } else {
-      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: ${response.body}")),
       );
@@ -204,11 +211,91 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void dispose() {
     channel?.sink.close();
+    _objectIdController.dispose();
     super.dispose();
   }
 
-  Widget _buildStatusBadge(String label, Color color) {
+  Future<void> _simulateTrigger() async {
+    await http.post(
+      Uri.parse("http://192.168.0.10:8000/api/simulate_trigger"),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        "channel_id": selectedChannel,
+      }),
+    );
+  }
+
+  Future<void> _simulateOutcome(String outcome) async {
+    await http.post(
+      Uri.parse("http://192.168.0.10:8000/api/simulate_outcome"),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        "channel_id": selectedChannel,
+        "value": outcome, // "buona" or "scarto"
+      }),
+    );
+  }
+
+  Future<void> _simulateObjectId() async {
+    final objectId = _objectIdController.text.trim();
+    if (objectId.isEmpty) return;
+
+    final url = Uri.parse("http://192.168.0.10:8000/api/simulate_objectId");
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        "channel_id": selectedChannel,
+        "objectId": objectId,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      debugPrint("✅ ObjectId sent successfully!");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("ObjectId scritto nel PLC!")),
+      );
+    } else {
+      debugPrint("❌ Failed to send ObjectId: ${response.body}");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text("Errore durante la scrittura dell'ObjectId")),
+      );
+    }
+  }
+
+  Widget _buildObjectIdSetter() {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.orange),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _objectIdController,
+              decoration: const InputDecoration(
+                hintText: 'Scrivi ObjectId...',
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.send, color: Colors.orange),
+            onPressed: () {
+              _simulateObjectId(); // Call the API
+            },
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(String label, Color color, {VoidCallback? onTap}) {
+    final badge = Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -231,6 +318,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ],
       ),
     );
+
+    // Make it tappable only if onTap is provided
+    return onTap != null
+        ? GestureDetector(
+            onTap: onTap,
+            child: badge,
+          )
+        : badge;
   }
 
   Color _getPCColor() {
@@ -280,6 +375,27 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             const SizedBox(width: 12),
             _buildStatusBadge("PC", _getPCColor()),
             _buildStatusBadge("PLC", _getPLCColor()),
+            _buildStatusBadge(
+              "Ciclo Iniziato",
+              cicloIniziato ? Colors.blue : Colors.grey,
+              onTap: _simulateTrigger,
+            ),
+            _buildStatusBadge(
+              "Pezzo OK",
+              pezzoOK ? Colors.green : Colors.grey,
+              onTap: () {
+                _simulateOutcome("buona");
+              },
+            ),
+            _buildStatusBadge(
+              "Pezzo KO",
+              pezzoKO ? Colors.red : Colors.grey,
+              onTap: () {
+                _simulateOutcome("scarto");
+              },
+            ),
+            const SizedBox(width: 20),
+            _buildObjectIdSetter(),
           ],
         ),
         actions: [
@@ -325,7 +441,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    if (isConnecting)
+                    if (connectionStatus == ConnectionStatus.retrying)
                       Container(
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.symmetric(

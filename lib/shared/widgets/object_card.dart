@@ -37,7 +37,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
     });
 
     final response = await http.post(
-      Uri.parse('http://172.20.10.10:8000/api/set_outcome'),
+      Uri.parse('http://192.168.0.10:8000/api/set_outcome'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         "channel_id": widget.selectedChannel,

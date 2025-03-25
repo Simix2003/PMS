@@ -28,7 +28,7 @@ class _DataViewPageState extends State<DataViewPage> {
   Future<Map<String, dynamic>> fetchData() async {
     final formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
     final response = await http.get(Uri.parse(
-        'http://localhost:8000/api/productions_summary?date=$formattedDate'));
+        'http://192.168.0.10:8000/api/productions_summary?date=$formattedDate'));
     if (response.statusCode == 200) {
       return json.decode(response.body);
     } else {
@@ -111,6 +111,7 @@ class _DataViewPageState extends State<DataViewPage> {
                                       barRods: [
                                         BarChartRodData(
                                           toY: data['stations'][station]
+                                                  ['good_count']
                                               .toDouble(),
                                           color: Colors.green,
                                           width: 20,
@@ -118,7 +119,9 @@ class _DataViewPageState extends State<DataViewPage> {
                                               BorderRadius.circular(4),
                                         ),
                                         BarChartRodData(
-                                          toY: data['bad_count'].toDouble(),
+                                          toY: data['stations'][station]
+                                                  ['bad_count']
+                                              .toDouble(),
                                           color: Colors.red,
                                           width: 20,
                                           borderRadius:

@@ -215,7 +215,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  /*Future<void> _simulateTrigger() async {
+  Future<void> _simulateTrigger() async {
     await http.post(
       Uri.parse("http://192.168.0.10:8000/api/simulate_trigger"),
       headers: {'Content-Type': 'application/json'},
@@ -235,7 +235,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       }),
     );
   }
-  
+
   Widget _buildObjectIdSetter() {
     return Container(
       width: 350,
@@ -296,7 +296,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             content: Text("Errore durante la scrittura dell'ObjectId")),
       );
     }
-  } */
+  }
 
   Widget _buildStatusBadge(String label, Color color, {VoidCallback? onTap}) {
     final badge = Container(
@@ -382,24 +382,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             _buildStatusBadge(
               "Ciclo Iniziato",
               cicloIniziato ? Colors.blue : Colors.grey,
-              //onTap: _simulateTrigger,
+              onTap: _simulateTrigger,
             ),
             _buildStatusBadge(
               "Pezzo OK",
               pezzoOK ? Colors.green : Colors.grey,
-              /*onTap: () {
+              onTap: () {
                 _simulateOutcome("buona");
-              },*/
+              },
             ),
             _buildStatusBadge(
               "Pezzo KO",
               pezzoKO ? Colors.red : Colors.grey,
-              /*onTap: () {
+              onTap: () {
                 _simulateOutcome("scarto");
-              },*/
+              },
             ),
-            //const SizedBox(width: 20),
-            //_buildObjectIdSetter(),
+            const SizedBox(width: 20),
+            _buildObjectIdSetter(),
           ],
         ),
         actions: [

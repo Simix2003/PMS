@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from pymysql.cursors import DictCursor
 import pymysql
 import ollama
+import re
 
 
 # ---------------- CONFIG & GLOBALS ----------------
@@ -321,11 +322,38 @@ def fill_1d(length, value):
 def fill_2d(rows, cols, value):
     return [[value] * cols for _ in range(rows)]
 
-def extract_leaf(issue: str) -> str:
-    # Step 1: Split by dot "." and get the last part
-    last_part = issue.split(".")[-1].strip()
-    
-    return last_part
+def remove_temp_issues(channel_id, object_id):
+    temp_data = load_temp_data()
+    filtered_data = [entry for entry in temp_data if not (entry.get("channel_id") == channel_id and entry.get("object_id") == object_id)]
+    save_temp_data(filtered_data)
+    print(f"🗑️ Removed temp issue for {channel_id} - {object_id}")
+
+def issue_matches_any(issues, pattern):
+    return any(re.search(pattern, issue) for issue in issues)
+
+def build_matrix_from_raw(issues, category, row_count, col_count):
+    return [
+        [
+            issue_matches_any(issues, fr"{category}\[{i+1}\]\.Saldatura\[{j+1}\]")
+            for j in range(col_count)
+        ]
+        for i in range(row_count)
+    ]
+
+def build_ribbon_array(issues, label, count):
+    return [
+        issue_matches_any(issues, fr"{label}\[{i+1}\]") for i in range(count)
+    ]
+
+def build_cell_matrix(issues, category, row_count, col_count):
+    return [
+        [
+            issue_matches_any(issues, fr"{category}\[{i+1}\]\.Cella\[{j+1}\]")
+            for j in range(col_count)
+        ]
+        for i in range(row_count)
+    ]
+
 
 # ---------------- PLC EVENTS ----------------
 async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val, data):
@@ -349,6 +377,8 @@ async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val
             plc_connection.read_string,
             id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
         )
+        
+        print('object_id: ', object_id)
 
         # Read issues flag again
         issues_value = await asyncio.to_thread(
@@ -442,31 +472,49 @@ async def read_data(plc_connection: PLCConnection, station, richiesta_ko, richie
 
         elif richiesta_ko:
             issues = get_latest_issues(station)
-            data["Stringa_F"] = fill_2d(6, 10, "Stringa_F" in issues)
-            data["Stringa_M_F"] = fill_2d(6, 10, "Stringa_M_F" in issues)
-            data["Stringa_M_B"] = fill_2d(6, 10, "Stringa_M_B" in issues)
-            data["Stringa_B"] = fill_2d(6, 10, "Stringa_B" in issues)
+            print('issues:', issues)
+
+            # Saldatura Matrici
+            data["Stringa_F"] = build_matrix_from_raw(issues, "Stringa_F", 6, 10)
+            data["Stringa_M_F"] = build_matrix_from_raw(issues, "Stringa_M_F", 6, 10)
+            data["Stringa_M_B"] = build_matrix_from_raw(issues, "Stringa_M_B", 6, 10)
+            data["Stringa_B"] = build_matrix_from_raw(issues, "Stringa_B", 6, 10)
+
+            # Disallineamento
             data["Disallineamento"] = {
-                "Ribbon_Stringa_F": fill_1d(12, "Disallineamento_Ribbon_Stringa_F" in issues),
-                "Ribbon_Stringa_M": fill_1d(12, "Disallineamento_Ribbon_Stringa_M" in issues),
-                "Ribbon_Stringa_B": fill_1d(12, "Disallineamento_Ribbon_Stringa_B" in issues)
+                "Ribbon_Stringa_F": build_ribbon_array(issues, "Ribbon_Stringa_F", 12),
+                "Ribbon_Stringa_M": build_ribbon_array(issues, "Ribbon_Stringa_M", 12),
+                "Ribbon_Stringa_B": build_ribbon_array(issues, "Ribbon_Stringa_B", 12),
             }
-            data["Stringa"] = fill_1d(12, "Stringa" in issues)
+
+            # Stringa (1D)
+            data["Stringa"] = build_ribbon_array(issues, "Stringa", 12)
+
+            # Mancanza Ribbon
             data["Mancanza_Ribbon"] = {
-                "Ribbon_Stringa_F": fill_1d(12, "Mancanza_Ribbon_Ribbon_Stringa_F" in issues),
-                "Ribbon_Stringa_M": fill_1d(12, "Mancanza_Ribbon_Ribbon_Stringa_M" in issues),
-                "Ribbon_Stringa_B": fill_1d(12, "Mancanza_Ribbon_Ribbon_Stringa_B" in issues)
+                "Ribbon_Stringa_F": build_ribbon_array(issues, "Mancanza_Ribbon.Ribbon_Stringa_F", 12),
+                "Ribbon_Stringa_M": build_ribbon_array(issues, "Mancanza_Ribbon.Ribbon_Stringa_M", 12),
+                "Ribbon_Stringa_B": build_ribbon_array(issues, "Mancanza_Ribbon.Ribbon_Stringa_B", 12),
             }
-            data["Rottura_Celle"] = fill_2d(12, 10, "Rottura_Celle" in issues)
-            data["Macchie_ECA_Celle"] = fill_2d(12, 10, "Macchie_ECA_Celle" in issues)
-            generali = {
-                "Non Lavorato Poe Scaduto": "Non Lavorato Poe Scaduto" in issues,
-                "Non Lavorato da Telecamere": "Non Lavorato da Telecamere" in issues,
-                "Materiale Esterno su Celle": "Materiale Esterno su Celle" in issues,
-                "Bad Soldering": "Bad Soldering" in issues
-            }
+
+            # Celle Matrici
+            data["Rottura_Celle"] = build_cell_matrix(issues, "Rottura_Celle", 12, 10)
+            data["Macchie_ECA_Celle"] = build_cell_matrix(issues, "Macchie_ECA_Celle", 12, 10)
+
+            # Generali
+            generali = {}
+            for general_issue in [
+                "Non Lavorato Poe Scaduto",
+                "Non Lavorato da Telecamere",
+                "Materiale Esterno su Celle",
+                "Bad Soldering"
+            ]:
+                generali[general_issue.replace(" ", "_")] = any(general_issue in issue for issue in issues)
+
             for i in range(4, 16):
-                generali[f"Non Lavorato Riserva {i}"] = f"Non Lavorato Riserva {i}" in issues
+                label = f"Non Lavorato Riserva {i}"
+                generali[label.replace(" ", "_")] = any(label in issue for issue in issues)
+
             data["Generali"] = generali
 
         print(f"[{station}] Data read successfully.")
@@ -728,6 +776,9 @@ async def background_task(plc_connection: PLCConnection, station):
                     print(f"[{station}] ✅ Inserting into MySQL...")
                     insert_production_data(result, station, mysql_connection)
                     print(f"[{station}] 🟢 Data inserted successfully!")
+                    # Clean up temp issues now that it's saved in MySQL
+                    remove_temp_issues(station, result.get("Id_Modulo"))
+
 
             await asyncio.sleep(1)
 
@@ -799,10 +850,6 @@ async def set_issues(request: Request):
 
     print('raw issues received:', issues)
 
-    # Normalize issues using extract_leaf()
-    normalized_issues = [extract_leaf(issue) for issue in issues]
-    print('normalized issues:', normalized_issues)
-
     # Load existing data
     existing_data = load_temp_data()
 
@@ -810,7 +857,7 @@ async def set_issues(request: Request):
     existing_data.append({
         "channel_id": channel_id,
         "object_id": object_id,
-        "issues": normalized_issues
+        "issues": issues
     })
 
     # Save updated data
@@ -1046,7 +1093,7 @@ async def simulate_objectId(request: Request):
             object_id,
             config["length"]
         )
-        logging.info(f"✅ ObjectId '{object_id}' written to PLC on channel {channel_id}")
+        print(f"✅ ObjectId '{object_id}' written to PLC on channel {channel_id}")
         return {"status": "ObjectId written", "value": object_id}
     except Exception as e:
         logging.error(f"❌ Failed to write ObjectId: {e}")

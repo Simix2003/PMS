@@ -15,6 +15,7 @@ class _DashboardState extends State<Dashboard> {
   final List<Widget> _pages = [
     const HomePage(),
     const DataViewPage(),
+    const DataViewPage(),
   ];
 
   @override
@@ -30,8 +31,12 @@ class _DashboardState extends State<Dashboard> {
             label: 'Difetti',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.data_exploration),
+            icon: Icon(Icons.query_stats),
             label: 'Analisi Dati',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.woo_commerce_rounded),
+            label: 'AI',
           ),
         ],
       ),

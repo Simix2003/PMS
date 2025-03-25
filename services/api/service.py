@@ -171,13 +171,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     print("🟢 MySQL connected!")
 
-    # Init PLC connections from INI config
-    plc_ip, plc_slot, pc_ip, pc_port, station_configs = load_station_configs("C:/IX-Monitor/stations.ini")
+    plc_ip, plc_slot, station_names = load_station_configs("C:/IX-Monitor/stations.ini")
 
-    for station, params in station_configs.items():
+    for station in station_names:
         plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot)
         plc_connections[station] = plc_conn
-        asyncio.create_task(background_task(plc_conn, params, station))
+        asyncio.create_task(background_task(plc_conn, station))
         print(f"🚀 Background task created for {station}")
 
     yield
@@ -671,28 +670,17 @@ def load_station_configs(file_path):
     plc_ip = config.get("PLC", "IP")
     plc_slot = config.getint("PLC", "SLOT")
 
-    pc_ip = config.get("PC", "IP")
-    pc_port = config.getint("PC", "PORT")
-    station_configs = {}
+    # Just load station names that start with "M"
+    station_names = []
 
     for section in config.sections():
         if section.startswith("M"):
-            station_configs[section] = {
-                "Richiesta_DB": config.getint(section, "Richiesta_DB"),
-                "Richiesta_Byte": config.getint(section, "Richiesta_Byte"),
-                "Richiesta_Bit": config.getint(section, "Richiesta_Bit"),
-                "CLOCK_DB": config.getint(section, "CLOCK_DB"),
-                "CLOCK_Byte": config.getint(section, "CLOCK_Byte"),
-                "CLOCK_Bit": config.getint(section, "CLOCK_Bit"),
-                "Lettura_DB": config.getint(section, "Lettura_DB"),
-                "Lettura_Byte": config.getint(section, "Lettura_Byte"),
-                "Lettura_Bit": config.getint(section, "Lettura_Bit"),
-            }
+            station_names.append(section)
 
-    return plc_ip, plc_slot, pc_ip, pc_port, station_configs
+    return plc_ip, plc_slot, station_names
 
 # ---------------- BACKGROUND TASK ----------------
-async def background_task(plc_connection: PLCConnection, params, station):
+async def background_task(plc_connection: PLCConnection, station):
     print(f"[{station}] Starting background task.")
     prev_trigger = False
 
@@ -760,6 +748,9 @@ async def websocket_endpoint(websocket: WebSocket, channel_id: str):
     await websocket.accept()
     await websocket.send_json({"handshake": True})
     print(f"📲 Client subscribed to {channel_id}")
+    await websocket.send_json({"msg": "ping"})
+    print("👋 Sent ping after handshake")
+
 
     subscriptions.setdefault(channel_id, set()).add(websocket)
 
@@ -998,4 +989,13 @@ async def chat_with_ai(request: Request):
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
-    uvicorn.run("service:app", host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "service:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        ws_max_size=16777216,  # Optional: allow big WS frames
+        ws_ping_interval=10,
+        ws_ping_timeout=20,
+    )
+

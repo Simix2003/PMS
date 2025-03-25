@@ -1,122 +1,60 @@
+// ignore_for_file: non_constant_identifier_names
+
 import 'package:flutter/material.dart';
 
-class ObjectDetailsPage extends StatefulWidget {
-  const ObjectDetailsPage({super.key});
-
-  @override
-  State<ObjectDetailsPage> createState() => _ObjectDetailsPageState();
-}
-
-class _ObjectDetailsPageState extends State<ObjectDetailsPage> {
-  final TextEditingController _controller = TextEditingController();
-  String searchQuery = '';
-
-  // Dummy KO objects list
-  final List<Map<String, dynamic>> koObjects = [
-    {
-      'objectNumber': 'OBJ-00123',
-      'issues': ['Superficie danneggiata', 'Colore non conforme']
-    },
-    {
-      'objectNumber': 'OBJ-00456',
-      'issues': ['Dimensioni errate']
-    },
-    {
-      'objectNumber': 'OBJ-00789',
-      'issues': ['Problemi di assemblaggio', 'Componente mancante']
-    },
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final filteredObjects = koObjects.where((obj) {
-      return obj['objectNumber']
-          .toString()
-          .toLowerCase()
-          .contains(searchQuery.toLowerCase());
-    }).toList();
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Dettagli Oggetto')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _controller,
-              decoration: InputDecoration(
-                hintText: 'Inserisci numero oggetto...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.search),
-                  onPressed: () {
-                    setState(() {
-                      searchQuery = _controller.text;
-                    });
-                  },
-                ),
-              ),
-              onSubmitted: (val) {
-                setState(() {
-                  searchQuery = val;
-                });
-              },
-            ),
-            const SizedBox(height: 24),
-            Expanded(
-              child: filteredObjects.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'Nessun oggetto trovato.',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: filteredObjects.length,
-                      itemBuilder: (context, index) {
-                        final obj = filteredObjects[index];
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 8),
-                          child: ListTile(
-                            title: Text(obj['objectNumber']),
-                            subtitle: Text(
-                                '${obj['issues'].length} problemi rilevati'),
-                            trailing: const Icon(Icons.arrow_forward_ios),
-                            onTap: () => _showIssuesDialog(obj),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showIssuesDialog(Map<String, dynamic> obj) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Problemi per ${obj['objectNumber']}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ...obj['issues'].map<Widget>((issue) => ListTile(
-                  leading: const Icon(Icons.bug_report),
-                  title: Text(issue),
-                )),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Chiudi'),
+Widget M326HomePage(context) {
+  return Padding(
+    padding: const EdgeInsets.all(24),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const SizedBox(height: 40),
+        Center(
+          child: Icon(
+            Icons.factory,
+            color: Colors.orangeAccent,
+            size: 80,
           ),
-        ],
-      ),
-    );
-  }
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          "M326 STATION",
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          "Questa è una schermata personalizzata per la M326.",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 40),
+        ElevatedButton.icon(
+          onPressed: () {
+            // Insert fake action here
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("M326 Action triggered")),
+            );
+          },
+          icon: const Icon(Icons.play_arrow),
+          label: const Text("Avvia Processo"),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orangeAccent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }

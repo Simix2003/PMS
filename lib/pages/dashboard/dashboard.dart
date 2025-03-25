@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../graphs/data_view.dart';
 import '../home_page/home_page.dart';
-import '../object_details/object_details_page.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -15,7 +14,6 @@ class _DashboardState extends State<Dashboard> {
 
   final List<Widget> _pages = [
     const HomePage(),
-    const ObjectDetailsPage(),
     const DataViewPage(),
   ];
 
@@ -30,10 +28,6 @@ class _DashboardState extends State<Dashboard> {
           BottomNavigationBarItem(
             icon: Icon(Icons.feedback),
             label: 'Difetti',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Dettagli Oggetto',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.data_exploration),

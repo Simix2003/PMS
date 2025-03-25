@@ -12,8 +12,6 @@ class ObjectCard extends StatefulWidget {
   String selectedChannel;
   final bool issuesSubmitted;
   final Function(List<String>) onIssuesLoaded;
-  String currentIP;
-  String currentPort;
 
   ObjectCard({
     super.key,
@@ -23,8 +21,6 @@ class ObjectCard extends StatefulWidget {
     required this.selectedChannel,
     required this.issuesSubmitted,
     required this.onIssuesLoaded,
-    required this.currentIP,
-    required this.currentPort,
   });
 
   @override
@@ -41,8 +37,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
     });
 
     final response = await http.post(
-      Uri.parse(
-          'http://${widget.currentIP}:${widget.currentPort}/api/set_outcome'),
+      Uri.parse('http://172.20.10.10:8000/api/set_outcome'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         "channel_id": widget.selectedChannel,

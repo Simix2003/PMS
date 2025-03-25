@@ -16,6 +16,7 @@ class PLCConnection:
 
     def _connect(self):
         """Internal connection method"""
+        self.force_reset()  # Always reset before trying to reconnect
         try:
             self.client.connect(self.ip_address, self.rack, self.slot)
             if self.client.get_connected():
@@ -57,6 +58,17 @@ class PLCConnection:
         if not self.connected:
             self.reconnect()
 
+    def force_reset(self):
+        """Forcefully reset Snap7 client and create a new one"""
+        with self.lock:
+            try:
+                self.client.disconnect()
+            except:
+                pass  # Ignore if already broken
+            self.client = c.Client()
+            self.connected = False
+            logging.warning(f"🔁 Snap7 client forcefully reset for {self.ip_address}")
+
     # ---------- READ/WRITE METHODS WITH RETRY LOGIC ----------
 
     def read_bool(self, db_number, byte_index, bit_index):
@@ -66,9 +78,16 @@ class PLCConnection:
                 byte_array = self.client.db_read(db_number, byte_index, 1)
                 return u.get_bool(byte_array, 0, bit_index)
             except Exception as e:
-                logging.warning(f"⚠️ Error reading BOOL from DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
+                logging.warning(f"⚠️ Error reading BOOL (first try) DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
                 self.connected = False
-                return None
+                self.reconnect()
+                try:
+                    byte_array = self.client.db_read(db_number, byte_index, 1)
+                    return u.get_bool(byte_array, 0, bit_index)
+                except Exception as e2:
+                    logging.error(f"❌ Retry failed: BOOL DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e2)}")
+                    self.connected = False
+                    return None
 
     def write_bool(self, db_number, byte_index, bit_index, value):
         with self.lock:
@@ -78,8 +97,16 @@ class PLCConnection:
                 u.set_bool(byte_array, 0, bit_index, value)
                 self.client.db_write(db_number, byte_index, byte_array)
             except Exception as e:
-                logging.warning(f"⚠️ Error writing BOOL to DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
+                logging.warning(f"⚠️ Error writing BOOL (first try) DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
                 self.connected = False
+                self.reconnect()
+                try:
+                    byte_array = self.client.db_read(db_number, byte_index, 1)
+                    u.set_bool(byte_array, 0, bit_index, value)
+                    self.client.db_write(db_number, byte_index, byte_array)
+                except Exception as e2:
+                    logging.error(f"❌ Retry failed: BOOL write DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e2)}")
+                    self.connected = False
 
     def read_integer(self, db_number, byte_index):
         with self.lock:
@@ -88,9 +115,16 @@ class PLCConnection:
                 byte_array = self.client.db_read(db_number, byte_index, 2)
                 return u.get_int(byte_array, 0)
             except Exception as e:
-                logging.warning(f"⚠️ Error reading INT from DB{db_number}, byte {byte_index}: {str(e)}")
+                logging.warning(f"⚠️ Error reading INT (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
-                return None
+                self.reconnect()
+                try:
+                    byte_array = self.client.db_read(db_number, byte_index, 2)
+                    return u.get_int(byte_array, 0)
+                except Exception as e2:
+                    logging.error(f"❌ Retry failed: INT DB{db_number}, byte {byte_index}: {str(e2)}")
+                    self.connected = False
+                    return None
 
     def write_integer(self, db_number, byte_index, value):
         with self.lock:
@@ -100,8 +134,16 @@ class PLCConnection:
                 u.set_int(byte_array, 0, value)
                 self.client.db_write(db_number, byte_index, byte_array)
             except Exception as e:
-                logging.warning(f"⚠️ Error writing INT to DB{db_number}, byte {byte_index}: {str(e)}")
+                logging.warning(f"⚠️ Error writing INT (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
+                self.reconnect()
+                try:
+                    byte_array = self.client.db_read(db_number, byte_index, 2)
+                    u.set_int(byte_array, 0, value)
+                    self.client.db_write(db_number, byte_index, byte_array)
+                except Exception as e2:
+                    logging.error(f"❌ Retry failed: INT write DB{db_number}, byte {byte_index}: {str(e2)}")
+                    self.connected = False
 
     def read_string(self, db_number, byte_index, max_size):
         with self.lock:
@@ -112,9 +154,32 @@ class PLCConnection:
                 string_data = byte_array[2:2 + actual_size]
                 return ''.join(map(chr, string_data))
             except Exception as e:
-                logging.warning(f"⚠️ Error reading STRING from DB{db_number}, byte {byte_index}: {str(e)}")
+                logging.warning(f"⚠️ Error reading STRING (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
-                return None
+                self.reconnect()
+                try:
+                    byte_array = self.client.db_read(db_number, byte_index, max_size + 2)
+                    actual_size = byte_array[1]
+                    string_data = byte_array[2:2 + actual_size]
+                    return ''.join(map(chr, string_data))
+                except Exception as e2:
+                    logging.error(f"❌ Retry failed: STRING DB{db_number}, byte {byte_index}: {str(e2)}")
+                    self.connected = False
+                    return None
+                
+    def write_string(self, db_number, byte_index, value, max_size):
+        with self.lock:
+            self._ensure_connection()
+            try:
+                byte_array = bytearray(max_size + 2)
+                byte_array[0] = max_size  # Max string length
+                byte_array[1] = len(value)  # Actual string length
+                for i, c in enumerate(value[:max_size]):
+                    byte_array[i + 2] = ord(c)
+                self.client.db_write(db_number, byte_index, byte_array)
+            except Exception as e:
+                logging.warning(f"⚠️ Error writing STRING to DB{db_number}, byte {byte_index}: {str(e)}")
+                self.connected = False
 
     def read_byte(self, db_number, byte_index):
         with self.lock:
@@ -123,9 +188,16 @@ class PLCConnection:
                 byte_array = self.client.db_read(db_number, byte_index, 1)
                 return byte_array[0]
             except Exception as e:
-                logging.warning(f"⚠️ Error reading BYTE from DB{db_number}, byte {byte_index}: {str(e)}")
+                logging.warning(f"⚠️ Error reading BYTE (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
-                return None
+                self.reconnect()
+                try:
+                    byte_array = self.client.db_read(db_number, byte_index, 1)
+                    return byte_array[0]
+                except Exception as e2:
+                    logging.error(f"❌ Retry failed: BYTE DB{db_number}, byte {byte_index}: {str(e2)}")
+                    self.connected = False
+                    return None
 
     def read_date_time(self, db_number, byte_index):
         with self.lock:
@@ -134,9 +206,16 @@ class PLCConnection:
                 byte_array = self.client.db_read(db_number, byte_index, 8)
                 return u.get_dt(byte_array, 0)
             except Exception as e:
-                logging.warning(f"⚠️ Error reading DATE AND TIME from DB{db_number}, byte {byte_index}: {str(e)}")
+                logging.warning(f"⚠️ Error reading DATE TIME (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
-                return None
+                self.reconnect()
+                try:
+                    byte_array = self.client.db_read(db_number, byte_index, 8)
+                    return u.get_dt(byte_array, 0)
+                except Exception as e2:
+                    logging.error(f"❌ Retry failed: DATE TIME DB{db_number}, byte {byte_index}: {str(e2)}")
+                    self.connected = False
+                    return None
 
     def read_real(self, db_number, byte_index):
         with self.lock:
@@ -145,6 +224,13 @@ class PLCConnection:
                 byte_array = self.client.db_read(db_number, byte_index, 4)
                 return u.get_real(byte_array, 0)
             except Exception as e:
-                logging.warning(f"⚠️ Error reading REAL from DB{db_number}, byte {byte_index}: {str(e)}")
+                logging.warning(f"⚠️ Error reading REAL (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
-                return None
+                self.reconnect()
+                try:
+                    byte_array = self.client.db_read(db_number, byte_index, 4)
+                    return u.get_real(byte_array, 0)
+                except Exception as e2:
+                    logging.error(f"❌ Retry failed: REAL DB{db_number}, byte {byte_index}: {str(e2)}")
+                    self.connected = False
+                    return None

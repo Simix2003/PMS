@@ -56,7 +56,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
     final currentPath = pathStack.join(".");
     final url = Uri.parse(
-        'http://172.20.10.10:8000/api/issues/${widget.channelId}?path=$currentPath');
+        'http://192.168.0.10:8000/api/issues/${widget.channelId}?path=$currentPath');
 
     try {
       final response = await http.get(url);

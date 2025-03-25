@@ -350,6 +350,9 @@ async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val
             id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
         )
 
+        print('ObjectId: ', object_id)
+        object_id = '123'
+
         # Read issues flag again
         issues_value = await asyncio.to_thread(
             plc_connection.read_bool,
@@ -985,6 +988,66 @@ async def chat_with_ai(request: Request):
         return {"query": ai_reply, "results": rows}
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"Errore nella query: {str(e)}", "query": ai_reply})
+
+@app.post("/api/simulate_trigger")
+async def simulate_trigger(request: Request):
+    data = await request.json()
+    channel_id = data.get("channel_id")
+
+    conf = CHANNELS[channel_id]["trigger"]
+    plc_conn = plc_connections[channel_id]
+
+    current_value = await asyncio.to_thread(plc_conn.read_bool, conf["db"], conf["byte"], conf["bit"])
+    new_value = not current_value
+
+    await asyncio.to_thread(plc_conn.write_bool, conf["db"], conf["byte"], conf["bit"], new_value)
+
+    return {"status": "trigger toggled", "value": new_value}
+
+@app.post("/api/simulate_outcome")
+async def simulate_outcome(request: Request):
+    data = await request.json()
+    channel_id = data.get("channel_id")
+    outcome = data.get("value")  # "buona" or "scarto"
+
+    conf = CHANNELS[channel_id]["fine_buona"] if outcome == "buona" else CHANNELS[channel_id]["fine_scarto"]
+    plc_conn = plc_connections[channel_id]
+
+    current_value = await asyncio.to_thread(plc_conn.read_bool, conf["db"], conf["byte"], conf["bit"])
+    new_value = not current_value
+
+    await asyncio.to_thread(plc_conn.write_bool, conf["db"], conf["byte"], conf["bit"], new_value)
+
+    return {"status": "outcome toggled", "value": new_value}
+
+@app.post("/api/simulate_objectId")
+async def simulate_objectId(request: Request):
+    data = await request.json()
+    channel_id = data.get("channel_id")
+    object_id = data.get("objectId")
+
+    if not channel_id or not object_id:
+        return JSONResponse(status_code=400, content={"error": "Missing channel_id or objectId"})
+
+    if channel_id not in CHANNELS:
+        return JSONResponse(status_code=404, content={"error": "Invalid channel ID"})
+
+    plc_conn = plc_connections[channel_id]
+    config = CHANNELS[channel_id]["id_modulo"]
+
+    try:
+        await asyncio.to_thread(
+            plc_conn.write_string,
+            config["db"],
+            config["byte"],
+            object_id,
+            config["length"]
+        )
+        logging.info(f"✅ ObjectId '{object_id}' written to PLC on channel {channel_id}")
+        return {"status": "ObjectId written", "value": object_id}
+    except Exception as e:
+        logging.error(f"❌ Failed to write ObjectId: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 # ---------------- MAIN ----------------

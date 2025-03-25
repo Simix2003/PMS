@@ -87,10 +87,10 @@ ISSUE_TREE = {
                         "Ribbon_Stringa_B": {
                             f"Ribbon_Stringa_B[{i}]": None for i in range(1, 13)
                         }
-                    },
-                    },
-                    "Stringa": {
-                        f"Stringa[{i}]": None for i in range(1, 13)
+                        },
+                        "Stringa": {
+                            f"Stringa[{i}]": None for i in range(1, 13)
+                        },
                     },
                     "Mancanza_Ribbon": {
                         "Ribbon": {
@@ -332,28 +332,37 @@ def issue_matches_any(issues, pattern):
     return any(re.search(pattern, issue) for issue in issues)
 
 def build_matrix_from_raw(issues, category, row_count, col_count):
+    """
+    Matches paths like:
+    Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa_F.Stringa_F[1].String_Ribbon[1]
+    """
     return [
         [
-            issue_matches_any(issues, fr"{category}\[{i+1}\]\.Saldatura\[{j+1}\]")
+            issue_matches_any(issues, fr"{category}\.{category}\[{i+1}\]\.String_Ribbon\[{j+1}\]")
             for j in range(col_count)
         ]
         for i in range(row_count)
     ]
 
+
 def build_ribbon_array(issues, label, count):
+    """
+    Matches entries like:
+    Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon_Stringa_M.Ribbon_Stringa_M[4]
+    """
     return [
-        issue_matches_any(issues, fr"{label}\[{i+1}\]") for i in range(count)
+        issue_matches_any(issues, fr"{label}\.{label.split('.')[-1]}\[{i+1}\]") for i in range(count)
     ]
 
 def build_cell_matrix(issues, category, row_count, col_count):
+    # Adjust pattern to include the ".Stringa.Stringa" segment as seen in your raw issues
     return [
         [
-            issue_matches_any(issues, fr"{category}\[{i+1}\]\.Cella\[{j+1}\]")
+            issue_matches_any(issues, fr"{category}\.Stringa\.Stringa\[{i+1}\]\.Cella\[{j+1}\]")
             for j in range(col_count)
         ]
         for i in range(row_count)
     ]
-
 
 # ---------------- PLC EVENTS ----------------
 async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val, data):
@@ -427,7 +436,7 @@ async def read_data(plc_connection: PLCConnection, station, richiesta_ko, richie
 
         data["DataInizio"] = data_inizio
         data["DataFine"] = datetime.datetime.now()
-        data["Linea_in_Lavorazione"] = [True, False, False, False, False]
+        data["Linea_in_Lavorazione"] = [False, True, False, False, False]
 
         # Read matrix data from the stringatrice configuration
         str_conf = CHANNELS[station]["stringatrice"]
@@ -532,48 +541,49 @@ Il database contiene le seguenti tabelle:
 
 1️⃣ `productions`
 - id (PK)
+- linea (INT)
 - station (ENUM: 'M308', 'M309', 'M326')
+- stringatrice (INT)
 - id_modulo (VARCHAR)
 - id_utente (VARCHAR)
 - data_inizio (DATETIME)
 - data_fine (DATETIME)
 - esito (BOOLEAN)
 
-2️⃣ `ribbons`
+2️⃣ `ribbon`
 - id (PK)
 - production_id (FK to productions.id)
-- category (VARCHAR)  -- ('Linea_in_Lavorazione', 'Lavorazione_Eseguita_Su_Stringatrice', 'Stringa')
+- tipo_difetto (ENUM: 'Disallineamento', 'Mancanza')
+- tipo (ENUM: 'F', 'M', 'B')
 - position (INT)
 - scarto (BOOLEAN)
 
 3️⃣ `saldatura`
 - id (PK)
 - production_id (FK)
-- category (VARCHAR)  -- ('Stringa_F', 'Stringa_M_F', etc.)
+- category ENUM('Stringa_F', 'Stringa_M_F', 'Stringa_M_B', 'Stringa_B')
 - stringa (INT)
 - ribbon (INT)
 - scarto (BOOLEAN)
 
-4️⃣ `celle`  -- this replaces `matrix_12x10`
+4️⃣ `celle`
 - id (PK)
 - production_id (FK)
-- category (VARCHAR)  -- ('Rottura_Celle', 'Macchie_ECA_Celle')
+- tipo_difetto ENUM('Rottura_Celle', 'Macchie_ECA_Celle')
 - stringa (INT)
 - cella (INT)
 - scarto (BOOLEAN)
 
-5️⃣ `ribbon_defects`
+5️⃣ `disallineamento_stringa`
 - id (PK)
 - production_id (FK)
-- tipo (VARCHAR) -- ('Disallineamento', 'Mancanza_Ribbon')
-- stringa (VARCHAR)
 - position (INT)
 - scarto (BOOLEAN)
 
-6️⃣ `generali_flags`
+6️⃣ `generali`
 - id (PK)
 - production_id (FK)
-- tipo (VARCHAR)
+- tipo_difetto ENUM('Non Lavorato Poe Scaduto', 'Non Lavorato da Telecamere', 'Materiale Esterno su Celle', 'Bad Soldering')
 - scarto (BOOLEAN)
 
 Regole:
@@ -594,113 +604,107 @@ def is_safe_query(query: str) -> bool:
 def insert_production_data(data, station, connection):
     """
     Inserts the PLC data into the normalized MySQL tables.
-
-    Parameters:
-        data (dict): Dictionary returned by read_station_data.
-        station (str): Station identifier ('M308', 'M309', or 'M326').
-        connection: An active pymysql connection.
-        
-    Returns:
-        production_id (int) if successful, None otherwise.
     """
     try:
         with connection.cursor() as cursor:
             # --- 1. Insert into productions table ---
+            # Determine the active 'linea'
+            for idx, val in enumerate(data.get("Linea_in_Lavorazione", [])):
+                if val:  # Only save True
+                    linea = idx + 1
+                    break  # exit after the first true value
+            
+            # Determine the active 'stringatrice'
+            for idx, val in enumerate(data.get("Lavorazione_Eseguita_Su_Stringatrice", [])):
+                if val:  # Only save True
+                    stringatrice = idx + 1
+                    break
+
             sql_productions = """
                 INSERT INTO productions 
-                    (station, id_modulo, id_utente, data_inizio, data_fine, esito)
+                    (linea, station, stringatrice, id_modulo, id_utente, data_inizio, data_fine, esito)
                 VALUES 
-                    (%s, %s, %s, %s, %s, %s)
+                    (%s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(sql_productions, (
+                linea,
                 station,
+                stringatrice,
                 data.get("Id_Modulo"),
                 data.get("Id_Utente"),
                 data.get("DataInizio"),
                 data.get("DataFine"),
-                #this should be inverted
-                0 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1,
-
+                6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1,  # 5 = OK_Operatore
             ))
             production_id = cursor.lastrowid
 
-            # --- 2. Insert into ribbons table (1D arrays) ---
-            for idx, val in enumerate(data.get("Linea_in_Lavorazione", [])):
-                if val:  # Only save True
-                    sql = "INSERT INTO ribbons (production_id, category, position, scarto) VALUES (%s, %s, %s, %s)"
-                    cursor.execute(sql, (production_id, 'Linea_in_Lavorazione', idx+1, False))
-
-            
-            # Only insert TRUE values for "Lavorazione_Eseguita_Su_Stringatrice"
-            for idx, val in enumerate(data.get("Lavorazione_Eseguita_Su_Stringatrice", [])):
-                if val:  # Only save True
-                    sql = "INSERT INTO ribbons (production_id, category, position, scarto) VALUES (%s, %s, %s, %s)"
-                    cursor.execute(sql, (production_id, 'Lavorazione_Eseguita_Su_Stringatrice', idx+1, False))
-
-            
-            # For "Stringa" (1D array) - ONLY TRUE values
-            for idx, val in enumerate(data.get("Stringa", [])):
-                if val:  # Only insert if True
-                    sql = "INSERT INTO ribbons (production_id, category, position, scarto) VALUES (%s, %s, %s, %s)"
-                    cursor.execute(sql, (production_id, 'Stringa', idx+1, val))
-
-            # --- 3. Insert into matrix_6x10 table (only True values) ---
+            # --- 2. Insert into saldatura ---
             for category in ['Stringa_F', 'Stringa_M_F', 'Stringa_M_B', 'Stringa_B']:
                 matrix = data.get(category, [])
                 for row_index, row in enumerate(matrix):
                     for col_index, val in enumerate(row):
-                        if val:  # Only save True
+                        if val:  # Only save True entries
                             sql = """
                                 INSERT INTO saldatura (production_id, category, stringa, ribbon, scarto)
                                 VALUES (%s, %s, %s, %s, %s)
                             """
-                            cursor.execute(sql, (production_id, category, row_index+1, col_index+1, True))
+                            cursor.execute(sql, (production_id, category, row_index + 1, col_index + 1, True))
 
-            # --- 4. Insert into matrix_12x10 table (only True values) ---
+            # --- 3. Insert into disallineamento_stringa ---
+            for idx, val in enumerate(data.get("Stringa", [])):
+                if val:  # Only insert if True
+                    sql = "INSERT INTO disallineamento_stringa (production_id, position, scarto) VALUES (%s, %s, %s)"
+                    cursor.execute(sql, (production_id, idx + 1, True))
+
+            # --- 4. Insert into generali ---
+            generali = data.get("Generali", {})
+            for flag_name, val in generali.items():
+                if val:
+                    # Replace underscores with spaces to match the ENUM values in your schema
+                    defect_type = flag_name.replace("_", " ")
+                    sql = "INSERT INTO generali (production_id, tipo_difetto, scarto) VALUES (%s, %s, %s)"
+                    cursor.execute(sql, (production_id, defect_type, True))
+
+            # --- 5. Insert into celle ---
             for category in ['Rottura_Celle', 'Macchie_ECA_Celle']:
                 matrix = data.get(category, [])
                 for row_index, row in enumerate(matrix):
                     for col_index, val in enumerate(row):
-                        if val:  # Only save True
+                        if val:  # Only save True entries
                             sql = """
-                                INSERT INTO celle (production_id, category, stringa, cella, scarto)
+                                INSERT INTO celle (production_id, tipo_difetto, stringa, cella, scarto)
                                 VALUES (%s, %s, %s, %s, %s)
                             """
-                            cursor.execute(sql, (production_id, category, row_index+1, col_index+1, True))
+                            cursor.execute(sql, (production_id, category, row_index + 1, col_index + 1, True))
 
-            # --- 5. Insert into ribbon_defects table ---
-            # For Disallineamento
+            # --- 6. Insert into ribbon ---
+            # For Disallineamento defects
             dis = data.get("Disallineamento", {})
             for ribbon_area in ['Ribbon_Stringa_F', 'Ribbon_Stringa_M', 'Ribbon_Stringa_B']:
                 arr = dis.get(ribbon_area, [])
                 for pos, val in enumerate(arr):
                     if val:
+                        # Extract the type (F, M, B) from the key (e.g. "Ribbon_Stringa_F")
+                        tipo_letter = ribbon_area.split("_")[-1]
                         sql = """
-                            INSERT INTO ribbon_defects (production_id, tipo, stringa, position, scarto)
+                            INSERT INTO ribbon (production_id, tipo_difetto, tipo, position, scarto)
                             VALUES (%s, %s, %s, %s, %s)
                         """
-                        cursor.execute(sql, (production_id, 'Disallineamento', ribbon_area, pos+1, val))
+                        cursor.execute(sql, (production_id, 'Disallineamento', tipo_letter, pos + 1, True))
 
-            # For Mancanza_Ribbon
+            # For Mancanza defects
             mr = data.get("Mancanza_Ribbon", {})
             for ribbon_area in ['Ribbon_Stringa_F', 'Ribbon_Stringa_M', 'Ribbon_Stringa_B']:
                 arr = mr.get(ribbon_area, [])
                 for pos, val in enumerate(arr):
                     if val:
+                        tipo_letter = ribbon_area.split("_")[-1]
                         sql = """
-                            INSERT INTO ribbon_defects (production_id, tipo, stringa, position, scarto)
+                            INSERT INTO ribbon (production_id, tipo_difetto, tipo, position, scarto)
                             VALUES (%s, %s, %s, %s, %s)
                         """
-                        cursor.execute(sql, (production_id, 'Mancanza_Ribbon', ribbon_area, pos+1, val))
+                        cursor.execute(sql, (production_id, 'Mancanza', tipo_letter, pos + 1, True))
 
-            # --- 6. Insert into generali_flags table (only True flags) ---
-            generali = data.get("Generali", {})
-            for flag_name, val in generali.items():
-                if val:
-                    sql = "INSERT INTO generali_flags (production_id, tipo, scarto) VALUES (%s, %s, %s)"
-                    cursor.execute(sql, (production_id, flag_name, val))
-
-            
             # Commit the transaction if all inserts are successful
             connection.commit()
             logging.info(f"Production data inserted with id: {production_id}")

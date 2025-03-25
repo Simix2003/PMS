@@ -141,7 +141,8 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
 
           if (widget.hasBeenEvaluated &&
               !widget.isObjectOK &&
-              widget.issuesSubmitted)
+              widget.issuesSubmitted &&
+              false)
             Align(
               alignment: Alignment.centerRight,
               child: ElevatedButton.icon(

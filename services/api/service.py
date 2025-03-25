@@ -350,9 +350,6 @@ async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val
             id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
         )
 
-        print('ObjectId: ', object_id)
-        object_id = '123'
-
         # Read issues flag again
         issues_value = await asyncio.to_thread(
             plc_connection.read_bool,
@@ -411,6 +408,8 @@ async def read_data(plc_connection: PLCConnection, station, richiesta_ko, richie
 
 
         data["Compilato_Su_Ipad_Scarto_Presente"] = True if richiesta_ko else False
+        print('Compilato_Su_Ipad_Scarto_Presente')
+        print(data["Compilato_Su_Ipad_Scarto_Presente"])
 
         if richiesta_ok:
             # All issue fields set to False
@@ -581,14 +580,14 @@ def insert_production_data(data, station, connection):
             for idx, val in enumerate(data.get("Linea_in_Lavorazione", [])):
                 if val:  # Only save True
                     sql = "INSERT INTO ribbons (production_id, category, position, scarto) VALUES (%s, %s, %s, %s)"
-                    cursor.execute(sql, (production_id, 'Linea_in_Lavorazione', idx+1, val))
+                    cursor.execute(sql, (production_id, 'Linea_in_Lavorazione', idx+1, False))
 
             
             # Only insert TRUE values for "Lavorazione_Eseguita_Su_Stringatrice"
             for idx, val in enumerate(data.get("Lavorazione_Eseguita_Su_Stringatrice", [])):
                 if val:  # Only save True
                     sql = "INSERT INTO ribbons (production_id, category, position, scarto) VALUES (%s, %s, %s, %s)"
-                    cursor.execute(sql, (production_id, 'Lavorazione_Eseguita_Su_Stringatrice', idx+1, val))
+                    cursor.execute(sql, (production_id, 'Lavorazione_Eseguita_Su_Stringatrice', idx+1, False))
 
             
             # For "Stringa" (1D array) - ONLY TRUE values
@@ -718,6 +717,10 @@ async def background_task(plc_connection: PLCConnection, station):
 
             if (fine_buona or fine_scarto) and not passato_flags[station]:
                 print(f"[{station}] Processing data (trigger detected)")
+                print('fine_buono: ')
+                print(fine_buona)
+                print('fine_scarto: ')
+                print(fine_scarto)
                 data_inizio = trigger_timestamps.get(station)
                 result = await read_data(plc_connection, station, richiesta_ok=fine_buona, richiesta_ko=fine_scarto, data_inizio=data_inizio)
                 if result:
@@ -1049,6 +1052,113 @@ async def simulate_objectId(request: Request):
         logging.error(f"❌ Failed to write ObjectId: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+@app.get("/api/productions_summary")
+async def productions_summary(date: str):
+    global mysql_connection
+    queries = {
+        "overall_summary": """
+            SELECT
+                SUM(CASE WHEN esito = 1 THEN 1 ELSE 0 END) AS good_count,
+                SUM(CASE WHEN esito = 0 THEN 1 ELSE 0 END) AS bad_count,
+                station
+            FROM productions
+            WHERE DATE(data_fine) = %s
+            GROUP BY station
+        """,
+        "station_production": """
+            SELECT 
+                station, 
+                COUNT(*) as total_production
+            FROM productions
+            WHERE DATE(data_fine) = %s
+            GROUP BY station
+        """,
+        "defect_types": """
+            SELECT 
+                r.tipo AS defect_type, 
+                COUNT(*) AS defect_count
+            FROM ribbon_defects r
+            JOIN productions p ON r.production_id = p.id
+            WHERE DATE(p.data_fine) = %s AND r.scarto = 1
+            GROUP BY r.tipo
+        """,
+        "cell_defects": """
+            SELECT 
+                c.category AS defect_type, 
+                COUNT(*) AS defect_count
+            FROM celle c
+            JOIN productions p ON c.production_id = p.id
+            WHERE DATE(p.data_fine) = %s AND c.scarto = 1
+            GROUP BY c.category
+        """,
+        "welding_defects": """
+            SELECT 
+                s.category AS defect_type, 
+                COUNT(*) AS defect_count
+            FROM saldatura s
+            JOIN productions p ON s.production_id = p.id
+            WHERE DATE(p.data_fine) = %s AND s.scarto = 1
+            GROUP BY s.category
+        """
+    }
+    
+    try:
+        assert mysql_connection is not None
+        with mysql_connection.cursor() as cursor:
+            # Execute all queries
+            results = {}
+            
+            # Overall Summary
+            cursor.execute(queries["overall_summary"], (date,))
+            overall_summary = cursor.fetchall()
+            
+            # Calculate good and bad counts
+            good_count = sum(row['good_count'] for row in overall_summary)
+            bad_count = sum(row['bad_count'] for row in overall_summary)
+            
+            # Station Production
+            cursor.execute(queries["station_production"], (date,))
+            station_production = cursor.fetchall()
+            
+            # Defect Types
+            defect_types = {}
+            
+            # Ribbon Defects
+            cursor.execute(queries["defect_types"], (date,))
+            ribbon_defects = cursor.fetchall()
+            for defect in ribbon_defects:
+                defect_types[f"Ribbon - {defect['defect_type']}"] = defect['defect_count']
+            
+            # Cell Defects
+            cursor.execute(queries["cell_defects"], (date,))
+            cell_defects = cursor.fetchall()
+            for defect in cell_defects:
+                defect_types[f"Celle - {defect['defect_type']}"] = defect['defect_count']
+            
+            # Welding Defects
+            cursor.execute(queries["welding_defects"], (date,))
+            welding_defects = cursor.fetchall()
+            for defect in welding_defects:
+                defect_types[f"Saldatura - {defect['defect_type']}"] = defect['defect_count']
+            
+            # Prepare stations dictionary
+            stations = {row['station']: row['total_production'] for row in station_production}
+            
+            # Ensure all stations are represented
+            for station in ['M308', 'M309', 'M326']:
+                if station not in stations:
+                    stations[station] = 0
+            
+            return {
+                "good_count": good_count,
+                "bad_count": bad_count,
+                "stations": stations,
+                "defect_types": defect_types
+            }
+            
+    except Exception as e:
+        logging.error(f"MySQL Error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":

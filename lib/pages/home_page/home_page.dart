@@ -215,7 +215,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  Future<void> _simulateTrigger() async {
+  /*Future<void> _simulateTrigger() async {
     await http.post(
       Uri.parse("http://192.168.0.10:8000/api/simulate_trigger"),
       headers: {'Content-Type': 'application/json'},
@@ -233,6 +233,40 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         "channel_id": selectedChannel,
         "value": outcome, // "buona" or "scarto"
       }),
+    );
+  }
+  
+  Widget _buildObjectIdSetter() {
+    return Container(
+      width: 350,
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.orange),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 200,
+            height: 20,
+            child: TextField(
+              controller: _objectIdController,
+              decoration: const InputDecoration(
+                hintText: 'Scrivi ObjectId...',
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.send, color: Colors.orange),
+            onPressed: () {
+              _simulateObjectId(); // Call the API
+            },
+          )
+        ],
+      ),
     );
   }
 
@@ -262,37 +296,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             content: Text("Errore durante la scrittura dell'ObjectId")),
       );
     }
-  }
-
-  Widget _buildObjectIdSetter() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.orange),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _objectIdController,
-              decoration: const InputDecoration(
-                hintText: 'Scrivi ObjectId...',
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.send, color: Colors.orange),
-            onPressed: () {
-              _simulateObjectId(); // Call the API
-            },
-          )
-        ],
-      ),
-    );
-  }
+  } */
 
   Widget _buildStatusBadge(String label, Color color, {VoidCallback? onTap}) {
     final badge = Container(
@@ -378,24 +382,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             _buildStatusBadge(
               "Ciclo Iniziato",
               cicloIniziato ? Colors.blue : Colors.grey,
-              onTap: _simulateTrigger,
+              //onTap: _simulateTrigger,
             ),
             _buildStatusBadge(
               "Pezzo OK",
               pezzoOK ? Colors.green : Colors.grey,
-              onTap: () {
+              /*onTap: () {
                 _simulateOutcome("buona");
-              },
+              },*/
             ),
             _buildStatusBadge(
               "Pezzo KO",
               pezzoKO ? Colors.red : Colors.grey,
-              onTap: () {
+              /*onTap: () {
                 _simulateOutcome("scarto");
-              },
+              },*/
             ),
-            const SizedBox(width: 20),
-            _buildObjectIdSetter(),
+            //const SizedBox(width: 20),
+            //_buildObjectIdSetter(),
           ],
         ),
         actions: [

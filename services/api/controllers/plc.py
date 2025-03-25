@@ -31,6 +31,7 @@ class PLCConnection:
 
     def reconnect(self, retries=3, delay=2):
         """Attempts reconnection with retries"""
+        self.force_reset()
         for attempt in range(retries):
             logging.info(f"🔄 Reconnection attempt {attempt+1} to {self.ip_address}")
             self._connect()

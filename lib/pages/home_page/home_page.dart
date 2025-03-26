@@ -200,7 +200,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       });
 
       issuesSubmitted = true;
-      _issueSelectorKey.currentState?.resetSelection();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: ${response.body}")),
@@ -398,8 +397,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _simulateOutcome("scarto");
               },
             ),
-            const SizedBox(width: 20),
-            _buildObjectIdSetter(),
+            //const SizedBox(width: 20),
+            //_buildObjectIdSetter(),
           ],
         ),
         actions: [
@@ -500,13 +499,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                       _issues.addAll(loadedIssues);
                                       issuesSubmitted =
                                           false; // this triggers IssueSelector to appear
-                                    });
-
-                                    // Defer restore after widget is built
-                                    WidgetsBinding.instance
-                                        .addPostFrameCallback((_) {
-                                      _issueSelectorKey.currentState
-                                          ?.restoreSelection(loadedIssues);
                                     });
                                   },
                                 ),

@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
+import '../create_visuals_page.dart';
 import '../graphs/data_view.dart';
-import '../home_page/home_page.dart';
 
-class Dashboard extends StatefulWidget {
-  const Dashboard({super.key});
+class DashboardData extends StatefulWidget {
+  const DashboardData({super.key});
 
   @override
-  State<Dashboard> createState() => _DashboardState();
+  State<DashboardData> createState() => _DashboardDataState();
 }
 
-class _DashboardState extends State<Dashboard> {
+class _DashboardDataState extends State<DashboardData> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = [
-    const HomePage(),
     const DataViewPage(),
-    const DataViewPage(),
+    const OverlayEditorPage(),
   ];
 
   @override
@@ -26,10 +25,6 @@ class _DashboardState extends State<Dashboard> {
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.feedback),
-            label: 'Difetti',
-          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.query_stats),
             label: 'Analisi Dati',

@@ -16,7 +16,6 @@ class PLCConnection:
 
     def _connect(self):
         """Internal connection method"""
-        self.force_reset()  # Always reset before trying to reconnect
         try:
             self.client.connect(self.ip_address, self.rack, self.slot)
             if self.client.get_connected():
@@ -30,15 +29,27 @@ class PLCConnection:
             logging.error(f"❌ Failed to connect to PLC at {self.ip_address}: {str(e)}")
 
     def reconnect(self, retries=3, delay=2):
-        """Attempts reconnection with retries"""
-        self.force_reset()
         for attempt in range(retries):
-            logging.info(f"🔄 Reconnection attempt {attempt+1} to {self.ip_address}")
-            self._connect()
-            if self.connected:
-                return True
+            logging.warning(f"🔄 Reconnection attempt {attempt + 1} to {self.ip_address}")
+            
+            self.force_reset()
+            
+            try:
+                self.client.connect(self.ip_address, self.rack, self.slot)
+                time.sleep(0.5)
+                if self.client.get_connected():
+                    self.connected = True
+                    logging.info(f"✅ Successfully reconnected on attempt {attempt + 1}")
+                    return True
+                else:
+                    logging.warning("❌ Client not connected even after connect()")
+            except Exception as e:
+                logging.error(f"❌ Exception during reconnect: {str(e)}")
+            
             time.sleep(delay)
-        logging.error(f"❌ All reconnection attempts failed for PLC at {self.ip_address}")
+        
+        self.connected = False
+        logging.error(f"🚫 All reconnection attempts failed for PLC at {self.ip_address}")
         return False
 
     def disconnect(self):
@@ -61,13 +72,16 @@ class PLCConnection:
 
     def force_reset(self):
         """Forcefully reset Snap7 client and create a new one"""
+        print('FORCE RESET!!')
         with self.lock:
             try:
-                self.client.disconnect()
-            except:
-                pass  # Ignore if already broken
+                self.client.destroy()
+            except Exception as e:
+                logging.warning(f"🔧 Error destroying client: {str(e)}")
             self.client = c.Client()
             self.connected = False
+            print('disconnected OKKK')
+            time.sleep(1)  # Allow OS to release the socket
             logging.warning(f"🔁 Snap7 client forcefully reset for {self.ip_address}")
 
     # ---------- READ/WRITE METHODS WITH RETRY LOGIC ----------
@@ -81,7 +95,9 @@ class PLCConnection:
             except Exception as e:
                 logging.warning(f"⚠️ Error reading BOOL (first try) DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
                 self.connected = False
+                print('connected = False')
                 self.reconnect()
+                print('reconnected')
                 try:
                     byte_array = self.client.db_read(db_number, byte_index, 1)
                     return u.get_bool(byte_array, 0, bit_index)

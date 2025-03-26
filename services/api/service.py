@@ -14,8 +14,8 @@ from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 from pymysql.cursors import DictCursor
 import pymysql
-import ollama
 import re
+from fastapi.staticfiles import StaticFiles
 
 
 # ---------------- CONFIG & GLOBALS ----------------
@@ -75,7 +75,7 @@ ISSUE_TREE = {
                                 f"Saldatura[{j}]": None for j in range(1, 11)
                             } for i in range(1, 7)
                         },
-                        },
+                    },
                     "Disallineamento": {
                         "Ribbon": {
                         "Ribbon_Stringa_F": {
@@ -119,6 +119,11 @@ ISSUE_TREE = {
                             } for i in range(1, 13)
                         }
                         },
+                    "Lunghezza_String_Ribbon": {
+                        "Stringa": {
+                            f"Stringa[{i}]": None for i in range(1, 13)
+                        },
+                    },
                     "Generali": {
                         "Non Lavorato Poe Scaduto": {},
                         "Non Lavorato da Telecamere": {},
@@ -162,9 +167,9 @@ SESSION_TIMEOUT = 600  # 600 seconds = 10 minutes
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     global mysql_connection
     mysql_connection = pymysql.connect(
-        host="127.0.0.1",
+        host="localhost",
         user="root",
-        password="Master36!",
+        #password="Master36!",
         database="production_data",
         port=3306,
         cursorclass=DictCursor,
@@ -193,6 +198,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/images", StaticFiles(directory="C:/IX-Monitor/images"), name="images")
 
 async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connection: PLCConnection):
     paths = CHANNELS[channel_id]
@@ -334,11 +340,12 @@ def issue_matches_any(issues, pattern):
 def build_matrix_from_raw(issues, category, row_count, col_count):
     """
     Matches paths like:
-    Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa_F.Stringa_F[1].String_Ribbon[1]
+    Dati.Esito.Esito_Scarto.Difetti.Saldatura.<category>.<category>[i].Saldatura[j]
+    For example: Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa_M_B.Stringa_M_B[1].Saldatura[1]
     """
     return [
         [
-            issue_matches_any(issues, fr"{category}\.{category}\[{i+1}\]\.String_Ribbon\[{j+1}\]")
+            issue_matches_any(issues, fr"{category}\.{category}\[{i+1}\]\.Saldatura\[{j+1}\]")
             for j in range(col_count)
         ]
         for i in range(row_count)
@@ -348,11 +355,14 @@ def build_matrix_from_raw(issues, category, row_count, col_count):
 def build_ribbon_array(issues, label, count):
     """
     Matches entries like:
-    Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon_Stringa_M.Ribbon_Stringa_M[4]
+    Dati.Esito.Esito_Scarto.Difetti.Saldatura.<label>.<label>[i]
+    Adjust the pattern as needed for your new structure.
     """
     return [
-        issue_matches_any(issues, fr"{label}\.{label.split('.')[-1]}\[{i+1}\]") for i in range(count)
+        issue_matches_any(issues, fr"{label}\.{label.split('.')[-1]}\[{i+1}\]")
+        for i in range(count)
     ]
+
 
 def build_cell_matrix(issues, category, row_count, col_count):
     # Adjust pattern to include the ".Stringa.Stringa" segment as seen in your raw issues
@@ -386,8 +396,8 @@ async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val
             plc_connection.read_string,
             id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
         )
-        
-        print('object_id: ', object_id)
+        #object_id = 'testte'
+        #print('object_id: ', object_id)
 
         # Read issues flag again
         issues_value = await asyncio.to_thread(
@@ -440,15 +450,17 @@ async def read_data(plc_connection: PLCConnection, station, richiesta_ko, richie
 
         # Read matrix data from the stringatrice configuration
         str_conf = CHANNELS[station]["stringatrice"]
-        data["Lavorazione_Eseguita_Su_Stringatrice"] = [
+        values = [
             await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
             for i in range(str_conf["length"])
         ]
+        # Ensure at least one True
+        if not any(values):
+            values[0] = True  # or random.choice if you want it randomized
 
+        data["Lavorazione_Eseguita_Su_Stringatrice"] = values
 
         data["Compilato_Su_Ipad_Scarto_Presente"] = True if richiesta_ko else False
-        print('Compilato_Su_Ipad_Scarto_Presente')
-        print(data["Compilato_Su_Ipad_Scarto_Presente"])
 
         if richiesta_ok:
             # All issue fields set to False
@@ -539,7 +551,7 @@ async def read_data(plc_connection: PLCConnection, station, richiesta_ko, richie
 DB_SCHEMA = """
 Il database contiene le seguenti tabelle:
 
-1️⃣ `productions`
+1 `productions`
 - id (PK)
 - linea (INT)
 - station (ENUM: 'M308', 'M309', 'M326')
@@ -550,7 +562,7 @@ Il database contiene le seguenti tabelle:
 - data_fine (DATETIME)
 - esito (BOOLEAN)
 
-2️⃣ `ribbon`
+2 `ribbon`
 - id (PK)
 - production_id (FK to productions.id)
 - tipo_difetto (ENUM: 'Disallineamento', 'Mancanza')
@@ -558,7 +570,7 @@ Il database contiene le seguenti tabelle:
 - position (INT)
 - scarto (BOOLEAN)
 
-3️⃣ `saldatura`
+3 `saldatura`
 - id (PK)
 - production_id (FK)
 - category ENUM('Stringa_F', 'Stringa_M_F', 'Stringa_M_B', 'Stringa_B')
@@ -566,7 +578,7 @@ Il database contiene le seguenti tabelle:
 - ribbon (INT)
 - scarto (BOOLEAN)
 
-4️⃣ `celle`
+4 `celle`
 - id (PK)
 - production_id (FK)
 - tipo_difetto ENUM('Rottura_Celle', 'Macchie_ECA_Celle')
@@ -574,13 +586,19 @@ Il database contiene le seguenti tabelle:
 - cella (INT)
 - scarto (BOOLEAN)
 
-5️⃣ `disallineamento_stringa`
+5 `disallineamento_stringa`
 - id (PK)
 - production_id (FK)
 - position (INT)
 - scarto (BOOLEAN)
 
-6️⃣ `generali`
+6 `lunghezza_string_ribbon`
+- id (PK)
+- production_id (FK)
+- position (INT)
+- scarto (BOOLEAN)
+
+7 `generali`
 - id (PK)
 - production_id (FK)
 - tipo_difetto ENUM('Non Lavorato Poe Scaduto', 'Non Lavorato da Telecamere', 'Materiale Esterno su Celle', 'Bad Soldering')
@@ -740,39 +758,48 @@ async def background_task(plc_connection: PLCConnection, station):
 
     while True:
         try:
-            # If PLC disconnected, retry before continuing
+            # Ensure connection is alive or try reconnect
             if not plc_connection.connected:
                 print(f"⚠️ PLC disconnected for {station}, attempting reconnect...")
                 if not plc_connection.reconnect(retries=3, delay=5):
                     print(f"❌ PLC reconnection failed for {station}, notifying clients.")
                     await broadcast(station, {"plc_status": "PLC_UNAVAILABLE"})
-                    await asyncio.sleep(10)  # Wait before next retry
+                    await asyncio.sleep(10)
                     continue
                 else:
                     print(f"✅ PLC reconnected for {station}!")
 
-            # --- Normal operation ---
+            # --- Safe Trigger Read ---
             trigger_conf = CHANNELS[station]["trigger"]
             trigger_value = await asyncio.to_thread(
-                plc_connection.read_bool, 
+                plc_connection.read_bool,
                 trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
             )
+
+            if trigger_value is None:
+                raise Exception("Trigger read returned None")
 
             if trigger_value != prev_trigger:
                 prev_trigger = trigger_value
                 await on_trigger_change(plc_connection, station, None, trigger_value, None)
 
+            # --- Outcome Check ---
             fb_conf = CHANNELS[station]["fine_buona"]
             fs_conf = CHANNELS[station]["fine_scarto"]
-            fine_buona = await asyncio.to_thread(plc_connection.read_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"])
-            fine_scarto = await asyncio.to_thread(plc_connection.read_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"])
+            fine_buona = await asyncio.to_thread(
+                plc_connection.read_bool,
+                fb_conf["db"], fb_conf["byte"], fb_conf["bit"]
+            )
+            fine_scarto = await asyncio.to_thread(
+                plc_connection.read_bool,
+                fs_conf["db"], fs_conf["byte"], fs_conf["bit"]
+            )
+
+            if fine_buona is None or fine_scarto is None:
+                raise Exception("Outcome read returned None")
 
             if (fine_buona or fine_scarto) and not passato_flags[station]:
                 print(f"[{station}] Processing data (trigger detected)")
-                print('fine_buono: ')
-                print(fine_buona)
-                print('fine_scarto: ')
-                print(fine_scarto)
                 data_inizio = trigger_timestamps.get(station)
                 result = await read_data(plc_connection, station, richiesta_ok=fine_buona, richiesta_ko=fine_scarto, data_inizio=data_inizio)
                 if result:
@@ -780,15 +807,15 @@ async def background_task(plc_connection: PLCConnection, station):
                     print(f"[{station}] ✅ Inserting into MySQL...")
                     insert_production_data(result, station, mysql_connection)
                     print(f"[{station}] 🟢 Data inserted successfully!")
-                    # Clean up temp issues now that it's saved in MySQL
+                    await asyncio.to_thread(plc_connection.write_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"], False)
+                    await asyncio.to_thread(plc_connection.write_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"], False)
                     remove_temp_issues(station, result.get("Id_Modulo"))
-
 
             await asyncio.sleep(1)
 
         except Exception as e:
             logging.error(f"[{station}] 🔴 Error in background task: {str(e)}")
-            plc_connection.connected = False  # Mark as disconnected, so next loop tries reconnect
+            plc_connection.connected = False  # Force reconnect next loop
             await asyncio.sleep(5)
 
 # ---------------- ROUTES ----------------
@@ -912,8 +939,8 @@ async def set_outcome(request: Request):
         plc_connection.read_string,
         read_conf["db"], read_conf["byte"], read_conf["length"]
     )
-    if str(current_object_id) != str(object_id):
-        return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
+    #if str(current_object_id) != str(object_id):
+    #    return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
 
     # Write outcome using a configuration stored in CHANNELS (or a dedicated mapping)
     #outcome_conf = CHANNELS[channel_id]["fine_buona"] if outcome == "buona" else CHANNELS[channel_id]["fine_scarto"]
@@ -931,11 +958,11 @@ async def set_outcome(request: Request):
     return {"status": "ok"}
 
 @app.get("/api/issues/{channel_id}")
-async def get_issue_tree(channel_id: str, path: str = Query("")):
+async def get_issue_tree(channel_id: str, path: str = Query("Dati.Esito.Esito_Scarto.Difetti")):
     if channel_id not in CHANNELS:
         return JSONResponse(status_code=404, content={"error": "Invalid channel ID"})
 
-    # Traverse ISSUE_TREE
+    # Traverse ISSUE_TREE using the dot-separated path.
     current_node = ISSUE_TREE
     if path:
         for part in path.split("."):
@@ -947,101 +974,82 @@ async def get_issue_tree(channel_id: str, path: str = Query("")):
     for name, child in current_node.items():
         item_type = "folder" if child else "leaf"
         items.append({"name": name, "type": item_type})
-
     return {"items": items}
 
-@app.post("/api/reset_session")
-async def reset_session(request: Request):
+@app.get("/api/overlay_config")
+async def get_overlay_config(path: str):
+    safe_folder = "Linea2"
+    config_file = f"C:/IX-Monitor/images/{safe_folder}/overlay_config.json"
+
+    if not os.path.exists(config_file):
+        return JSONResponse(status_code=417, content={"error": "Overlay config not found"})
+
+    with open(config_file, "r") as f:
+        all_configs = json.load(f)
+
+    # Try to match entry based on provided path
+    for image_name, config in all_configs.items():
+        if config.get("path", "").lower() == path.lower():
+            return {
+                "image_url": f"http://192.168.0.10:8000/images/{safe_folder}/{image_name}",
+                "rectangles": config.get("rectangles", [])
+            }
+
+    return JSONResponse(status_code=404, content={"error": "No config matches the provided path"})
+
+@app.post("/api/update_overlay_config")
+async def update_overlay_config(request: Request):
     data = await request.json()
-    session_id = data.get("session_id")
-    if not session_id:
-        return JSONResponse(status_code=400, content={"error": "Missing session_id"})
-    
-    user_sessions.pop(session_id, None)
-    return {"status": "Session reset successfully"}
+    path = data.get("path")
+    new_rectangles = data.get("rectangles")
 
-@app.post("/api/chat")
-async def chat_with_ai(request: Request):
-    global mysql_connection, user_sessions
-    data = await request.json()
-    user_input = data.get("prompt")
-    session_id = data.get("session_id", "default")
+    if not path or not new_rectangles:
+        return JSONResponse(status_code=400, content={"error": "Missing path or rectangles"})
 
-    if not user_input:
-        return JSONResponse(status_code=400, content={"error": "Missing prompt"})
+    config_file = "C:/IX-Monitor/images/Linea2/overlay_config.json"
 
-    current_time = time.time()
+    if not os.path.exists(config_file):
+        return JSONResponse(status_code=404, content={"error": "Config file not found"})
 
-    # Get or initialize session
-    session = user_sessions.get(session_id)
+    with open(config_file, "r") as f:
+        config = json.load(f)
 
-    # Check if expired
-    if session and current_time - session.get("last_active", 0) > SESSION_TIMEOUT:
-        print(f"⏰ Session '{session_id}' expired!")
-        session = None  # Reset
+    # Find matching image by path
+    image_to_update = None
+    for image_name, entry in config.items():
+        if entry.get("path") == path:
+            image_to_update = image_name
+            break
 
-    if not session:
-        # Start new session
-        session = {
-            "messages": [{
-                "role": "assistant",
-                "content": "Ciao! 👋 Sono il tuo assistente SQL. Come posso aiutarti?"
-            }],
-            "last_active": current_time
-        }
+    if not image_to_update:
+        return JSONResponse(status_code=404, content={"error": "Path not found in config"})
 
-    # Add user message and update timestamp
-    session["messages"].append({"role": "user", "content": user_input})
-    session["last_active"] = current_time
+    # Update rectangles
+    config[image_to_update]["rectangles"] = new_rectangles
 
-    # Store back session
-    user_sessions[session_id] = session
+    with open(config_file, "w") as f:
+        json.dump(config, f, indent=4)
 
-    # AI chat
-    response = ollama.chat(
-    model="gemma:2b-instruct",
-    messages=[
-        {
-            "role": "system",
-            "content": f"""Sei un assistente SQL per un database MySQL.
-    Genera SOLO query SQL di tipo SELECT. Se mancano dettagli, chiedi ulteriori informazioni all'utente.
-    Non aggiungere spiegazioni, restituisci solo la query SQL oppure una domanda per chiarimenti.
-    Rispondi SEMPRE in italiano.
+    return {"status": "updated", "image": image_to_update}
 
-    Ecco la struttura del database:
-    {DB_SCHEMA}
-    """
-            },
-            *session["messages"]
-        ]
-    )
+@app.get("/api/available_overlay_paths")
+async def available_overlay_paths():
+    config_file = "C:/IX-Monitor/images/Linea2/overlay_config.json"
+    if not os.path.exists(config_file):
+        return JSONResponse(status_code=404, content={"error": "Config file not found"})
 
+    with open(config_file, "r") as f:
+        all_configs = json.load(f)
 
-    ai_reply = response['message']['content']
-    print(f"💡 AI says: {ai_reply}")
-
-    # Save AI reply
-    session["messages"].append({"role": "assistant", "content": ai_reply})
-
-    # Store back updated session
-    user_sessions[session_id] = session
-
-    # If the reply is not a SELECT, just return the AI message
-    if not ai_reply.strip().lower().startswith("select"):
-        return {"ai_message": ai_reply}
-
-    if not is_safe_query(ai_reply):
-        return JSONResponse(status_code=400, content={"error": "Query non sicura.", "query": ai_reply})
-
-    # Execute query
-    try:
-        assert mysql_connection is not None
-        with mysql_connection.cursor() as cursor:
-            cursor.execute(ai_reply)
-            rows = cursor.fetchall()
-        return {"query": ai_reply, "results": rows}
-    except Exception as e:
-        return JSONResponse(status_code=400, content={"error": f"Errore nella query: {str(e)}", "query": ai_reply})
+    result = []
+    for image_name, config in all_configs.items():
+        path = config.get("path")
+        if path:
+            result.append({
+                "image": image_name,
+                "path": path
+            })
+    return result
 
 @app.post("/api/simulate_trigger")
 async def simulate_trigger(request: Request):
@@ -1088,16 +1096,24 @@ async def simulate_objectId(request: Request):
 
     plc_conn = plc_connections[channel_id]
     config = CHANNELS[channel_id]["id_modulo"]
+    print(config)
 
     try:
         await asyncio.to_thread(
             plc_conn.write_string,
             config["db"],
             config["byte"],
-            object_id,
+            object_id,       # <-- value
+            config["length"] # <-- max_size
+        )
+
+        obj = await asyncio.to_thread(
+            plc_conn.read_string,
+            config["db"],
+            config["byte"],
             config["length"]
         )
-        print(f"✅ ObjectId '{object_id}' written to PLC on channel {channel_id}")
+        print(f"✅ ObjectId '{obj}' written to PLC on channel {channel_id}")
         return {"status": "ObjectId written", "value": object_id}
     except Exception as e:
         logging.error(f"❌ Failed to write ObjectId: {e}")
@@ -1124,102 +1140,125 @@ async def productions_summary(date: str):
             WHERE DATE(data_fine) = %s
             GROUP BY station
         """,
-        "defect_types": """
+        "ribbon_defects": """
             SELECT 
-                r.tipo AS defect_type, 
+                CONCAT(tipo_difetto, ' - ', tipo) AS defect_type,
                 COUNT(*) AS defect_count
-            FROM ribbon_defects r
-            JOIN productions p ON r.production_id = p.id
-            WHERE DATE(p.data_fine) = %s AND r.scarto = 1
-            GROUP BY r.tipo
+            FROM ribbon
+            JOIN productions ON productions.id = ribbon.production_id
+            WHERE DATE(productions.data_fine) = %s AND ribbon.scarto = 1
+            GROUP BY tipo_difetto, tipo
         """,
         "cell_defects": """
             SELECT 
-                c.category AS defect_type, 
+                tipo_difetto AS defect_type, 
                 COUNT(*) AS defect_count
-            FROM celle c
-            JOIN productions p ON c.production_id = p.id
-            WHERE DATE(p.data_fine) = %s AND c.scarto = 1
-            GROUP BY c.category
+            FROM celle
+            JOIN productions ON productions.id = celle.production_id
+            WHERE DATE(productions.data_fine) = %s AND celle.scarto = 1
+            GROUP BY tipo_difetto
         """,
         "welding_defects": """
             SELECT 
-                s.category AS defect_type, 
+                category AS defect_type, 
                 COUNT(*) AS defect_count
-            FROM saldatura s
-            JOIN productions p ON s.production_id = p.id
-            WHERE DATE(p.data_fine) = %s AND s.scarto = 1
-            GROUP BY s.category
+            FROM saldatura
+            JOIN productions ON productions.id = saldatura.production_id
+            WHERE DATE(productions.data_fine) = %s AND saldatura.scarto = 1
+            GROUP BY category
+        """,
+        "disallineamento_defects": """
+            SELECT 
+                'Disallineamento Stringa' AS defect_type,
+                COUNT(*) AS defect_count
+            FROM disallineamento_stringa
+            JOIN productions ON productions.id = disallineamento_stringa.production_id
+            WHERE DATE(productions.data_fine) = %s AND disallineamento_stringa.scarto = 1
+        """,
+        "lunghezza_ribbon_defects": """
+            SELECT 
+                'Lunghezza String Ribbon' AS defect_type,
+                COUNT(*) AS defect_count
+            FROM lunghezza_string_ribbon
+            JOIN productions ON productions.id = lunghezza_string_ribbon.production_id
+            WHERE DATE(productions.data_fine) = %s AND lunghezza_string_ribbon.scarto = 1
+        """,
+        "generali_defects": """
+            SELECT 
+                tipo_difetto AS defect_type,
+                COUNT(*) AS defect_count
+            FROM generali
+            JOIN productions ON productions.id = generali.production_id
+            WHERE DATE(productions.data_fine) = %s AND generali.scarto = 1
+            GROUP BY tipo_difetto
         """
     }
-    
+
     try:
         assert mysql_connection is not None
         with mysql_connection.cursor() as cursor:
-            # Execute all queries
             results = {}
-            
-            # Overall Summary
+
+            # Overall
             cursor.execute(queries["overall_summary"], (date,))
             overall_summary = cursor.fetchall()
-            
-            # Calculate good and bad counts
             good_count = sum(row['good_count'] for row in overall_summary)
             bad_count = sum(row['bad_count'] for row in overall_summary)
-            
-            # Station Production
+
+            # Stations
             cursor.execute(queries["station_production"], (date,))
             station_production = cursor.fetchall()
-            
-            # Defect Types
-            defect_types = {}
-            
-            # Ribbon Defects
-            cursor.execute(queries["defect_types"], (date,))
-            ribbon_defects = cursor.fetchall()
-            for defect in ribbon_defects:
-                defect_types[f"Ribbon - {defect['defect_type']}"] = defect['defect_count']
-            
-            # Cell Defects
-            cursor.execute(queries["cell_defects"], (date,))
-            cell_defects = cursor.fetchall()
-            for defect in cell_defects:
-                defect_types[f"Celle - {defect['defect_type']}"] = defect['defect_count']
-            
-            # Welding Defects
-            cursor.execute(queries["welding_defects"], (date,))
-            welding_defects = cursor.fetchall()
-            for defect in welding_defects:
-                defect_types[f"Saldatura - {defect['defect_type']}"] = defect['defect_count']
-            
-            # Prepare stations dictionary
             stations = {row['station']: row['total_production'] for row in station_production}
-            
-            # Ensure all stations are represented
             for station in ['M308', 'M309', 'M326']:
                 if station not in stations:
                     stations[station] = 0
-            
+
+            # Defects
+            defect_types = {}
+
+            # Ribbon
+            cursor.execute(queries["ribbon_defects"], (date,))
+            for row in cursor.fetchall():
+                defect_types[f"Ribbon - {row['defect_type']}"] = row['defect_count']
+
+            # Celle
+            cursor.execute(queries["cell_defects"], (date,))
+            for row in cursor.fetchall():
+                defect_types[f"Celle - {row['defect_type']}"] = row['defect_count']
+
+            # Saldatura
+            cursor.execute(queries["welding_defects"], (date,))
+            for row in cursor.fetchall():
+                defect_types[f"Saldatura - {row['defect_type']}"] = row['defect_count']
+
+            # Disallineamento Stringa
+            cursor.execute(queries["disallineamento_defects"], (date,))
+            row = cursor.fetchone()
+            if row:
+                defect_types[row['defect_type']] = row['defect_count']
+
+            # Lunghezza String Ribbon
+            cursor.execute(queries["lunghezza_ribbon_defects"], (date,))
+            row = cursor.fetchone()
+            if row:
+                defect_types[row['defect_type']] = row['defect_count']
+
+            # Generali
+            cursor.execute(queries["generali_defects"], (date,))
+            for row in cursor.fetchall():
+                defect_types[f"Generali - {row['defect_type']}"] = row['defect_count']
+
             return {
                 "good_count": good_count,
                 "bad_count": bad_count,
                 "stations": stations,
                 "defect_types": defect_types
             }
-            
+
     except Exception as e:
         logging.error(f"MySQL Error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
-    uvicorn.run(
-        "service:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        ws_max_size=16777216,  # Optional: allow big WS frames
-        ws_ping_interval=10,
-        ws_ping_timeout=20,
-    )
-
+   uvicorn.run(app, host="0.0.0.0", port=8000)

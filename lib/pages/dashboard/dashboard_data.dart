@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../create_visuals_page.dart';
+import '../graphs/ai_data_report.dart';
 import '../graphs/data_view.dart';
 
 class DashboardData extends StatefulWidget {
@@ -14,7 +14,7 @@ class _DashboardDataState extends State<DashboardData> {
 
   final List<Widget> _pages = [
     const DataViewPage(),
-    const OverlayEditorPage(),
+    const AIReportPage(),
   ];
 
   @override
@@ -30,7 +30,7 @@ class _DashboardDataState extends State<DashboardData> {
             label: 'Analisi Dati',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.woo_commerce_rounded),
+            icon: Icon(Icons.airline_stops_rounded),
             label: 'AI',
           ),
         ],

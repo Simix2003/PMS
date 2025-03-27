@@ -1142,6 +1142,60 @@ async def chat_with_ai(request: Request):
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"Errore nella query: {str(e)}", "query": ai_reply})
 
+import json
+
+@app.get("/api/ai_report")
+async def ai_report():
+    global mysql_connection
+
+    prompt = """
+    Sei un assistente che analizza i dati di produzione da un database MySQL.
+    Devi fornire un report dettagliato in formato JSON strutturato, senza testo aggiuntivo.
+    
+    Il JSON deve contenere:
+    {
+      "periodo_analisi": "Ultimi 7 giorni",
+      "totali": {
+        "pezzi_totali": numero,
+        "pezzi_buoni": numero,
+        "pezzi_scarti": numero,
+        "percentuale_buoni": "percentuale%",
+        "percentuale_scarti": "percentuale%"
+      },
+      "problemi_principali": [
+        {"problema": "descrizione breve", "numero_scarti": numero},
+        ...
+      ],
+      "trend": {
+        "produttivita": "aumento/riduzione e percentuale",
+        "qualita": "aumento/riduzione e percentuale"
+      },
+      "consiglio_ai": "consiglio breve e pratico per migliorare"
+    }
+
+    Usa la struttura del database per generare query SQL e calcolare questi dati. Restituisci SOLO il JSON finale senza spiegazioni o testo aggiuntivo.
+
+    Struttura Database:
+    """ + DB_SCHEMA
+
+    try:
+        response = ollama.chat(
+            model="gemma:2b-instruct",
+            messages=[{"role": "system", "content": prompt}]
+        )
+
+        ai_content = response['message']['content']
+        
+        # Validate JSON
+        report_json = json.loads(ai_content)
+        
+        return report_json
+
+    except json.JSONDecodeError:
+        return JSONResponse(status_code=500, content={"error": "AI response is not valid JSON", "content": ai_content})
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+        
 @app.post("/api/simulate_trigger")
 async def simulate_trigger(request: Request):
     data = await request.json()

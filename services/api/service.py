@@ -169,7 +169,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     mysql_connection = pymysql.connect(
         host="localhost",
         user="root",
-        #password="Master36!",
+        password="Master36!",
         database="production_data",
         port=3306,
         cursorclass=DictCursor,
@@ -180,7 +180,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     plc_ip, plc_slot, station_names = load_station_configs("C:/IX-Monitor/stations.ini")
 
     for station in station_names:
-        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot)
+        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
         plc_connections[station] = plc_conn
         asyncio.create_task(background_task(plc_conn, station))
         print(f"🚀 Background task created for {station}")
@@ -752,6 +752,14 @@ def load_station_configs(file_path):
     return plc_ip, plc_slot, station_names
 
 # ---------------- BACKGROUND TASK ----------------
+def make_status_callback(station):
+    async def callback(status):
+        try:
+            await broadcast(station, {"plc_status": status})
+        except Exception as e:
+            logging.error(f"❌ Failed to send PLC status for {station}: {e}")
+    return callback
+
 async def background_task(plc_connection: PLCConnection, station):
     print(f"[{station}] Starting background task.")
     prev_trigger = False
@@ -759,23 +767,18 @@ async def background_task(plc_connection: PLCConnection, station):
     while True:
         try:
             # Ensure connection is alive or try reconnect
-            if not plc_connection.connected:
+            if not plc_connection.connected or not plc_connection.is_connected():
                 print(f"⚠️ PLC disconnected for {station}, attempting reconnect...")
-                if not plc_connection.reconnect(retries=3, delay=5):
-                    print(f"❌ PLC reconnection failed for {station}, notifying clients.")
-                    await broadcast(station, {"plc_status": "PLC_UNAVAILABLE"})
-                    await asyncio.sleep(10)
-                    continue
-                else:
-                    print(f"✅ PLC reconnected for {station}!")
+                await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
+                await asyncio.sleep(10)
+                continue  # Retry after delay
 
-            # --- Safe Trigger Read ---
+            # Safe trigger read
             trigger_conf = CHANNELS[station]["trigger"]
             trigger_value = await asyncio.to_thread(
                 plc_connection.read_bool,
                 trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
             )
-
             if trigger_value is None:
                 raise Exception("Trigger read returned None")
 
@@ -783,7 +786,7 @@ async def background_task(plc_connection: PLCConnection, station):
                 prev_trigger = trigger_value
                 await on_trigger_change(plc_connection, station, None, trigger_value, None)
 
-            # --- Outcome Check ---
+            # Outcome check
             fb_conf = CHANNELS[station]["fine_buona"]
             fs_conf = CHANNELS[station]["fine_scarto"]
             fine_buona = await asyncio.to_thread(
@@ -801,7 +804,10 @@ async def background_task(plc_connection: PLCConnection, station):
             if (fine_buona or fine_scarto) and not passato_flags[station]:
                 print(f"[{station}] Processing data (trigger detected)")
                 data_inizio = trigger_timestamps.get(station)
-                result = await read_data(plc_connection, station, richiesta_ok=fine_buona, richiesta_ko=fine_scarto, data_inizio=data_inizio)
+                result = await read_data(plc_connection, station,
+                                         richiesta_ok=fine_buona,
+                                         richiesta_ko=fine_scarto,
+                                         data_inizio=data_inizio)
                 if result:
                     passato_flags[station] = True
                     print(f"[{station}] ✅ Inserting into MySQL...")
@@ -815,7 +821,7 @@ async def background_task(plc_connection: PLCConnection, station):
 
         except Exception as e:
             logging.error(f"[{station}] 🔴 Error in background task: {str(e)}")
-            plc_connection.connected = False  # Force reconnect next loop
+            await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
             await asyncio.sleep(5)
 
 # ---------------- ROUTES ----------------
@@ -836,28 +842,24 @@ async def websocket_endpoint(websocket: WebSocket, channel_id: str):
     await websocket.accept()
     await websocket.send_json({"handshake": True})
     print(f"📲 Client subscribed to {channel_id}")
-    await websocket.send_json({"msg": "ping"})
-    print("👋 Sent ping after handshake")
-
 
     subscriptions.setdefault(channel_id, set()).add(websocket)
-
     plc_connection = plc_connections.get(channel_id)
 
     if not plc_connection:
-        print(f"❌ No PLC connection object found for {channel_id}. Closing socket.")
+        print(f"❌ No PLC connection found for {channel_id}.")
         await websocket.close()
         return
 
-    # 🔄 Auto-reconnect logic if PLC is disconnected
-    if not plc_connection.connected:
-        print(f"⚠️ PLC for {channel_id} is currently disconnected. Trying to reconnect for the WebSocket...")
+    # Check connection status before sending initial state
+    if not plc_connection.connected or not plc_connection.is_connected():
+        print(f"⚠️ PLC for {channel_id} is disconnected. Attempting reconnect for WebSocket...")
         if not plc_connection.reconnect(retries=3, delay=5):
             print(f"❌ Failed to reconnect PLC for {channel_id}. Closing socket.")
             await websocket.close()
             return
         else:
-            print(f"✅ PLC reconnected successfully for {channel_id}!")
+            print(f"✅ PLC reconnected for {channel_id}!")
 
     await send_initial_state(websocket, channel_id, plc_connection)
 
@@ -939,8 +941,8 @@ async def set_outcome(request: Request):
         plc_connection.read_string,
         read_conf["db"], read_conf["byte"], read_conf["length"]
     )
-    #if str(current_object_id) != str(object_id):
-    #    return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
+    if str(current_object_id) != str(object_id):
+        return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
 
     # Write outcome using a configuration stored in CHANNELS (or a dedicated mapping)
     #outcome_conf = CHANNELS[channel_id]["fine_buona"] if outcome == "buona" else CHANNELS[channel_id]["fine_scarto"]
@@ -991,7 +993,7 @@ async def get_overlay_config(path: str):
     for image_name, config in all_configs.items():
         if config.get("path", "").lower() == path.lower():
             return {
-                "image_url": f"http://192.168.0.10:8000/images/{safe_folder}/{image_name}",
+                "image_url": f"http://localhost:8000/images/{safe_folder}/{image_name}",
                 "rectangles": config.get("rectangles", [])
             }
 

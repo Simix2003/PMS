@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
 
+import '../../shared/widgets/station_card.dart';
 import 'find_page.dart';
 
 class DataViewPage extends StatefulWidget {
@@ -18,6 +19,7 @@ class DataViewPage extends StatefulWidget {
 class _DataViewPageState extends State<DataViewPage> {
   late Future<Map<String, dynamic>> _dataFuture;
   DateTime _selectedDate = DateTime.now();
+  DateTimeRange? _selectedRange;
 
   @override
   void initState() {
@@ -26,13 +28,61 @@ class _DataViewPageState extends State<DataViewPage> {
   }
 
   Future<Map<String, dynamic>> fetchData() async {
-    final formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
-    final response = await http.get(Uri.parse(
-        'http://192.168.0.10:8000/api/productions_summary?date=$formattedDate'));
+    String url;
+
+    if (_selectedRange != null) {
+      final from = DateFormat('yyyy-MM-dd').format(_selectedRange!.start);
+      final to = DateFormat('yyyy-MM-dd').format(_selectedRange!.end);
+      url = 'http://192.168.0.10:8000/api/productions_summary?from=$from&to=$to';
+    } else {
+      final date = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      url = 'http://192.168.0.10:8000/api/productions_summary?date=$date';
+    }
+
+    final response = await http.get(Uri.parse(url));
     if (response.statusCode == 200) {
-      return json.decode(response.body);
+      final jsonMap = json.decode(response.body);
+      return Map<String, dynamic>.from(jsonMap);
     } else {
       throw Exception('Errore durante il caricamento dei dati');
+    }
+  }
+
+  Future<void> _selectDateRange() async {
+    final today = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(today.year - 1),
+      lastDate: today,
+      initialDateRange: _selectedRange ??
+          DateTimeRange(
+              start: today.subtract(const Duration(days: 7)), end: today),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: ColorScheme.light(primary: Colors.deepOrange),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedRange = picked;
+        _dataFuture = fetchData();
+      });
+    }
+  }
+
+  String _getDateTitle() {
+    if (_selectedRange != null) {
+      final from =
+          DateFormat('d MMMM y', 'it_IT').format(_selectedRange!.start);
+      final to = DateFormat('d MMMM y', 'it_IT').format(_selectedRange!.end);
+      return '$from → $to';
+    } else {
+      return 'Oggi, ${DateFormat('d MMMM y', 'it_IT').format(_selectedDate)}';
     }
   }
 
@@ -42,10 +92,8 @@ class _DataViewPageState extends State<DataViewPage> {
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: const Text(
-          'Analisi Dati',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('Analisi Dati',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         elevation: 0,
         actions: [
@@ -72,9 +120,12 @@ class _DataViewPageState extends State<DataViewPage> {
             final data = snapshot.data!;
             final stations = ['M308', 'M309', 'M326'];
 
-            final maxY = stations
-                    .map((station) => (data['stations'][station] as int))
-                    .reduce((a, b) => a > b ? a : b) +
+            final maxY = stations.map((station) {
+                  final counts =
+                      data['stations'][station] as Map<String, dynamic>;
+                  return (counts['good_count'] as int) +
+                      (counts['bad_count'] as int);
+                }).reduce((a, b) => a > b ? a : b) +
                 20;
 
             return SingleChildScrollView(
@@ -82,6 +133,7 @@ class _DataViewPageState extends State<DataViewPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 📅 Header Card with Chart and Date Range Picker
                   Card(
                     elevation: 2,
                     shape: RoundedRectangleBorder(
@@ -91,10 +143,23 @@ class _DataViewPageState extends State<DataViewPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Oggi, ${DateFormat('d MMMM y', 'it_IT').format(_selectedDate)}',
-                            style: const TextStyle(
-                                fontSize: 32, fontWeight: FontWeight.bold),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _getDateTitle(),
+                                style: const TextStyle(
+                                    fontSize: 28, fontWeight: FontWeight.bold),
+                              ),
+                              /*TextButton.icon(
+                                onPressed: _selectDateRange,
+                                icon: const Icon(Icons.date_range),
+                                label: const Text("Seleziona Giorni"),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.deepOrange,
+                                ),
+                              ),*/
+                            ],
                           ),
                           const SizedBox(height: 20),
                           SizedBox(
@@ -106,30 +171,29 @@ class _DataViewPageState extends State<DataViewPage> {
                                     stations.asMap().entries.map((entry) {
                                   final station = entry.value;
                                   final idx = entry.key;
+                                  final counts = data['stations'][station]
+                                      as Map<String, dynamic>;
                                   return BarChartGroupData(
-                                      x: idx,
-                                      barRods: [
-                                        BarChartRodData(
-                                          toY: data['stations'][station]
-                                                  ['good_count']
-                                              .toDouble(),
-                                          color: Colors.green,
-                                          width: 20,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        BarChartRodData(
-                                          toY: data['stations'][station]
-                                                  ['bad_count']
-                                              .toDouble(),
-                                          color: Colors.red,
-                                          width: 20,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                      ],
-                                      showingTooltipIndicators: [0, 1],
-                                      barsSpace: 25);
+                                    x: idx,
+                                    barRods: [
+                                      BarChartRodData(
+                                        toY: (counts['good_count'] as int)
+                                            .toDouble(),
+                                        color: Colors.green,
+                                        width: 20,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      BarChartRodData(
+                                        toY: (counts['bad_count'] as int)
+                                            .toDouble(),
+                                        color: Colors.red,
+                                        width: 20,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ],
+                                    showingTooltipIndicators: [0, 1],
+                                    barsSpace: 25,
+                                  );
                                 }).toList(),
                                 titlesData: FlTitlesData(
                                   bottomTitles: AxisTitles(
@@ -180,6 +244,13 @@ class _DataViewPageState extends State<DataViewPage> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 32),
+                  ...stations.map((station) {
+                    final stationData =
+                        data['stations'][station] as Map<String, dynamic>;
+                    return StationCard(
+                        station: station, stationData: stationData);
+                  }).toList(),
                 ],
               ),
             );

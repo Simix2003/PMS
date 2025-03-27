@@ -135,7 +135,6 @@ passato_flags = {
     "M309": False,
     "M326": False
 }
-trigger_value_test = False
 
 plc_connections = {} 
 
@@ -386,9 +385,6 @@ async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val
             plc_connection.read_string,
             id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
         )
-        if trigger_value_test:
-            object_id = 'test'
-
         print('object_id: ', object_id)
 
         # Read matrix data from the stringatrice configuration
@@ -437,6 +433,10 @@ async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val
 
 async def read_data(plc_connection: PLCConnection, station, richiesta_ko, richiesta_ok, data_inizio):
     try:
+        if data_inizio is None:
+            logging.warning(f"[{station}] data_inizio is None, assigning current time as fallback.")
+            data_inizio = datetime.datetime.now()
+
         data = {}
 
         # Read Id_Modulo string
@@ -458,6 +458,7 @@ async def read_data(plc_connection: PLCConnection, station, richiesta_ko, richie
         tempo_ciclo = data["DataFine"] - data_inizio  #timedelta
         # Formatfor MySQL TIME
         data["Tempo_Ciclo"] = str(tempo_ciclo)
+
         data["Linea_in_Lavorazione"] = [False, True, False, False, False]
 
         # Read matrix data from the stringatrice configuration
@@ -645,7 +646,7 @@ def insert_production_data(data, station, connection):
                 INSERT INTO productions 
                     (linea, station, stringatrice, id_modulo, id_utente, data_inizio, data_fine, esito, tempo_ciclo)
                 VALUES 
-                    (%s, %s, %s, %s, %s, %s, %s, %s, %S)
+                    (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(sql_productions, (
                 linea,
@@ -768,11 +769,10 @@ async def background_task(plc_connection: PLCConnection, station):
 
             # Safe trigger read
             trigger_conf = CHANNELS[station]["trigger"]
-            #trigger_value = await asyncio.to_thread(
-            #    plc_connection.read_bool,
-            #    trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
-            #)
-            trigger_value = trigger_value_test
+            trigger_value = await asyncio.to_thread(
+                plc_connection.read_bool,
+                trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
+            )
 
             if trigger_value is None:
                 raise Exception("Trigger read returned None")
@@ -1050,8 +1050,6 @@ async def available_overlay_paths():
 
 @app.post("/api/simulate_trigger")
 async def simulate_trigger(request: Request):
-    global trigger_value_test
-
     data = await request.json()
     channel_id = data.get("channel_id")
 
@@ -1060,10 +1058,6 @@ async def simulate_trigger(request: Request):
 
     current_value = await asyncio.to_thread(plc_conn.read_bool, conf["db"], conf["byte"], conf["bit"])
     new_value = not current_value
-
-    trigger_value_test = not trigger_value_test
-
-
 
     return {"status": "trigger toggled", "value": new_value}
 

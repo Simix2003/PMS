@@ -12,3 +12,6 @@ flutter build web --web-renderer html --release -t lib/main_data.dart -o build/w
 
 flutter run -d chrome --web-renderer html -t lib/main_home.dart
 flutter run -d chrome --web-renderer html -t lib/main_data.dart
+
+
+pyinstaller --onefile --add-binary="C:\Users\papar\Desktop\Prova_Comunicazione_PLC\Lib\site-packages\snap7\lib\snap7.dll;." service.py  

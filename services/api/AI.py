@@ -5,6 +5,7 @@ from pymysql.cursors import DictCursor
 import json
 from datetime import datetime, timedelta
 import ollama
+import asyncio
 
 
 app = FastAPI()
@@ -13,8 +14,8 @@ app = FastAPI()
 mysql_config = {
     'host': 'localhost',
     'user': 'root',
-    'password': 'password',
-    'database': 'your_production_db'
+    'password': 'Master36!',
+    'database': 'production_data'
 }
 
 # Your database schema as provided
@@ -71,6 +72,7 @@ Il database contiene le seguenti tabelle:
 @app.get("/api/ai_report")
 async def ai_report():
     try:
+        print("🔌 Connecting to MySQL...")
         connection = pymysql.connect(
             host="localhost",
             user="root",
@@ -81,10 +83,12 @@ async def ai_report():
             autocommit=False  # or True if you want auto-commit
         )
         cursor = connection.cursor()
+        print("✅ Connected.")
 
 
         
         # Define the period: last 7 days
+        print("📅 Calculating analysis period...")
         end_date = datetime.now()
         start_date = end_date - timedelta(days=7)
         start_date_str = start_date.strftime('%Y-%m-%d %H:%M:%S')
@@ -92,6 +96,7 @@ async def ai_report():
         # --------------------------------------------------------------
         # 1. Aggregate production totals from the "productions" table
         # --------------------------------------------------------------
+        print("📊 Querying production totals...")
         query_totals = """
             SELECT
                 COUNT(*) AS pezzi_totali,
@@ -117,11 +122,13 @@ async def ai_report():
         
         percentuale_buoni = f"{(pezzi_buoni/pezzi_totali*100):.2f}%" if pezzi_totali else "0%"
         percentuale_scarti = f"{(pezzi_scarti/pezzi_totali*100):.2f}%" if pezzi_totali else "0%"
+        print("✅ Totals fetched.")
         
         # --------------------------------------------------------------
         # 2. Retrieve defects from various tables
         # --------------------------------------------------------------
         # (A) Defects from "ribbon"
+        print("🔍 Gathering defect data...")
         query_ribbon = """
             SELECT tipo_difetto AS difetto, COUNT(*) AS count_scarti
             FROM ribbon
@@ -199,10 +206,12 @@ async def ai_report():
             key=lambda x: x["numero_scarti"],
             reverse=True
         )[:5]
+        print("✅ Defect analysis complete.")
         
         # --------------------------------------------------------------
         # 3. Trend Analysis: Compare current 7 days with the previous 7 days
         # --------------------------------------------------------------
+        print("📈 Calculating productivity and quality trend...")
         previous_start_date = start_date - timedelta(days=7)
         previous_start_date_str = previous_start_date.strftime('%Y-%m-%d %H:%M:%S')
         
@@ -230,11 +239,15 @@ async def ai_report():
         if prev_totali:
             qualita_trend = f"Aumento del {diff_qualita:.1f}%" if diff_qualita >= 0 else f"Riduzione del {abs(diff_qualita):.1f}%"
         
+        print(f"📉 Produttività: {produttivita_trend}, Qualità: {qualita_trend}")
+        
         # Close the database connection
         cursor.close()
         connection.close()
+        print("🔒 Database connection closed.")
         
     except Exception as e:
+        print("❌ Error during database processing.")
         return JSONResponse(status_code=500, content={"error": str(e)})
     
     # --------------------------------------------------------------
@@ -294,46 +307,46 @@ Non aggiungere alcun testo extra.
     """
     
     # --------------------------------------------------------------
-    # 5. Call the AI model – here we simulate its response
+    # 5. Call the AI model – real Ollama call with gemma:2b-instruct
     # --------------------------------------------------------------
-    # Replace the code below with your actual AI model call.
-    # Example:
-    # response = ai_model.call(prompt)
-    # ai_content = response["message"]["content"]
-    ai_content = json.dumps({
-        "periodo_analisi": "Ultimi 7 giorni",
-        "totali": {
-            "pezzi_totali": pezzi_totali,
-            "pezzi_buoni": pezzi_buoni,
-            "pezzi_scarti": pezzi_scarti,
-            "percentuale_buoni": percentuale_buoni,
-            "percentuale_scarti": percentuale_scarti,
-            "tempo_ciclo_medio": tempo_ciclo_medio
-        },
-        "problemi_principali": problemi_principali,
-        "trend": {
-            "produttivita": produttivita_trend,
-            "qualita": qualita_trend
-        },
-        "analisi_approfondita": [
-            "I difetti 'Disallineamento' e 'Bad Soldering' si verificano maggiormente durante il turno notturno.",
-            "Esiste una correlazione tra l’aumento della produttività e una leggera riduzione della qualità."
-        ],
-        "cose_che_stanno_andando_bene": [
-            "La linea M309 mostra buone performance con una bassa percentuale di scarti.",
-            "Il tempo ciclo medio è stabile, indicando un processo produttivo regolare."
-        ],
-        "consigli_ai": [
-            "Implementare controlli aggiuntivi durante il turno notturno per ridurre i difetti.",
-            "Effettuare manutenzione preventiva sui macchinari delle linee con maggiori difetti."
-        ]
-    }, ensure_ascii=False)
-    
-    # --------------------------------------------------------------
-    # 6. Validate and return the AI JSON report
-    # --------------------------------------------------------------
+    print("🤖 Sending prompt to Ollama...")
     try:
+        response = ollama.chat(
+            model="gemma:2b-instruct",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        ai_content = response["message"]["content"]
+        print("✅ AI response received.")
+
+    except Exception as e:
+        print("❌ AI error.")
+        return JSONResponse(status_code=500, content={"error": f"AI error: {str(e)}"})
+
+    try:
+        print("🧠 Parsing AI JSON response...")
         report_json = json.loads(ai_content)
+        print("✅ Parsed successfully.")
         return report_json
     except json.JSONDecodeError:
+        print("❌ Failed to parse AI JSON.")
         return JSONResponse(status_code=500, content={"error": "AI response is not valid JSON", "content": ai_content})
+    
+if __name__ == "__main__":
+    print("🚀 Starting report generation...\n")
+    result = asyncio.run(ai_report())
+
+    if isinstance(result, JSONResponse):
+        print("\n❌ ERROR returned:")
+        try:
+            body_bytes = bytes(result.body)  # Convert memoryview to bytes
+            error_data = json.loads(body_bytes.decode("utf-8"))
+            print(json.dumps(error_data, indent=2, ensure_ascii=False))
+        except Exception as e:
+            print("⚠️ Failed to parse error content:")
+            print(str(e))
+            print("Raw response body:")
+            print(result.body)
+    else:
+        print("\n📄 Final AI Report:")
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+

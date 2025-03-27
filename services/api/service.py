@@ -152,7 +152,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     mysql_connection = pymysql.connect(
         host="localhost",
         user="root",
-        #password="Master36!",
+        password="Master36!",
         database="production_data",
         port=3306,
         cursorclass=DictCursor,
@@ -205,10 +205,23 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
             plc_connection.read_string,
             id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
         )
-        stringatrice = await asyncio.to_thread(
-            plc_connection.read_string,
-            id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
-        )
+
+        # Read matrix data from the stringatrice configuration
+        str_conf = CHANNELS[channel_id]["stringatrice"]
+        values = [
+            await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
+            for i in range(str_conf["length"])
+        ]
+
+        # Ensure at least one True (fallback)
+        if not any(values):
+            values[0] = True
+
+        # Get the index of the True value → stringatrice number (1-based)
+        stringatrice_index = values.index(True) + 1
+        stringatrice = str(stringatrice_index)
+        print(stringatrice)
+
         # Read fine_buona and fine_scarto (booleans)
         fine_buona_conf = paths["fine_buona"]
         fine_buona = await asyncio.to_thread(

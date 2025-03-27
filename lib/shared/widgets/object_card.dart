@@ -187,7 +187,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                 // KO Button
                 Expanded(
                   child: _buildFlatButton(
-                    label: "Inserimento Difetti Pezzo",
+                    label: "Inserisci Difetti Pezzo",
                     icon: Icons.close_rounded,
                     color: Colors.red,
                     onPressed: () => _sendOutcome(context, "scarto"),

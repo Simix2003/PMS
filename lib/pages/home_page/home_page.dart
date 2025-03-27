@@ -36,6 +36,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   String selectedChannel = "M308"; // Default selection
   final List<String> availableChannels = ["M308", "M309", "M326"];
+  final Map<String, String> stationDisplayNames = {
+    'M308': 'M308 - QG2 di M306',
+    'M309': 'M309 - QG2 di M307',
+    'M326': 'M326 - RW1',
+  };
 
   bool issuesSubmitted = false;
 
@@ -438,8 +443,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          channel,
-                          style: TextStyle(fontSize: 24),
+                          stationDisplayNames[channel] ?? channel,
+                          style: TextStyle(fontSize: 18),
                         ),
                       ],
                     ),
@@ -478,7 +483,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              "Connessione a $selectedChannel...",
+                              "Connessione a ${stationDisplayNames[selectedChannel] ?? selectedChannel}...",
                               style: TextStyle(
                                 color: Colors.blueGrey.shade800,
                                 fontSize: 12,

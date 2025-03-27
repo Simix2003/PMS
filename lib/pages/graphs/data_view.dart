@@ -27,6 +27,12 @@ class _DataViewPageState extends State<DataViewPage> {
     _dataFuture = fetchData();
   }
 
+  final Map<String, String> stationDisplayNames = {
+    'M308': 'M308 - QG2 di M306',
+    'M309': 'M309 - QG2 di M307',
+    'M326': 'M326 - RW1',
+  };
+
   Future<Map<String, dynamic>> fetchData() async {
     String url;
 
@@ -218,11 +224,16 @@ class _DataViewPageState extends State<DataViewPage> {
                                     sideTitles: SideTitles(
                                       showTitles: true,
                                       getTitlesWidget:
-                                          (double value, TitleMeta meta) =>
-                                              Text(
-                                        stations[value.toInt()],
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
+                                          (double value, TitleMeta meta) {
+                                        final stationCode =
+                                            stations[value.toInt()];
+                                        final label =
+                                            stationDisplayNames[stationCode] ??
+                                                stationCode;
+                                        return Text(label,
+                                            style:
+                                                const TextStyle(fontSize: 12));
+                                      },
                                     ),
                                   ),
                                   leftTitles: AxisTitles(
@@ -266,8 +277,9 @@ class _DataViewPageState extends State<DataViewPage> {
                   ...stations.map((station) {
                     final stationData =
                         data['stations'][station] as Map<String, dynamic>;
+                    final visualName = stationDisplayNames[station] ?? station;
                     return StationCard(
-                        station: station, stationData: stationData);
+                        station: visualName, stationData: stationData);
                   }).toList(),
                 ],
               ),

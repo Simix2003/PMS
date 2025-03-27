@@ -1155,16 +1155,55 @@ async def productions_summary(date: str):
                         "last_cycle_time": "00:00:00"
                     }
 
-            # Defects per station
+            # Aggregazione dei difetti principali:
+
+            # Mancanza Ribbon (tutti i difetti dalla tabella ribbon)
             cursor.execute("""
-                SELECT p.station, CONCAT('Ribbon - ', r.tipo_difetto, ' - ', r.tipo) AS defect_type, COUNT(*) AS defect_count
+                SELECT p.station, COUNT(*) AS defect_count
                 FROM ribbon r
                 JOIN productions p ON p.id = r.production_id
                 WHERE DATE(p.data_fine) = %s AND r.scarto = 1
-                GROUP BY p.station, r.tipo_difetto, r.tipo
+                GROUP BY p.station
             """, (date,))
             for row in cursor.fetchall():
-                stations[row['station']].setdefault("defects", {})[row['defect_type']] = row['defect_count']
+                if row['defect_count'] > 0:
+                    stations[row['station']].setdefault("defects", {})["Mancanza Ribbon"] = row['defect_count']
+
+            # Saldatura (somma di tutte le categorie)
+            cursor.execute("""
+                SELECT p.station, COUNT(*) AS defect_count
+                FROM saldatura s
+                JOIN productions p ON p.id = s.production_id
+                WHERE DATE(p.data_fine) = %s AND s.scarto = 1
+                GROUP BY p.station
+            """, (date,))
+            for row in cursor.fetchall():
+                if row['defect_count'] > 0:
+                    stations[row['station']].setdefault("defects", {})["Saldatura"] = row['defect_count']
+
+            # Disallineamento (da disallineamento_stringa)
+            cursor.execute("""
+                SELECT p.station, COUNT(*) AS defect_count
+                FROM disallineamento_stringa d
+                JOIN productions p ON p.id = d.production_id
+                WHERE DATE(p.data_fine) = %s AND d.scarto = 1
+                GROUP BY p.station
+            """, (date,))
+            for row in cursor.fetchall():
+                if row['defect_count'] > 0:
+                    stations[row['station']].setdefault("defects", {})["Disallineamento"] = row['defect_count']
+
+            # Generali (somma di tutti i difetti generali)
+            cursor.execute("""
+                SELECT p.station, COUNT(*) AS defect_count
+                FROM generali g
+                JOIN productions p ON p.id = g.production_id
+                WHERE DATE(p.data_fine) = %s AND g.scarto = 1
+                GROUP BY p.station
+            """, (date,))
+            for row in cursor.fetchall():
+                if row['defect_count'] > 0:
+                    stations[row['station']].setdefault("defects", {})["Generali"] = row['defect_count']
 
             # Aggiungiamo il last_cycle_time per ogni stazione (l'ultimo ciclo della giornata)
             cursor.execute("""
@@ -1173,54 +1212,12 @@ async def productions_summary(date: str):
                 WHERE DATE(data_fine) = %s
                 ORDER BY data_fine DESC
             """, (date,))
-
             seen_stations = set()
             for row in cursor.fetchall():
                 station = row['station']
                 if station not in seen_stations and station in stations:
                     stations[station]["last_cycle_time"] = str(row["tempo_ciclo"])
                     seen_stations.add(station)
-
-
-            cursor.execute("""
-                SELECT p.station, category AS defect_type, COUNT(*) AS defect_count
-                FROM saldatura s
-                JOIN productions p ON p.id = s.production_id
-                WHERE DATE(p.data_fine) = %s AND s.scarto = 1
-                GROUP BY p.station, category
-            """, (date,))
-            for row in cursor.fetchall():
-                stations[row['station']].setdefault("defects", {})[f"Saldatura - {row['defect_type']}"] = row['defect_count']
-
-            cursor.execute("""
-                SELECT p.station, 'Disallineamento Stringa' AS defect_type, COUNT(*) AS defect_count
-                FROM disallineamento_stringa d
-                JOIN productions p ON p.id = d.production_id
-                WHERE DATE(p.data_fine) = %s AND d.scarto = 1
-                GROUP BY p.station
-            """, (date,))
-            for row in cursor.fetchall():
-                stations[row['station']].setdefault("defects", {})[row['defect_type']] = row['defect_count']
-
-            cursor.execute("""
-                SELECT p.station, 'Lunghezza String Ribbon' AS defect_type, COUNT(*) AS defect_count
-                FROM lunghezza_string_ribbon l
-                JOIN productions p ON p.id = l.production_id
-                WHERE DATE(p.data_fine) = %s AND l.scarto = 1
-                GROUP BY p.station
-            """, (date,))
-            for row in cursor.fetchall():
-                stations[row['station']].setdefault("defects", {})[row['defect_type']] = row['defect_count']
-
-            cursor.execute("""
-                SELECT p.station, tipo_difetto AS defect_type, COUNT(*) AS defect_count
-                FROM generali g
-                JOIN productions p ON p.id = g.production_id
-                WHERE DATE(p.data_fine) = %s AND g.scarto = 1
-                GROUP BY p.station, tipo_difetto
-            """, (date,))
-            for row in cursor.fetchall():
-                stations[row['station']].setdefault("defects", {})[f"Generali - {row['defect_type']}"] = row['defect_count']
 
             good_count = sum(s["good_count"] for s in stations.values())
             bad_count = sum(s["bad_count"] for s in stations.values())

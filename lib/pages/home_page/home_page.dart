@@ -22,6 +22,7 @@ ConnectionStatus connectionStatus = ConnectionStatus.offline;
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String objectId = "";
+  String stringatrice = "";
   bool isObjectOK = false;
   bool hasBeenEvaluated = false;
   final Set<String> _issues = {};
@@ -98,7 +99,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           final decoded = jsonDecode(message);
           print('🔔 Message on $selectedChannel: $decoded');
 
-          _fetchPLCStatus();
+          if (decoded.containsKey('plc_status')) {
+            setState(() {
+              plcStatus = decoded['plc_status'];
+            });
+          }
 
           if (decoded['handshake'] == true) {
             setState(() {
@@ -109,6 +114,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           if (decoded['trigger'] == true) {
             setState(() {
               objectId = decoded['objectId'] ?? '';
+              stringatrice = decoded['stringatrice'] ?? '';
               hasBeenEvaluated = false;
               issuesSubmitted = decoded['issuesSubmitted'] ?? false;
               cicloIniziato = true;
@@ -117,6 +123,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           } else if (decoded['trigger'] == false) {
             setState(() {
               objectId = "";
+              stringatrice = "";
               isObjectOK = false;
               hasBeenEvaluated = false;
               issuesSubmitted = false;
@@ -166,6 +173,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         // Reset UI data when switching station
         selectedChannel = newChannel;
         objectId = "";
+        stringatrice = "";
         isObjectOK = false;
         hasBeenEvaluated = false;
         _issues.clear();
@@ -181,6 +189,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       return;
     }
 
+    final confirm = await showAddIssueConfirmationDialog(context);
+    if (!confirm) return;
+
     final response = await http.post(
       Uri.parse('http://192.168.0.10:8000/api/set_issues'),
       headers: {'Content-Type': 'application/json'},
@@ -193,7 +204,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
     if (response.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Issues sent successfully")),
+        const SnackBar(content: Text("Difetti inviati con successo")),
       );
       setState(() {
         _issues.clear();
@@ -202,7 +213,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       issuesSubmitted = true;
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: ${response.body}")),
+        SnackBar(content: Text("Errore: ${response.body}")),
       );
     }
   }
@@ -235,7 +246,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildObjectIdSetter() {
+  /*Widget _buildObjectIdSetter() {
     return Container(
       width: 350,
       height: 50,
@@ -295,7 +306,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             content: Text("Errore durante la scrittura dell'ObjectId")),
       );
     }
-  }
+  }*/
 
   Widget _buildStatusBadge(String label, Color color, {VoidCallback? onTap}) {
     final badge = Container(
@@ -416,8 +427,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     child: Row(
                       children: [
                         Container(
-                          width: 8,
-                          height: 8,
+                          width: 24,
+                          height: 24,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: channel == selectedChannel
@@ -426,7 +437,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(channel),
+                        Text(
+                          channel,
+                          style: TextStyle(fontSize: 24),
+                        ),
                       ],
                     ),
                   );
@@ -489,6 +503,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               if (objectId.isNotEmpty) ...[
                                 ObjectCard(
                                   objectId: objectId,
+                                  stringatrice: stringatrice,
                                   isObjectOK: isObjectOK,
                                   hasBeenEvaluated: hasBeenEvaluated,
                                   selectedChannel: selectedChannel,
@@ -529,15 +544,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               if (hasBeenEvaluated &&
                                   !isObjectOK &&
                                   !issuesSubmitted) ...[
-                                const Text(
-                                  'Seleziona i problemi rilevati',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
                                 IssueSelectorWidget(
                                   key: _issueSelectorKey, // pass key
                                   channelId: selectedChannel,

@@ -28,7 +28,7 @@ Widget M326HomePage(context) {
         ),
         const SizedBox(height: 12),
         const Text(
-          "Questa è una schermata personalizzata per la M326.",
+          "WORK IN PROGRESSSSSSSS",
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 16,
@@ -36,24 +36,6 @@ Widget M326HomePage(context) {
           ),
         ),
         const SizedBox(height: 40),
-        ElevatedButton.icon(
-          onPressed: () {
-            // Insert fake action here
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("M326 Action triggered")),
-            );
-          },
-          icon: const Icon(Icons.play_arrow),
-          label: const Text("Avvia Processo"),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orangeAccent,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        ),
       ],
     ),
   );

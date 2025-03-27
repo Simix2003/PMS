@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 class ObjectCard extends StatefulWidget {
   final String objectId;
+  final String stringatrice;
   bool isObjectOK;
   bool hasBeenEvaluated;
   String selectedChannel;
@@ -16,6 +17,7 @@ class ObjectCard extends StatefulWidget {
   ObjectCard({
     super.key,
     required this.objectId,
+    required this.stringatrice,
     required this.isObjectOK,
     required this.hasBeenEvaluated,
     required this.selectedChannel,
@@ -107,6 +109,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Left side: Object info
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -136,39 +139,32 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                   ),
                 ],
               ),
+
+              // Right side: Da stringatrice
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text(
+                    "Da stringatrice:",
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.stringatrice,
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-
-          if (widget.hasBeenEvaluated &&
-              !widget.isObjectOK &&
-              widget.issuesSubmitted &&
-              false)
-            Align(
-              alignment: Alignment.centerRight,
-              child: ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(
-                  Icons.refresh,
-                  color: Colors.white,
-                  size: 28, // Bigger icon
-                ),
-                label: const Text(
-                  "Modifica difetti",
-                  style: TextStyle(
-                    fontSize: 28, // Bigger text
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 4, // optional subtle shadow
-                ),
-              ),
-            ),
 
           const SizedBox(height: 16),
 
@@ -191,7 +187,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                 // KO Button
                 Expanded(
                   child: _buildFlatButton(
-                    label: "KO",
+                    label: "Inserimento Difetti Pezzo",
                     icon: Icons.close_rounded,
                     color: Colors.red,
                     onPressed: () => _sendOutcome(context, "scarto"),
@@ -220,14 +216,8 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
     return MouseRegion(
       onEnter: (_) => onHoverChanged(true),
       onExit: (_) => onHoverChanged(false),
-      child: ElevatedButton.icon(
+      child: ElevatedButton(
         onPressed: onPressed,
-        icon: Icon(
-          icon,
-          color: Colors.white,
-          size: 18,
-        ),
-        label: Text(label, style: TextStyle(color: Colors.white)),
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           shape: RoundedRectangleBorder(
@@ -236,6 +226,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
           padding: const EdgeInsets.symmetric(vertical: 24),
           elevation: isHovering ? 4 : 0,
         ),
+        child: Text(label, style: TextStyle(color: Colors.white, fontSize: 18)),
       ),
     );
   }

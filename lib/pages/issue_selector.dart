@@ -239,7 +239,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     if (pathStack.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.only(top: 16.0, bottom: 12.0),
+      padding: const EdgeInsets.only(bottom: 12.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -576,20 +576,30 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 600, // adjust as needed
+      height: 600,
       child: pathStack.isEmpty
-          ? _buildGroupSelection()
-          : Column(
-              children: [
-                _buildNavigationButtons(),
-                _buildGuidedHint(), // 👈 Add this here
-                if (pathStack.length == 1 && pathStack[0] == "Disallineamento")
-                  _buildDisallineamentoButtons()
-                else if (pathStack.length == 1 && pathStack[0] == "Generali")
-                  _buildGeneraliButtons()
-                else
-                  _buildOverlayView(),
-              ],
+          ? SingleChildScrollView(child: _buildGroupSelection())
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildNavigationButtons(),
+                  _buildGuidedHint(),
+                  if (pathStack.length == 1 &&
+                      pathStack[0] == "Disallineamento")
+                    _buildDisallineamentoButtons()
+                  else if (pathStack.length == 1 && pathStack[0] == "Generali")
+                    _buildGeneraliButtons()
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxHeight:
+                            500, // 👈 limit how tall the image view can be
+                      ),
+                      child: _buildOverlayView(),
+                    ),
+                ],
+              ),
             ),
     );
   }

@@ -5,7 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
-
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/status.dart' as status;
 import '../../shared/widgets/station_card.dart';
 import 'find_page.dart';
 
@@ -17,14 +18,34 @@ class DataViewPage extends StatefulWidget {
 }
 
 class _DataViewPageState extends State<DataViewPage> {
+  late final WebSocketChannel _summaryChannel;
   late Future<Map<String, dynamic>> _dataFuture;
+
   DateTime _selectedDate = DateTime.now();
   DateTimeRange? _selectedRange;
 
   @override
   void initState() {
     super.initState();
+    _summaryChannel = WebSocketChannel.connect(
+      Uri.parse('ws://192.168.0.10:8000/ws/summary'),
+    );
+
+    _summaryChannel.stream.listen((event) {
+      print("🔁 Dashboard refresh event received");
+      if (mounted) {
+        setState(() {
+          _dataFuture = fetchData();
+        });
+      }
+    });
     _dataFuture = fetchData();
+  }
+
+  @override
+  void dispose() {
+    _summaryChannel.sink.close(status.goingAway);
+    super.dispose();
   }
 
   final Map<String, String> stationDisplayNames = {
@@ -39,8 +60,7 @@ class _DataViewPageState extends State<DataViewPage> {
     if (_selectedRange != null) {
       final from = DateFormat('yyyy-MM-dd').format(_selectedRange!.start);
       final to = DateFormat('yyyy-MM-dd').format(_selectedRange!.end);
-      url =
-          'http://192.168.0.10:8000/api/productions_summary?from=$from&to=$to';
+      url = 'http://192.168.0.10:8000/api/productions_summary?from=$from&to=$to';
     } else {
       final date = DateFormat('yyyy-MM-dd').format(_selectedDate);
       url = 'http://192.168.0.10:8000/api/productions_summary?date=$date';
@@ -223,6 +243,8 @@ class _DataViewPageState extends State<DataViewPage> {
                                   bottomTitles: AxisTitles(
                                     sideTitles: SideTitles(
                                       showTitles: true,
+                                      reservedSize:
+                                          48, // 👈 Increase this for 2 lines (default is ~32)
                                       getTitlesWidget:
                                           (double value, TitleMeta meta) {
                                         final stationCode =
@@ -230,9 +252,20 @@ class _DataViewPageState extends State<DataViewPage> {
                                         final label =
                                             stationDisplayNames[stationCode] ??
                                                 stationCode;
-                                        return Text(label,
-                                            style:
-                                                const TextStyle(fontSize: 12));
+
+                                        return SizedBox(
+                                          width: 100,
+                                          child: Text(
+                                            label,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        );
                                       },
                                     ),
                                   ),

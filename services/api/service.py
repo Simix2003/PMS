@@ -152,7 +152,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     mysql_connection = pymysql.connect(
         host="localhost",
         user="root",
-        password="Master36!",
+        #password="Master36!",
         database="production_data",
         port=3306,
         cursorclass=DictCursor,
@@ -636,7 +636,7 @@ def is_safe_query(query: str) -> bool:
     blacklist = ["insert", "update", "delete", "drop", "alter", "union", "outfile"]
     return not any(bad in query_lower for bad in blacklist)
 
-def insert_production_data(data, station, connection):
+async def insert_production_data(data, station, connection):
     """
     Inserts the PLC data into the normalized MySQL tables.
     """
@@ -732,7 +732,9 @@ def insert_production_data(data, station, connection):
             # Commit the transaction if all inserts are successful
             connection.commit()
             logging.info(f"Production data inserted with id: {production_id}")
+            asyncio.create_task(broadcast("summary", {"type": "update_summary"}))
             return production_id
+        
 
     except Exception as e:
         connection.rollback()
@@ -819,7 +821,7 @@ async def background_task(plc_connection: PLCConnection, station):
                 if result:
                     passato_flags[station] = True
                     print(f"[{station}] ✅ Inserting into MySQL...")
-                    insert_production_data(result, station, mysql_connection)
+                    await insert_production_data(result, station, mysql_connection)
                     print(f"[{station}] 🟢 Data inserted successfully!")
                     await asyncio.to_thread(plc_connection.write_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"], False)
                     await asyncio.to_thread(plc_connection.write_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"], False)
@@ -832,14 +834,22 @@ async def background_task(plc_connection: PLCConnection, station):
             await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
             await asyncio.sleep(5)
 
-# ---------------- ROUTES ----------------
-            
-@app.get("/api/plc_status")
-async def plc_status():
-    statuses = {}
-    for station, plc_conn in plc_connections.items():
-        statuses[station] = "CONNECTED" if plc_conn.connected else "DISCONNECTED"
-    return statuses
+# ---------------- WEB SOCKET ----------------
+@app.websocket("/ws/summary")
+async def websocket_summary(websocket: WebSocket):
+    await websocket.accept()
+    print("📊 Dashboard client connected")
+    
+    if "summary" not in subscriptions:
+        subscriptions["summary"] = set()
+    subscriptions["summary"].add(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()  # Optional, or just keep it open
+    except WebSocketDisconnect:
+        print("❌ Dashboard client disconnected")
+        subscriptions["summary"].remove(websocket)
 
 @app.websocket("/ws/{channel_id}")
 async def websocket_endpoint(websocket: WebSocket, channel_id: str):
@@ -878,6 +888,16 @@ async def websocket_endpoint(websocket: WebSocket, channel_id: str):
         print(f"⚠️ Client disconnected from {channel_id}")
     finally:
         subscriptions[channel_id].remove(websocket)
+
+# ---------------- ROUTES ----------------
+            
+@app.get("/api/plc_status")
+async def plc_status():
+    statuses = {}
+    for station, plc_conn in plc_connections.items():
+        statuses[station] = "CONNECTED" if plc_conn.connected else "DISCONNECTED"
+    return statuses
+
 
 @app.post("/api/set_issues")
 async def set_issues(request: Request):
@@ -1128,29 +1148,45 @@ async def simulate_objectId(request: Request):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/api/productions_summary")
-async def productions_summary(date: str):
+async def productions_summary(
+    date: str = Query(default=None),
+    from_date: str = Query(default=None, alias="from"),
+    to_date: str = Query(default=None, alias="to")
+):
     global mysql_connection
     try:
         assert mysql_connection is not None
         with mysql_connection.cursor() as cursor:
-            # Summary per station
-            cursor.execute("""
+
+            # Determine WHERE clause based on input
+            if from_date and to_date:
+                where_clause = "WHERE DATE(data_fine) BETWEEN %s AND %s"
+                params = (from_date, to_date)
+            elif date:
+                where_clause = "WHERE DATE(data_fine) = %s"
+                params = (date,)
+            else:
+                return JSONResponse(status_code=400, content={"error": "Missing 'date' or 'from' and 'to'"})
+
+            # --- Summary per station ---
+            cursor.execute(f"""
                 SELECT
                     station,
                     SUM(CASE WHEN esito = 1 THEN 1 ELSE 0 END) AS good_count,
                     SUM(CASE WHEN esito = 6 THEN 1 ELSE 0 END) AS bad_count,
                     SEC_TO_TIME(AVG(TIME_TO_SEC(tempo_ciclo))) AS avg_cycle_time
                 FROM productions
-                WHERE DATE(data_fine) = %s
+                {where_clause}
                 GROUP BY station
-            """, (date,))
+            """, params)
+
             stations = {}
             for row in cursor.fetchall():
                 stations[row['station']] = {
                     "good_count": row['good_count'],
                     "bad_count": row['bad_count'],
                     "avg_cycle_time": str(row['avg_cycle_time']),
-                    "last_cycle_time": "00:00:00"  # inizializziamo a 00:00:00
+                    "last_cycle_time": "00:00:00"
                 }
 
             for station in ['M308', 'M309', 'M326']:
@@ -1162,69 +1198,64 @@ async def productions_summary(date: str):
                         "last_cycle_time": "00:00:00"
                     }
 
-            # Aggregazione dei difetti principali:
-
-            # Mancanza Ribbon (tutti i difetti dalla tabella ribbon)
-            cursor.execute("""
+            # --- Defect: Mancanza Ribbon ---
+            cursor.execute(f"""
                 SELECT p.station, COUNT(*) AS defect_count
                 FROM ribbon r
                 JOIN productions p ON p.id = r.production_id
-                WHERE DATE(p.data_fine) = %s AND r.scarto = 1
+                {where_clause} AND r.scarto = 1
                 GROUP BY p.station
-            """, (date,))
+            """, params)
             for row in cursor.fetchall():
-                if row['defect_count'] > 0:
-                    stations[row['station']].setdefault("defects", {})["Mancanza Ribbon"] = row['defect_count']
+                stations[row['station']].setdefault("defects", {})["Mancanza Ribbon"] = row['defect_count']
 
-            # Saldatura (somma di tutte le categorie)
-            cursor.execute("""
+            # --- Defect: Saldatura ---
+            cursor.execute(f"""
                 SELECT p.station, COUNT(*) AS defect_count
                 FROM saldatura s
                 JOIN productions p ON p.id = s.production_id
-                WHERE DATE(p.data_fine) = %s AND s.scarto = 1
+                {where_clause} AND s.scarto = 1
                 GROUP BY p.station
-            """, (date,))
+            """, params)
             for row in cursor.fetchall():
-                if row['defect_count'] > 0:
-                    stations[row['station']].setdefault("defects", {})["Saldatura"] = row['defect_count']
+                stations[row['station']].setdefault("defects", {})["Saldatura"] = row['defect_count']
 
-            # Disallineamento (da disallineamento_stringa)
-            cursor.execute("""
+            # --- Defect: Disallineamento ---
+            cursor.execute(f"""
                 SELECT p.station, COUNT(*) AS defect_count
                 FROM disallineamento_stringa d
                 JOIN productions p ON p.id = d.production_id
-                WHERE DATE(p.data_fine) = %s AND d.scarto = 1
+                {where_clause} AND d.scarto = 1
                 GROUP BY p.station
-            """, (date,))
+            """, params)
             for row in cursor.fetchall():
-                if row['defect_count'] > 0:
-                    stations[row['station']].setdefault("defects", {})["Disallineamento"] = row['defect_count']
+                stations[row['station']].setdefault("defects", {})["Disallineamento"] = row['defect_count']
 
-            # Generali (somma di tutti i difetti generali)
-            cursor.execute("""
+            # --- Defect: Generali ---
+            cursor.execute(f"""
                 SELECT p.station, COUNT(*) AS defect_count
                 FROM generali g
                 JOIN productions p ON p.id = g.production_id
-                WHERE DATE(p.data_fine) = %s AND g.scarto = 1
+                {where_clause} AND g.scarto = 1
                 GROUP BY p.station
-            """, (date,))
+            """, params)
             for row in cursor.fetchall():
-                if row['defect_count'] > 0:
-                    stations[row['station']].setdefault("defects", {})["Generali"] = row['defect_count']
+                stations[row['station']].setdefault("defects", {})["Generali"] = row['defect_count']
 
-            # Aggiungiamo il last_cycle_time per ogni stazione (l'ultimo ciclo della giornata)
-            cursor.execute("""
-                SELECT station, tempo_ciclo
-                FROM productions
-                WHERE DATE(data_fine) = %s
-                ORDER BY data_fine DESC
-            """, (date,))
-            seen_stations = set()
-            for row in cursor.fetchall():
-                station = row['station']
-                if station not in seen_stations and station in stations:
-                    stations[station]["last_cycle_time"] = str(row["tempo_ciclo"])
-                    seen_stations.add(station)
+            # --- Last Cycle Time (only for single-day requests) ---
+            if date:
+                cursor.execute("""
+                    SELECT station, tempo_ciclo
+                    FROM productions
+                    WHERE DATE(data_fine) = %s
+                    ORDER BY data_fine DESC
+                """, (date,))
+                seen_stations = set()
+                for row in cursor.fetchall():
+                    station = row['station']
+                    if station not in seen_stations and station in stations:
+                        stations[station]["last_cycle_time"] = str(row["tempo_ciclo"])
+                        seen_stations.add(station)
 
             good_count = sum(s["good_count"] for s in stations.values())
             bad_count = sum(s["bad_count"] for s in stations.values())

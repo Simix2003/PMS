@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../graphs/ai_data_report.dart';
+import 'package:ix_monitor/pages/work_in_progress.dart';
 import '../graphs/data_view.dart';
 
 class DashboardData extends StatefulWidget {
@@ -14,7 +14,7 @@ class _DashboardDataState extends State<DashboardData> {
 
   final List<Widget> _pages = [
     const DataViewPage(),
-    const AIReportPage(),
+    const WorkInProgressPage(),
   ];
 
   @override

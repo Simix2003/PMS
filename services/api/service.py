@@ -1131,19 +1131,19 @@ async def productions_summary(date: str):
                 SELECT
                     station,
                     SUM(CASE WHEN esito = 1 THEN 1 ELSE 0 END) AS good_count,
-                    SUM(CASE WHEN esito = 0 THEN 1 ELSE 0 END) AS bad_count,
+                    SUM(CASE WHEN esito = 6 THEN 1 ELSE 0 END) AS bad_count,
                     SEC_TO_TIME(AVG(TIME_TO_SEC(tempo_ciclo))) AS avg_cycle_time
                 FROM productions
                 WHERE DATE(data_fine) = %s
                 GROUP BY station
             """, (date,))
-
             stations = {}
             for row in cursor.fetchall():
                 stations[row['station']] = {
                     "good_count": row['good_count'],
                     "bad_count": row['bad_count'],
-                    "avg_cycle_time": str(row['avg_cycle_time'])
+                    "avg_cycle_time": str(row['avg_cycle_time']),
+                    "last_cycle_time": "00:00:00"  # inizializziamo a 00:00:00
                 }
 
             for station in ['M308', 'M309', 'M326']:
@@ -1151,7 +1151,8 @@ async def productions_summary(date: str):
                     stations[station] = {
                         "good_count": 0,
                         "bad_count": 0,
-                        "avg_cycle_time": "00:00:00"
+                        "avg_cycle_time": "00:00:00",
+                        "last_cycle_time": "00:00:00"
                     }
 
             # Defects per station
@@ -1164,6 +1165,22 @@ async def productions_summary(date: str):
             """, (date,))
             for row in cursor.fetchall():
                 stations[row['station']].setdefault("defects", {})[row['defect_type']] = row['defect_count']
+
+            # Aggiungiamo il last_cycle_time per ogni stazione (l'ultimo ciclo della giornata)
+            cursor.execute("""
+                SELECT station, tempo_ciclo
+                FROM productions
+                WHERE DATE(data_fine) = %s
+                ORDER BY data_fine DESC
+            """, (date,))
+
+            seen_stations = set()
+            for row in cursor.fetchall():
+                station = row['station']
+                if station not in seen_stations and station in stations:
+                    stations[station]["last_cycle_time"] = str(row["tempo_ciclo"])
+                    seen_stations.add(station)
+
 
             cursor.execute("""
                 SELECT p.station, category AS defect_type, COUNT(*) AS defect_count

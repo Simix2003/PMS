@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, library_private_types_in_public_api
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -33,7 +33,8 @@ class _DataViewPageState extends State<DataViewPage> {
     if (_selectedRange != null) {
       final from = DateFormat('yyyy-MM-dd').format(_selectedRange!.start);
       final to = DateFormat('yyyy-MM-dd').format(_selectedRange!.end);
-      url = 'http://192.168.0.10:8000/api/productions_summary?from=$from&to=$to';
+      url =
+          'http://192.168.0.10:8000/api/productions_summary?from=$from&to=$to';
     } else {
       final date = DateFormat('yyyy-MM-dd').format(_selectedDate);
       url = 'http://192.168.0.10:8000/api/productions_summary?date=$date';
@@ -167,6 +168,23 @@ class _DataViewPageState extends State<DataViewPage> {
                             child: BarChart(
                               BarChartData(
                                 maxY: maxY.toDouble(),
+                                barTouchData: BarTouchData(
+                                  enabled: true,
+                                  touchTooltipData: BarTouchTooltipData(
+                                    tooltipBorder:
+                                        BorderSide(color: Colors.grey.shade300),
+                                    getTooltipItem:
+                                        (group, groupIndex, rod, rodIndex) {
+                                      return BarTooltipItem(
+                                        rod.toY.toInt().toString(),
+                                        TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
                                 barGroups:
                                     stations.asMap().entries.map((entry) {
                                   final station = entry.value;

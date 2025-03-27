@@ -105,30 +105,13 @@ ISSUE_TREE = {
                             }
                         }
                     },
-                     "Rottura_Celle": {
-                        "Stringa": {
-                            f"Stringa[{i}]": {
-                                f"Cella[{j}]": None for j in range(1, 11)
-                            } for i in range(1, 13)
-                        }
-                        },
-                     "Macchie_ECA_Celle": {
-                        "Stringa": {
-                            f"Stringa[{i}]": {
-                                f"Cella[{j}]": None for j in range(1, 11)
-                            } for i in range(1, 13)
-                        }
-                        },
-                    "Lunghezza_String_Ribbon": {
-                        "Stringa": {
-                            f"Stringa[{i}]": None for i in range(1, 13)
-                        },
-                    },
                     "Generali": {
                         "Non Lavorato Poe Scaduto": {},
                         "Non Lavorato da Telecamere": {},
                         "Materiale Esterno su Celle": {},
                         "Bad Soldering": {},
+                        "Macchie ECA": {},
+                        "Cella Rotta": {}
                     }
                 }
             }
@@ -152,6 +135,7 @@ passato_flags = {
     "M309": False,
     "M326": False
 }
+trigger_value_test = False
 
 plc_connections = {} 
 
@@ -211,6 +195,7 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
     )
 
     object_id = ""
+    stringatrice = ""
     outcome = None
     issues_submitted = False
 
@@ -218,6 +203,10 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
         # Read the module ID (string)
         id_mod_conf = paths["id_modulo"]
         object_id = await asyncio.to_thread(
+            plc_connection.read_string,
+            id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
+        )
+        stringatrice = await asyncio.to_thread(
             plc_connection.read_string,
             id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
         )
@@ -249,6 +238,7 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
     await websocket.send_json({
         "trigger": trigger_value,
         "objectId": object_id,
+        "stringatrice": stringatrice,
         "outcome": outcome,
         "issuesSubmitted": issues_submitted
     })
@@ -396,8 +386,25 @@ async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val
             plc_connection.read_string,
             id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
         )
-        #object_id = 'testte'
-        #print('object_id: ', object_id)
+        if trigger_value_test:
+            object_id = 'test'
+
+        print('object_id: ', object_id)
+
+        # Read matrix data from the stringatrice configuration
+        str_conf = CHANNELS[channel_id]["stringatrice"]
+        values = [
+            await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
+            for i in range(str_conf["length"])
+        ]
+
+        # Ensure at least one True (fallback)
+        if not any(values):
+            values[0] = True
+
+        # Get the index of the True value → stringatrice number (1-based)
+        stringatrice_index = values.index(True) + 1
+        stringatrice = str(stringatrice_index)
 
         # Read issues flag again
         issues_value = await asyncio.to_thread(
@@ -412,6 +419,7 @@ async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val
         await broadcast(channel_id, {
             "trigger": True,
             "objectId": object_id,
+            "stringatrice": stringatrice,
             "outcome": None,
             "issuesSubmitted": issues_submitted
         })
@@ -422,6 +430,7 @@ async def on_trigger_change(plc_connection: PLCConnection, channel_id, node, val
         await broadcast(channel_id, {
             "trigger": False,
             "objectId": None,
+            "stringatrice": None,
             "outcome": None,
             "issuesSubmitted": False
         })
@@ -479,13 +488,13 @@ async def read_data(plc_connection: PLCConnection, station, richiesta_ko, richie
                 "Ribbon_Stringa_M": fill_1d(12, False),
                 "Ribbon_Stringa_B": fill_1d(12, False)
             }
-            data["Rottura_Celle"] = fill_2d(12, 10, False)
-            data["Macchie_ECA_Celle"] = fill_2d(12, 10, False)
             generali = {
                 "Non_Lavorato_Poe_Scaduto": False,
                 "Non_Lavorato_da_Telecamere": False,
                 "Materiale_Esterno_su_Celle": False,
-                "Bad_Soldering": False
+                "Bad_Soldering": False,
+                "Macchie ECA": False,
+                "Cella Rotta": False
             }
             for i in range(4, 16):
                 generali[f"Non_Lavorato_Riserva_{i}"] = False
@@ -518,17 +527,15 @@ async def read_data(plc_connection: PLCConnection, station, richiesta_ko, richie
                 "Ribbon_Stringa_B": build_ribbon_array(issues, "Mancanza_Ribbon.Ribbon_Stringa_B", 12),
             }
 
-            # Celle Matrici
-            data["Rottura_Celle"] = build_cell_matrix(issues, "Rottura_Celle", 12, 10)
-            data["Macchie_ECA_Celle"] = build_cell_matrix(issues, "Macchie_ECA_Celle", 12, 10)
-
             # Generali
             generali = {}
             for general_issue in [
                 "Non Lavorato Poe Scaduto",
                 "Non Lavorato da Telecamere",
                 "Materiale Esterno su Celle",
-                "Bad Soldering"
+                "Bad Soldering",
+                "Macchie ECA",
+                "Cella Rotta"
             ]:
                 generali[general_issue.replace(" ", "_")] = any(general_issue in issue for issue in issues)
 
@@ -578,30 +585,22 @@ Il database contiene le seguenti tabelle:
 - ribbon (INT)
 - scarto (BOOLEAN)
 
-4 `celle`
-- id (PK)
-- production_id (FK)
-- tipo_difetto ENUM('Rottura_Celle', 'Macchie_ECA_Celle')
-- stringa (INT)
-- cella (INT)
-- scarto (BOOLEAN)
-
-5 `disallineamento_stringa`
+4 `disallineamento_stringa`
 - id (PK)
 - production_id (FK)
 - position (INT)
 - scarto (BOOLEAN)
 
-6 `lunghezza_string_ribbon`
+5 `lunghezza_string_ribbon`
 - id (PK)
 - production_id (FK)
 - position (INT)
 - scarto (BOOLEAN)
 
-7 `generali`
+6 `generali`
 - id (PK)
 - production_id (FK)
-- tipo_difetto ENUM('Non Lavorato Poe Scaduto', 'Non Lavorato da Telecamere', 'Materiale Esterno su Celle', 'Bad Soldering')
+- tipo_difetto ENUM('Non Lavorato Poe Scaduto', 'Non Lavorato da Telecamere', 'Materiale Esterno su Celle', 'Bad Soldering', 'Macchie ECA', 'Cella Rotta')
 - scarto (BOOLEAN)
 
 Regole:
@@ -683,19 +682,7 @@ def insert_production_data(data, station, connection):
                     sql = "INSERT INTO generali (production_id, tipo_difetto, scarto) VALUES (%s, %s, %s)"
                     cursor.execute(sql, (production_id, defect_type, True))
 
-            # --- 5. Insert into celle ---
-            for category in ['Rottura_Celle', 'Macchie_ECA_Celle']:
-                matrix = data.get(category, [])
-                for row_index, row in enumerate(matrix):
-                    for col_index, val in enumerate(row):
-                        if val:  # Only save True entries
-                            sql = """
-                                INSERT INTO celle (production_id, tipo_difetto, stringa, cella, scarto)
-                                VALUES (%s, %s, %s, %s, %s)
-                            """
-                            cursor.execute(sql, (production_id, category, row_index + 1, col_index + 1, True))
-
-            # --- 6. Insert into ribbon ---
+            # --- 5. Insert into ribbon ---
             # For Disallineamento defects
             dis = data.get("Disallineamento", {})
             for ribbon_area in ['Ribbon_Stringa_F', 'Ribbon_Stringa_M', 'Ribbon_Stringa_B']:
@@ -761,6 +748,7 @@ def make_status_callback(station):
     return callback
 
 async def background_task(plc_connection: PLCConnection, station):
+    global trigger_value_test
     print(f"[{station}] Starting background task.")
     prev_trigger = False
 
@@ -775,10 +763,12 @@ async def background_task(plc_connection: PLCConnection, station):
 
             # Safe trigger read
             trigger_conf = CHANNELS[station]["trigger"]
-            trigger_value = await asyncio.to_thread(
-                plc_connection.read_bool,
-                trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
-            )
+            #trigger_value = await asyncio.to_thread(
+            #    plc_connection.read_bool,
+            #    trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
+            #)
+            trigger_value = trigger_value_test
+
             if trigger_value is None:
                 raise Exception("Trigger read returned None")
 
@@ -941,8 +931,8 @@ async def set_outcome(request: Request):
         plc_connection.read_string,
         read_conf["db"], read_conf["byte"], read_conf["length"]
     )
-    if str(current_object_id) != str(object_id):
-        return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
+    #if str(current_object_id) != str(object_id):
+    #    return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
 
     # Write outcome using a configuration stored in CHANNELS (or a dedicated mapping)
     #outcome_conf = CHANNELS[channel_id]["fine_buona"] if outcome == "buona" else CHANNELS[channel_id]["fine_scarto"]
@@ -1055,6 +1045,8 @@ async def available_overlay_paths():
 
 @app.post("/api/simulate_trigger")
 async def simulate_trigger(request: Request):
+    global trigger_value_test
+
     data = await request.json()
     channel_id = data.get("channel_id")
 
@@ -1064,7 +1056,9 @@ async def simulate_trigger(request: Request):
     current_value = await asyncio.to_thread(plc_conn.read_bool, conf["db"], conf["byte"], conf["bit"])
     new_value = not current_value
 
-    await asyncio.to_thread(plc_conn.write_bool, conf["db"], conf["byte"], conf["bit"], new_value)
+    trigger_value_test = not trigger_value_test
+
+
 
     return {"status": "trigger toggled", "value": new_value}
 

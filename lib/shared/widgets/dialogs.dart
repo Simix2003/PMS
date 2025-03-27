@@ -14,6 +14,40 @@ void showAddIssueWarningDialog(context) {
   ).show();
 }
 
+Future<bool> showAddIssueConfirmationDialog(BuildContext context) async {
+  bool confirmed = false;
+
+  await AwesomeDialog(
+    width: 750,
+    context: context,
+    dialogType: DialogType.question,
+    animType: AnimType.bottomSlide,
+    title: 'Conferma invio',
+    desc:
+        'Vuoi inviare i difetti selezionati?\nPuoi ancora aggiungerne altri prima di inviare.',
+    titleTextStyle: const TextStyle(
+      fontSize: 26,
+      fontWeight: FontWeight.bold,
+    ),
+    descTextStyle: const TextStyle(
+      fontSize: 20,
+      fontWeight: FontWeight.normal,
+    ),
+    btnCancelOnPress: () {
+      confirmed = false;
+    },
+    btnOkOnPress: () {
+      confirmed = true;
+    },
+    btnCancelText: 'Aggiungi altri',
+    btnOkText: 'Invia',
+    btnOkColor: Colors.deepOrange,
+    btnCancelColor: Colors.blueAccent,
+  ).show();
+
+  return confirmed;
+}
+
 void showConfirmSendDialog(context) {
   AwesomeDialog(
     width: 750,

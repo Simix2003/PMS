@@ -21,32 +21,15 @@ class _DataViewPageState extends State<DataViewPage> {
   late final WebSocketChannel _summaryChannel;
   late Future<Map<String, dynamic>> _dataFuture;
 
-  DateTime _selectedDate = DateTime.now();
+  final DateTime _selectedDate = DateTime.now();
   DateTimeRange? _selectedRange;
 
-  @override
-  void initState() {
-    super.initState();
-    _summaryChannel = WebSocketChannel.connect(
-      Uri.parse('ws://192.168.0.10:8000/ws/summary'),
-    );
-
-    _summaryChannel.stream.listen((event) {
-      print("🔁 Dashboard refresh event received");
-      if (mounted) {
-        setState(() {
-          _dataFuture = fetchData();
-        });
-      }
-    });
-    _dataFuture = fetchData();
-  }
-
-  @override
-  void dispose() {
-    _summaryChannel.sink.close(status.goingAway);
-    super.dispose();
-  }
+  String selectedLine = "Linea1";
+  final List<String> availableLines = ["Linea1", "Linea2"];
+  final Map<String, String> lineDisplayNames = {
+    'Linea1': 'Linea A',
+    'Linea2': 'Linea B',
+  };
 
   final Map<String, String> stationDisplayNames = {
     'M308': 'M308 - QG2 di M306',
@@ -54,16 +37,60 @@ class _DataViewPageState extends State<DataViewPage> {
     'M326': 'M326 - RW1',
   };
 
+  @override
+  void initState() {
+    super.initState();
+    _initializeWebSocket(); // Initialize WebSocket connection
+    _dataFuture = fetchData(); // Fetch initial data
+  }
+
+  @override
+  void dispose() {
+    _summaryChannel.sink
+        .close(status.goingAway); // Close WebSocket when page is disposed
+    super.dispose();
+  }
+
+  // Initialize the WebSocket channel for the selected line
+  void _initializeWebSocket() {
+    _summaryChannel = WebSocketChannel.connect(
+      Uri.parse(
+          'ws://192.168.0.10:8000/ws/summary/$selectedLine'), // WebSocket URL includes selected line
+    );
+
+    _summaryChannel.stream.listen((event) {
+      print("🔁 Dashboard refresh event received");
+      if (mounted) {
+        setState(() {
+          _dataFuture = fetchData(); // Refresh data on WebSocket event
+        });
+      }
+    });
+  }
+
+  // Handle line change (update WebSocket connection and fetch new data)
+  void _onLineChange(String? newLine) {
+    if (newLine != null && newLine != selectedLine) {
+      setState(() {
+        selectedLine = newLine; // Update selected line
+        _initializeWebSocket(); // Reinitialize WebSocket for the new line
+        _dataFuture = fetchData(); // Fetch data for the new line
+      });
+    }
+  }
+
+  // Fetch data based on the selected line
   Future<Map<String, dynamic>> fetchData() async {
     String url;
-
     if (_selectedRange != null) {
       final from = DateFormat('yyyy-MM-dd').format(_selectedRange!.start);
       final to = DateFormat('yyyy-MM-dd').format(_selectedRange!.end);
-      url = 'http://192.168.0.10:8000/api/productions_summary?from=$from&to=$to';
+      url =
+          'http://192.168.0.10:8000/api/productions_summary?from=$from&to=$to&line_name=$selectedLine';
     } else {
       final date = DateFormat('yyyy-MM-dd').format(_selectedDate);
-      url = 'http://192.168.0.10:8000/api/productions_summary?date=$date';
+      url =
+          'http://192.168.0.10:8000/api/productions_summary?date=$date&line_name=$selectedLine';
     }
 
     final response = await http.get(Uri.parse(url));
@@ -72,33 +99,6 @@ class _DataViewPageState extends State<DataViewPage> {
       return Map<String, dynamic>.from(jsonMap);
     } else {
       throw Exception('Errore durante il caricamento dei dati');
-    }
-  }
-
-  Future<void> _selectDateRange() async {
-    final today = DateTime.now();
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(today.year - 1),
-      lastDate: today,
-      initialDateRange: _selectedRange ??
-          DateTimeRange(
-              start: today.subtract(const Duration(days: 7)), end: today),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: ColorScheme.light(primary: Colors.deepOrange),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null) {
-      setState(() {
-        _selectedRange = picked;
-        _dataFuture = fetchData();
-      });
     }
   }
 
@@ -124,6 +124,36 @@ class _DataViewPageState extends State<DataViewPage> {
         centerTitle: true,
         elevation: 0,
         actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            child: Row(
+              children: [
+                const Text("Linea: ",
+                    style:
+                        TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                const SizedBox(width: 12),
+                DropdownButton<String>(
+                  value: selectedLine,
+                  icon: const Icon(Icons.arrow_drop_down),
+                  items: availableLines.map((line) {
+                    return DropdownMenuItem(
+                      value: line,
+                      child: Text(lineDisplayNames[line] ?? line),
+                    );
+                  }).toList(),
+                  onChanged: (newLine) {
+                    if (newLine != null && newLine != selectedLine) {
+                      setState(() {
+                        selectedLine = newLine;
+                        _onLineChange(selectedLine);
+                        _dataFuture = fetchData(); // Refresh data for new line
+                      });
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.search_rounded),
             onPressed: () {

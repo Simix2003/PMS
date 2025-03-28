@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/work_in_progress.dart';
+import '../create_visuals_page.dart';
 import '../home_page/home_page.dart';
 
 class DashboardHome extends StatefulWidget {
@@ -14,7 +15,7 @@ class _DashboardHomeState extends State<DashboardHome> {
 
   final List<Widget> _pages = [
     const HomePage(),
-    const WorkInProgressPage(),
+    const OverlayEditorPage(),
   ];
 
   @override

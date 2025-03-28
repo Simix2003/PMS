@@ -10,6 +10,7 @@ class ObjectCard extends StatefulWidget {
   final String stringatrice;
   bool isObjectOK;
   bool hasBeenEvaluated;
+  String selectedLine;
   String selectedChannel;
   final bool issuesSubmitted;
   final Function(List<String>) onIssuesLoaded;
@@ -20,6 +21,7 @@ class ObjectCard extends StatefulWidget {
     required this.stringatrice,
     required this.isObjectOK,
     required this.hasBeenEvaluated,
+    required this.selectedLine,
     required this.selectedChannel,
     required this.issuesSubmitted,
     required this.onIssuesLoaded,
@@ -42,6 +44,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
       Uri.parse('http://192.168.0.10:8000/api/set_outcome'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
+        "line_name": widget.selectedLine,
         "channel_id": widget.selectedChannel,
         "object_id": widget.objectId,
         "outcome": outcome,

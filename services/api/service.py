@@ -1302,7 +1302,8 @@ async def productions_summary(
     date: str = Query(default=None),
     from_date: str = Query(default=None, alias="from"),
     to_date: str = Query(default=None, alias="to"),
-    line_name: str = Query(default=None)  # Optional filter by line
+    line_name: str = Query(default=None),  # Optional filter by line
+    turno: int = Query(default=None),      # New turno parameter (1, 2, 3)
 ):
     global mysql_connection
     try:
@@ -1318,15 +1319,38 @@ async def productions_summary(
             else:
                 return JSONResponse(status_code=400, content={"error": "Missing 'date' or 'from' and 'to'"})
 
+            if turno:
+                # Define the time range for each turno
+                turno_times = {
+                    1: ("06:00:00", "13:59:59"),
+                    2: ("14:00:00", "21:59:59"),
+                    3: ("22:00:00", "05:59:59"),
+                }
+
+                if turno not in turno_times:
+                    return JSONResponse(status_code=400, content={"error": "Invalid turno number (must be 1, 2, or 3)"})
+
+                start_time, end_time = turno_times[turno]
+
+                if turno == 3:  # Night shift spans two dates
+                    where_clause += """
+                        AND (
+                            (TIME(data_fine) >= %s AND DATE(data_fine) = %s) OR
+                            (TIME(data_fine) <= %s AND DATE(data_fine) = DATE_ADD(%s, INTERVAL 1 DAY))
+                        )
+                    """
+                    params += (start_time, date, end_time, date)
+                else:
+                    where_clause += " AND TIME(data_fine) BETWEEN %s AND %s"
+                    params += (start_time, end_time)
+
             if line_name:
-                # Extract the numeric part from "Linea1" → 1
                 try:
-                    line_number = int(line_name.replace("Linea", ""))
+                    line_number = int(line_name.replace("Linea", ""))  # Extract numeric part from "Linea1"
                     where_clause += " AND linea = %s"
                     params += (line_number,)
                 except ValueError:
                     return JSONResponse(status_code=400, content={"error": "Invalid line_name format"})
-
 
             # --- Summary per station ---
             cursor.execute(f"""
@@ -1348,6 +1372,8 @@ async def productions_summary(
                     "avg_cycle_time": str(row['avg_cycle_time']),
                     "last_cycle_time": "00:00:00"
                 }
+            
+            print('stations: ', stations)
 
             # Fill missing stations (for visual consistency)
             all_station_names = [
@@ -1364,7 +1390,7 @@ async def productions_summary(
                     "last_cycle_time": "00:00:00"
                 })
 
-            # Define a helper to avoid repeating defect code
+            # Fetch defect summary for each defect type
             def fetch_defect_summary(table, label):
                 cursor.execute(f"""
                     SELECT p.station, COUNT(*) AS defect_count
@@ -1376,16 +1402,16 @@ async def productions_summary(
                 for row in cursor.fetchall():
                     stations[row['station']].setdefault("defects", {})[label] = row['defect_count']
 
-            # --- Fetch all defect types ---
             fetch_defect_summary("ribbon", "Mancanza Ribbon")
             fetch_defect_summary("saldatura", "Saldatura")
             fetch_defect_summary("disallineamento_stringa", "Disallineamento")
             fetch_defect_summary("generali", "Generali")
 
-            # --- Last Cycle Time (only for single-day requests) ---
+            # Last cycle time for single-day requests
             if date:
+                # Adding the last object ID, esito, and cycle times for the station
                 cursor.execute("""
-                    SELECT station, tempo_ciclo
+                    SELECT station, id_modulo, esito, tempo_ciclo, data_inizio, data_fine
                     FROM productions
                     WHERE DATE(data_fine) = %s
                     ORDER BY data_fine DESC
@@ -1394,7 +1420,11 @@ async def productions_summary(
                 for row in cursor.fetchall():
                     station = row['station']
                     if station not in seen_stations and station in stations:
-                        stations[station]["last_cycle_time"] = str(row["tempo_ciclo"])
+                        stations[station]["last_object"] = row["id_modulo"]  # Last Object ID
+                        stations[station]["last_esito"] = row["esito"]  # Esito
+                        stations[station]["last_cycle_time"] = str(row["tempo_ciclo"])  # Last Cycle Time
+                        stations[station]["last_in_time"] = str(row["data_inizio"])  # Last Start Time (data_inizio)
+                        stations[station]["last_out_time"] = str(row["data_fine"])  # Last End Time (data_fine)
                         seen_stations.add(station)
 
             good_count = sum(s["good_count"] for s in stations.values())

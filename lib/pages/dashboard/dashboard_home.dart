@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ix_monitor/pages/work_in_progress.dart';
-import '../create_visuals_page.dart';
+import 'package:ix_monitor/pages/graphs/data_view.dart';
 import '../home_page/home_page.dart';
 
 class DashboardHome extends StatefulWidget {
@@ -15,7 +14,7 @@ class _DashboardHomeState extends State<DashboardHome> {
 
   final List<Widget> _pages = [
     const HomePage(),
-    const OverlayEditorPage(),
+    const DataViewPage(),
   ];
 
   @override
@@ -31,8 +30,8 @@ class _DashboardHomeState extends State<DashboardHome> {
             label: 'Difetti',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.feedback),
-            label: 'Work in Progress',
+            icon: Icon(Icons.today),
+            label: 'Dati',
           ),
         ],
       ),

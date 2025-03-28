@@ -34,12 +34,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   String plcStatus = "CHECKING"; // or values like "CONNECTED", "DISCONNECTED"
 
+  // STATIONS
   String selectedChannel = "M308"; // Default selection
   final List<String> availableChannels = ["M308", "M309", "M326"];
   final Map<String, String> stationDisplayNames = {
     'M308': 'M308 - QG2 di M306',
     'M309': 'M309 - QG2 di M307',
     'M326': 'M326 - RW1',
+  };
+
+  // LINES
+  String selectedLine = "Linea1";
+  final List<String> availableLines = ["Linea1", "Linea2"];
+  final Map<String, String> lineDisplayNames = {
+    'Linea1': 'Linea A',
+    'Linea2': 'Linea B',
   };
 
   bool issuesSubmitted = false;
@@ -67,7 +76,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
-          plcStatus = data[selectedChannel] ?? "UNKNOWN";
+          plcStatus = data[selectedLine]?[selectedChannel] ?? "UNKNOWN";
         });
       } else {
         setState(() {
@@ -91,7 +100,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     channel?.sink.close();
 
     channel = WebSocketChannel.connect(
-      Uri.parse('ws://192.168.0.10:8000/ws/$selectedChannel'),
+      Uri.parse(
+          'ws://192.168.0.10:8000/ws/$selectedLine/$selectedChannel'), // WebSocket URL with dynamic values
     );
 
     if (channel != null) {
@@ -104,18 +114,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           final decoded = jsonDecode(message);
           print('🔔 Message on $selectedChannel: $decoded');
 
+          // Handling WebSocket message
           if (decoded.containsKey('plc_status')) {
             setState(() {
               plcStatus = decoded['plc_status'];
             });
           }
 
-          if (decoded['handshake'] == true) {
-            setState(() {
-              connectionStatus = ConnectionStatus.online;
-            });
-          }
-
+          // Handling 'trigger' state
           if (decoded['trigger'] == true) {
             setState(() {
               objectId = decoded['objectId'] ?? '';
@@ -137,6 +143,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             });
           }
 
+          // Outcome processing
           if (decoded['outcome'] != null) {
             final outcome = decoded['outcome']; // "buona" or "scarto"
             print("Outcome from PLC: $outcome");
@@ -201,6 +208,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       Uri.parse('http://192.168.0.10:8000/api/set_issues'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
+        'line_name': selectedLine,
         'channel_id': selectedChannel,
         'object_id': objectId,
         'issues': _issues.toList(),
@@ -235,6 +243,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       Uri.parse("http://192.168.0.10:8000/api/simulate_trigger"),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
+        "line_name": selectedLine,
         "channel_id": selectedChannel,
       }),
     );
@@ -245,8 +254,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       Uri.parse("http://192.168.0.10:8000/api/simulate_outcome"),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
+        "line_name": selectedLine,
         "channel_id": selectedChannel,
-        "value": outcome, // "buona" or "scarto"
+        "value": outcome,
       }),
     );
   }
@@ -394,7 +404,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             const SizedBox(width: 12),
             _buildStatusBadge("PC", _getPCColor()),
             _buildStatusBadge("PLC", _getPLCColor()),
-            _buildStatusBadge(
+            /*_buildStatusBadge(
               "Ciclo Iniziato",
               cicloIniziato ? Colors.blue : Colors.grey,
               onTap: _simulateTrigger,
@@ -414,7 +424,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               },
             ),
             //const SizedBox(width: 20),
-            //_buildObjectIdSetter(),
+            //_buildObjectIdSetter(),*/
           ],
         ),
         actions: [
@@ -422,35 +432,79 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: selectedChannel,
-                icon: const Icon(Icons.arrow_drop_down, color: Colors.black87),
-                style: const TextStyle(color: Colors.black87, fontSize: 14),
-                items: availableChannels.map((channel) {
-                  return DropdownMenuItem(
-                    value: channel,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: channel == selectedChannel
-                                ? Colors.blueAccent
-                                : Colors.grey,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          stationDisplayNames[channel] ?? channel,
-                          style: TextStyle(fontSize: 18),
-                        ),
-                      ],
+              child: Row(
+                children: [
+                  // LINE DROPDOWN
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedLine,
+                        icon: const Icon(Icons.arrow_drop_down,
+                            color: Colors.black87),
+                        style: const TextStyle(
+                            color: Colors.black87, fontSize: 14),
+                        items: availableLines.map((line) {
+                          return DropdownMenuItem(
+                            value: line,
+                            child: Text(
+                              lineDisplayNames[line] ?? line,
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (newLine) {
+                          if (newLine != null && newLine != selectedLine) {
+                            setState(() {
+                              selectedLine = newLine;
+                              _fetchPLCStatus();
+                              _connectWebSocket(); // reconnect with new line
+                            });
+                          }
+                        },
+                      ),
                     ),
-                  );
-                }).toList(),
-                onChanged: _onChannelChange,
+                  ),
+
+                  // CHANNEL DROPDOWN (as-is)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedChannel,
+                        icon: const Icon(Icons.arrow_drop_down,
+                            color: Colors.black87),
+                        style: const TextStyle(
+                            color: Colors.black87, fontSize: 14),
+                        items: availableChannels.map((channel) {
+                          return DropdownMenuItem(
+                            value: channel,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: channel == selectedChannel
+                                        ? Colors.blueAccent
+                                        : Colors.grey,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  stationDisplayNames[channel] ?? channel,
+                                  style: const TextStyle(fontSize: 18),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: _onChannelChange,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -511,6 +565,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                   stringatrice: stringatrice,
                                   isObjectOK: isObjectOK,
                                   hasBeenEvaluated: hasBeenEvaluated,
+                                  selectedLine: selectedLine,
                                   selectedChannel: selectedChannel,
                                   issuesSubmitted: issuesSubmitted,
                                   onIssuesLoaded: (loadedIssues) {
@@ -551,6 +606,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                   !issuesSubmitted) ...[
                                 IssueSelectorWidget(
                                   key: _issueSelectorKey, // pass key
+                                  selectedLine: selectedLine,
                                   channelId: selectedChannel,
                                   onIssueSelected: (issuePath) {
                                     setState(() {

@@ -5,14 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class IssueSelectorWidget extends StatefulWidget {
+  final String selectedLine;
   final String channelId;
   final Function(String fullPath) onIssueSelected;
 
   const IssueSelectorWidget({
-    Key? key,
+    super.key,
+    required this.selectedLine,
     required this.channelId,
     required this.onIssueSelected,
-  }) : super(key: key);
+  });
 
   @override
   IssueSelectorWidgetState createState() => IssueSelectorWidgetState();
@@ -38,21 +40,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     "Mancanza_Ribbon",
     "Generali",
   ];
-  //"Rottura_Celle",
-  //"Macchie_ECA_Celle",
-
-  final Map<String, String> groupImages = {
-    "Saldatura": "http://192.168.0.10:8000/images/Linea2/saldatura.jpg",
-    "Disallineamento":
-        "http://192.168.0.10:8000/images/Linea2/disallineamento.jpg",
-    "Mancanza_Ribbon":
-        "http://192.168.0.10:8000/images/Linea2/mancanza_ribbon.jpg",
-    "Generali": "http://192.168.0.10:8000/images/Linea2/generali.jpg",
-  };
-
-  //"Rottura_Celle": "http://192.168.0.10:8000/images/Linea2/rottura_celle.jpg",
-  //"Macchie_ECA_Celle":
-  //      "http://192.168.0.10:8000/images/Linea2/macchie_eca_celle.jpg",
 
   @override
   void initState() {
@@ -71,16 +58,19 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
   // Determine the background image URL for the current level.
   String get currentImageUrl {
+    final line = widget.selectedLine;
+    final station = widget.channelId;
+
     if (pathStack.isEmpty) return "";
+
     if (pathStack.length == 1) {
-      // level 1: use main group image
-      return groupImages[pathStack.first] ??
-          "http://192.168.0.10:8000/images/Linea2/default.jpg";
+      final group = pathStack.first.toLowerCase();
+      return "http://192.168.0.10:8000/images/$line/$station/$group.jpg";
     }
-    // For deeper levels, you might have images like: "<group>_<subfolder>.jpg"
-    String base = pathStack.first.toLowerCase();
-    String sub = pathStack.last.toLowerCase().replaceAll(' ', '_');
-    return "http://192.168.0.10:8000/images/Linea2/${base}_$sub.jpg";
+
+    final base = pathStack.first.toLowerCase();
+    final sub = pathStack.last.toLowerCase().replaceAll(' ', '_');
+    return "http://192.168.0.10:8000/images/$line/$station/${base}_$sub.jpg";
   }
 
   Future<void> _fetchCurrentItems() async {
@@ -88,14 +78,20 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
       isLoading = true;
     });
 
+    final line = widget.selectedLine;
+    final channel = widget.channelId;
+
+    // Correct the URL parameters: replace `channel` with `station`
     final issueUrl = Uri.parse(
-        'http://192.168.0.10:8000/api/issues/${widget.channelId}?path=$apiPath');
-    final overlayUrl =
-        Uri.parse('http://192.168.0.10:8000/api/overlay_config?path=$apiPath');
+        'http://192.168.0.10:8000/api/issues/$line/$channel?path=$apiPath');
+    final overlayUrl = Uri.parse(
+        'http://192.168.0.10:8000/api/overlay_config?path=$apiPath&line_name=$line&station=$channel');
 
     try {
       final issueResponse = await http.get(issueUrl);
+      print('Sending overlayURL: $overlayUrl');
       final overlayResponse = await http.get(overlayUrl);
+      print('Received overlayURL respone: ${overlayResponse.body}');
 
       if (issueResponse.statusCode == 200) {
         final data = jsonDecode(issueResponse.body);
@@ -104,14 +100,16 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
       if (overlayResponse.statusCode == 200) {
         final overlay = jsonDecode(overlayResponse.body);
-        backgroundImageUrl = overlay['image_url'];
+        backgroundImageUrl = overlay['image_url'] ?? currentImageUrl;
         currentRectangles = overlay['rectangles'];
       } else {
         currentRectangles = [];
+        backgroundImageUrl = currentImageUrl;
       }
     } catch (e) {
       currentItems = [];
       currentRectangles = [];
+      backgroundImageUrl = currentImageUrl;
     }
 
     setState(() {
@@ -288,7 +286,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
               alignment: WrapAlignment.center,
               children: currentItems.map<Widget>((item) {
                 final String name = item['name'];
-                final String type = item['type'];
                 final fullPath = "$apiPath.$name";
                 final bool isSelected = selectedLeaves.contains(fullPath);
 

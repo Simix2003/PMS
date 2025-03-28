@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ix_monitor/pages/work_in_progress.dart';
-import '../create_visuals_page.dart';
+import 'package:ix_monitor/pages/graphs/find_page.dart';
 import '../graphs/data_view.dart';
 
 class DashboardData extends StatefulWidget {
@@ -15,7 +14,7 @@ class _DashboardDataState extends State<DashboardData> {
 
   final List<Widget> _pages = [
     const DataViewPage(),
-    const OverlayEditorPage(),
+    const FindPage(),
   ];
 
   @override
@@ -27,12 +26,12 @@ class _DashboardDataState extends State<DashboardData> {
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.query_stats),
-            label: 'Analisi Dati',
+            icon: Icon(Icons.today),
+            label: 'Oggi',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.airline_stops_rounded),
-            label: 'AI',
+            icon: Icon(Icons.query_stats),
+            label: 'Analisi Dati',
           ),
         ],
       ),

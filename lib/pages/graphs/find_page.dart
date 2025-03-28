@@ -1,6 +1,7 @@
-// lib/pages/find_page.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class FindPage extends StatefulWidget {
   const FindPage({super.key});
@@ -15,6 +16,16 @@ class _FindPageState extends State<FindPage> {
 
   List<String> stations = ['M308', 'M309', 'M326'];
   List<String> selectedStations = [];
+  bool showGood = true;
+  bool showBad = true;
+
+  String? selectedDefect;
+  final Map<String, String> defectTypes = {
+    'Disallineamento': 'Disallineamento',
+    'Mancanza': 'Mancanza Ribbon',
+    'Generali': 'Generali',
+    'Saldatura': 'Saldatura',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +56,7 @@ class _FindPageState extends State<FindPage> {
             ),
             const SizedBox(height: 20),
 
-            // Filter Chips
+            // Filter Chips for Stations
             Wrap(
               spacing: 10,
               children: stations.map((station) {
@@ -88,7 +99,56 @@ class _FindPageState extends State<FindPage> {
                 }
               },
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
+
+            // Good/Bad Filter Toggles
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Text("Mostra solo:"),
+                Switch(
+                  value: showGood,
+                  onChanged: (value) {
+                    setState(() {
+                      showGood = value;
+                    });
+                  },
+                  activeTrackColor: Colors.green,
+                  activeColor: Colors.greenAccent,
+                ),
+                Text("Buoni"),
+                Switch(
+                  value: showBad,
+                  onChanged: (value) {
+                    setState(() {
+                      showBad = value;
+                    });
+                  },
+                  activeTrackColor: Colors.red,
+                  activeColor: Colors.redAccent,
+                ),
+                Text("Scarti"),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Defect Type Selector
+            DropdownButton<String>(
+              value: selectedDefect,
+              hint: const Text('Seleziona Tipo Difetto'),
+              items: defectTypes.entries
+                  .map((entry) => DropdownMenuItem<String>(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  selectedDefect = value;
+                });
+              },
+            ),
+            const SizedBox(height: 20),
 
             // Search Button
             Center(
@@ -96,7 +156,7 @@ class _FindPageState extends State<FindPage> {
                 icon: const Icon(Icons.search),
                 label: const Text('Cerca'),
                 onPressed: () {
-                  // Fake search action
+                  _performSearch();
                 },
                 style: ElevatedButton.styleFrom(
                   padding:
@@ -113,37 +173,74 @@ class _FindPageState extends State<FindPage> {
             ),
             const SizedBox(height: 10),
 
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.memory, color: Colors.blueGrey),
-                title: const Text('Modulo ID: ABC123'),
-                subtitle: const Text('Utente: Mario Rossi - Station: M308'),
-                trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {},
-              ),
-            ),
-
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.memory, color: Colors.blueGrey),
-                title: const Text('Modulo ID: XYZ789'),
-                subtitle: const Text('Utente: Luca Bianchi - Station: M326'),
-                trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {},
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            const Center(
-              child: Text(
-                'Fai una ricerca per vedere più risultati...',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ),
+            // Show the results (to be updated with actual API results)
+            _buildSearchResults(),
           ],
         ),
       ),
+    );
+  }
+
+  void _performSearch() async {
+    final queryParams = {
+      'date': _selectedRange != null
+          ? DateFormat('yyyy-MM-dd').format(_selectedRange!.start)
+          : null,
+      'from_date': _selectedRange != null
+          ? DateFormat('yyyy-MM-dd').format(_selectedRange!.start)
+          : null,
+      'to_date': _selectedRange != null
+          ? DateFormat('yyyy-MM-dd').format(_selectedRange!.end)
+          : null,
+      'stations': selectedStations.join(','),
+      'showGood': showGood ? 'true' : 'false',
+      'showBad': showBad ? 'true' : 'false',
+      'defect': selectedDefect,
+      'search_query': _searchController.text,
+    };
+
+    final response = await http.get(
+      Uri.http(
+        '192.168.0.10:8000',
+        '/api/productions_search',
+        queryParams,
+      ),
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      setState(() {
+        // Update results (you should modify this part to display actual data)
+      });
+    } else {
+      // Handle errors
+      print('Errore durante la ricerca');
+    }
+  }
+
+  Widget _buildSearchResults() {
+    // Display results here (mock example for now)
+    return Column(
+      children: [
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.memory, color: Colors.blueGrey),
+            title: const Text('Modulo ID: ABC123'),
+            subtitle: const Text('Utente: Mario Rossi - Station: M308'),
+            trailing: const Icon(Icons.arrow_forward_ios),
+            onTap: () {},
+          ),
+        ),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.memory, color: Colors.blueGrey),
+            title: const Text('Modulo ID: XYZ789'),
+            subtitle: const Text('Utente: Luca Bianchi - Station: M326'),
+            trailing: const Icon(Icons.arrow_forward_ios),
+            onTap: () {},
+          ),
+        ),
+      ],
     );
   }
 }

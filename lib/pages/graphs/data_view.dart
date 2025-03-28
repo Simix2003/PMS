@@ -8,7 +8,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import '../../shared/widgets/station_card.dart';
-import 'find_page.dart';
 
 class DataViewPage extends StatefulWidget {
   const DataViewPage({super.key});
@@ -21,8 +20,11 @@ class _DataViewPageState extends State<DataViewPage> {
   late final WebSocketChannel _summaryChannel;
   late Future<Map<String, dynamic>> _dataFuture;
 
+  // select yesterday as date
   final DateTime _selectedDate = DateTime.now();
   DateTimeRange? _selectedRange;
+
+  int selectedTurno = 1;
 
   String selectedLine = "Linea1";
   final List<String> availableLines = ["Linea1", "Linea2"];
@@ -79,23 +81,26 @@ class _DataViewPageState extends State<DataViewPage> {
     }
   }
 
-  // Fetch data based on the selected line
   Future<Map<String, dynamic>> fetchData() async {
     String url;
-    if (_selectedRange != null) {
-      final from = DateFormat('yyyy-MM-dd').format(_selectedRange!.start);
-      final to = DateFormat('yyyy-MM-dd').format(_selectedRange!.end);
-      url =
-          'http://192.168.0.10:8000/api/productions_summary?from=$from&to=$to&line_name=$selectedLine';
-    } else {
-      final date = DateFormat('yyyy-MM-dd').format(_selectedDate);
-      url =
-          'http://192.168.0.10:8000/api/productions_summary?date=$date&line_name=$selectedLine';
-    }
+    final date = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+    // Update the URL to include the selected turno
+    url =
+        'http://192.168.0.10:8000/api/productions_summary?date=$date&line_name=$selectedLine&turno=$selectedTurno';
 
     final response = await http.get(Uri.parse(url));
     if (response.statusCode == 200) {
       final jsonMap = json.decode(response.body);
+      // Add the new fields to each station's data
+      for (var station in jsonMap['stations'].values) {
+        // If last object, esito, and last cycle time exist, include them
+        station['last_object'] = station['last_object'] ?? 'No Data';
+        station['last_esito'] = station['last_esito'] ?? 'No Data';
+        station['last_cycle_time'] = station['last_cycle_time'] ?? 'No Data';
+        station['last_in_time'] = station['last_in_time'] ?? 'No Data';
+        station['last_out_time'] = station['last_out_time'] ?? 'No Data';
+      }
       return Map<String, dynamic>.from(jsonMap);
     } else {
       throw Exception('Errore durante il caricamento dei dati');
@@ -154,16 +159,6 @@ class _DataViewPageState extends State<DataViewPage> {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.search_rounded),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const FindPage()),
-              );
-            },
-          ),
-          const SizedBox(width: 10),
         ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
@@ -208,14 +203,46 @@ class _DataViewPageState extends State<DataViewPage> {
                                 style: const TextStyle(
                                     fontSize: 28, fontWeight: FontWeight.bold),
                               ),
-                              /*TextButton.icon(
-                                onPressed: _selectDateRange,
-                                icon: const Icon(Icons.date_range),
-                                label: const Text("Seleziona Giorni"),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: Colors.deepOrange,
-                                ),
-                              ),*/
+                              Row(
+                                children: [
+                                  // Smooth Rounded Turno Selector using ToggleButtons
+                                  ToggleButtons(
+                                    isSelected: [1, 2, 3]
+                                        .map((turno) => selectedTurno == turno)
+                                        .toList(),
+                                    onPressed: (index) {
+                                      setState(() {
+                                        selectedTurno =
+                                            index + 1; // Set selected turno
+                                        _dataFuture =
+                                            fetchData(); // Refresh data based on selected turno
+                                      });
+                                    },
+                                    borderRadius: BorderRadius.circular(
+                                        12), // Smooth rounded edges
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16),
+                                        child: Text("Turno 1\n06:00 - 14:00",
+                                            textAlign: TextAlign.center),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16),
+                                        child: Text("Turno 2\n14:00 - 22:00",
+                                            textAlign: TextAlign.center),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16),
+                                        child: Text("Turno 3\n22:00 - 06:00",
+                                            textAlign: TextAlign.center),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                           const SizedBox(height: 20),

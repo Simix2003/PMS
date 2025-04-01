@@ -1443,12 +1443,13 @@ async def productions_summary(
 
             # Now calculate "KO Generico" for each station
             for station, data in stations.items():
-                bad_count = int(stations[station]["bad_count"])
-                defects = stations[station].get("defects", {})
+                bad_count = int(data["bad_count"])
+                defects = data.get("defects", {})
                 total_defects = sum(defects.values())
                 generic = bad_count - total_defects
                 if generic > 0:
-                    stations[station]["defects"]["Generico"] = generic
+                    stations[station].setdefault("defects", {})["Generico"] = generic
+
 
             # Last cycle time for single-day requests
             if date:

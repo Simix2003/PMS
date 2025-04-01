@@ -43,6 +43,7 @@ dependencies:
   shared_preferences: ^2.5.2
   intl: ^0.20.2
   file_picker: ^9.2.1
+  calendar_date_picker2: ^2.0.0
 
 dev_dependencies:
   flutter_test:

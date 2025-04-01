@@ -1,6 +1,7 @@
 import asyncio
 import configparser
 import datetime
+from datetime import datetime, timedelta
 import json
 import logging
 import os
@@ -480,7 +481,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         )
         issues_submitted = issues_value is True
 
-        trigger_timestamps[full_id] = datetime.datetime.now()
+        trigger_timestamps[full_id] = datetime.now()
         print(f'trigger_timestamps[{full_id}]: {trigger_timestamps[full_id]}')
 
         await broadcast(line_name, channel_id, {
@@ -508,14 +509,14 @@ async def read_data(
     channel_id: str,
     richiesta_ko: bool,
     richiesta_ok: bool,
-    data_inizio: datetime.datetime | None
+    data_inizio: datetime | None
 ):
     try:
         full_id = f"{line_name}.{channel_id}"
 
         if data_inizio is None:
             logging.warning(f"[{full_id}] data_inizio is None, assigning current time as fallback.")
-            data_inizio = datetime.datetime.now()
+            data_inizio = datetime.now()
 
         config = get_channel_config(line_name, channel_id)
         if config is None:
@@ -539,7 +540,7 @@ async def read_data(
         )
 
         data["DataInizio"] = data_inizio
-        data["DataFine"] = datetime.datetime.now()
+        data["DataFine"] = datetime.now()
         tempo_ciclo = data["DataFine"] - data_inizio
         data["Tempo_Ciclo"] = str(tempo_ciclo)
 
@@ -1152,7 +1153,6 @@ async def get_overlay_config(
 
     return JSONResponse(status_code=404, content={"error": f"No config matches the provided path '{path}'"})
 
-
 @app.post("/api/update_overlay_config")
 async def update_overlay_config(request: Request):
     data = await request.json()
@@ -1314,8 +1314,16 @@ async def productions_summary(
                 where_clause = "WHERE DATE(data_fine) BETWEEN %s AND %s"
                 params = (from_date, to_date)
             elif date:
-                where_clause = "WHERE DATE(data_fine) = %s"
-                params = (date,)
+                if turno and turno == 3:
+                    # For Shift 3, use a datetime range: from 22:00 on the selected date
+                    # to 05:59:59 on the next day.
+                    start_dt = f"{date} 22:00:00"
+                    end_dt = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d 05:59:59")
+                    where_clause = "WHERE data_fine BETWEEN %s AND %s"
+                    params = (start_dt, end_dt)
+                else:
+                    where_clause = "WHERE DATE(data_fine) = %s"
+                    params = (date,)
             else:
                 return JSONResponse(status_code=400, content={"error": "Missing 'date' or 'from' and 'to'"})
 
@@ -1328,19 +1336,45 @@ async def productions_summary(
                 }
 
                 if turno not in turno_times:
-                    return JSONResponse(status_code=400, content={"error": "Invalid turno number (must be 1, 2, or 3)"})
+                    return JSONResponse(
+                        status_code=400,
+                        content={"error": "Invalid turno number (must be 1, 2, or 3)"}
+                    )
 
                 start_time, end_time = turno_times[turno]
 
-                if turno == 3:  # Night shift spans two dates
-                    where_clause += """
-                        AND (
-                            (TIME(data_fine) >= %s AND DATE(data_fine) = %s) OR
-                            (TIME(data_fine) <= %s AND DATE(data_fine) = DATE_ADD(%s, INTERVAL 1 DAY))
+                if turno == 3:
+                    if date:
+                        shift_day = datetime.strptime(date, "%Y-%m-%d")
+                        next_day = shift_day + timedelta(days=1)
+
+                        where_clause += """
+                            AND (
+                                (DATE(data_fine) = %s AND TIME(data_fine) >= '22:00:00')
+                                OR
+                                (DATE(data_fine) = %s AND TIME(data_fine) <= '05:59:59')
+                            )
+                        """
+                        params += (shift_day.strftime("%Y-%m-%d"), next_day.strftime("%Y-%m-%d"))
+
+                    elif from_date and to_date:
+                        # Keep WHERE DATE(data_fine) BETWEEN from_date AND to_date
+                        # Add time-based filter for turno 3
+                        where_clause += """
+                            AND (
+                                TIME(data_fine) >= '22:00:00'
+                                OR TIME(data_fine) <= '05:59:59'
+                            )
+                        """
+
+                    else:
+                        return JSONResponse(
+                            status_code=400,
+                            content={"error": "Missing 'date' or 'from' and 'to'"}
                         )
-                    """
-                    params += (start_time, date, end_time, date)
+
                 else:
+                    # Turno 1 or 2 — simple time filter
                     where_clause += " AND TIME(data_fine) BETWEEN %s AND %s"
                     params += (start_time, end_time)
 
@@ -1390,22 +1424,31 @@ async def productions_summary(
                     "last_cycle_time": "00:00:00"
                 })
 
-            # Fetch defect summary for each defect type
+                        # Fetch defect summary for each defect type
             def fetch_defect_summary(table, label):
                 cursor.execute(f"""
-                    SELECT p.station, COUNT(*) AS defect_count
+                    SELECT p.station, COUNT(DISTINCT p.id) AS defect_count
                     FROM {table} t
                     JOIN productions p ON p.id = t.production_id
-                    {where_clause} AND t.scarto = 1
+                    {where_clause} AND t.scarto = 1 AND p.esito = 6
                     GROUP BY p.station
                 """, params)
                 for row in cursor.fetchall():
-                    stations[row['station']].setdefault("defects", {})[label] = row['defect_count']
+                    stations[row['station']].setdefault("defects", {})[label] = int(row['defect_count'])
 
             fetch_defect_summary("ribbon", "Mancanza Ribbon")
             fetch_defect_summary("saldatura", "Saldatura")
             fetch_defect_summary("disallineamento_stringa", "Disallineamento")
             fetch_defect_summary("generali", "Generali")
+
+            # Now calculate "KO Generico" for each station
+            for station, data in stations.items():
+                bad_count = int(stations[station]["bad_count"])
+                defects = stations[station].get("defects", {})
+                total_defects = sum(defects.values())
+                generic = bad_count - total_defects
+                if generic > 0:
+                    stations[station]["defects"]["Generico"] = generic
 
             # Last cycle time for single-day requests
             if date:

@@ -1,9 +1,8 @@
 // ignore_for_file: deprecated_member_use, must_be_immutable, use_build_context_synchronously
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
+import '../services/api_service.dart';
 
 class ObjectCard extends StatefulWidget {
   final String objectId;
@@ -40,18 +39,14 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
       widget.hasBeenEvaluated = true;
     });
 
-    final response = await http.post(
-      Uri.parse('http://192.168.0.10:8000/api/set_outcome'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        "line_name": widget.selectedLine,
-        "channel_id": widget.selectedChannel,
-        "object_id": widget.objectId,
-        "outcome": outcome,
-      }),
+    final success = await ApiService.sendObjectOutcome(
+      lineName: widget.selectedLine,
+      channelId: widget.selectedChannel,
+      objectId: widget.objectId,
+      outcome: outcome,
     );
 
-    if (response.statusCode == 200) {
+    if (success) {
       setState(() {
         widget.hasBeenEvaluated = true;
         widget.isObjectOK = (outcome == "buona");

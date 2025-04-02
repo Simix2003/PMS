@@ -2,12 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:web_socket_channel/status.dart' as status;
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
+import '../../shared/services/api_service.dart';
+import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/station_card.dart';
 
 class DataViewPage extends StatefulWidget {
@@ -18,7 +16,7 @@ class DataViewPage extends StatefulWidget {
 }
 
 class _DataViewPageState extends State<DataViewPage> {
-  late final WebSocketChannel _summaryChannel;
+  final WebSocketService _webSocketService = WebSocketService();
   late Future<Map<String, dynamic>> _dataFuture;
 
   // Initially using a single date; if a range is selected, _selectedRange will be non-null
@@ -46,30 +44,26 @@ class _DataViewPageState extends State<DataViewPage> {
   void initState() {
     super.initState();
     _initializeWebSocket(); // Initialize WebSocket connection
-    _dataFuture = fetchData(); // Fetch initial data
+    _dataFuture = _fetchData();
   }
 
   @override
   void dispose() {
-    _summaryChannel.sink
-        .close(status.goingAway); // Close WebSocket when page is disposed
+    _webSocketService.close();
     super.dispose();
   }
 
-  // Initialize the WebSocket channel for the selected line
   void _initializeWebSocket() {
-    _summaryChannel = WebSocketChannel.connect(
-      Uri.parse('ws://192.168.0.10:8000/ws/summary/$selectedLine'),
+    _webSocketService.connectToSummary(
+      selectedLine: selectedLine,
+      onMessage: () {
+        if (mounted) {
+          setState(() {
+            _dataFuture = _fetchData();
+          });
+        }
+      },
     );
-
-    _summaryChannel.stream.listen((event) {
-      print("🔁 Dashboard refresh event received");
-      if (mounted) {
-        setState(() {
-          _dataFuture = fetchData(); // Refresh data on WebSocket event
-        });
-      }
-    });
   }
 
   // Handle line change (update WebSocket connection and fetch new data)
@@ -78,44 +72,18 @@ class _DataViewPageState extends State<DataViewPage> {
       setState(() {
         selectedLine = newLine;
         _initializeWebSocket();
-        _dataFuture = fetchData();
+        _dataFuture = _fetchData();
       });
     }
   }
 
-  Future<Map<String, dynamic>> fetchData() async {
-    String url;
-    // If a date range is selected, use it; otherwise use the single date
-    if (_selectedRange != null) {
-      final startDate = DateFormat('yyyy-MM-dd').format(_selectedRange!.start);
-      final endDate = DateFormat('yyyy-MM-dd').format(_selectedRange!.end);
-      url = 'http://192.168.0.10:8000/api/productions_summary?'
-          'from=$startDate&to=$endDate&line_name=$selectedLine';
-    } else {
-      final date = DateFormat('yyyy-MM-dd').format(_selectedDate);
-      url =
-          'http://192.168.0.10:8000/api/productions_summary?date=$date&line_name=$selectedLine';
-    }
-    // Append turno parameter only if a specific shift is selected (non-zero)
-    if (selectedTurno != 0) {
-      url += '&turno=$selectedTurno';
-    }
-
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode == 200) {
-      final jsonMap = json.decode(response.body);
-      // Add new fields to each station's data
-      for (var station in jsonMap['stations'].values) {
-        station['last_object'] = station['last_object'] ?? 'No Data';
-        station['last_esito'] = station['last_esito'] ?? 'No Data';
-        station['last_cycle_time'] = station['last_cycle_time'] ?? 'No Data';
-        station['last_in_time'] = station['last_in_time'] ?? 'No Data';
-        station['last_out_time'] = station['last_out_time'] ?? 'No Data';
-      }
-      return Map<String, dynamic>.from(jsonMap);
-    } else {
-      throw Exception('Errore durante il caricamento dei dati');
-    }
+  Future<Map<String, dynamic>> _fetchData() {
+    return ApiService.fetchProductionSummary(
+      selectedLine: selectedLine,
+      singleDate: _selectedDate,
+      range: _selectedRange,
+      selectedTurno: selectedTurno,
+    );
   }
 
   String _getDateTitle() {
@@ -151,7 +119,7 @@ class _DataViewPageState extends State<DataViewPage> {
         _selectedDate = pickedRange.start;
         _selectedRange = pickedRange;
       }
-      _dataFuture = fetchData();
+      _dataFuture = _fetchData();
     });
   }
 
@@ -253,7 +221,7 @@ class _DataViewPageState extends State<DataViewPage> {
                       setState(() {
                         selectedLine = newLine;
                         _onLineChange(selectedLine);
-                        _dataFuture = fetchData();
+                        _dataFuture = _fetchData();
                       });
                     }
                   },
@@ -316,7 +284,7 @@ class _DataViewPageState extends State<DataViewPage> {
                                       setState(() {
                                         // Here, 0 represents “Full Day”
                                         selectedTurno = index;
-                                        _dataFuture = fetchData();
+                                        _dataFuture = _fetchData();
                                       });
                                     },
                                     borderRadius: BorderRadius.circular(12),

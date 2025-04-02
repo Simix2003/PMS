@@ -1,6 +1,6 @@
-import 'dart:convert';
+// ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../shared/services/api_service.dart';
 
 class OverlayEditorPage extends StatefulWidget {
   const OverlayEditorPage({super.key});
@@ -24,34 +24,35 @@ class _OverlayEditorPageState extends State<OverlayEditorPage> {
   Size? imageSize;
 
   Future<void> fetchAvailablePaths() async {
-    final uri =
-        Uri.parse('http://192.168.0.10:8000/api/available_overlay_paths');
-    final res = await http.get(uri);
-    if (res.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(res.body);
+    try {
+      final paths = await ApiService.fetchAvailableOverlayPaths();
       setState(() {
-        availableConfigs = List<Map<String, dynamic>>.from(data);
+        availableConfigs = paths;
       });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Errore nel caricamento: $e')),
+      );
     }
   }
 
   Future<void> fetchOverlay(String path) async {
     setState(() => isLoading = true);
-    final uri =
-        Uri.parse('http://192.168.0.10:8000/api/overlay_config?path=$path');
-    final res = await http.get(uri);
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
+    try {
+      final data = await ApiService.fetchOverlayConfig(path);
       setState(() {
         selectedPath = path;
         selectedImageUrl = data['image_url'];
         rectangles = List<Map<String, dynamic>>.from(data['rectangles']);
       });
-    } else {
+    } catch (e) {
       setState(() {
         selectedImageUrl = null;
         rectangles = [];
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Errore nel caricamento: $e')),
+      );
     }
     setState(() => isLoading = false);
   }
@@ -262,29 +263,20 @@ class _OverlayEditorPageState extends State<OverlayEditorPage> {
               onPressed: selectedPath == null
                   ? null
                   : () async {
-                      final uri = Uri.parse(
-                          'http://192.168.0.10:8000/api/update_overlay_config');
-                      final body = {
-                        "path": selectedPath,
-                        "rectangles": rectangles,
-                      };
-
-                      final response = await http.post(
-                        uri,
-                        headers: {'Content-Type': 'application/json'},
-                        body: jsonEncode(body),
+                      final success = await ApiService.updateOverlayConfig(
+                        path: selectedPath!,
+                        rectangles: rectangles,
                       );
 
-                      if (response.statusCode == 200) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('✔️ Modifiche salvate!')),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('❌ Errore: ${response.body}')),
-                        );
-                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            success
+                                ? '✔️ Modifiche salvate!'
+                                : '❌ Errore durante il salvataggio',
+                          ),
+                        ),
+                      );
                     },
             ),
           ),

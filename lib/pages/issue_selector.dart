@@ -1,8 +1,6 @@
 // ignore_for_file: deprecated_member_use, unrelated_type_equality_checks
-
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../shared/services/api_service.dart';
 
 class IssueSelectorWidget extends StatefulWidget {
   final String selectedLine;
@@ -58,63 +56,47 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
   // Determine the background image URL for the current level.
   String get currentImageUrl {
-    final line = widget.selectedLine;
-    final station = widget.channelId;
-
-    if (pathStack.isEmpty) return "";
-
-    if (pathStack.length == 1) {
-      final group = pathStack.first.toLowerCase();
-      return "http://192.168.0.10:8000/images/$line/$station/$group.jpg";
-    }
-
-    final base = pathStack.first.toLowerCase();
-    final sub = pathStack.last.toLowerCase().replaceAll(' ', '_');
-    return "http://192.168.0.10:8000/images/$line/$station/${base}_$sub.jpg";
+    return ApiService.buildOverlayImageUrl(
+      line: widget.selectedLine,
+      station: widget.channelId,
+      pathStack: pathStack,
+    );
   }
 
   Future<void> _fetchCurrentItems() async {
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isLoading = true);
 
     final line = widget.selectedLine;
     final channel = widget.channelId;
 
-    // Correct the URL parameters: replace `channel` with `station`
-    final issueUrl = Uri.parse(
-        'http://192.168.0.10:8000/api/issues/$line/$channel?path=$apiPath');
-    final overlayUrl = Uri.parse(
-        'http://192.168.0.10:8000/api/overlay_config?path=$apiPath&line_name=$line&station=$channel');
-
     try {
-      final issueResponse = await http.get(issueUrl);
-      print('Sending overlayURL: $overlayUrl');
-      final overlayResponse = await http.get(overlayUrl);
-      print('Received overlayURL respone: ${overlayResponse.body}');
+      final issues = await ApiService.fetchIssues(
+        line: line,
+        station: channel,
+        path: apiPath,
+      );
 
-      if (issueResponse.statusCode == 200) {
-        final data = jsonDecode(issueResponse.body);
-        currentItems = data['items'];
-      }
+      final overlay = await ApiService.fetchIssueOverlay(
+        line: line,
+        station: channel,
+        path: apiPath,
+      );
 
-      if (overlayResponse.statusCode == 200) {
-        final overlay = jsonDecode(overlayResponse.body);
+      setState(() {
+        currentItems = issues;
+        currentRectangles = overlay['rectangles'] ?? [];
         backgroundImageUrl = overlay['image_url'] ?? currentImageUrl;
-        currentRectangles = overlay['rectangles'];
-      } else {
+      });
+    } catch (e) {
+      setState(() {
+        currentItems = [];
         currentRectangles = [];
         backgroundImageUrl = currentImageUrl;
-      }
-    } catch (e) {
-      currentItems = [];
-      currentRectangles = [];
-      backgroundImageUrl = currentImageUrl;
+      });
+      debugPrint("❌ Error in _fetchCurrentItems: $e");
     }
 
-    setState(() {
-      isLoading = false;
-    });
+    setState(() => isLoading = false);
   }
 
   void _onGroupSelected(String group) {

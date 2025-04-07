@@ -17,6 +17,7 @@ from pymysql.cursors import DictCursor
 import pymysql
 import re
 from fastapi.staticfiles import StaticFiles
+from typing import Optional, Union, Dict
 
 
 # ---------------- CONFIG & GLOBALS ----------------
@@ -86,64 +87,41 @@ ISSUE_TREE = {
         "Esito": {
             "Esito_Scarto": {
                 "Difetti": {
-                    "Saldatura": {
-                        "Stringa_F": {
-                            f"Stringa_F[{i}]": {
-                                f"String_Ribbon[{j}]": None for j in range(1, 11)
-                            } for i in range(1, 7)
-                        },
-                        "Stringa_M_F": {
-                            f"Stringa_M_F[{i}]": {
-                                f"Saldatura[{j}]": None for j in range(1, 11)
-                            } for i in range(1, 7)
-                        },
-                        "Stringa_M_B": {
-                            f"Stringa_M_B[{i}]": {
-                                f"Saldatura[{j}]": None for j in range(1, 11)
-                            } for i in range(1, 7)
-                        },
-                        "Stringa_B": {
-                            f"Stringa_B[{i}]": {
-                                f"Saldatura[{j}]": None for j in range(1, 11)
-                            } for i in range(1, 7)
-                        },
-                    },
-                    "Disallineamento": {
-                        "Ribbon": {
-                        "Ribbon_Stringa_F": {
-                            f"Ribbon_Stringa_F[{i}]": None for i in range(1, 13)
-                        },
-                        "Ribbon_Stringa_M": {
-                            f"Ribbon_Stringa_M[{i}]": None for i in range(1, 13)
-                        },
-                        "Ribbon_Stringa_B": {
-                            f"Ribbon_Stringa_B[{i}]": None for i in range(1, 13)
-                        }
-                        },
-                        "Stringa": {
-                            f"Stringa[{i}]": None for i in range(1, 13)
-                        },
-                    },
-                    "Mancanza_Ribbon": {
-                        "Ribbon": {
-                            "Ribbon_Stringa_F": {
-                                f"Ribbon_Stringa_F[{i}]": None for i in range(1, 13)
-                            },
-                            "Ribbon_Stringa_M": {
-                                f"Ribbon_Stringa_M[{i}]": None for i in range(1, 13)
-                            },
-                            "Ribbon_Stringa_B": {
-                                f"Ribbon_Stringa_B[{i}]": None for i in range(1, 13)
-                            }
-                        }
-                    },
                     "Generali": {
                         "Non Lavorato Poe Scaduto": {},
                         "Non Lavorato da Telecamere": {},
                         "Materiale Esterno su Celle": {},
-                        "Bad Soldering": {},
-                        "Macchie ECA": {},
-                        "Cella Rotta": {}
+                        "Bad Soldering": {}
+                    },
+                    "Saldatura": {
+                        f"Stringa[{i}]": {
+                            f"Pin[{j}]": {
+                                "F": None,
+                                "M": None,
+                                "B": None
+                            } for j in range(1, 21)
+                        } for i in range(1, 13)
+                    },
+                   "Disallineamento": {
+                        **{f"Stringa[{i}]": None for i in range(1, 13)},
+                        **{f"Ribbon[{i}]": {
+                            "F": None,
+                            "M": None,
+                            "B": None
+                        } for i in range(1, 11)}
+                    },
+                    "Mancanza Ribbon": {
+                        f"Ribbon[{i}]": {
+                            "F": None,
+                            "M": None,
+                            "B": None
+                        } for i in range(1, 11)
+                    },
+                    "Macchie ECA": {
+                        f"Stringa[{i}]": None for i in range(1, 13)
+                    },
+                    "Celle Rotte": {
+                        f"Stringa[{i}]": None for i in range(1, 13)
                     }
                 }
             }
@@ -188,8 +166,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     mysql_connection = pymysql.connect(
         host="localhost",
         user="root",
-        #password="Master36!",
-        database="production_data",
+        password="Master36!",
+        database="ix_monitor",
         port=3306,
         cursorclass=DictCursor,
         autocommit=False
@@ -375,12 +353,6 @@ def get_latest_issues(line_name: str, channel_id: str):
             return entry.get("issues", [])
     return []
 
-def fill_1d(length, value):
-    return [value] * length
-
-def fill_2d(rows, cols, value):
-    return [[value] * cols for _ in range(rows)]
-
 def remove_temp_issues(line_name, channel_id, object_id):
     temp_data = load_temp_data()
     filtered_data = [
@@ -396,41 +368,6 @@ def remove_temp_issues(line_name, channel_id, object_id):
 
 def issue_matches_any(issues, pattern):
     return any(re.search(pattern, issue) for issue in issues)
-
-def build_matrix_from_raw(issues, category, row_count, col_count):
-    """
-    Matches paths like:
-    Dati.Esito.Esito_Scarto.Difetti.Saldatura.<category>.<category>[i].Saldatura[j]
-    For example: Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa_M_B.Stringa_M_B[1].Saldatura[1]
-    """
-    return [
-        [
-            issue_matches_any(issues, fr"{category}\.{category}\[{i+1}\]\.Saldatura\[{j+1}\]")
-            for j in range(col_count)
-        ]
-        for i in range(row_count)
-    ]
-
-def build_ribbon_array(issues, label, count):
-    """
-    Matches entries like:
-    Dati.Esito.Esito_Scarto.Difetti.Saldatura.<label>.<label>[i]
-    Adjust the pattern as needed for your new structure.
-    """
-    return [
-        issue_matches_any(issues, fr"{label}\.{label.split('.')[-1]}\[{i+1}\]")
-        for i in range(count)
-    ]
-
-def build_cell_matrix(issues, category, row_count, col_count):
-    # Adjust pattern to include the ".Stringa.Stringa" segment as seen in your raw issues
-    return [
-        [
-            issue_matches_any(issues, fr"{category}\.Stringa\.Stringa\[{i+1}\]\.Cella\[{j+1}\]")
-            for j in range(col_count)
-        ]
-        for i in range(row_count)
-    ]
 
 async def on_trigger_change(plc_connection: PLCConnection, line_name: str, channel_id: str, node, val, data):
     if not isinstance(val, bool):
@@ -515,24 +452,22 @@ async def read_data(
         full_id = f"{line_name}.{channel_id}"
 
         if data_inizio is None:
-            logging.warning(f"[{full_id}] data_inizio is None, assigning current time as fallback.")
             data_inizio = datetime.now()
 
         config = get_channel_config(line_name, channel_id)
         if config is None:
-            logging.error(f"[{full_id}] ❌ Config not found.")
             return None
 
         data = {}
 
-        # Read Id_Modulo string
+        # Read Id_Modulo
         id_mod_conf = config["id_modulo"]
         data["Id_Modulo"] = await asyncio.to_thread(
             plc_connection.read_string,
             id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
         )
 
-        # Read Id_Utente string
+        # Read Id_Utente
         id_utente_conf = config["id_utente"]
         data["Id_Utente"] = await asyncio.to_thread(
             plc_connection.read_string,
@@ -544,10 +479,10 @@ async def read_data(
         tempo_ciclo = data["DataFine"] - data_inizio
         data["Tempo_Ciclo"] = str(tempo_ciclo)
 
-        # Update this logic if needed
+        # Set linea_in_lavorazione if needed
         data["Linea_in_Lavorazione"] = [line_name == "Linea1", line_name == "Linea2", False, False, False]
 
-        # Read stringatrice info
+        # Read stringatrice bits if relevant
         str_conf = config["stringatrice"]
         values = [
             await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
@@ -559,76 +494,6 @@ async def read_data(
 
         data["Compilato_Su_Ipad_Scarto_Presente"] = richiesta_ko
 
-        if richiesta_ok:
-            # All issue fields set to False
-            data["Stringa_F"] = fill_2d(6, 10, False)
-            data["Stringa_M_F"] = fill_2d(6, 10, False)
-            data["Stringa_M_B"] = fill_2d(6, 10, False)
-            data["Stringa_B"] = fill_2d(6, 10, False)
-            data["Disallineamento"] = {
-                "Ribbon_Stringa_F": fill_1d(12, False),
-                "Ribbon_Stringa_M": fill_1d(12, False),
-                "Ribbon_Stringa_B": fill_1d(12, False)
-            }
-            data["Stringa"] = fill_1d(12, False)
-            data["Mancanza_Ribbon"] = {
-                "Ribbon_Stringa_F": fill_1d(12, False),
-                "Ribbon_Stringa_M": fill_1d(12, False),
-                "Ribbon_Stringa_B": fill_1d(12, False)
-            }
-            generali = {
-                "Non_Lavorato_Poe_Scaduto": False,
-                "Non_Lavorato_da_Telecamere": False,
-                "Materiale_Esterno_su_Celle": False,
-                "Bad_Soldering": False,
-                "Macchie ECA": False,
-                "Cella_Rotta": False
-            }
-            for i in range(4, 16):
-                generali[f"Non_Lavorato_Riserva_{i}"] = False
-            data["Generali"] = generali
-
-        elif richiesta_ko:
-            issues = get_latest_issues(line_name, channel_id)
-            print('issues:', issues)
-
-            data["Stringa_F"] = build_matrix_from_raw(issues, "Stringa_F", 6, 10)
-            data["Stringa_M_F"] = build_matrix_from_raw(issues, "Stringa_M_F", 6, 10)
-            data["Stringa_M_B"] = build_matrix_from_raw(issues, "Stringa_M_B", 6, 10)
-            data["Stringa_B"] = build_matrix_from_raw(issues, "Stringa_B", 6, 10)
-
-            data["Disallineamento"] = {
-                "Ribbon_Stringa_F": build_ribbon_array(issues, "Ribbon_Stringa_F", 12),
-                "Ribbon_Stringa_M": build_ribbon_array(issues, "Ribbon_Stringa_M", 12),
-                "Ribbon_Stringa_B": build_ribbon_array(issues, "Ribbon_Stringa_B", 12),
-            }
-
-            data["Stringa"] = build_ribbon_array(issues, "Stringa", 12)
-
-            data["Mancanza_Ribbon"] = {
-                "Ribbon_Stringa_F": build_ribbon_array(issues, "Mancanza_Ribbon.Ribbon_Stringa_F", 12),
-                "Ribbon_Stringa_M": build_ribbon_array(issues, "Mancanza_Ribbon.Ribbon_Stringa_M", 12),
-                "Ribbon_Stringa_B": build_ribbon_array(issues, "Mancanza_Ribbon.Ribbon_Stringa_B", 12),
-            }
-
-            generali = {}
-            for general_issue in [
-                "Non Lavorato Poe Scaduto",
-                "Non Lavorato da Telecamere",
-                "Materiale Esterno su Celle",
-                "Bad Soldering",
-                "Macchie ECA",
-                "Cella Rotta"
-            ]:
-                generali[general_issue.replace(" ", "_")] = any(general_issue in issue for issue in issues)
-
-            for i in range(4, 16):
-                label = f"Non Lavorato Riserva {i}"
-                generali[label.replace(" ", "_")] = any(label in issue for issue in issues)
-
-            data["Generali"] = generali
-
-        print(f"[{full_id}] ✅ Data read successfully.")
         return data
 
     except Exception as e:
@@ -639,162 +504,270 @@ async def read_data(
 DB_SCHEMA = """
 Il database contiene le seguenti tabelle:
 
-1 `productions`
+1 `objects`
 - id (PK)
-- linea (INT)
-- station (ENUM: 'M308', 'M309', 'M326')
-- stringatrice (INT)
-- id_modulo (VARCHAR)
-- id_utente (VARCHAR)
-- data_inizio (DATETIME)
-- data_fine (DATETIME)
-- esito (BOOLEAN)
-- tempo_ciclo (TIME)
+- id_modulo (VARCHAR, UNIQUE)
+- creator_station_id (FK to stations.id)
+- created_at (DATETIME)
 
-2 `ribbon`
+2 `stations`
+- id (PK)
+- line_id (FK to production_lines.id)
+- name (VARCHAR)
+- display_name (VARCHAR)
+- type (ENUM: 'creator', 'qc', 'rework', 'other')
+- config (JSON)
+
+3 `production_lines`
+- id (PK)
+- name (VARCHAR)
+- display_name (VARCHAR)
+- description (TEXT)
+
+4 `productions`
+- id (PK)
+- object_id (FK to objects.id)
+- station_id (FK to stations.id)
+- start_time (DATETIME)
+- end_time (DATETIME)
+- esito (INT) -- 1 = OK, 6 = KO
+- operator_id (VARCHAR)
+- cycle_time (TIME) -- calcolato come differenza tra end_time e start_time
+- last_station_id (FK to stations.id, NULLABLE)
+
+5 `defects`
+- id (PK)
+- category (ENUM: 'Generali', 'Saldatura', 'Disallineamento', 'Mancanza Ribbon', 'Macchie ECA', 'Celle Rotte', 'Altro')
+
+6 `object_defects`
 - id (PK)
 - production_id (FK to productions.id)
-- tipo_difetto (ENUM: 'Disallineamento', 'Mancanza')
-- tipo (ENUM: 'F', 'M', 'B')
-- position (INT)
-- scarto (BOOLEAN)
+- defect_id (FK to defects.id)
+- defect_type (VARCHAR, NULLABLE) -- usato solo per i "Generali"
+- stringa (INT, NULLABLE)
+- s_ribbon (INT, NULLABLE)
+- i_ribbon (INT, NULLABLE)
+- ribbon_lato (ENUM: 'F', 'M', 'B', NULLABLE)
+- extra_data (JSON, NULLABLE)
 
-3 `saldatura`
-- id (PK)
-- production_id (FK)
-- category ENUM('Stringa_F', 'Stringa_M_F', 'Stringa_M_B', 'Stringa_B')
-- stringa (INT)
-- ribbon (INT)
-- scarto (BOOLEAN)
-
-4 `disallineamento_stringa`
-- id (PK)
-- production_id (FK)
-- position (INT)
-- scarto (BOOLEAN)
-
-5 `lunghezza_string_ribbon`
-- id (PK)
-- production_id (FK)
-- position (INT)
-- scarto (BOOLEAN)
-
-6 `generali`
-- id (PK)
-- production_id (FK)
-- tipo_difetto ENUM('Non Lavorato Poe Scaduto', 'Non Lavorato da Telecamere', 'Materiale Esterno su Celle', 'Bad Soldering', 'Macchie ECA', 'Cella Rotta')
-- scarto (BOOLEAN)
+7 `station_defects`
+- station_id (FK to stations.id)
+- defect_id (FK to defects.id)
+(Chiave primaria composta: station_id + defect_id)
 
 Regole:
-- Chiedi chiarimenti all'utente se la richiesta è vaga.
-- Genera solo query sicure e leggibili.
-- Non generare query che modificano il database (NO INSERT, UPDATE, DELETE).
+- Usa la tabella `object_defects` per registrare **tutti i difetti** rilevati durante una produzione.
+- La colonna `defect_type` è obbligatoria solo per difetti di categoria "Generali".
+- Le altre colonne (`stringa`, `s_ribbon`, `i_ribbon`, `ribbon_lato`) vengono compilate **in base alla categoria del difetto**.
+- Non inserire, modificare o eliminare dati tramite query SQL generate: sono consentite solo query **di lettura** (SELECT).
 """
 
-async def insert_production_data(data, line, station, connection):
-    """
-    Inserts the PLC data into the normalized MySQL tables.
-    """
+async def insert_production_data(data, station_name, connection):
     try:
         with connection.cursor() as cursor:
-            # --- 1. Insert into productions table ---
-            # Determine the active 'linea'
-            for idx, val in enumerate(data.get("Linea_in_Lavorazione", [])):
-                if val:  # Only save True
-                    linea = idx + 1
-                    break  # exit after the first true value
-            
-            # Determine the active 'stringatrice'
-            for idx, val in enumerate(data.get("Lavorazione_Eseguita_Su_Stringatrice", [])):
-                if val:  # Only save True
-                    stringatrice = idx + 1
-                    break
+            id_modulo = data.get("Id_Modulo")
+            # Determine the line by checking the 'Linea_in_Lavorazione' list.
+            # We assume the list is ordered like [Linea1, Linea2, ...]
+            linea_index = data.get("Linea_in_Lavorazione", [False] * 5).index(True) + 1
+            actual_line = f"Linea{linea_index}"
 
+            # Get the line_id from production_lines using the line name.
+            cursor.execute("SELECT id FROM production_lines WHERE name = %s", (actual_line,))
+            line_row = cursor.fetchone()
+            if not line_row:
+                raise ValueError(f"{actual_line} not found in production_lines")
+            line_id = line_row["id"]
+
+            # Get the station's numeric id from stations table using station name and line_id.
+            cursor.execute("SELECT id FROM stations WHERE name = %s AND line_id = %s", (station_name, line_id))
+            station_row = cursor.fetchone()
+            if not station_row:
+                raise ValueError(f"Station '{station_name}' not found for {actual_line}")
+            real_station_id = station_row["id"]
+
+            # 1️⃣ Insert (or update) into objects table.
+            sql_insert_object = """
+                INSERT INTO objects (id_modulo, creator_station_id)
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE id_modulo = id_modulo
+            """
+            cursor.execute(sql_insert_object, (id_modulo, real_station_id))
+
+            # 3️⃣ Get object_id
+            cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
+            object_id = cursor.fetchone()["id"]
+
+                        # 3️⃣ Retrieve last_station_id from stringatrice
+            last_station_id = None
+            str_flags = data.get("Lavorazione_Eseguita_Su_Stringatrice", [])
+            if any(str_flags):
+                stringatrice_index = str_flags.index(True) + 1
+                stringatrice_name = f"Str{stringatrice_index}"
+
+                # Query station_id for the stringatrice (last station)
+                cursor.execute(
+                    "SELECT id FROM stations WHERE name = %s AND line_id = %s",
+                    (stringatrice_name, line_id)
+                )
+                str_row = cursor.fetchone()
+                if str_row:
+                    last_station_id = str_row["id"]
+
+
+            # 4️⃣ Insert into productions table.
             sql_productions = """
-                INSERT INTO productions 
-                    (linea, station, stringatrice, id_modulo, id_utente, data_inizio, data_fine, esito, tempo_ciclo)
-                VALUES 
-                    (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO productions (
+                    object_id, station_id, start_time, end_time, esito, operator_id, last_station_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             cursor.execute(sql_productions, (
-                linea,
-                station,
-                stringatrice,
-                data.get("Id_Modulo"),
-                data.get("Id_Utente"),
+                object_id,
+                real_station_id,
                 data.get("DataInizio"),
                 data.get("DataFine"),
-                6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1,  # 5 = OK_Operatore
-                data.get("Tempo_Ciclo"),
+                6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1,
+                data.get("Id_Utente"),
+                last_station_id
             ))
             production_id = cursor.lastrowid
 
-            # --- 2. Insert into saldatura ---
-            for category in ['Stringa_F', 'Stringa_M_F', 'Stringa_M_B', 'Stringa_B']:
-                matrix = data.get(category, [])
-                for row_index, row in enumerate(matrix):
-                    for col_index, val in enumerate(row):
-                        if val:  # Only save True entries
-                            sql = """
-                                INSERT INTO saldatura (production_id, category, stringa, ribbon, scarto)
-                                VALUES (%s, %s, %s, %s, %s)
-                            """
-                            cursor.execute(sql, (production_id, category, row_index + 1, col_index + 1, True))
+            # 5 Insert defects.
+            # Pass the correct line name (actual_line) to get_latest_issues.
+            await insert_defects(data, production_id, channel_id=station_name, line_name=actual_line, cursor=cursor)
 
-            # --- 3. Insert into disallineamento_stringa ---
-            for idx, val in enumerate(data.get("Stringa", [])):
-                if val:  # Only insert if True
-                    sql = "INSERT INTO disallineamento_stringa (production_id, position, scarto) VALUES (%s, %s, %s)"
-                    cursor.execute(sql, (production_id, idx + 1, True))
-
-            # --- 4. Insert into generali ---
-            generali = data.get("Generali", {})
-            for flag_name, val in generali.items():
-                if val:
-                    # Replace underscores with spaces to match the ENUM values in your schema
-                    defect_type = flag_name.replace("_", " ")
-                    sql = "INSERT INTO generali (production_id, tipo_difetto, scarto) VALUES (%s, %s, %s)"
-                    cursor.execute(sql, (production_id, defect_type, True))
-
-            # --- 5. Insert into ribbon ---
-            # For Disallineamento defects
-            dis = data.get("Disallineamento", {})
-            for ribbon_area in ['Ribbon_Stringa_F', 'Ribbon_Stringa_M', 'Ribbon_Stringa_B']:
-                arr = dis.get(ribbon_area, [])
-                for pos, val in enumerate(arr):
-                    if val:
-                        # Extract the type (F, M, B) from the key (e.g. "Ribbon_Stringa_F")
-                        tipo_letter = ribbon_area.split("_")[-1]
-                        sql = """
-                            INSERT INTO ribbon (production_id, tipo_difetto, tipo, position, scarto)
-                            VALUES (%s, %s, %s, %s, %s)
-                        """
-                        cursor.execute(sql, (production_id, 'Disallineamento', tipo_letter, pos + 1, True))
-
-            # For Mancanza defects
-            mr = data.get("Mancanza_Ribbon", {})
-            for ribbon_area in ['Ribbon_Stringa_F', 'Ribbon_Stringa_M', 'Ribbon_Stringa_B']:
-                arr = mr.get(ribbon_area, [])
-                for pos, val in enumerate(arr):
-                    if val:
-                        tipo_letter = ribbon_area.split("_")[-1]
-                        sql = """
-                            INSERT INTO ribbon (production_id, tipo_difetto, tipo, position, scarto)
-                            VALUES (%s, %s, %s, %s, %s)
-                        """
-                        cursor.execute(sql, (production_id, 'Mancanza', tipo_letter, pos + 1, True))
-
-            # Commit the transaction if all inserts are successful
             connection.commit()
-            logging.info(f"Production data inserted with id: {production_id}")
-            asyncio.create_task(broadcast(line, "summary", {"type": "update_summary"}))
+            logging.info(f"Inserted production {production_id} for object {object_id}")
+            # Broadcast update (using actual_line for the summary).
+            asyncio.create_task(broadcast(actual_line, "summary", {"type": "update_summary"}))
             return production_id
-        
 
     except Exception as e:
         connection.rollback()
         logging.error(f"Error inserting production data: {e}")
         return None
+
+
+async def insert_defects(data, production_id, channel_id, line_name, cursor):
+    # 1. Get defects mapping from DB.
+    cursor.execute("SELECT id, category FROM defects")
+    cat_map = {row["category"]: row["id"] for row in cursor.fetchall()}
+
+    # 2. Load the issues from temporary storage using the proper line name.
+    issues = get_latest_issues(line_name, channel_id)
+    data["issues"] = issues  # Inject into data if needed later.
+
+    # 3. For each issue path, parse and insert a row.
+    for path in issues:
+        category = detect_category(path)  # e.g. "Generali"
+        defect_id = cat_map.get(category, cat_map["Altro"])  # fallback if unknown
+        parsed = parse_issue_path(path, category)
+        sql = """
+            INSERT INTO object_defects (
+                production_id, defect_id, defect_type, stringa, s_ribbon, i_ribbon, ribbon_lato
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(sql, (
+            production_id,
+            defect_id,
+            parsed["defect_type"],
+            parsed["stringa"],
+            parsed["s_ribbon"],
+            parsed["i_ribbon"],
+            parsed["ribbon_lato"],
+        ))
+  
+def detect_category(path: str) -> str:
+    parts = path.split(".")
+    if len(parts) < 5:
+        return "Altro"
+    return parts[4]  # Now returns the actual category, e.g. "Saldatura"
+
+def parse_issue_path(path: str, category: str):
+    """
+    Returns a dict with fields:
+      {
+        "defect_type": ...   # For Generali
+        "stringa": ...       # For Saldatura, Disallineamento, Macchie ECA, etc.
+        "s_ribbon": ...      # For Saldatura (Pin)
+        "i_ribbon": ...      # For Disallineamento/Mancanza Ribbon
+        "ribbon_lato": ...   # Possibly 'F','M','B'
+      }
+    """
+    res: Dict[str, Optional[Union[str, int]]] = {
+        "defect_type": None,
+        "stringa": None,
+        "s_ribbon": None,
+        "i_ribbon": None,
+        "ribbon_lato": None
+    }
+
+    # Split
+    parts = path.split(".")
+
+    if category == "Generali":
+        # last part might be the actual defect, e.g. "Bad Soldering"
+        # path might be: "...Generali.Bad Soldering"
+        if len(parts) >= 5:
+            res["defect_type"] = parts[-1]  # e.g. "Bad Soldering"
+        return res
+
+    elif category == "Saldatura":
+        # path e.g. "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[5].M"
+        # Let's parse out 'Stringa[2]' => stringa=2
+        # 'Pin[5]' => s_ribbon=5
+        # 'M' => ribbon_lato='M'
+        # That might be parts[4], parts[5], parts[6]
+        # e.g. parts[4]="Stringa[2]", parts[5]="Pin[5]", parts[6]="M"
+        str_match = re.search(r"Stringa\[(\d+)\]", path)
+        pin_match = re.search(r"Pin\[(\d+)\]", path)
+        side_match = re.search(r"\.(F|M|B)$", path)  # the last segment
+
+        if str_match:
+            res["stringa"] = int(str_match.group(1))
+        if pin_match:
+            res["s_ribbon"] = int(pin_match.group(1))
+        if side_match:
+            res["ribbon_lato"] = side_match.group(1)
+
+    elif category == "Disallineamento":
+        # Could be: "...Disallineamento.Stringa[3]" or "...Disallineamento.Ribbon[5].F"
+        str_match = re.search(r"Stringa\[(\d+)\]", path)
+        if str_match:
+            res["stringa"] = int(str_match.group(1))
+        else:
+            # else check Ribbon
+            # e.g. "Disallineamento.Ribbon[5].M"
+            rib_match = re.search(r"Ribbon\[(\d+)\]", path)
+            side_match = re.search(r"\.(F|M|B)$", path)
+            if rib_match:
+                res["i_ribbon"] = int(rib_match.group(1))
+            if side_match:
+                res["ribbon_lato"] = side_match.group(1)
+
+    elif category == "Mancanza Ribbon":
+        # e.g. "Mancanza Ribbon.Ribbon[2].B"
+        # i_ribbon=2, ribbon_lato='B'
+        rib_match = re.search(r"Ribbon\[(\d+)\]", path)
+        side_match = re.search(r"\.(F|M|B)$", path)
+        if rib_match:
+            res["i_ribbon"] = int(rib_match.group(1))
+        if side_match:
+            res["ribbon_lato"] = side_match.group(1)
+
+    elif category == "Macchie ECA":
+        # e.g. "Macchie ECA.Stringa[4]"
+        str_match = re.search(r"Stringa\[(\d+)\]", path)
+        if str_match:
+            res["stringa"] = int(str_match.group(1))
+
+    elif category == "Celle Rotte":
+        # e.g. "Celle Rotte.Stringa[6]"
+        str_match = re.search(r"Stringa\[(\d+)\]", path)
+        if str_match:
+            res["stringa"] = int(str_match.group(1))
+
+    return res
 
 # ---------------- CONFIG PARSING ----------------
 def load_station_configs(file_path):
@@ -894,14 +867,14 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 result = await read_data(plc_connection, line_name, channel_id,
                                          richiesta_ok=fine_buona,
                                          richiesta_ko=fine_scarto,
+                                         #richiesta_ok=False,
+                                         #richiesta_ko=True,
                                          data_inizio=data_inizio)
                 if result:
                     passato_flags[full_station_id] = True
                     print(f"[{full_station_id}] ✅ Inserting into MySQL...")
-                    await insert_production_data(result, line_name, channel_id, mysql_connection)
+                    await insert_production_data(result, channel_id, mysql_connection)
                     print(f"[{full_station_id}] 🟢 Data inserted successfully!")
-                    await asyncio.to_thread(plc_connection.write_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"], False)
-                    await asyncio.to_thread(plc_connection.write_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"], False)
                     remove_temp_issues(line_name, channel_id, result.get("Id_Modulo"))
 
             await asyncio.sleep(1)
@@ -1210,92 +1183,6 @@ async def available_overlay_paths(
                 "path": path
             })
     return result
-
-@app.post("/api/simulate_trigger")
-async def simulate_trigger(request: Request):
-    data = await request.json()
-    line_name = data.get("line_name")
-    channel_id = data.get("channel_id")
-
-    paths = get_channel_config(line_name, channel_id)
-    if not paths:
-        return JSONResponse(status_code=404, content={"error": "Invalid line or channel"})
-
-    conf = paths["trigger"]
-    plc_conn = plc_connections.get(channel_id)
-    if not plc_conn:
-        return JSONResponse(status_code=404, content={"error": "PLC connection not found"})
-
-    current_value = await asyncio.to_thread(plc_conn.read_bool, conf["db"], conf["byte"], conf["bit"])
-    new_value = not current_value
-
-    await asyncio.to_thread(plc_conn.write_bool, conf["db"], conf["byte"], conf["bit"], new_value)
-    return {"status": "trigger toggled", "value": new_value}
-
-@app.post("/api/simulate_outcome")
-async def simulate_outcome(request: Request):
-    data = await request.json()
-    line_name = data.get("line_name")
-    channel_id = data.get("channel_id")
-    outcome = data.get("value")  # "buona" or "scarto"
-
-    paths = get_channel_config(line_name, channel_id)
-    if not paths or outcome not in ["buona", "scarto"]:
-        return JSONResponse(status_code=400, content={"error": "Invalid data"})
-
-    conf = paths["fine_buona"] if outcome == "buona" else paths["fine_scarto"]
-    plc_conn = plc_connections.get(channel_id)
-    if not plc_conn:
-        return JSONResponse(status_code=404, content={"error": "PLC connection not found"})
-
-    current_value = await asyncio.to_thread(plc_conn.read_bool, conf["db"], conf["byte"], conf["bit"])
-    new_value = not current_value
-
-    await asyncio.to_thread(plc_conn.write_bool, conf["db"], conf["byte"], conf["bit"], new_value)
-
-    return {"status": f"{outcome} toggled", "value": new_value}
-
-@app.post("/api/simulate_objectId")
-async def simulate_objectId(request: Request):
-    data = await request.json()
-    line_name = data.get("line_name")
-    channel_id = data.get("channel_id")
-    object_id = data.get("objectId")
-
-    if not line_name or not channel_id or not object_id:
-        return JSONResponse(status_code=400, content={"error": "Missing parameters"})
-
-    paths = get_channel_config(line_name, channel_id)
-    if not paths:
-        return JSONResponse(status_code=404, content={"error": "Invalid line or channel"})
-
-    plc_conn = plc_connections.get(channel_id)
-    if not plc_conn:
-        return JSONResponse(status_code=404, content={"error": "PLC connection not found"})
-
-    config = paths["id_modulo"]
-
-    try:
-        await asyncio.to_thread(
-            plc_conn.write_string,
-            config["db"],
-            config["byte"],
-            object_id,
-            config["length"]
-        )
-
-        obj = await asyncio.to_thread(
-            plc_conn.read_string,
-            config["db"],
-            config["byte"],
-            config["length"]
-        )
-
-        print(f"✅ ObjectId '{obj}' written to PLC on {line_name} / {channel_id}")
-        return {"status": "ObjectId written", "value": object_id}
-    except Exception as e:
-        logging.error(f"❌ Failed to write ObjectId: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/api/productions_summary")
 async def productions_summary(

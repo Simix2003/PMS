@@ -30,6 +30,7 @@ CHANNELS = {
             "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
             "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
+            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
             "stringatrice": {"db": 19606, "byte": 46, "length": 5},
         },
         "M309": {
@@ -39,6 +40,7 @@ CHANNELS = {
             "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
             "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
+            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
             "stringatrice": {"db": 19606, "byte": 94, "length": 5},
         },
     "M326": {
@@ -48,6 +50,7 @@ CHANNELS = {
             "fine_buona": {"db": 19606, "byte": 96, "bit": 4},
             "fine_scarto": {"db": 19606, "byte": 96, "bit": 5},
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
+            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
             "stringatrice": {"db": 19606, "byte": 142, "length": 5},
         },
     },
@@ -59,6 +62,7 @@ CHANNELS = {
             "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
             "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
+            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
             "stringatrice": {"db": 19606, "byte": 46, "length": 5},
         },
         "M309": {
@@ -68,6 +72,7 @@ CHANNELS = {
             "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
             "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
+            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
             "stringatrice": {"db": 19606, "byte": 94, "length": 5},
         },
     "M326": {
@@ -77,6 +82,7 @@ CHANNELS = {
             "fine_buona": {"db": 19606, "byte": 96, "bit": 4},
             "fine_scarto": {"db": 19606, "byte": 96, "bit": 5},
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
+            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
             "stringatrice": {"db": 19606, "byte": 142, "length": 5},
         },
     },
@@ -138,7 +144,7 @@ TEMP_STORAGE_PATH = os.path.join("C:/IX-Monitor", "temp_data.json")
 subscriptions = {}
 # Temporary store for trigger timestamps
 trigger_timestamps = {}
-
+incomplete_productions = {}  # Tracks production_id per station (e.g., "Linea1.M308")
 stop_threads = {}
 passato_flags = {}
 
@@ -377,52 +383,50 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         return
 
     full_id = f"{line_name}.{channel_id}"
-
     paths = get_channel_config(line_name, channel_id)
     if not paths:
         print(f"❌ Config not found for {full_id}")
         return
 
     if val:
-        print(f"🟡 Trigger on {full_id} set to TRUE, reading...")
+        print(f"🟡 Inizio Ciclo on {full_id} TRUE ...")
         trigger_timestamps.pop(full_id, None)
 
-        # Write FALSE to esito_scarto_compilato
+        # Write FALSE to esito_scarto_compilato.
         esito_conf = paths["esito_scarto_compilato"]
-        await asyncio.to_thread(
-            plc_connection.write_bool,
-            esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False
-        )
+        await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
 
-        # Read the module ID string
+        # Write FALSE to pezzo_salvato_su_DB_con_inizio_ciclo.
+        pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
+        await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False)
+
+        # Read initial values.
         id_mod_conf = paths["id_modulo"]
-        object_id = await asyncio.to_thread(
-            plc_connection.read_string,
-            id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
-        )
-        print('object_id: ', object_id)
+        object_id = await asyncio.to_thread(plc_connection.read_string, id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"])
 
-        # Read matrix data from the stringatrice configuration
         str_conf = paths["stringatrice"]
-        values = [
-            await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
-            for i in range(str_conf["length"])
-        ]
+        values = [await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i) for i in range(str_conf["length"])]
         if not any(values):
             values[0] = True
-
         stringatrice_index = values.index(True) + 1
         stringatrice = str(stringatrice_index)
 
-        # Read issues flag again
-        issues_value = await asyncio.to_thread(
-            plc_connection.read_bool,
-            esito_conf["db"], esito_conf["byte"], esito_conf["bit"]
-        )
+        issues_value = await asyncio.to_thread(plc_connection.read_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"])
         issues_submitted = issues_value is True
 
         trigger_timestamps[full_id] = datetime.now()
-        print(f'trigger_timestamps[{full_id}]: {trigger_timestamps[full_id]}')
+        print(f"trigger_timestamps[{full_id}]: {trigger_timestamps[full_id]}")
+
+        # Read the initial data from the PLC using read_data.
+        data_inizio = trigger_timestamps[full_id]
+        initial_data = await read_data(plc_connection, line_name, channel_id, richiesta_ok=False, richiesta_ko=False, data_inizio=data_inizio)
+        # Insert the initial production record (with esito = 2) and store the production_id.
+        prod_id = await insert_initial_production_data(initial_data, channel_id, mysql_connection)
+        if prod_id:
+            incomplete_productions[full_id] = prod_id
+
+        # Write TRUE to pezzo_salvato_su_DB_con_inizio_ciclo.
+        await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True)
 
         await broadcast(line_name, channel_id, {
             "trigger": True,
@@ -433,7 +437,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         })
 
     else:
-        print(f"🟡 Trigger on {full_id} set to FALSE, resetting clients...")
+        print(f"🟡 Inizio Ciclo on {full_id} FALSE ...")
         passato_flags[full_id] = False
         await broadcast(line_name, channel_id, {
             "trigger": False,
@@ -442,6 +446,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
             "outcome": None,
             "issuesSubmitted": False
         })
+
 
 async def read_data(
     plc_connection: PLCConnection,
@@ -520,6 +525,7 @@ Il database contiene le seguenti tabelle:
 - display_name (VARCHAR)
 - type (ENUM: 'creator', 'qc', 'rework', 'other')
 - config (JSON)
+- created_at (DATETIME)
 
 3 `production_lines`
 - id (PK)
@@ -533,62 +539,60 @@ Il database contiene le seguenti tabelle:
 - station_id (FK to stations.id)
 - start_time (DATETIME)
 - end_time (DATETIME)
-- esito (INT) -- 1 = OK, 6 = KO
+- esito (INT) -- 1 = OK, 6 = KO, 2 = In Progress ( No Esito )
 - operator_id (VARCHAR)
 - cycle_time (TIME) -- calcolato come differenza tra end_time e start_time
 - last_station_id (FK to stations.id, NULLABLE)
 
 5 `defects`
 - id (PK)
-- category (ENUM: 'Generali', 'Saldatura', 'Disallineamento', 'Mancanza Ribbon', 'Macchie ECA', 'Celle Rotte', 'Altro')
+- category (ENUM: 'Generali', 'Saldatura', 'Disallineamento', 'Mancanza Ribbon', 'Macchie ECA', 'Celle Rotte', 'Lunghezza String Ribbon', 'Altro')
 
 6 `object_defects`
 - id (PK)
 - production_id (FK to productions.id)
 - defect_id (FK to defects.id)
 - defect_type (VARCHAR, NULLABLE) -- usato solo per i "Generali"
-- stringa (INT, NULLABLE)
-- s_ribbon (INT, NULLABLE)
 - i_ribbon (INT, NULLABLE)
+- stringa (INT, NULLABLE)
 - ribbon_lato (ENUM: 'F', 'M', 'B', NULLABLE)
-- extra_data (JSON, NULLABLE)
+- s_ribbon (INT, NULLABLE)
+- extra_data (VARCHAR, NULLABLE)
 
 7 `station_defects`
 - station_id (FK to stations.id)
 - defect_id (FK to defects.id)
 (Chiave primaria composta: station_id + defect_id)
 
-Regole:
-- Usa la tabella `object_defects` per registrare **tutti i difetti** rilevati durante una produzione.
-- La colonna `defect_type` è obbligatoria solo per difetti di categoria "Generali".
-- Le altre colonne (`stringa`, `s_ribbon`, `i_ribbon`, `ribbon_lato`) vengono compilate **in base alla categoria del difetto**.
-- Non inserire, modificare o eliminare dati tramite query SQL generate: sono consentite solo query **di lettura** (SELECT).
-"""
+"""""
 
-async def insert_production_data(data, station_name, connection):
+async def insert_initial_production_data(data, station_name, connection):
+    """
+    Inserts a production record using data available at cycle start.
+    It sets the end_time to NULL and uses esito = 2 (in-progress).
+    """
     try:
         with connection.cursor() as cursor:
             id_modulo = data.get("Id_Modulo")
-            # Determine the line by checking the 'Linea_in_Lavorazione' list.
-            # We assume the list is ordered like [Linea1, Linea2, ...]
+            # Determine line from the 'Linea_in_Lavorazione' list.
             linea_index = data.get("Linea_in_Lavorazione", [False] * 5).index(True) + 1
             actual_line = f"Linea{linea_index}"
 
-            # Get the line_id from production_lines using the line name.
+            # Get line_id.
             cursor.execute("SELECT id FROM production_lines WHERE name = %s", (actual_line,))
             line_row = cursor.fetchone()
             if not line_row:
                 raise ValueError(f"{actual_line} not found in production_lines")
             line_id = line_row["id"]
 
-            # Get the station's numeric id from stations table using station name and line_id.
+            # Get station id using station_name and line_id.
             cursor.execute("SELECT id FROM stations WHERE name = %s AND line_id = %s", (station_name, line_id))
             station_row = cursor.fetchone()
             if not station_row:
                 raise ValueError(f"Station '{station_name}' not found for {actual_line}")
             real_station_id = station_row["id"]
 
-            # 1️⃣ Insert (or update) into objects table.
+            # Insert into objects table.
             sql_insert_object = """
                 INSERT INTO objects (id_modulo, creator_station_id)
                 VALUES (%s, %s)
@@ -596,18 +600,16 @@ async def insert_production_data(data, station_name, connection):
             """
             cursor.execute(sql_insert_object, (id_modulo, real_station_id))
 
-            # 3️⃣ Get object_id
+            # Get object_id.
             cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
             object_id = cursor.fetchone()["id"]
 
-                        # 3️⃣ Retrieve last_station_id from stringatrice
+            # Retrieve last_station_id from stringatrice if available.
             last_station_id = None
             str_flags = data.get("Lavorazione_Eseguita_Su_Stringatrice", [])
             if any(str_flags):
                 stringatrice_index = str_flags.index(True) + 1
                 stringatrice_name = f"Str{stringatrice_index}"
-
-                # Query station_id for the stringatrice (last station)
                 cursor.execute(
                     "SELECT id FROM stations WHERE name = %s AND line_id = %s",
                     (stringatrice_name, line_id)
@@ -616,8 +618,7 @@ async def insert_production_data(data, station_name, connection):
                 if str_row:
                     last_station_id = str_row["id"]
 
-
-            # 4️⃣ Insert into productions table.
+            # Insert into productions table with esito = 2 (in progress) and no end_time.
             sql_productions = """
                 INSERT INTO productions (
                     object_id, station_id, start_time, end_time, esito, operator_id, last_station_id
@@ -627,29 +628,52 @@ async def insert_production_data(data, station_name, connection):
             cursor.execute(sql_productions, (
                 object_id,
                 real_station_id,
-                data.get("DataInizio"),
-                data.get("DataFine"),
-                6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1,
+                data.get("DataInizio"),  # starting timestamp
+                None,                     # end_time left as NULL
+                2,                        # esito 2 means “in progress”
                 data.get("Id_Utente"),
                 last_station_id
             ))
             production_id = cursor.lastrowid
 
-            # 5 Insert defects.
-            # Pass the correct line name (actual_line) to get_latest_issues.
-            await insert_defects(data, production_id, channel_id=station_name, line_name=actual_line, cursor=cursor)
-
             connection.commit()
-            logging.info(f"Inserted production {production_id} for object {object_id}")
-            # Broadcast update (using actual_line for the summary).
-            asyncio.create_task(broadcast(actual_line, "summary", {"type": "update_summary"}))
+            logging.info(f"Initial production inserted: ID {production_id} for object {object_id}")
             return production_id
 
     except Exception as e:
         connection.rollback()
-        logging.error(f"Error inserting production data: {e}")
+        logging.error(f"Error inserting initial production data: {e}")
         return None
 
+
+async def update_production_final(production_id, data, station_name, connection):
+    """
+    Updates an existing production record with the final outcome and DataFine.
+    Here, esito is updated: if Compilato_Su_Ipad_Scarto_Presente is True,
+    then the final outcome is 6; otherwise 1.
+    """
+    try:
+        with connection.cursor() as cursor:
+            final_esito = 6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1
+
+            sql_update = """
+                UPDATE productions 
+                SET end_time = %s, esito = %s 
+                WHERE id = %s
+            """
+            cursor.execute(sql_update, (
+                data.get("DataFine"),
+                final_esito,
+                production_id
+            ))
+            connection.commit()
+            logging.info(f"Updated production {production_id} with final outcome {final_esito}")
+            return True
+
+    except Exception as e:
+        connection.rollback()
+        logging.error(f"Error updating production {production_id}: {e}")
+        return False
 
 async def insert_defects(data, production_id, channel_id, line_name, cursor):
     # 1. Get defects mapping from DB.
@@ -685,7 +709,11 @@ def detect_category(path: str) -> str:
     parts = path.split(".")
     if len(parts) < 5:
         return "Altro"
-    return parts[4]  # Now returns the actual category, e.g. "Saldatura"
+    category_raw = parts[4]
+    if ":" in category_raw:
+        category_raw = category_raw.split(":")[0].strip()
+    return category_raw
+
 
 def parse_issue_path(path: str, category: str):
     """
@@ -780,6 +808,7 @@ def parse_issue_path(path: str, category: str):
 
     elif category == "Altro":
         # Example: "Dati.Esito.Esito_Scarto.Difetti.Altro: Macchia sulla cella"
+        print('ALTRO Path: %s' % path)
         if ":" in path:
             res["extra_data"] = path.split(":", 1)[1].strip()
 
@@ -879,7 +908,6 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 raise Exception("Outcome read returned None")
 
             if (fine_buona or fine_scarto) and not passato_flags[full_station_id]:
-                print(f"[{full_station_id}] Processing data (trigger detected)")
                 data_inizio = trigger_timestamps.get(full_station_id)
                 result = await read_data(plc_connection, line_name, channel_id,
                                          #richiesta_ok=fine_buona,
@@ -889,9 +917,13 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                          data_inizio=data_inizio)
                 if result:
                     passato_flags[full_station_id] = True
-                    print(f"[{full_station_id}] ✅ Inserting into MySQL...")
-                    await insert_production_data(result, channel_id, mysql_connection)
-                    print(f"[{full_station_id}] 🟢 Data inserted successfully!")
+                    production_id = incomplete_productions.get(full_station_id)
+                    if production_id:
+                        # Update the initial production record with final data.
+                        await update_production_final(production_id, result, channel_id, mysql_connection)
+                        incomplete_productions.pop(full_station_id)
+                    else:
+                        logging.warning(f"⚠️ No initial production record found for {full_station_id}; skipping update.")
                     remove_temp_issues(line_name, channel_id, result.get("Id_Modulo"))
 
             await asyncio.sleep(1)
@@ -990,7 +1022,6 @@ async def set_issues(request: Request):
         return JSONResponse(status_code=400, content={"error": "Missing data"})
 
     full_id = f"{line_name}.{channel_id}"
-    print('raw issues received:', issues)
 
     # Load existing data
     existing_data = load_temp_data()
@@ -1005,7 +1036,6 @@ async def set_issues(request: Request):
 
     # Save updated data
     save_temp_data(existing_data)
-    print('issues saved:', existing_data)
 
     plc_connection = plc_connections.get(full_id)
     if not plc_connection:
@@ -1018,6 +1048,27 @@ async def set_issues(request: Request):
     target = paths.get("esito_scarto_compilato")
     if not target:
         return JSONResponse(status_code=404, content={"error": "esito_scarto_compilato not found in mapping"})
+    
+    # 💾 Immediately insert defects if production is already tracked
+    production_id = incomplete_productions.get(full_id)
+    if production_id:
+        try:
+            assert mysql_connection is not None
+            cursor = mysql_connection.cursor()
+            result = {
+                "Id_Modulo": object_id,
+                "Compilato_Su_Ipad_Scarto_Presente": True,
+                "issues": issues
+            }
+            await insert_defects(result, production_id, channel_id, line_name, cursor=cursor)
+            mysql_connection.commit()
+            cursor.close()
+            print(f"✅ Defects inserted immediately for {object_id} (prod_id: {production_id})")
+        except Exception as e:
+            assert mysql_connection is not None
+            mysql_connection.rollback()
+            logging.error(f"❌ Error inserting defects early for {full_id}: {e}")
+
 
     await asyncio.to_thread(plc_connection.write_bool, target["db"], target["byte"], target["bit"], True)
 

@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import time
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, Form, Query, UploadFile, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from controllers.plc import PLCConnection
@@ -122,7 +122,10 @@ ISSUE_TREE = {
                     },
                     "Celle Rotte": {
                         f"Stringa[{i}]": None for i in range(1, 13)
-                    }
+                    },
+                     "Lunghezza String Ribbon": {
+                        f"Stringa[{i}]": None for i in range(1, 13)
+                    },
                 }
             }
         }
@@ -721,7 +724,7 @@ def parse_issue_path(path: str, category: str):
         # e.g. parts[4]="Stringa[2]", parts[5]="Pin[5]", parts[6]="M"
         str_match = re.search(r"Stringa\[(\d+)\]", path)
         pin_match = re.search(r"Pin\[(\d+)\]", path)
-        side_match = re.search(r"\.(F|M|B)$", path)  # the last segment
+        side_match = re.search(r"\ - (F|M|B)$", path)  # the last segment
 
         if str_match:
             res["stringa"] = int(str_match.group(1))
@@ -739,7 +742,7 @@ def parse_issue_path(path: str, category: str):
             # else check Ribbon
             # e.g. "Disallineamento.Ribbon[5].M"
             rib_match = re.search(r"Ribbon\[(\d+)\]", path)
-            side_match = re.search(r"\.(F|M|B)$", path)
+            side_match = re.search(r"\ - (F|M|B)$", path)
             if rib_match:
                 res["i_ribbon"] = int(rib_match.group(1))
             if side_match:
@@ -749,7 +752,7 @@ def parse_issue_path(path: str, category: str):
         # e.g. "Mancanza Ribbon.Ribbon[2].B"
         # i_ribbon=2, ribbon_lato='B'
         rib_match = re.search(r"Ribbon\[(\d+)\]", path)
-        side_match = re.search(r"\.(F|M|B)$", path)
+        side_match = re.search(r"\ - (F|M|B)$", path)
         if rib_match:
             res["i_ribbon"] = int(rib_match.group(1))
         if side_match:
@@ -865,10 +868,10 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 print(f"[{full_station_id}] Processing data (trigger detected)")
                 data_inizio = trigger_timestamps.get(full_station_id)
                 result = await read_data(plc_connection, line_name, channel_id,
-                                         richiesta_ok=fine_buona,
-                                         richiesta_ko=fine_scarto,
-                                         #richiesta_ok=False,
-                                         #richiesta_ko=True,
+                                         #richiesta_ok=fine_buona,
+                                         #richiesta_ko=fine_scarto,
+                                         richiesta_ok=False,
+                                         richiesta_ko=True,
                                          data_inizio=data_inizio)
                 if result:
                     passato_flags[full_station_id] = True
@@ -883,7 +886,6 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             logging.error(f"[{full_station_id}] 🔴 Error in background task: {str(e)}")
             await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
             await asyncio.sleep(5)
-
 
 # ---------------- WEB SOCKET ----------------
 @app.websocket("/ws/summary/{line_name}")
@@ -1110,21 +1112,38 @@ async def get_overlay_config(
     station: str = Query(...)
 ):
     config_file = f"C:/IX-Monitor/images/{line_name}/{station}/overlay_config.json"
+    print(f"🔍 Requested overlay config for path: '{path}' (line: {line_name}, station: {station})")
+    print(f"📄 Looking for config file at: {config_file}")
 
     if not os.path.exists(config_file):
+        print(f"❌ Config file not found.")
         return JSONResponse(status_code=417, content={"error": f"Overlay config not found for {line_name}/{station}"})
 
-    with open(config_file, "r") as f:
-        all_configs = json.load(f)
+    try:
+        with open(config_file, "r") as f:
+            all_configs = json.load(f)
+            print(f"✅ Loaded overlay_config.json with keys: {list(all_configs.keys())}")
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON decode error: {e}")
+        all_configs = {}
 
     for image_name, config in all_configs.items():
-        if config.get("path", "").lower() == path.lower():
+        config_path = config.get("path", "")
+        print(f"➡️ Checking config: image = '{image_name}', path = '{config_path}'")
+
+        if config_path.lower() == path.lower():
+            image_url = f"http://localhost:8000/images/{line_name}/{station}/{image_name}"
+            print(f"✅ MATCH FOUND! Returning image: {image_url}")
             return {
-                "image_url": f"http://192.168.0.10:8000/images/{line_name}/{station}/{image_name}",
+                "image_url": image_url,
                 "rectangles": config.get("rectangles", [])
             }
 
-    return JSONResponse(status_code=404, content={"error": f"No config matches the provided path '{path}'"})
+    print(f"⚠️ No matching path found. Returning fallback with empty image URL.")
+    return {
+        "image_url": "",
+        "rectangles": []
+    }
 
 @app.post("/api/update_overlay_config")
 async def update_overlay_config(request: Request):

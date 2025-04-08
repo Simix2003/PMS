@@ -20,8 +20,7 @@ class IssueSelectorWidget extends StatefulWidget {
 
 class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     with TickerProviderStateMixin {
-  // When pathStack is empty, show main group selection.
-  // Once a group is selected, we add it to pathStack.
+  // pathStack is empty to start with and when empty, it will default to the base path.
   List<String> pathStack = [];
   List<dynamic> currentItems = [];
   List<dynamic> currentRectangles = [];
@@ -31,21 +30,24 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   final GlobalKey _imageKey = GlobalKey();
   Size? imageSize;
 
-  // Define main groups and a mapping to base images.
+  // Updated main groups to exactly match backend keys:
   final List<String> mainGroups = [
     "Saldatura",
     "Disallineamento",
-    "Mancanza_Ribbon",
+    "Mancanza Ribbon",
     "Generali",
+    "Macchie ECA",
+    "Celle Rotte",
+    "Lunghezza String Ribbon",
   ];
 
   @override
   void initState() {
     super.initState();
-    // Start by showing the main groups.
+    // Show main groups initially.
   }
 
-  // Build the full API path: always prefixed with "Dati.Esito.Esito_Scarto.Difetti"
+  // Build the full API path using the new backend structure.
   String get apiPath {
     if (pathStack.isEmpty) {
       return "Dati.Esito.Esito_Scarto.Difetti";
@@ -54,7 +56,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     }
   }
 
-  // Determine the background image URL for the current level.
+  // Updated overlay URL builder can be kept as is if your backend overlay config is in the same format.
   String get currentImageUrl {
     return ApiService.buildOverlayImageUrl(
       line: widget.selectedLine,
@@ -85,7 +87,10 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
       setState(() {
         currentItems = issues;
         currentRectangles = overlay['rectangles'] ?? [];
-        backgroundImageUrl = overlay['image_url'] ?? currentImageUrl;
+        final newImageUrl = overlay['image_url'];
+        backgroundImageUrl = (newImageUrl != null && newImageUrl.isNotEmpty)
+            ? newImageUrl
+            : currentImageUrl;
       });
     } catch (e) {
       setState(() {
@@ -100,13 +105,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   }
 
   void _onGroupSelected(String group) {
-    // When a main group is selected, set pathStack to contain that group.
     setState(() {
-      if (group == 'Mancanza_Ribbon') {
-        pathStack = ['Mancanza_Ribbon', 'Ribbon'];
-      } else {
-        pathStack = [group];
-      }
+      pathStack = [group];
     });
     _fetchCurrentItems();
   }
@@ -114,14 +114,14 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   void _onRectangleTapped(String name, String type) {
     // Full path of tapped rectangle is apiPath + "." + name.
     final fullPath = "$apiPath.$name";
-    if (type == "folder") {
-      // Not a leaf: push to stack and load next level.
+    if (type == "Folder") {
+      // If folder, push new level.
       setState(() {
         pathStack.add(name);
       });
       _fetchCurrentItems();
-    } else {
-      // Leaf: toggle selection.
+    } else if (type == "Leaf") {
+      // If leaf, toggle selection.
       setState(() {
         if (selectedLeaves.contains(fullPath)) {
           selectedLeaves.remove(fullPath);
@@ -130,19 +130,19 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         }
       });
       widget.onIssueSelected(fullPath);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Unsupported rectangle type")),
+      );
     }
   }
 
   void _goBack() {
     if (pathStack.isNotEmpty) {
       setState(() {
-        if (pathStack[0] == 'Mancanza_Ribbon' && pathStack.length == 2) {
-          pathStack = [];
-        } else {
-          pathStack.removeLast();
-          _fetchCurrentItems();
-        }
+        pathStack.removeLast();
       });
+      _fetchCurrentItems();
     }
   }
 
@@ -152,67 +152,11 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
       backgroundImageUrl = "";
       currentItems = [];
       currentRectangles = [];
-      // ❌ Do NOT reset selectedLeaves here
     });
   }
 
   bool groupHasSelected(String group) {
     return selectedLeaves.any((issuePath) => issuePath.contains(".$group."));
-  }
-
-  Widget _buildDisallineamentoButtons() {
-    final subGroups = ["Ribbon", "Stringa"];
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 30.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Center(
-            child: Wrap(
-              spacing: 20,
-              runSpacing: 20,
-              alignment: WrapAlignment.center,
-              children: subGroups.map((sub) {
-                final fullPathPrefix =
-                    "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.$sub";
-                final isSelected = selectedLeaves
-                    .any((leaf) => leaf.startsWith(fullPathPrefix));
-
-                return ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      pathStack.add(sub);
-                    });
-                    _fetchCurrentItems();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isSelected
-                        ? Colors.deepOrange.withOpacity(0.2)
-                        : Colors.white,
-                    foregroundColor: Colors.black,
-                    side: isSelected
-                        ? const BorderSide(color: Colors.deepOrange, width: 2)
-                        : const BorderSide(color: Colors.blueGrey, width: 1),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 30, vertical: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: isSelected ? 3 : 2,
-                  ),
-                  child: Text(
-                    sub,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w500),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildNavigationButtons() {
@@ -455,7 +399,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                     final double height = rect['height'] * imageSize!.height;
 
                     final String name = rect['name'];
-                    final String type = rect['type'];
+                    final String type = rect['type'] ?? "Leaf";
                     final fullPath = "$apiPath.$name";
                     // Highlight if this rectangle was directly selected or is a parent
                     final isSelected = selectedLeaves.contains(fullPath) ||
@@ -509,35 +453,27 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   }
 
   Widget _buildGuidedHint() {
-    String path =
-        apiPath; // es: "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa_F"
-
     String hint;
 
     if (pathStack.isEmpty) {
       hint = "Seleziona un gruppo di difetti per iniziare.";
     } else if (pathStack.length == 1 && pathStack[0] == "Saldatura") {
-      hint = "Seleziona Interconnection Ribbon";
-    } else if (pathStack.length == 2 && pathStack[0] == "Saldatura") {
       hint = "Seleziona la Stringa interessata dal difetto di saldatura.";
-    } else if (pathStack.length == 3 && pathStack[0] == "Saldatura") {
-      hint = "Seleziona i String-Ribbon interessati dal difetto di saldatura.";
+    } else if (pathStack.length == 2 && pathStack[0] == "Saldatura") {
+      hint = "Seleziona i Pin interessati dal difetto di saldatura.";
     } else if (pathStack.length == 1 && pathStack[0] == "Disallineamento") {
-      hint = "Scegli tra Interconnection Ribbon o Stringa.";
-    } else if (pathStack[0] == "Disallineamento" &&
-        pathStack[1] == "Ribbon" &&
-        pathStack.length == 3) {
-      hint = "Seleziona Interconnection Ribbon disallineato";
-    } else if (path.contains("Disallineamento.Ribbon")) {
-      hint = "Seleziona lato Interconnection Ribbon disallineato";
-    } else if (path.contains("Disallineamento.Stringa")) {
-      hint = "Seleziona la stringa che presenta disallineamento.";
-    } else if (pathStack.length == 3 && pathStack[0] == "Mancanza_Ribbon") {
+      hint = "Seleziona Interconnection Ribbon o Stringa disallineati";
+    } else if (pathStack.length == 1 && pathStack[0] == "Mancanza Ribbon") {
       hint = "Seleziona Interconnection Ribbon mancante.";
-    } else if (pathStack.length == 2 && pathStack[0] == "Mancanza_Ribbon") {
-      hint = "Seleziona lato Interconnection Ribbon mancante.";
     } else if (pathStack.length == 1 && pathStack[0] == "Generali") {
       hint = "Seleziona il tipo di difetto generale riscontrato.";
+    } else if (pathStack.length == 1 && pathStack[0] == "Macchie ECA") {
+      hint = "Seleziona le Celle macchiate.";
+    } else if (pathStack.length == 1 && pathStack[0] == "Celle Rotte") {
+      hint = "Seleziona le Celle rotte.";
+    } else if (pathStack.length == 1 &&
+        pathStack[0] == "Lunghezza String Ribbon") {
+      hint = "Seleziona la Stringa interessata dal difetto di lunghezza.";
     } else {
       hint = "Seleziona l'area corretta toccando l'immagine.";
     }
@@ -564,18 +500,16 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                 children: [
                   _buildNavigationButtons(),
                   _buildGuidedHint(),
-                  if (pathStack.length == 1 &&
-                      pathStack[0] == "Disallineamento")
-                    _buildDisallineamentoButtons()
-                  else if (pathStack.length == 1 && pathStack[0] == "Generali")
+                  if (pathStack.length == 1 && pathStack[0] == "Generali")
                     _buildGeneraliButtons()
                   else
                     ConstrainedBox(
                       constraints: const BoxConstraints(
-                        maxHeight:
-                            500, // 👈 limit how tall the image view can be
+                        maxHeight: 500,
                       ),
-                      child: _buildOverlayView(),
+                      child: backgroundImageUrl.isNotEmpty
+                          ? _buildOverlayView()
+                          : const SizedBox.shrink(),
                     ),
                 ],
               ),

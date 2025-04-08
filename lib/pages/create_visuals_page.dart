@@ -1,20 +1,91 @@
-// ignore_for_file: use_build_context_synchronously
+// create_visual_page.dart
 import 'package:flutter/material.dart';
 import '../shared/services/api_service.dart';
 
-class OverlayEditorPage extends StatefulWidget {
-  const OverlayEditorPage({super.key});
+Map<String, dynamic> issueTree = {
+  "Generali": {
+    "Non Lavorato Poe Scaduto": {},
+    "Non Lavorato da Telecamere": {},
+    "Materiale Esterno su Celle": {},
+    "Bad Soldering": {}
+  },
+  "Saldatura": {},
+  "Saldatura.Stringa[1]": {},
+  "Saldatura.Stringa[2]": {},
+  "Saldatura.Stringa[3]": {},
+  "Saldatura.Stringa[4]": {},
+  "Saldatura.Stringa[5]": {},
+  "Saldatura.Stringa[6]": {},
+  "Saldatura.Stringa[7]": {},
+  "Saldatura.Stringa[8]": {},
+  "Saldatura.Stringa[9]": {},
+  "Saldatura.Stringa[10]": {},
+  "Saldatura.Stringa[11]": {},
+  "Saldatura.Stringa[12]": {},
+  "Disallineamento": {
+    for (var i = 1; i <= 12; i++) 'Stringa[\$i]': null,
+    for (var i = 1; i <= 10; i++)
+      'Ribbon[\$i]': {"F": null, "M": null, "B": null},
+  },
+  "Mancanza Ribbon": {
+    for (var i = 1; i <= 10; i++)
+      'Ribbon[\$i]': {"F": null, "M": null, "B": null},
+  },
+  "Macchie ECA": {
+    for (var i = 1; i <= 12; i++) 'Stringa[\$i]': null,
+  },
+  "Celle Rotte": {
+    for (var i = 1; i <= 12; i++) 'Stringa[\$i]': null,
+  },
+  "Lunghezza String Ribbon": {
+    for (var i = 1; i <= 12; i++) 'Stringa[\$i]': null,
+  }
+};
 
-  @override
-  State<OverlayEditorPage> createState() => _OverlayEditorPageState();
+List<Map<String, dynamic>> generateRectanglesFromTree(dynamic node) {
+  List<Map<String, dynamic>> rectangles = [];
+
+  void walk(String path, dynamic current) {
+    if (current is Map && current.isNotEmpty) {
+      current.forEach((key, value) {
+        walk(path.isEmpty ? key : "\$path.\$key", value);
+      });
+    } else {
+      rectangles.add({
+        "name": path.split('.').last,
+        "x": 0.45,
+        "y": 0.45,
+        "width": 0.1,
+        "height": 0.1,
+        "type": "leaf",
+      });
+    }
+  }
+
+  walk("", node);
+  return rectangles;
 }
 
-class _OverlayEditorPageState extends State<OverlayEditorPage> {
-  List<Map<String, dynamic>> availableConfigs = [];
+class CreateVisualPage extends StatefulWidget {
+  final String lineName;
+  final String station;
+
+  const CreateVisualPage({
+    Key? key,
+    required this.lineName,
+    required this.station,
+  }) : super(key: key);
+
+  @override
+  State<CreateVisualPage> createState() => _CreateVisualPageState();
+}
+
+class _CreateVisualPageState extends State<CreateVisualPage> {
+  final List<String> mainGroups = issueTree.keys.toList();
+  String? selectedGroup;
   String? selectedPath;
   String? selectedImageUrl;
   List<Map<String, dynamic>> rectangles = [];
-  bool isLoading = false;
   Offset? dragStartGlobal;
   Offset? resizeStartGlobal;
   int? activeDragIndex;
@@ -22,45 +93,11 @@ class _OverlayEditorPageState extends State<OverlayEditorPage> {
   Size? initialResizeSize;
   final GlobalKey _imageKey = GlobalKey();
   Size? imageSize;
-
-  Future<void> fetchAvailablePaths() async {
-    try {
-      final paths = await ApiService.fetchAvailableOverlayPaths();
-      setState(() {
-        availableConfigs = paths;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Errore nel caricamento: $e')),
-      );
-    }
-  }
-
-  Future<void> fetchOverlay(String path) async {
-    setState(() => isLoading = true);
-    try {
-      final data = await ApiService.fetchOverlayConfig(path);
-      setState(() {
-        selectedPath = path;
-        selectedImageUrl = data['image_url'];
-        rectangles = List<Map<String, dynamic>>.from(data['rectangles']);
-      });
-    } catch (e) {
-      setState(() {
-        selectedImageUrl = null;
-        rectangles = [];
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Errore nel caricamento: $e')),
-      );
-    }
-    setState(() => isLoading = false);
-  }
+  bool isLoading = false;
 
   void updateRectangle(
       int index, double newX, double newY, double newW, double newH) {
     if (imageSize == null) return;
-
     setState(() {
       rectangles[index]['x'] = (newX / imageSize!.width).clamp(0.0, 1.0);
       rectangles[index]['y'] = (newY / imageSize!.height).clamp(0.0, 1.0);
@@ -69,56 +106,102 @@ class _OverlayEditorPageState extends State<OverlayEditorPage> {
     });
   }
 
-  @override
-  void initState() {
-    super.initState();
-    fetchAvailablePaths();
+  Future<void> _saveOverlay() async {
+    if (selectedPath == null) return;
+    try {
+      final success = await ApiService.updateOverlayConfig(
+        path: selectedPath!,
+        rectangles: rectangles,
+        lineName: widget.lineName,
+        station: widget.station,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success
+              ? '✔️ Modifiche salvate!'
+              : '❌ Errore durante il salvataggio'),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Errore durante il salvataggio: \$e')),
+      );
+    }
+  }
+
+  Future<void> _onGroupSelected(String group) async {
+    setState(() {
+      selectedGroup = group;
+      selectedPath = "Dati.Esito.Esito_Scarto.Difetti.$group";
+      isLoading = true;
+    });
+
+    try {
+      final overlay = await ApiService.fetchOverlayConfig(
+        selectedPath!,
+        widget.lineName,
+        widget.station,
+      );
+
+      setState(() {
+        selectedImageUrl = overlay["image_url"];
+        rectangles = List<Map<String, dynamic>>.from(overlay["rectangles"]);
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("❌ Overlay non trovato per '\$group'")),
+      );
+      setState(() {
+        selectedImageUrl = null;
+        rectangles = [];
+      });
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Overlay Editor')),
+      appBar: AppBar(title: const Text('Editor Overlay')),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: DropdownButton<String>(
-              value: selectedPath,
-              hint: const Text("Seleziona il path"),
-              onChanged: (newValue) {
-                setState(() {
-                  selectedPath = newValue!;
-                });
-                fetchOverlay(newValue!);
+              value: selectedGroup,
+              hint: const Text("Seleziona il gruppo di difetti"),
+              onChanged: (group) {
+                if (group != null) _onGroupSelected(group);
               },
-              items: availableConfigs
-                  .map((config) => DropdownMenuItem<String>(
-                        value: config['path'] as String,
-                        child: Text(config['path']),
+              items: mainGroups
+                  .map((group) => DropdownMenuItem<String>(
+                        value: group,
+                        child: Text(group),
                       ))
                   .toList(),
             ),
           ),
-          if (isLoading) const Center(child: CircularProgressIndicator()),
-          if (!isLoading && selectedImageUrl != null)
+          const SizedBox(height: 16),
+          if (isLoading)
+            const Center(child: CircularProgressIndicator())
+          else if (selectedImageUrl != null)
             Expanded(
               child: InteractiveViewer(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    const imageAspectRatio = 16 / 9;
-
+                    const aspectRatio = 16 / 9;
                     double maxWidth = constraints.maxWidth;
                     double maxHeight = constraints.maxHeight;
-
                     double targetWidth, targetHeight;
-
-                    if (maxWidth / maxHeight > imageAspectRatio) {
+                    if (maxWidth / maxHeight > aspectRatio) {
                       targetHeight = maxHeight;
-                      targetWidth = targetHeight * imageAspectRatio;
+                      targetWidth = targetHeight * aspectRatio;
                     } else {
                       targetWidth = maxWidth;
-                      targetHeight = targetWidth / imageAspectRatio;
+                      targetHeight = targetWidth / aspectRatio;
                     }
 
                     return Center(
@@ -133,9 +216,8 @@ class _OverlayEditorPageState extends State<OverlayEditorPage> {
                               width: targetWidth,
                               height: targetHeight,
                               fit: BoxFit.contain,
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                if (loadingProgress == null) {
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) {
                                   WidgetsBinding.instance
                                       .addPostFrameCallback((_) {
                                     final box = _imageKey.currentContext
@@ -154,18 +236,15 @@ class _OverlayEditorPageState extends State<OverlayEditorPage> {
                               ...rectangles.asMap().entries.map((entry) {
                                 final index = entry.key;
                                 final rect = entry.value;
-
-                                double x = rect['x'] * imageSize!.width;
-                                double y = rect['y'] * imageSize!.height;
-                                double width = rect['width'] * imageSize!.width;
-                                double height =
-                                    rect['height'] * imageSize!.height;
-
+                                final x = rect['x'] * imageSize!.width;
+                                final y = rect['y'] * imageSize!.height;
+                                final w = rect['width'] * imageSize!.width;
+                                final h = rect['height'] * imageSize!.height;
                                 return Positioned(
                                   left: x,
                                   top: y,
-                                  width: width,
-                                  height: height,
+                                  width: w,
+                                  height: h,
                                   child: GestureDetector(
                                     onPanStart: (_) {
                                       dragStartGlobal = Offset(x, y);
@@ -173,11 +252,17 @@ class _OverlayEditorPageState extends State<OverlayEditorPage> {
                                     },
                                     onPanUpdate: (details) {
                                       if (activeDragIndex == index &&
-                                          dragStartGlobal != null) {
-                                        final newX = x + details.delta.dx;
-                                        final newY = y + details.delta.dy;
+                                          _imageKey.currentContext != null) {
+                                        final box = _imageKey.currentContext!
+                                            .findRenderObject() as RenderBox;
+                                        final localPosition = box.globalToLocal(
+                                            details.globalPosition);
+
+                                        final newX = localPosition.dx - (w / 2);
+                                        final newY = localPosition.dy - (h / 2);
+
                                         updateRectangle(
-                                            index, newX, newY, width, height);
+                                            index, newX, newY, w, h);
                                       }
                                     },
                                     onPanEnd: (_) {
@@ -209,14 +294,11 @@ class _OverlayEditorPageState extends State<OverlayEditorPage> {
                                             onPanStart: (details) {
                                               resizeStartGlobal =
                                                   details.globalPosition;
-                                              initialResizeSize =
-                                                  Size(width, height);
+                                              initialResizeSize = Size(w, h);
                                               activeResizeIndex = index;
                                             },
                                             onPanUpdate: (details) {
-                                              if (activeResizeIndex == index &&
-                                                  resizeStartGlobal != null &&
-                                                  initialResizeSize != null) {
+                                              if (activeResizeIndex == index) {
                                                 final dx =
                                                     details.globalPosition.dx -
                                                         resizeStartGlobal!.dx;
@@ -235,8 +317,8 @@ class _OverlayEditorPageState extends State<OverlayEditorPage> {
                                             },
                                             onPanEnd: (_) {
                                               resizeStartGlobal = null;
-                                              activeResizeIndex = null;
                                               initialResizeSize = null;
+                                              activeResizeIndex = null;
                                             },
                                             child: const Icon(Icons.open_with,
                                                 size: 18, color: Colors.white),
@@ -260,24 +342,9 @@ class _OverlayEditorPageState extends State<OverlayEditorPage> {
             child: ElevatedButton.icon(
               icon: const Icon(Icons.save),
               label: const Text("Salva modifiche"),
-              onPressed: selectedPath == null
+              onPressed: (selectedPath == null || selectedImageUrl == null)
                   ? null
-                  : () async {
-                      final success = await ApiService.updateOverlayConfig(
-                        path: selectedPath!,
-                        rectangles: rectangles,
-                      );
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            success
-                                ? '✔️ Modifiche salvate!'
-                                : '❌ Errore durante il salvataggio',
-                          ),
-                        ),
-                      );
-                    },
+                  : _saveOverlay,
             ),
           ),
         ],

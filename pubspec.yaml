@@ -44,6 +44,7 @@ dependencies:
   intl: ^0.20.2
   file_picker: ^9.2.1
   calendar_date_picker2: ^2.0.0
+  http_parser: ^4.1.2
 
 dev_dependencies:
   flutter_test:

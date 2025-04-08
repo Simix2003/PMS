@@ -1,4 +1,5 @@
 // lib/shared/services/api_service.dart
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -110,19 +111,11 @@ class ApiService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> fetchAvailableOverlayPaths() async {
-    final uri = Uri.parse('$baseUrl/api/available_overlay_paths');
-    final res = await http.get(uri);
-    if (res.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(res.body);
-      return List<Map<String, dynamic>>.from(data);
-    } else {
-      throw Exception("Errore nel caricamento dei path disponibili");
-    }
-  }
+  static Future<Map<String, dynamic>> fetchOverlayConfig(
+      String path, String lineName, String station) async {
+    final uri = Uri.parse(
+        '$baseUrl/api/overlay_config?path=$path&line_name=$lineName&station=$station');
 
-  static Future<Map<String, dynamic>> fetchOverlayConfig(String path) async {
-    final uri = Uri.parse('$baseUrl/api/overlay_config?path=$path');
     final res = await http.get(uri);
     if (res.statusCode == 200) {
       return Map<String, dynamic>.from(jsonDecode(res.body));
@@ -134,6 +127,8 @@ class ApiService {
   static Future<bool> updateOverlayConfig({
     required String path,
     required List<Map<String, dynamic>> rectangles,
+    required String lineName,
+    required String station,
   }) async {
     final uri = Uri.parse('$baseUrl/api/update_overlay_config');
     final response = await http.post(
@@ -142,6 +137,8 @@ class ApiService {
       body: jsonEncode({
         "path": path,
         "rectangles": rectangles,
+        "line_name": lineName,
+        "station": station,
       }),
     );
 
@@ -174,7 +171,7 @@ class ApiService {
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      return {}; // Fallback: no overlay available
+      return {};
     }
   }
 
@@ -182,7 +179,7 @@ class ApiService {
     required String lineName,
     required String channelId,
     required String objectId,
-    required String outcome, // "buona" or "scarto"
+    required String outcome,
   }) async {
     final url = Uri.parse('$baseUrl/api/set_outcome');
     final response = await http.post(
@@ -198,7 +195,6 @@ class ApiService {
     return response.statusCode == 200;
   }
 
-  //HELPERS
   static String _formatDate(DateTime date) {
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
@@ -212,13 +208,21 @@ class ApiService {
   }) {
     if (pathStack.isEmpty) return "";
 
+    final base = pathStack.first.toLowerCase(); // e.g., "saldatura"
+
     if (pathStack.length == 1) {
-      final group = pathStack.first.toLowerCase();
-      return "$baseUrl/images/$line/$station/$group.jpg";
+      return "$baseUrl/images/$line/$station/$base.jpg";
     }
 
-    final base = pathStack.first.toLowerCase();
-    final sub = pathStack.last.toLowerCase().replaceAll(' ', '_');
-    return "$baseUrl/images/$line/$station/${base}_$sub.jpg";
+    // Special handling for stringa layers
+    final last = pathStack.last;
+    final match = RegExp(r'Stringa\[(\d+)\]').firstMatch(last);
+
+    if (match != null) {
+      final stringaIndex = match.group(1);
+      return "$baseUrl/images/$line/$station/${base}_stringa_$stringaIndex.jpg";
+    }
+
+    return ""; // fallback
   }
 }

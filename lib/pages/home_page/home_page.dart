@@ -43,7 +43,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   };
 
   // LINES
-  String selectedLine = "Linea1";
+  String selectedLine = "Linea2";
   final List<String> availableLines = ["Linea1", "Linea2"];
   final Map<String, String> lineDisplayNames = {
     'Linea1': 'Linea A',

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/graphs/data_view.dart';
-import '../create_visuals_page.dart';
 import '../home_page/home_page.dart';
 
 class DashboardHome extends StatefulWidget {
@@ -13,13 +12,7 @@ class DashboardHome extends StatefulWidget {
 class _DashboardHomeState extends State<DashboardHome> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = [
-    const HomePage(),
-    const CreateVisualPage(
-      lineName: 'Linea2',
-      station: 'M309',
-    ),
-  ];
+  final List<Widget> _pages = [const HomePage(), const DataViewPage()];
 
   @override
   Widget build(BuildContext context) {

@@ -29,6 +29,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   Set<String> selectedLeaves = {};
   final GlobalKey _imageKey = GlobalKey();
   Size? imageSize;
+  List<String> altroIssues = [];
+  TextEditingController altroController = TextEditingController();
 
   // Updated main groups to exactly match backend keys:
   final List<String> mainGroups = [
@@ -39,6 +41,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     "Macchie ECA",
     "Celle Rotte",
     "Lunghezza String Ribbon",
+    "Altro",
   ];
 
   @override
@@ -108,7 +111,9 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     setState(() {
       pathStack = [group];
     });
-    _fetchCurrentItems();
+    if (group != "Altro") {
+      _fetchCurrentItems();
+    }
   }
 
   void _onRectangleTapped(String name, String type) {
@@ -156,6 +161,9 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   }
 
   bool groupHasSelected(String group) {
+    if (group == "Altro") {
+      return altroIssues.isNotEmpty;
+    }
     return selectedLeaves.any((issuePath) => issuePath.contains(".$group."));
   }
 
@@ -248,6 +256,89 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                 );
               }).toList(),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAltroField() {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Descrivi i problemi riscontrati:",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  child: Focus(
+                    autofocus: false,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.text,
+                      child: TextField(
+                        controller: altroController,
+                        decoration: InputDecoration(
+                          hintText: "Scrivi qui l'anomalia...",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton(
+                onPressed: () {
+                  final text = altroController.text.trim();
+                  if (text.isNotEmpty && !altroIssues.contains(text)) {
+                    setState(() {
+                      altroIssues.add(text);
+                      widget.onIssueSelected(
+                        "Dati.Esito.Esito_Scarto.Difetti.Altro: $text",
+                      );
+                      altroController.clear();
+                    });
+                  }
+                },
+                child: const Text("Aggiungi Difetto"),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 4.0,
+            children: altroIssues.map((issue) {
+              return Chip(
+                label: Text(issue),
+                deleteIcon: const Icon(Icons.close),
+                onDeleted: () {
+                  setState(() {
+                    final path =
+                        "Dati.Esito.Esito_Scarto.Difetti.Altro: $issue";
+                    altroIssues.remove(issue);
+                    selectedLeaves.remove(path);
+                    widget.onIssueSelected(path);
+                  });
+                },
+                backgroundColor: Colors.deepOrange.withOpacity(0.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: const BorderSide(color: Colors.deepOrange),
+                ),
+              );
+            }).toList(),
           ),
         ],
       ),
@@ -502,6 +593,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                   _buildGuidedHint(),
                   if (pathStack.length == 1 && pathStack[0] == "Generali")
                     _buildGeneraliButtons()
+                  else if (pathStack.length == 1 && pathStack[0] == "Altro")
+                    _buildAltroField()
                   else
                     ConstrainedBox(
                       constraints: const BoxConstraints(

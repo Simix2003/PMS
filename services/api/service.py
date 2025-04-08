@@ -667,8 +667,8 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
         parsed = parse_issue_path(path, category)
         sql = """
             INSERT INTO object_defects (
-                production_id, defect_id, defect_type, stringa, s_ribbon, i_ribbon, ribbon_lato
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                production_id, defect_id, defect_type, stringa, s_ribbon, i_ribbon, ribbon_lato, extra_data
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(sql, (
             production_id,
@@ -678,6 +678,7 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
             parsed["s_ribbon"],
             parsed["i_ribbon"],
             parsed["ribbon_lato"],
+            parsed['extra_data']
         ))
   
 def detect_category(path: str) -> str:
@@ -702,7 +703,8 @@ def parse_issue_path(path: str, category: str):
         "stringa": None,
         "s_ribbon": None,
         "i_ribbon": None,
-        "ribbon_lato": None
+        "ribbon_lato": None,
+        "extra_data": None
     }
 
     # Split
@@ -769,6 +771,18 @@ def parse_issue_path(path: str, category: str):
         str_match = re.search(r"Stringa\[(\d+)\]", path)
         if str_match:
             res["stringa"] = int(str_match.group(1))
+
+    elif category == "Lunghezza String Ribbon":
+        # e.g. "Lunghezza String Ribbon.Stringa[2]"
+        str_match = re.search(r"Stringa\[(\d+)\]", path)
+        if str_match:
+            res["stringa"] = int(str_match.group(1))
+
+    elif category == "Altro":
+        # Example: "Dati.Esito.Esito_Scarto.Difetti.Altro: Macchia sulla cella"
+        if ":" in path:
+            res["extra_data"] = path.split(":", 1)[1].strip()
+
 
     return res
 

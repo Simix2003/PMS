@@ -168,6 +168,7 @@ SESSION_TIMEOUT = 600  # 600 seconds = 10 minutes
 def get_channel_config(line_name: str, channel_id: str):
     return CHANNELS.get(line_name, {}).get(channel_id)
 
+
 # ---------------- LIFESPAN ----------------
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -447,7 +448,6 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
             "issuesSubmitted": False
         })
 
-
 async def read_data(
     plc_connection: PLCConnection,
     line_name: str,
@@ -507,7 +507,8 @@ async def read_data(
     except Exception as e:
         logging.error(f"[{full_id}] ❌ Error reading PLC data: {e}")
         return None
-   
+
+
 # ---------------- MYSQL ----------------
 DB_SCHEMA = """
 Il database contiene le seguenti tabelle:
@@ -569,7 +570,9 @@ Il database contiene le seguenti tabelle:
 async def insert_initial_production_data(data, station_name, connection):
     """
     Inserts a production record using data available at cycle start.
-    It sets the end_time to NULL and uses esito = 2 (in-progress).
+    It sets the end_time to NULL and uses esito = 2 (in progress).
+    If a production record for the same object_id and station (with esito = 2 and end_time IS NULL)
+    is already present, that record is returned instead of inserting a new row.
     """
     try:
         with connection.cursor() as cursor:
@@ -604,6 +607,23 @@ async def insert_initial_production_data(data, station_name, connection):
             cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
             object_id = cursor.fetchone()["id"]
 
+            # ☆ Check for existing partial production record:
+            cursor.execute("""
+                SELECT id FROM productions 
+                WHERE object_id = %s 
+                  AND station_id = %s 
+                  AND esito = 2 
+                  AND end_time IS NULL
+                ORDER BY start_time DESC
+                LIMIT 1
+            """, (object_id, real_station_id))
+            existing_prod = cursor.fetchone()
+            if existing_prod:
+                production_id = existing_prod["id"]
+                connection.commit()
+                logging.info(f"Production record already exists: ID {production_id} for object {object_id}")
+                return production_id
+
             # Retrieve last_station_id from stringatrice if available.
             last_station_id = None
             str_flags = data.get("Lavorazione_Eseguita_Su_Stringatrice", [])
@@ -630,7 +650,7 @@ async def insert_initial_production_data(data, station_name, connection):
                 real_station_id,
                 data.get("DataInizio"),  # starting timestamp
                 None,                     # end_time left as NULL
-                2,                        # esito 2 means “in progress”
+                2,                        # esito 2 means "in progress"
                 data.get("Id_Utente"),
                 last_station_id
             ))
@@ -645,29 +665,42 @@ async def insert_initial_production_data(data, station_name, connection):
         logging.error(f"Error inserting initial production data: {e}")
         return None
 
-
 async def update_production_final(production_id, data, station_name, connection):
     """
-    Updates an existing production record with the final outcome and DataFine.
-    Here, esito is updated: if Compilato_Su_Ipad_Scarto_Presente is True,
-    then the final outcome is 6; otherwise 1.
+    Always update end_time. Update esito only if the current value is 2.
     """
     try:
         with connection.cursor() as cursor:
-            final_esito = 6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1
+            # Step 1: Read current esito
+            cursor.execute("SELECT esito FROM productions WHERE id = %s", (production_id,))
+            row = cursor.fetchone()
+            if not row:
+                logging.warning(f"No production found with ID {production_id}")
+                return False
 
-            sql_update = """
-                UPDATE productions 
-                SET end_time = %s, esito = %s 
-                WHERE id = %s
-            """
-            cursor.execute(sql_update, (
-                data.get("DataFine"),
-                final_esito,
-                production_id
-            ))
+            current_esito = row["esito"]
+            final_esito = 6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1
+            end_time = data.get("DataFine")
+
+            # Step 2: Conditional update
+            if current_esito == 2:
+                sql_update = """
+                    UPDATE productions 
+                    SET end_time = %s, esito = %s 
+                    WHERE id = %s
+                """
+                cursor.execute(sql_update, (end_time, final_esito, production_id))
+                logging.info(f"✅ Updated end_time + esito ({final_esito}) for production {production_id}")
+            else:
+                sql_update = """
+                    UPDATE productions 
+                    SET end_time = %s 
+                    WHERE id = %s
+                """
+                cursor.execute(sql_update, (end_time, production_id))
+                logging.info(f"ℹ️ Updated only end_time for production {production_id} (esito was already {current_esito})")
+
             connection.commit()
-            logging.info(f"Updated production {production_id} with final outcome {final_esito}")
             return True
 
     except Exception as e:
@@ -713,7 +746,6 @@ def detect_category(path: str) -> str:
     if ":" in category_raw:
         category_raw = category_raw.split(":")[0].strip()
     return category_raw
-
 
 def parse_issue_path(path: str, category: str):
     """
@@ -815,6 +847,7 @@ def parse_issue_path(path: str, category: str):
 
     return res
 
+
 # ---------------- CONFIG PARSING ----------------
 def load_station_configs(file_path):
     config = configparser.ConfigParser()
@@ -844,6 +877,7 @@ def load_station_configs(file_path):
             line_configs[current_line]["stations"].append(section)
 
     return line_configs
+
 
 # ---------------- BACKGROUND TASK ----------------
 def make_status_callback(full_station_id: str):
@@ -910,10 +944,10 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             if (fine_buona or fine_scarto) and not passato_flags[full_station_id]:
                 data_inizio = trigger_timestamps.get(full_station_id)
                 result = await read_data(plc_connection, line_name, channel_id,
-                                         #richiesta_ok=fine_buona,
-                                         #richiesta_ko=fine_scarto,
-                                         richiesta_ok=False,
-                                         richiesta_ko=True,
+                                         richiesta_ok=fine_buona,
+                                         richiesta_ko=fine_scarto,
+                                         #richiesta_ok=False,
+                                         #richiesta_ko=True,
                                          data_inizio=data_inizio)
                 if result:
                     passato_flags[full_station_id] = True
@@ -932,6 +966,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             logging.error(f"[{full_station_id}] 🔴 Error in background task: {str(e)}")
             await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
             await asyncio.sleep(5)
+
 
 # ---------------- WEB SOCKET ----------------
 @app.websocket("/ws/summary/{line_name}")
@@ -992,7 +1027,6 @@ async def websocket_endpoint(websocket: WebSocket, line_name: str, channel_id: s
 
 
 # ---------------- ROUTES ----------------
-            
 @app.get("/api/plc_status")
 async def plc_status():
     statuses = {}
@@ -1274,38 +1308,40 @@ async def productions_summary(
     from_date: str = Query(default=None, alias="from"),
     to_date: str = Query(default=None, alias="to"),
     line_name: str = Query(default=None),  # Optional filter by line
-    turno: int = Query(default=None),      # New turno parameter (1, 2, 3)
+    turno: int = Query(default=None),       # New turno parameter (1, 2, 3)
 ):
     global mysql_connection
     try:
         assert mysql_connection is not None
         with mysql_connection.cursor() as cursor:
 
+            # Build base WHERE clause for production filtering on end_time (new schema)
+            params = []
+            where_clause = ""
             if from_date and to_date:
-                where_clause = "WHERE DATE(data_fine) BETWEEN %s AND %s"
-                params = (from_date, to_date)
+                where_clause = "WHERE DATE(p.end_time) BETWEEN %s AND %s"
+                params.extend([from_date, to_date])
             elif date:
                 if turno and turno == 3:
-                    # For Shift 3, use a datetime range: from 22:00 on the selected date
-                    # to 05:59:59 on the next day.
+                    # For turno 3, use a datetime range: from 22:00 on the selected date to 05:59:59 on the next day.
                     start_dt = f"{date} 22:00:00"
                     end_dt = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d 05:59:59")
-                    where_clause = "WHERE data_fine BETWEEN %s AND %s"
-                    params = (start_dt, end_dt)
+                    where_clause = "WHERE p.end_time BETWEEN %s AND %s"
+                    params.extend([start_dt, end_dt])
                 else:
-                    where_clause = "WHERE DATE(data_fine) = %s"
-                    params = (date,)
+                    where_clause = "WHERE DATE(p.end_time) = %s"
+                    params.append(date)
             else:
                 return JSONResponse(status_code=400, content={"error": "Missing 'date' or 'from' and 'to'"})
 
+            # Apply turno (shift) filter if provided.
             if turno:
-                # Define the time range for each turno
+                # Define time ranges for each turno.
                 turno_times = {
                     1: ("06:00:00", "13:59:59"),
                     2: ("14:00:00", "21:59:59"),
                     3: ("22:00:00", "05:59:59"),
                 }
-
                 if turno not in turno_times:
                     return JSONResponse(
                         status_code=400,
@@ -1313,147 +1349,167 @@ async def productions_summary(
                     )
 
                 start_time, end_time = turno_times[turno]
-
                 if turno == 3:
                     if date:
                         shift_day = datetime.strptime(date, "%Y-%m-%d")
                         next_day = shift_day + timedelta(days=1)
-
                         where_clause += """
                             AND (
-                                (DATE(data_fine) = %s AND TIME(data_fine) >= '22:00:00')
+                                (DATE(p.end_time) = %s AND TIME(p.end_time) >= '22:00:00')
                                 OR
-                                (DATE(data_fine) = %s AND TIME(data_fine) <= '05:59:59')
+                                (DATE(p.end_time) = %s AND TIME(p.end_time) <= '05:59:59')
                             )
                         """
-                        params += (shift_day.strftime("%Y-%m-%d"), next_day.strftime("%Y-%m-%d"))
-
+                        params.extend([shift_day.strftime("%Y-%m-%d"), next_day.strftime("%Y-%m-%d")])
                     elif from_date and to_date:
-                        # Keep WHERE DATE(data_fine) BETWEEN from_date AND to_date
-                        # Add time-based filter for turno 3
                         where_clause += """
                             AND (
-                                TIME(data_fine) >= '22:00:00'
-                                OR TIME(data_fine) <= '05:59:59'
+                                TIME(p.end_time) >= '22:00:00'
+                                OR TIME(p.end_time) <= '05:59:59'
                             )
                         """
-
                     else:
                         return JSONResponse(
                             status_code=400,
                             content={"error": "Missing 'date' or 'from' and 'to'"}
                         )
-
                 else:
-                    # Turno 1 or 2 — simple time filter
-                    where_clause += " AND TIME(data_fine) BETWEEN %s AND %s"
-                    params += (start_time, end_time)
+                    # For turno 1 or 2, filter on the TIME component.
+                    where_clause += " AND TIME(p.end_time) BETWEEN %s AND %s"
+                    params.extend([start_time, end_time])
 
+            # Filter by production line if provided.
+            # In the new schema, we join production_lines (alias pl) via stations.
             if line_name:
                 try:
-                    line_number = int(line_name.replace("Linea", ""))  # Extract numeric part from "Linea1"
-                    where_clause += " AND linea = %s"
-                    params += (line_number,)
+                    where_clause += " AND pl.name = %s"
+                    params.append(line_name)
                 except ValueError:
                     return JSONResponse(status_code=400, content={"error": "Invalid line_name format"})
 
             # --- Summary per station ---
-            cursor.execute(f"""
+            # Join productions with stations (and production_lines for filtering) to use new schema columns.
+            query = f"""
                 SELECT
-                    station,
-                    SUM(CASE WHEN esito = 1 THEN 1 ELSE 0 END) AS good_count,
-                    SUM(CASE WHEN esito = 6 THEN 1 ELSE 0 END) AS bad_count,
-                    SEC_TO_TIME(AVG(TIME_TO_SEC(tempo_ciclo))) AS avg_cycle_time
-                FROM productions
+                    s.name AS station_name,
+                    s.display_name AS station_display,
+                    SUM(CASE WHEN p.esito = 1 THEN 1 ELSE 0 END) AS good_count,
+                    SUM(CASE WHEN p.esito = 6 THEN 1 ELSE 0 END) AS bad_count,
+                    SEC_TO_TIME(AVG(TIME_TO_SEC(p.cycle_time))) AS avg_cycle_time
+                FROM productions p
+                JOIN stations s ON p.station_id = s.id
+                LEFT JOIN production_lines pl ON s.line_id = pl.id
                 {where_clause}
-                GROUP BY station
-            """, params)
-
+                GROUP BY s.name, s.display_name
+            """
+            cursor.execute(query, tuple(params))
             stations = {}
             for row in cursor.fetchall():
-                stations[row['station']] = {
-                    "good_count": row['good_count'],
-                    "bad_count": row['bad_count'],
+                name = row['station_name']
+                stations[name] = {
+                    "display": row['station_display'],  # M308 - QG2 di M306
+                    "good_count": int(row['good_count']),
+                    "bad_count": int(row['bad_count']),
                     "avg_cycle_time": str(row['avg_cycle_time']),
                     "last_cycle_time": "00:00:00"
                 }
-            
+
             print('stations: ', stations)
 
-            # Fill missing stations (for visual consistency)
+            # Fill in missing stations (for visual consistency).
+            # CHANNELS should be defined elsewhere in your code.
             all_station_names = [
-                station for line, stations in CHANNELS.items()
+                station for line, stations_list in CHANNELS.items()
                 if line == line_name or line_name is None
-                for station in stations
+                for station in stations_list
             ]
-
             for station in all_station_names:
                 stations.setdefault(station, {
+                    "display": station,  # fallback to code if display is missing
                     "good_count": 0,
                     "bad_count": 0,
                     "avg_cycle_time": "00:00:00",
                     "last_cycle_time": "00:00:00"
                 })
 
-                        # Fetch defect summary for each defect type
-            def fetch_defect_summary(table, label):
-                cursor.execute(f"""
-                    SELECT p.station, COUNT(DISTINCT p.id) AS defect_count
-                    FROM {table} t
-                    JOIN productions p ON p.id = t.production_id
-                    {where_clause} AND t.scarto = 1 AND p.esito = 6
-                    GROUP BY p.station
-                """, params)
+
+            # --- Defect Summary ---
+            # Helper function to fetch defects by category.
+            def fetch_defect_summary(category_label, label):
+                q = f"""
+                    SELECT 
+                        s.name AS station_code, 
+                        d.category,
+                        COUNT(DISTINCT CONCAT(od.production_id, '-', d.category)) AS unique_defect_count
+                    FROM object_defects od
+                    JOIN defects d ON od.defect_id = d.id
+                    JOIN productions p ON p.id = od.production_id
+                    JOIN stations s ON p.station_id = s.id
+                    LEFT JOIN production_lines pl ON s.line_id = pl.id
+                    {where_clause} AND p.esito = 6
+                    GROUP BY s.name, d.category
+                """
+                
+                cursor.execute(q, tuple(params))  # ✅ Use params only
+
                 for row in cursor.fetchall():
-                    stations[row['station']].setdefault("defects", {})[label] = int(row['defect_count'])
+                    station_code = row['station_code']
+                    category = row['category']
+                    count = int(row['unique_defect_count'])
+                    if station_code in stations:
+                        stations[station_code].setdefault("defects", {})[category] = count
 
-            fetch_defect_summary("ribbon", "Mancanza Ribbon")
-            fetch_defect_summary("saldatura", "Saldatura")
-            fetch_defect_summary("disallineamento_stringa", "Disallineamento")
-            fetch_defect_summary("generali", "Generali")
+            fetch_defect_summary("Mancanza Ribbon", "Mancanza Ribbon")
+            fetch_defect_summary("Saldatura", "Saldatura")
+            fetch_defect_summary("Disallineamento", "Disallineamento")
+            fetch_defect_summary("Generali", "Generali")
 
-            # Now calculate "KO Generico" for each station
+            # Calculate "KO Generico" (generic KO) for each station.
             for station, data in stations.items():
-                bad_count = int(data["bad_count"])
+                bad_count_val = int(data["bad_count"])
                 defects = data.get("defects", {})
                 total_defects = sum(defects.values())
-                generic = bad_count - total_defects
+                generic = bad_count_val - total_defects
                 if generic > 0:
                     stations[station].setdefault("defects", {})["Generico"] = generic
 
+            # --- Last cycle time details (always fetch latest per station) ---
+            query_last = f"""
+                SELECT s.name as station, o.id_modulo, p.esito, p.cycle_time, p.start_time, p.end_time
+                FROM productions p
+                JOIN stations s ON p.station_id = s.id
+                JOIN objects o ON p.object_id = o.id
+                LEFT JOIN production_lines pl ON s.line_id = pl.id
+                {where_clause}
+                ORDER BY p.end_time DESC
+            """
+            # ✅ This is the correct version:
+            cursor.execute(query_last, tuple(params))
 
-            # Last cycle time for single-day requests
-            if date:
-                # Adding the last object ID, esito, and cycle times for the station
-                cursor.execute("""
-                    SELECT station, id_modulo, esito, tempo_ciclo, data_inizio, data_fine
-                    FROM productions
-                    WHERE DATE(data_fine) = %s
-                    ORDER BY data_fine DESC
-                """, (date,))
-                seen_stations = set()
-                for row in cursor.fetchall():
-                    station = row['station']
-                    if station not in seen_stations and station in stations:
-                        stations[station]["last_object"] = row["id_modulo"]  # Last Object ID
-                        stations[station]["last_esito"] = row["esito"]  # Esito
-                        stations[station]["last_cycle_time"] = str(row["tempo_ciclo"])  # Last Cycle Time
-                        stations[station]["last_in_time"] = str(row["data_inizio"])  # Last Start Time (data_inizio)
-                        stations[station]["last_out_time"] = str(row["data_fine"])  # Last End Time (data_fine)
-                        seen_stations.add(station)
+            seen_stations = set()
+            for row in cursor.fetchall():
+                station = row['station']
+                if station not in seen_stations and station in stations:
+                    stations[station]["last_object"] = row["id_modulo"]
+                    stations[station]["last_esito"] = row["esito"]
+                    stations[station]["last_cycle_time"] = str(row["cycle_time"])
+                    stations[station]["last_in_time"] = str(row["start_time"])
+                    stations[station]["last_out_time"] = str(row["end_time"])
+                    seen_stations.add(station)
 
-            good_count = sum(s["good_count"] for s in stations.values())
-            bad_count = sum(s["bad_count"] for s in stations.values())
+            good_count_total = sum(s["good_count"] for s in stations.values())
+            bad_count_total = sum(s["bad_count"] for s in stations.values())
 
             return {
-                "good_count": good_count,
-                "bad_count": bad_count,
+                "good_count": good_count_total,
+                "bad_count": bad_count_total,
                 "stations": stations,
             }
 
     except Exception as e:
         logging.error(f"MySQL Error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":

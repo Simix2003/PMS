@@ -737,7 +737,25 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
             parsed["ribbon_lato"],
             parsed['extra_data']
         ))
-  
+
+async def update_esito(esito: int, production_id: int, cursor):
+    """
+    Update the 'esito' field in the productions table for the given production ID.
+    """
+    try:
+        sql_update = """
+            UPDATE productions 
+            SET esito = %s 
+            WHERE id = %s
+        """
+        cursor.execute(sql_update, (esito, production_id))
+        return True
+    except Exception as e:
+        if mysql_connection:
+            mysql_connection.rollback()
+        logging.error(f"❌ Error updating esito for production_id={production_id}: {e}")
+        return False
+    
 def detect_category(path: str) -> str:
     parts = path.split(".")
     if len(parts) < 5:
@@ -1095,6 +1113,7 @@ async def set_issues(request: Request):
                 "issues": issues
             }
             await insert_defects(result, production_id, channel_id, line_name, cursor=cursor)
+            await update_esito(6, production_id, cursor=cursor)
             mysql_connection.commit()
             cursor.close()
             print(f"✅ Defects inserted immediately for {object_id} (prod_id: {production_id})")
@@ -1511,6 +1530,7 @@ async def productions_summary(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ---------------- SEARCH ----------------
+# Mapping from client order field names to DB columns.
 column_map = {
     "ID Modulo": "o.id_modulo",
     "Esito": "p.esito",
@@ -1535,14 +1555,24 @@ async def search_results(request: Request):
         limit: int = int(payload.get("limit", 1000))
         direction = "ASC" if order_direction.lower() == "crescente" else "DESC"
 
+        # Initialize join and where clauses.
+        join_clauses = []
         where_clauses = []
         params = []
 
+        # If any filter is for defects, include the defects join.
+        has_defect_filter = any(f.get("type") == "Difetto" for f in filters)
+        if has_defect_filter:
+            join_clauses.append("JOIN object_defects od ON p.id = od.production_id")
+            join_clauses.append("JOIN defects d ON od.defect_id = d.id")
+
+        # Process all filters.
         for f in filters:
             key, value = f.get("type"), f.get("value")
             if key == "ID Modulo":
                 where_clauses.append("o.id_modulo LIKE %s")
                 params.append(f"%{value}%")
+            
             elif key == "Esito":
                 if value == "OK":
                     where_clauses.append("p.esito = 1")
@@ -1550,15 +1580,19 @@ async def search_results(request: Request):
                     where_clauses.append("p.esito = 6")
                 elif value == "In Produzione":
                     where_clauses.append("p.esito NOT IN (1, 6)")
+            
             elif key == "Operatore":
                 where_clauses.append("p.operator_id LIKE %s")
                 params.append(f"%{value}%")
+            
             elif key == "Linea":
                 where_clauses.append("pl.display_name = %s")
                 params.append(value)
+            
             elif key == "Stazione":
                 where_clauses.append("s.name = %s")
                 params.append(value)
+            
             elif key == "Turno":
                 turno_times = {
                     "1": ("06:00:00", "13:59:59"),
@@ -1568,10 +1602,13 @@ async def search_results(request: Request):
                 if value in turno_times:
                     start_t, end_t = turno_times[value]
                     if value == "3":
-                        where_clauses.append("(TIME(p.end_time) >= '22:00:00' OR TIME(p.end_time) <= '05:59:59')")
+                        where_clauses.append(
+                            "(TIME(p.end_time) >= '22:00:00' OR TIME(p.end_time) <= '05:59:59')"
+                        )
                     else:
                         where_clauses.append("TIME(p.end_time) BETWEEN %s AND %s")
                         params.extend([start_t, end_t])
+            
             elif key == "Intervallo Date" and value:
                 if "→" in value:
                     parts = value.split(" → ")
@@ -1582,34 +1619,152 @@ async def search_results(request: Request):
                         params.extend([from_date, to_date])
                     except Exception as e:
                         print(f"Date parsing error: {e}")
+            
+            elif key == "Stringatrice":
+                stringatrice_map = {
+                    "1": "Str1",
+                    "2": "Str2",
+                    "3": "Str3",
+                    "4": "Str4",
+                    "5": "Str5"
+                }
+                if value in stringatrice_map:
+                    # Add a second join to stations table (aliased as ls for last_station)
+                    join_clauses.append("LEFT JOIN stations ls ON p.last_station_id = ls.id")
+                    where_clauses.append("ls.name = %s")
+                    params.append(stringatrice_map[value])
+            
+            elif key == "Difetto" and value:
+                # Split the composite defect filter by " > "
+                parts = value.split(" > ")
+                if not parts:
+                    continue
+                # Always filter by defect category.
+                defect_category = parts[0]
+                where_clauses.append("d.category = %s")
+                params.append(defect_category)
 
+                if defect_category == "Generali":
+                    if len(parts) > 1 and parts[1].strip():
+                        # For Generali, second part is defect_type.
+                        where_clauses.append("od.defect_type = %s")
+                        params.append(parts[1])
+                elif defect_category == "Saldatura":
+                    print('Saldtura Gang')
+                    print(parts)
+                    print(len(parts))
+                    # Expected: Saldatura > Stringa[<num>] > Lato <letter> > Pin[<num>]
+                    if len(parts) > 1 and parts[1].strip():
+                        match = re.search(r'\[(\d+)\]', parts[1])
+                        if match:
+                            stringa_num = int(match.group(1))
+                            where_clauses.append("od.stringa = %s")
+                            params.append(stringa_num)
+                    if len(parts) > 2 and parts[2].strip():
+                        lato = parts[2].replace("Lato ", "").strip()
+                        where_clauses.append("od.ribbon_lato = %s")
+                        params.append(lato)
+                    if len(parts) > 3 and parts[3].strip():
+                        match = re.search(r'\[(\d+)\]', parts[3])
+                        if match:
+                            pin_num = int(match.group(1))
+                            where_clauses.append("od.s_ribbon = %s")
+                            params.append(pin_num)
+                elif defect_category == "Disallineamento":
+                    # Expected can be either:
+                    #   "Disallineamento > Stringa > Stringa[<num>]"
+                    #   or "Disallineamento > Ribbon > Lato <letter> > Ribbon[<num>]"
+                    if len(parts) > 1 and parts[1].strip():
+                        mode = parts[1]
+                        if mode == "Stringa":
+                            if len(parts) > 2 and parts[2].strip():
+                                match = re.search(r'\[(\d+)\]', parts[2])
+                                if match:
+                                    stringa_num = int(match.group(1))
+                                    where_clauses.append("od.stringa = %s")
+                                    params.append(stringa_num)
+                        elif mode == "Ribbon":
+                            if len(parts) > 2 and parts[2].strip():
+                                lato = parts[2].replace("Lato ", "").strip()
+                                where_clauses.append("od.ribbon_lato = %s")
+                                params.append(lato)
+                            if len(parts) > 3 and parts[3].strip():
+                                match = re.search(r'\[(\d+)\]', parts[3])
+                                if match:
+                                    ribbon_num = int(match.group(1))
+                                    # For Disallineamento in Ribbon mode, use i_ribbon.
+                                    where_clauses.append("od.i_ribbon = %s")
+                                    params.append(ribbon_num)
+                elif defect_category == "Mancanza Ribbon":
+                    # Expected: Mancanza Ribbon > Lato <letter> > Ribbon[<num>]
+                    if len(parts) > 1 and parts[1].strip():
+                        lato = parts[1].replace("Lato ", "").strip()
+                        where_clauses.append("od.ribbon_lato = %s")
+                        params.append(lato)
+                    if len(parts) > 2 and parts[2].strip():
+                        match = re.search(r'\[(\d+)\]', parts[2])
+                        if match:
+                            ribbon_num = int(match.group(1))
+                            # For Mancanza Ribbon use i_ribbon.
+                            where_clauses.append("od.i_ribbon = %s")
+                            params.append(ribbon_num)
+                elif defect_category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon"):
+                    # Expected: e.g., "Macchie ECA > Stringa[<num>]"
+                    if len(parts) > 1 and parts[1].strip():
+                        match = re.search(r'\[(\d+)\]', parts[1])
+                        if match:
+                            stringa_num = int(match.group(1))
+                            where_clauses.append("od.stringa = %s")
+                            params.append(stringa_num)
+                elif defect_category == "Altro":
+                    if len(parts) > 1 and parts[1].strip():
+                        where_clauses.append("od.extra_data LIKE %s")
+                        params.append(f"%{parts[1]}%")
+
+        # Build final JOIN and WHERE SQL parts.
+        join_sql = " ".join(join_clauses)
         where_sql = " AND ".join(where_clauses)
         if where_sql:
             where_sql = "WHERE " + where_sql
 
-        # Special ordering logic for NULLs in esito/cycle_time
+        # Special ordering logic for NULLs in esito/cycle_time.
         if order_by in {"p.esito", "p.cycle_time"}:
             order_clause = f"ORDER BY ISNULL({order_by}), {order_by} {direction}"
         else:
             order_clause = f"ORDER BY {order_by} {direction}"
 
+        select_fields = """
+            o.id_modulo, 
+            p.esito, 
+            p.operator_id, 
+            p.cycle_time, 
+            p.start_time, 
+            p.end_time,
+            s.name AS station_name,
+            pl.display_name AS line_display_name
+        """
+
+        if has_defect_filter:
+            select_fields += """,
+                MIN(od.defect_type) AS defect_type,
+                MIN(od.i_ribbon) AS i_ribbon,
+                MIN(od.stringa) AS stringa,
+                MIN(od.ribbon_lato) AS ribbon_lato,
+                MIN(od.s_ribbon) AS s_ribbon,
+                MIN(od.extra_data) AS extra_data
+            """
+
         query = f"""
-            SELECT 
-                o.id_modulo, 
-                p.esito, 
-                p.operator_id, 
-                p.cycle_time, 
-                p.start_time, 
-                p.end_time,
-                s.name AS station_name,
-                pl.display_name AS line_display_name
-            FROM productions p
-            JOIN objects o ON p.object_id = o.id
-            JOIN stations s ON p.station_id = s.id
-            LEFT JOIN production_lines pl ON s.line_id = pl.id
-            {where_sql}
-            {order_clause}
-            LIMIT %s
+        SELECT {select_fields}
+        FROM productions p
+        JOIN objects o ON p.object_id = o.id
+        JOIN stations s ON p.station_id = s.id
+        {join_sql}
+        LEFT JOIN production_lines pl ON s.line_id = pl.id
+        {where_sql}
+        GROUP BY p.id
+        {order_clause}
+        LIMIT %s
         """
         params.append(limit)
 

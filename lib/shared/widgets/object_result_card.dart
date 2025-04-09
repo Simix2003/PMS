@@ -5,8 +5,17 @@ import 'package:intl/intl.dart';
 
 class ObjectResultCard extends StatelessWidget {
   final Map<String, dynamic> data;
+  final bool isSelectable;
+  final bool isSelected;
+  final void Function()? onTap;
 
-  const ObjectResultCard({super.key, required this.data});
+  const ObjectResultCard({
+    super.key,
+    required this.data,
+    this.isSelectable = false,
+    this.isSelected = false,
+    this.onTap,
+  });
 
   Color _getStatusColor(int? esito) {
     if (esito == 1) return const Color(0xFF34C759); // OK
@@ -83,95 +92,115 @@ class ObjectResultCard extends StatelessWidget {
     final statusColor = _getStatusColor(esito);
     final statusLabel = _getStatusLabel(esito);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            statusColor.withOpacity(0.8),
-            statusColor,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: statusColor.withOpacity(0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
         children: [
-          // Title Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${data['id_modulo']}',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.5,
-                ),
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  statusColor.withOpacity(0.8),
+                  statusColor,
+                ],
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
+              border: isSelectable && isSelected
+                  ? Border.all(color: Colors.yellowAccent, width: 3)
+                  : null,
+              boxShadow: [
+                BoxShadow(
+                  color: statusColor.withOpacity(0.3),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
                 ),
-                child: Text(
-                  statusLabel,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Title Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${data['id_modulo']}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 16),
+
+                // Info rows (unchanged)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    int columnCount = 1;
+                    if (constraints.maxWidth > 600) columnCount = 2;
+                    if (constraints.maxWidth > 900) columnCount = 3;
+
+                    final infoItems = [
+                      _buildInfoRow(Icons.factory, 'Linea:',
+                          data['line_display_name'] ?? '-', Colors.white),
+                      _buildInfoRow(Icons.precision_manufacturing, 'Stazione:',
+                          data['station_name'] ?? '-', Colors.white),
+                      _buildInfoRow(Icons.person, 'Operatore:',
+                          data['operator_id'] ?? '-', Colors.white),
+                      _buildInfoRow(Icons.access_time, 'Tempo Ciclo:',
+                          _formatCycleTime(data['cycle_time']), Colors.white),
+                      _buildInfoRow(Icons.login, 'Ingresso:',
+                          _formatTime(data['start_time']), Colors.white),
+                      _buildInfoRow(Icons.logout, 'Uscita:',
+                          _formatTime(data['end_time']), Colors.white),
+                    ];
+
+                    return Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: List.generate(infoItems.length, (index) {
+                        return SizedBox(
+                          width:
+                              (constraints.maxWidth - 16 * (columnCount - 1)) /
+                                  columnCount,
+                          child: infoItems[index],
+                        );
+                      }),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          if (isSelectable)
+            Positioned(
+              bottom: 16,
+              right: 16,
+              child: Icon(
+                isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: isSelected ? Colors.yellowAccent : Colors.white70,
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          LayoutBuilder(
-            builder: (context, constraints) {
-              // Calculate column count based on card width
-              int columnCount = 1;
-              if (constraints.maxWidth > 600) columnCount = 2;
-              if (constraints.maxWidth > 900) columnCount = 3;
-
-              final infoItems = [
-                _buildInfoRow(Icons.factory, 'Linea:',
-                    data['line_display_name'] ?? '-', Colors.white),
-                _buildInfoRow(Icons.precision_manufacturing, 'Stazione:',
-                    data['station_name'] ?? '-', Colors.white),
-                _buildInfoRow(Icons.person, 'Operatore:',
-                    data['operator_id'] ?? '-', Colors.white),
-                _buildInfoRow(Icons.access_time, 'Tempo Ciclo:',
-                    _formatCycleTime(data['cycle_time']), Colors.white),
-                _buildInfoRow(Icons.login, 'Ingresso:',
-                    _formatTime(data['start_time']), Colors.white),
-                _buildInfoRow(Icons.logout, 'Uscita:',
-                    _formatTime(data['end_time']), Colors.white),
-              ];
-
-              return Wrap(
-                spacing: 16,
-                runSpacing: 16,
-                children: List.generate(infoItems.length, (index) {
-                  return SizedBox(
-                    width: (constraints.maxWidth - 16 * (columnCount - 1)) /
-                        columnCount,
-                    child: infoItems[index],
-                  );
-                }),
-              );
-            },
-          ),
+            ),
         ],
       ),
     );

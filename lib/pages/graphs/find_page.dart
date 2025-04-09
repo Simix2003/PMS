@@ -1,7 +1,9 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+
+import '../../shared/widgets/object_result_card.dart';
 
 class FindPage extends StatefulWidget {
   const FindPage({super.key});
@@ -11,236 +13,663 @@ class FindPage extends StatefulWidget {
 }
 
 class _FindPageState extends State<FindPage> {
-  final TextEditingController _searchController = TextEditingController();
-  DateTimeRange? _selectedRange;
+  String? selectedFilterType;
+  String filterValue = '';
+  DateTimeRange? selectedRange;
+  String? selectedRibbonSide;
+  final TextEditingController _textController = TextEditingController();
+  final TextEditingController _numericController = TextEditingController();
 
-  List<String> stations = ['M308', 'M309', 'M326'];
-  List<String> selectedStations = [];
-  bool showGood = true;
-  bool showBad = true;
+  final List<Map<String, String>> activeFilters = [];
 
-  String? selectedDefect;
-  final Map<String, String> defectTypes = {
-    'Disallineamento': 'Disallineamento',
-    'Mancanza': 'Mancanza Ribbon',
-    'Generali': 'Generali',
-    'Saldatura': 'Saldatura',
-  };
+  final List<String> filterOptions = [
+    'Linea',
+    'Stazione',
+    'Esito',
+    'Categoria Difetto',
+    'ID Modulo',
+    'Intervallo Date',
+    'Turno',
+    "Stringatrice",
+    'Operatore',
+    'Tipo Difetto (Generali)',
+    'Stringa',
+    'Ribbon',
+    'S-Ribbon',
+    'Dati Extra',
+  ];
+
+  final List<String> esitoOptions = [
+    'OK',
+    'KO',
+    'In Produzione',
+  ];
+
+  final List<String> ribbonSides = ['F', 'M', 'B'];
+
+  String? selectedOrderBy = 'Data';
+  String? selectedLimit = '1000';
+  String? selectedOrderDirection = 'Decrescente';
+
+  final List<String> orderOptions = [
+    'Data',
+    'Esito',
+    'ID Modulo',
+    'Operatore',
+  ];
+  final List<String> limitOptions = ['500', '1000', '5000'];
+  final orderDirections = ['Crescente', 'Decrescente']; // A-Z / Z-A
+
+  final List<Map<String, dynamic>> results = [];
+
+  void _addFilter() {
+    if (selectedFilterType != null && filterValue.isNotEmpty) {
+      setState(() {
+        activeFilters.add({
+          'type': selectedFilterType!,
+          'value': filterValue,
+        });
+        _textController.clear();
+        _numericController.clear();
+        filterValue = '';
+        selectedFilterType = null;
+        selectedRange = null;
+      });
+    }
+  }
+
+  void _removeFilter(int index) {
+    setState(() {
+      activeFilters.removeAt(index);
+    });
+  }
+
+  Widget _buildStyledDropdown({
+    required String hint,
+    required String? value,
+    required List<String> items,
+    required void Function(String?) onChanged,
+    String description = '',
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (description.isNotEmpty) ...[
+          Text(
+            "$description:",
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF007AFF).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: DropdownButton<String>(
+            value: value,
+            hint: Text(hint),
+            icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                color: Color(0xFF007AFF)),
+            underline: Container(),
+            borderRadius: BorderRadius.circular(16),
+            items: items
+                .map((item) => DropdownMenuItem(
+                      value: item,
+                      child: Text(
+                        item,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF007AFF),
+                        ),
+                      ),
+                    ))
+                .toList(),
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStyledTextField({
+    required TextEditingController controller,
+    required String hint,
+    bool isNumeric = false,
+    required void Function(String) onChanged,
+    double width = 150,
+  }) {
+    return Container(
+      width: width,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF007AFF).withOpacity(0.05),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          hintText: hint,
+        ),
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget _buildDynamicInput() {
+    switch (selectedFilterType) {
+      case 'Esito':
+        return _buildStyledDropdown(
+          hint: 'Esito',
+          value: filterValue.isNotEmpty ? filterValue : null,
+          items: esitoOptions,
+          onChanged: (val) => setState(() => filterValue = val ?? ''),
+        );
+
+      case 'Linea':
+        return _buildStyledDropdown(
+          hint: 'Linea',
+          value: filterValue.isNotEmpty ? filterValue : null,
+          items: ['Linea A', 'Linea B'],
+          onChanged: (val) => setState(() => filterValue = val ?? ''),
+        );
+
+      case 'Stringatrice':
+        return _buildStyledDropdown(
+          hint: 'Stringatrice',
+          value: filterValue.isNotEmpty ? filterValue : null,
+          items: ['1', '2', '3', '4', '5'],
+          onChanged: (val) => setState(() => filterValue = val ?? ''),
+        );
+
+      case 'Stazione':
+        return _buildStyledDropdown(
+          hint: 'Stazione',
+          value: filterValue.isNotEmpty ? filterValue : null,
+          items: ['M308', 'M309', 'M326'],
+          onChanged: (val) => setState(() => filterValue = val ?? ''),
+        );
+
+      case 'Turno':
+        return _buildStyledDropdown(
+          hint: 'Turno',
+          value: filterValue.isNotEmpty ? filterValue : null,
+          items: ['1', '2', '3'],
+          onChanged: (val) => setState(() => filterValue = val ?? ''),
+        );
+
+      case 'Categoria Difetto':
+        return _buildStyledDropdown(
+          hint: 'Categoria',
+          value: filterValue.isNotEmpty ? filterValue : null,
+          items: [
+            'Generali',
+            'Saldatura',
+            'Disallineamento',
+            'Mancanza Ribbon',
+            'Macchie ECA',
+            'Celle Rotte',
+            'Lunghezza String Ribbon',
+            'Altro',
+          ],
+          onChanged: (val) => setState(() => filterValue = val ?? ''),
+        );
+
+      case 'ID Modulo':
+      case 'Operatore':
+      case 'Tipo Difetto (Generali)':
+      case 'Dati Extra':
+        return _buildStyledTextField(
+          controller: _textController,
+          hint: 'Testo',
+          onChanged: (val) => filterValue = val,
+        );
+
+      case 'Stringa':
+      case 'S-Ribbon':
+        return _buildStyledTextField(
+          controller: _numericController,
+          hint: 'Numero',
+          isNumeric: true,
+          width: 100,
+          onChanged: (val) => filterValue = val,
+        );
+
+      case 'Ribbon':
+        return Row(
+          children: [
+            _buildStyledTextField(
+              controller: _numericController,
+              hint: 'N°',
+              isNumeric: true,
+              width: 70,
+              onChanged: (val) {
+                if (selectedRibbonSide != null) {
+                  filterValue = '$val (${selectedRibbonSide!})';
+                }
+              },
+            ),
+            const SizedBox(width: 8),
+            _buildStyledDropdown(
+              hint: 'Lato',
+              value: selectedRibbonSide,
+              items: ribbonSides,
+              onChanged: (val) {
+                setState(() {
+                  selectedRibbonSide = val;
+                  if (_numericController.text.isNotEmpty) {
+                    filterValue = '${_numericController.text} ($val)';
+                  }
+                });
+              },
+            ),
+          ],
+        );
+
+      case 'Intervallo Date':
+        return TextButton.icon(
+          onPressed: () async {
+            final picked = await showDateRangePicker(
+              context: context,
+              firstDate: DateTime(DateTime.now().year - 1),
+              lastDate: DateTime.now(),
+            );
+            if (picked != null) {
+              setState(() {
+                selectedRange = picked;
+                filterValue =
+                    '${DateFormat('dd MMM y').format(picked.start)} → ${DateFormat('dd MMM y').format(picked.end)}';
+              });
+            }
+          },
+          icon: const Icon(Icons.date_range_rounded),
+          label: Text(
+            filterValue.isEmpty ? 'Seleziona Intervallo' : filterValue,
+            style: const TextStyle(
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF007AFF),
+            ),
+          ),
+        );
+
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildFilterRowCard() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 700;
+
+        final filterDropdown = DropdownButton<String>(
+          value: selectedFilterType,
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: Color(0xFF007AFF),
+          ),
+          underline: Container(), // Remove the default underline
+          borderRadius: BorderRadius.circular(16),
+          hint: const Text('Tipo Filtro'),
+          items: filterOptions
+              .map((f) => DropdownMenuItem(
+                    value: f,
+                    child: Text(
+                      f,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF007AFF),
+                      ),
+                    ),
+                  ))
+              .toList(),
+          onChanged: (value) {
+            setState(() {
+              selectedFilterType = value;
+              filterValue = '';
+              _textController.clear();
+              _numericController.clear();
+              selectedRibbonSide = null;
+            });
+          },
+        );
+
+        final addButton = ElevatedButton(
+          onPressed: _addFilter,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF007AFF),
+            shape: const CircleBorder(),
+            padding: const EdgeInsets.all(12),
+          ),
+          child: const Icon(Icons.add, color: Colors.white, size: 20),
+        );
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: isWide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    filterDropdown,
+                    const SizedBox(width: 12),
+                    _buildDynamicInput(),
+                    const Spacer(),
+                    addButton,
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: filterDropdown),
+                        const SizedBox(width: 12),
+                        addButton,
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDynamicInput(),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: Colors.grey.shade400)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+          Expanded(child: Divider(color: Colors.grey.shade400)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChips() {
+    if (activeFilters.isEmpty) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: List.generate(activeFilters.length, (index) {
+        final f = activeFilters[index];
+        return Chip(
+          label: Text('${f['type']}: ${f['value']}'),
+          backgroundColor: Colors.blue.shade50,
+          deleteIcon: const Icon(Icons.close),
+          onDeleted: () => _removeFilter(index),
+        );
+      }),
+    );
+  }
+
+  void _onSearchPressed() {
+    print("🔎 Filtri attivi:");
+    for (var filter in activeFilters) {
+      print("${filter['type']}: ${filter['value']}");
+    }
+    print("📊 Ordina per: $selectedOrderBy");
+    print("⬆⬇ Direzione: $selectedOrderDirection");
+    print("⛔ Limite: $selectedLimit");
+
+    setState(() {
+      results.clear();
+      results.addAll([
+        {
+          'id_modulo': 'X-20240409',
+          'esito': 1,
+          'operatore': 'Luigi',
+          'cycle_time': '00:23',
+          'start_time': DateTime.now().subtract(const Duration(minutes: 5)),
+          'end_time': DateTime.now(),
+        },
+        {
+          'id_modulo': 'Y-20240408',
+          'esito': 6,
+          'operatore': 'Anna',
+          'cycle_time': '00:19',
+          'start_time': DateTime.now().subtract(const Duration(hours: 1)),
+          'end_time': DateTime.now().subtract(const Duration(minutes: 40)),
+        },
+        {
+          'id_modulo': 'X-20240409',
+          'esito': 1,
+          'operatore': 'Luigi',
+          'cycle_time': '00:23',
+          'start_time': DateTime.now().subtract(const Duration(minutes: 5)),
+          'end_time': DateTime.now(),
+        },
+        {
+          'id_modulo': 'Y-20240408',
+          'esito': 6,
+          'operatore': 'Anna',
+          'cycle_time': '00:19',
+          'start_time': DateTime.now().subtract(const Duration(hours: 1)),
+          'end_time': DateTime.now().subtract(const Duration(minutes: 40)),
+        },
+        {
+          'id_modulo': 'X-20240409',
+          'esito': 1,
+          'operatore': 'Luigi',
+          'cycle_time': '00:23',
+          'start_time': DateTime.now().subtract(const Duration(minutes: 5)),
+          'end_time': DateTime.now(),
+        },
+        {
+          'id_modulo': 'Y-20240408',
+          'esito': 6,
+          'operatore': 'Anna',
+          'cycle_time': '00:19',
+          'start_time': DateTime.now().subtract(const Duration(hours: 1)),
+          'end_time': DateTime.now().subtract(const Duration(minutes: 40)),
+        },
+        {
+          'id_modulo': 'X-20240409',
+          'esito': 1,
+          'operatore': 'Luigi',
+          'cycle_time': '00:23',
+          'start_time': DateTime.now().subtract(const Duration(minutes: 5)),
+          'end_time': DateTime.now(),
+        },
+        {
+          'id_modulo': 'Y-20240408',
+          'esito': 6,
+          'operatore': 'Anna',
+          'cycle_time': '00:19',
+          'start_time': DateTime.now().subtract(const Duration(hours: 1)),
+          'end_time': DateTime.now().subtract(const Duration(minutes: 40)),
+        },
+        {
+          'id_modulo': 'X-20240409',
+          'esito': 1,
+          'operatore': 'Luigi',
+          'cycle_time': '00:23',
+          'start_time': DateTime.now().subtract(const Duration(minutes: 5)),
+          'end_time': DateTime.now(),
+        },
+        {
+          'id_modulo': 'Y-20240408',
+          'esito': 6,
+          'operatore': 'Anna',
+          'cycle_time': '00:19',
+          'start_time': DateTime.now().subtract(const Duration(hours: 1)),
+          'end_time': DateTime.now().subtract(const Duration(minutes: 40)),
+        },
+      ]);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text('Ricerca Dati'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        backgroundColor: Colors.white,
+        scrolledUnderElevation: 0,
         elevation: 0,
+        title: const Text(
+          'Ricerca Dati',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 20,
+            letterSpacing: -0.5,
+          ),
+        ),
+        centerTitle: true,
       ),
-      body: SingleChildScrollView(
+      body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Search Bar
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Cerca ID Modulo o Utente...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
+            _buildFilterRowCard(),
+            if (activeFilters.isNotEmpty) _buildSectionTitle("Filtri Attivi"),
+            if (activeFilters.isNotEmpty) _buildFilterChips(),
+            _buildSectionTitle("Dati"),
             const SizedBox(height: 20),
 
-            // Filter Chips for Stations
-            Wrap(
-              spacing: 10,
-              children: stations.map((station) {
-                return FilterChip(
-                  label: Text(station),
-                  selected: selectedStations.contains(station),
-                  onSelected: (selected) {
-                    setState(() {
-                      if (selected) {
-                        selectedStations.add(station);
-                      } else {
-                        selectedStations.remove(station);
-                      }
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 20),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 1000;
+                final controls = [
+                  _buildStyledDropdown(
+                    hint: 'Ordina per',
+                    value: selectedOrderBy,
+                    items: orderOptions,
+                    onChanged: (val) => setState(() => selectedOrderBy = val),
+                    description: 'Ordina per',
+                  ),
+                  _buildStyledDropdown(
+                    hint: '↑ ↓',
+                    value: selectedOrderDirection,
+                    items: orderDirections,
+                    onChanged: (val) =>
+                        setState(() => selectedOrderDirection = val),
+                  ),
+                  _buildStyledDropdown(
+                    hint: 'Limite',
+                    value: selectedLimit,
+                    items: limitOptions,
+                    onChanged: (val) => setState(() => selectedLimit = val),
+                    description: 'Limita a',
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: _onSearchPressed,
+                    icon: const Icon(Icons.search, color: Colors.white),
+                    label: const Text("Cerca"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF007AFF),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ];
 
-            // Date Range Picker
-            ListTile(
-              title: const Text("Intervallo date"),
-              subtitle: Text(
-                _selectedRange == null
-                    ? 'Seleziona date'
-                    : '${DateFormat('dd MMM y').format(_selectedRange!.start)} → ${DateFormat('dd MMM y').format(_selectedRange!.end)}',
-              ),
-              trailing: const Icon(Icons.date_range),
-              onTap: () async {
-                final today = DateTime.now();
-                final picked = await showDateRangePicker(
-                  context: context,
-                  firstDate: DateTime(today.year - 1),
-                  lastDate: today,
-                );
+                final countLabel = results.isNotEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.only(right: 12, bottom: 12),
+                        child: Text(
+                          '${results.length} Elementi Visualizzati',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 24,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      )
+                    : const SizedBox();
 
-                if (picked != null) {
-                  setState(() => _selectedRange = picked);
+                if (isWide) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      countLabel,
+                      const Spacer(),
+                      ...controls.map((w) => Padding(
+                            padding: const EdgeInsets.only(left: 12),
+                            child: w,
+                          )),
+                    ],
+                  );
+                } else {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Align(alignment: Alignment.centerLeft, child: countLabel),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.end,
+                        children: controls,
+                      ),
+                    ],
+                  );
                 }
               },
             ),
+
             const SizedBox(height: 20),
 
-            // Good/Bad Filter Toggles
-            Row(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                Text("Mostra solo:"),
-                Switch(
-                  value: showGood,
-                  onChanged: (value) {
-                    setState(() {
-                      showGood = value;
-                    });
-                  },
-                  activeTrackColor: Colors.green,
-                  activeColor: Colors.greenAccent,
-                ),
-                Text("Buoni"),
-                Switch(
-                  value: showBad,
-                  onChanged: (value) {
-                    setState(() {
-                      showBad = value;
-                    });
-                  },
-                  activeTrackColor: Colors.red,
-                  activeColor: Colors.redAccent,
-                ),
-                Text("Scarti"),
-              ],
+            // 🧩 Cards Scrollable Area
+            Expanded(
+              child: results.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Nessun dato da mostrare',
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: results.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: ObjectResultCard(data: results[index]),
+                        );
+                      },
+                    ),
             ),
-            const SizedBox(height: 20),
-
-            // Defect Type Selector
-            DropdownButton<String>(
-              value: selectedDefect,
-              hint: const Text('Seleziona Tipo Difetto'),
-              items: defectTypes.entries
-                  .map((entry) => DropdownMenuItem<String>(
-                        value: entry.key,
-                        child: Text(entry.value),
-                      ))
-                  .toList(),
-              onChanged: (value) {
-                setState(() {
-                  selectedDefect = value;
-                });
-              },
-            ),
-            const SizedBox(height: 20),
-
-            // Search Button
-            Center(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.search),
-                label: const Text('Cerca'),
-                onPressed: () {
-                  _performSearch();
-                },
-                style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 50, vertical: 16),
-                ),
-              ),
-            ),
-            const SizedBox(height: 30),
-
-            // Placeholder for results
-            const Text(
-              'Risultati della Ricerca:',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-
-            // Show the results (to be updated with actual API results)
-            _buildSearchResults(),
           ],
         ),
       ),
-    );
-  }
-
-  void _performSearch() async {
-    final queryParams = {
-      'date': _selectedRange != null
-          ? DateFormat('yyyy-MM-dd').format(_selectedRange!.start)
-          : null,
-      'from_date': _selectedRange != null
-          ? DateFormat('yyyy-MM-dd').format(_selectedRange!.start)
-          : null,
-      'to_date': _selectedRange != null
-          ? DateFormat('yyyy-MM-dd').format(_selectedRange!.end)
-          : null,
-      'stations': selectedStations.join(','),
-      'showGood': showGood ? 'true' : 'false',
-      'showBad': showBad ? 'true' : 'false',
-      'defect': selectedDefect,
-      'search_query': _searchController.text,
-    };
-
-    final response = await http.get(
-      Uri.http(
-        '192.168.0.10:8000',
-        '/api/productions_search',
-        queryParams,
-      ),
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      setState(() {
-        // Update results (you should modify this part to display actual data)
-      });
-    } else {
-      // Handle errors
-      print('Errore durante la ricerca');
-    }
-  }
-
-  Widget _buildSearchResults() {
-    // Display results here (mock example for now)
-    return Column(
-      children: [
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.memory, color: Colors.blueGrey),
-            title: const Text('Modulo ID: ABC123'),
-            subtitle: const Text('Utente: Mario Rossi - Station: M308'),
-            trailing: const Icon(Icons.arrow_forward_ios),
-            onTap: () {},
-          ),
-        ),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.memory, color: Colors.blueGrey),
-            title: const Text('Modulo ID: XYZ789'),
-            subtitle: const Text('Utente: Luca Bianchi - Station: M326'),
-            trailing: const Icon(Icons.arrow_forward_ios),
-            onTap: () {},
-          ),
-        ),
-      ],
     );
   }
 }

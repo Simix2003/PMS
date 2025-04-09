@@ -1511,24 +1511,28 @@ async def productions_summary(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ---------------- SEARCH ----------------
+column_map = {
+    "ID Modulo": "o.id_modulo",
+    "Esito": "p.esito",
+    "Data": "p.end_time",
+    "Operatore": "p.operator_id",
+    "Linea": "pl.display_name",
+    "Stazione": "s.name",
+    "Tempo Ciclo": "p.cycle_time"
+}
+
 @app.post("/api/search")
 async def search_results(request: Request):
     global mysql_connection
-
     try:
         payload = await request.json()
-
         print(payload)
 
         filters: List[Dict[str, str]] = payload.get("filters", [])
-        order_by: str = payload.get("order_by", "end_time")
+        order_by_input = payload.get("order_by", "Data")
+        order_by = column_map.get(order_by_input, "p.end_time")
         order_direction: str = payload.get("order_direction", "DESC")
         limit: int = int(payload.get("limit", 1000))
-
-        allowed_order_columns = {"id_modulo", "end_time", "start_time", "esito", "operatore"}
-        if order_by not in allowed_order_columns:
-            order_by = "end_time"
-
         direction = "ASC" if order_direction.lower() == "crescente" else "DESC"
 
         where_clauses = []
@@ -1556,7 +1560,6 @@ async def search_results(request: Request):
                 where_clauses.append("s.name = %s")
                 params.append(value)
             elif key == "Turno":
-                # Turno filter (1/2/3)
                 turno_times = {
                     "1": ("06:00:00", "13:59:59"),
                     "2": ("14:00:00", "21:59:59"),
@@ -1580,27 +1583,32 @@ async def search_results(request: Request):
                     except Exception as e:
                         print(f"Date parsing error: {e}")
 
-
         where_sql = " AND ".join(where_clauses)
         if where_sql:
             where_sql = "WHERE " + where_sql
 
+        # Special ordering logic for NULLs in esito/cycle_time
+        if order_by in {"p.esito", "p.cycle_time"}:
+            order_clause = f"ORDER BY ISNULL({order_by}), {order_by} {direction}"
+        else:
+            order_clause = f"ORDER BY {order_by} {direction}"
+
         query = f"""
             SELECT 
-            o.id_modulo, 
-            p.esito, 
-            p.operator_id, 
-            p.cycle_time, 
-            p.start_time, 
-            p.end_time,
-            s.name AS station_name,
-            pl.display_name AS line_display_name
+                o.id_modulo, 
+                p.esito, 
+                p.operator_id, 
+                p.cycle_time, 
+                p.start_time, 
+                p.end_time,
+                s.name AS station_name,
+                pl.display_name AS line_display_name
             FROM productions p
             JOIN objects o ON p.object_id = o.id
             JOIN stations s ON p.station_id = s.id
             LEFT JOIN production_lines pl ON s.line_id = pl.id
             {where_sql}
-            ORDER BY {order_by} {direction}
+            {order_clause}
             LIMIT %s
         """
         params.append(limit)
@@ -1609,9 +1617,6 @@ async def search_results(request: Request):
         with mysql_connection.cursor() as cursor:
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
-
-        print('Results: ')
-        print(rows)
 
         return {"results": rows}
 

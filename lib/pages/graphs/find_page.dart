@@ -57,7 +57,11 @@ class _FindPageState extends State<FindPage> {
     'Esito',
     'ID Modulo',
     'Operatore',
+    'Linea',
+    'Stazione',
+    'Tempo Ciclo',
   ];
+
   final List<String> limitOptions = ['100', '500', '1000', '5000'];
   final orderDirections = ['Crescente', 'Decrescente']; // A-Z / Z-A
 
@@ -436,14 +440,6 @@ class _FindPageState extends State<FindPage> {
   }
 
   void _onSearchPressed() async {
-    print("🔎 Filtri attivi:");
-    for (var filter in activeFilters) {
-      print("${filter['type']}: ${filter['value']}");
-    }
-    print("📊 Ordina per: $selectedOrderBy");
-    print("⬆⬇ Direzione: $selectedOrderDirection");
-    print("⛔ Limite: $selectedLimit");
-
     setState(() => results.clear());
 
     try {
@@ -489,7 +485,6 @@ class _FindPageState extends State<FindPage> {
             _buildFilterRowCard(),
             if (activeFilters.isNotEmpty) _buildSectionTitle("Filtri Attivi"),
             if (activeFilters.isNotEmpty) _buildFilterChips(),
-            _buildSectionTitle("Dati"),
             const SizedBox(height: 20),
 
             LayoutBuilder(
@@ -533,7 +528,11 @@ class _FindPageState extends State<FindPage> {
                   ),
                   ElevatedButton.icon(
                     onPressed: _onSearchPressed,
-                    icon: const Icon(Icons.search, color: Colors.white),
+                    icon: const Icon(
+                      Icons.search,
+                      color: Colors.white,
+                      size: 25,
+                    ),
                     label: const Text("Cerca"),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF007AFF),
@@ -590,7 +589,7 @@ class _FindPageState extends State<FindPage> {
               },
             ),
 
-            const SizedBox(height: 20),
+            _buildSectionTitle("Dati"),
 
             // 🧩 Cards Scrollable Area
             Expanded(

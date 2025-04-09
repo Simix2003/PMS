@@ -13,7 +13,9 @@ class _DashboardDataState extends State<DashboardData> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = [
-    const DataViewPage(),
+    const DataViewPage(
+      canSearch: true,
+    ),
     const FindPage(),
   ];
 

@@ -12,7 +12,12 @@ class DashboardHome extends StatefulWidget {
 class _DashboardHomeState extends State<DashboardHome> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = [const HomePage(), const DataViewPage()];
+  final List<Widget> _pages = [
+    const HomePage(),
+    const DataViewPage(
+      canSearch: false,
+    )
+  ];
 
   @override
   Widget build(BuildContext context) {

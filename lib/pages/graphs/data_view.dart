@@ -10,7 +10,9 @@ import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/station_card.dart';
 
 class DataViewPage extends StatefulWidget {
-  const DataViewPage({super.key});
+  final bool canSearch;
+
+  const DataViewPage({super.key, required this.canSearch});
 
   @override
   _DataViewPageState createState() => _DataViewPageState();

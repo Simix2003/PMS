@@ -225,4 +225,31 @@ class ApiService {
 
     return ""; // fallback
   }
+
+  static Future<List<Map<String, dynamic>>> fetchSearchResults({
+    required List<Map<String, String>> filters,
+    required String? orderBy,
+    required String? orderDirection,
+    required String? limit,
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/search');
+
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        "filters": filters,
+        "order_by": orderBy,
+        "order_direction": orderDirection,
+        "limit": limit,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return List<Map<String, dynamic>>.from(data["results"] ?? []);
+    } else {
+      throw Exception("Errore durante la ricerca");
+    }
+  }
 }

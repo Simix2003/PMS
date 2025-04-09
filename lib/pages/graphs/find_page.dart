@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../shared/services/api_service.dart';
 import '../../shared/widgets/object_result_card.dart';
 
 class FindPage extends StatefulWidget {
@@ -57,7 +58,7 @@ class _FindPageState extends State<FindPage> {
     'ID Modulo',
     'Operatore',
   ];
-  final List<String> limitOptions = ['500', '1000', '5000'];
+  final List<String> limitOptions = ['100', '500', '1000', '5000'];
   final orderDirections = ['Crescente', 'Decrescente']; // A-Z / Z-A
 
   final List<Map<String, dynamic>> results = [];
@@ -434,7 +435,7 @@ class _FindPageState extends State<FindPage> {
     );
   }
 
-  void _onSearchPressed() {
+  void _onSearchPressed() async {
     print("🔎 Filtri attivi:");
     for (var filter in activeFilters) {
       print("${filter['type']}: ${filter['value']}");
@@ -443,91 +444,23 @@ class _FindPageState extends State<FindPage> {
     print("⬆⬇ Direzione: $selectedOrderDirection");
     print("⛔ Limite: $selectedLimit");
 
-    setState(() {
-      results.clear();
-      results.addAll([
-        {
-          'id_modulo': 'X-20240409',
-          'esito': 1,
-          'operatore': 'Luigi',
-          'cycle_time': '00:23',
-          'start_time': DateTime.now().subtract(const Duration(minutes: 5)),
-          'end_time': DateTime.now(),
-        },
-        {
-          'id_modulo': 'Y-20240408',
-          'esito': 6,
-          'operatore': 'Anna',
-          'cycle_time': '00:19',
-          'start_time': DateTime.now().subtract(const Duration(hours: 1)),
-          'end_time': DateTime.now().subtract(const Duration(minutes: 40)),
-        },
-        {
-          'id_modulo': 'X-20240409',
-          'esito': 1,
-          'operatore': 'Luigi',
-          'cycle_time': '00:23',
-          'start_time': DateTime.now().subtract(const Duration(minutes: 5)),
-          'end_time': DateTime.now(),
-        },
-        {
-          'id_modulo': 'Y-20240408',
-          'esito': 6,
-          'operatore': 'Anna',
-          'cycle_time': '00:19',
-          'start_time': DateTime.now().subtract(const Duration(hours: 1)),
-          'end_time': DateTime.now().subtract(const Duration(minutes: 40)),
-        },
-        {
-          'id_modulo': 'X-20240409',
-          'esito': 1,
-          'operatore': 'Luigi',
-          'cycle_time': '00:23',
-          'start_time': DateTime.now().subtract(const Duration(minutes: 5)),
-          'end_time': DateTime.now(),
-        },
-        {
-          'id_modulo': 'Y-20240408',
-          'esito': 6,
-          'operatore': 'Anna',
-          'cycle_time': '00:19',
-          'start_time': DateTime.now().subtract(const Duration(hours: 1)),
-          'end_time': DateTime.now().subtract(const Duration(minutes: 40)),
-        },
-        {
-          'id_modulo': 'X-20240409',
-          'esito': 1,
-          'operatore': 'Luigi',
-          'cycle_time': '00:23',
-          'start_time': DateTime.now().subtract(const Duration(minutes: 5)),
-          'end_time': DateTime.now(),
-        },
-        {
-          'id_modulo': 'Y-20240408',
-          'esito': 6,
-          'operatore': 'Anna',
-          'cycle_time': '00:19',
-          'start_time': DateTime.now().subtract(const Duration(hours: 1)),
-          'end_time': DateTime.now().subtract(const Duration(minutes: 40)),
-        },
-        {
-          'id_modulo': 'X-20240409',
-          'esito': 1,
-          'operatore': 'Luigi',
-          'cycle_time': '00:23',
-          'start_time': DateTime.now().subtract(const Duration(minutes: 5)),
-          'end_time': DateTime.now(),
-        },
-        {
-          'id_modulo': 'Y-20240408',
-          'esito': 6,
-          'operatore': 'Anna',
-          'cycle_time': '00:19',
-          'start_time': DateTime.now().subtract(const Duration(hours: 1)),
-          'end_time': DateTime.now().subtract(const Duration(minutes: 40)),
-        },
-      ]);
-    });
+    setState(() => results.clear());
+
+    try {
+      final data = await ApiService.fetchSearchResults(
+        filters: activeFilters,
+        orderBy: selectedOrderBy,
+        orderDirection: selectedOrderDirection,
+        limit: selectedLimit,
+      );
+
+      setState(() {
+        results.addAll(data);
+      });
+    } catch (e) {
+      print("❌ Errore nel caricamento dei risultati: $e");
+      // Show a Snackbar or Alert if needed
+    }
   }
 
   @override
@@ -567,21 +500,35 @@ class _FindPageState extends State<FindPage> {
                     hint: 'Ordina per',
                     value: selectedOrderBy,
                     items: orderOptions,
-                    onChanged: (val) => setState(() => selectedOrderBy = val),
+                    onChanged: (val) {
+                      setState(() => selectedOrderBy = val);
+                      if (results.isNotEmpty) {
+                        _onSearchPressed();
+                      }
+                    },
                     description: 'Ordina per',
                   ),
                   _buildStyledDropdown(
                     hint: '↑ ↓',
                     value: selectedOrderDirection,
                     items: orderDirections,
-                    onChanged: (val) =>
-                        setState(() => selectedOrderDirection = val),
+                    onChanged: (val) {
+                      setState(() => selectedOrderDirection = val);
+                      if (results.isNotEmpty) {
+                        _onSearchPressed();
+                      }
+                    },
                   ),
                   _buildStyledDropdown(
                     hint: 'Limite',
                     value: selectedLimit,
                     items: limitOptions,
-                    onChanged: (val) => setState(() => selectedLimit = val),
+                    onChanged: (val) {
+                      setState(() => selectedLimit = val);
+                      if (results.isNotEmpty) {
+                        _onSearchPressed();
+                      }
+                    },
                     description: 'Limita a',
                   ),
                   ElevatedButton.icon(

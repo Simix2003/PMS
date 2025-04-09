@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import time
-from fastapi import FastAPI, Form, Query, UploadFile, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, Form, Query, UploadFile, WebSocket, WebSocketDisconnect, Request, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from controllers.plc import PLCConnection
@@ -17,7 +17,7 @@ from pymysql.cursors import DictCursor
 import pymysql
 import re
 from fastapi.staticfiles import StaticFiles
-from typing import Optional, Union, Dict
+from typing import Optional, Union, Dict, List
 
 
 # ---------------- CONFIG & GLOBALS ----------------
@@ -1510,6 +1510,114 @@ async def productions_summary(
         logging.error(f"MySQL Error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+# ---------------- SEARCH ----------------
+@app.post("/api/search")
+async def search_results(request: Request):
+    global mysql_connection
+
+    try:
+        payload = await request.json()
+
+        print(payload)
+
+        filters: List[Dict[str, str]] = payload.get("filters", [])
+        order_by: str = payload.get("order_by", "end_time")
+        order_direction: str = payload.get("order_direction", "DESC")
+        limit: int = int(payload.get("limit", 1000))
+
+        allowed_order_columns = {"id_modulo", "end_time", "start_time", "esito", "operatore"}
+        if order_by not in allowed_order_columns:
+            order_by = "end_time"
+
+        direction = "ASC" if order_direction.lower() == "crescente" else "DESC"
+
+        where_clauses = []
+        params = []
+
+        for f in filters:
+            key, value = f.get("type"), f.get("value")
+            if key == "ID Modulo":
+                where_clauses.append("o.id_modulo LIKE %s")
+                params.append(f"%{value}%")
+            elif key == "Esito":
+                if value == "OK":
+                    where_clauses.append("p.esito = 1")
+                elif value == "KO":
+                    where_clauses.append("p.esito = 6")
+                elif value == "In Produzione":
+                    where_clauses.append("p.esito NOT IN (1, 6)")
+            elif key == "Operatore":
+                where_clauses.append("p.operator_id LIKE %s")
+                params.append(f"%{value}%")
+            elif key == "Linea":
+                where_clauses.append("pl.display_name = %s")
+                params.append(value)
+            elif key == "Stazione":
+                where_clauses.append("s.name = %s")
+                params.append(value)
+            elif key == "Turno":
+                # Turno filter (1/2/3)
+                turno_times = {
+                    "1": ("06:00:00", "13:59:59"),
+                    "2": ("14:00:00", "21:59:59"),
+                    "3": ("22:00:00", "05:59:59"),
+                }
+                if value in turno_times:
+                    start_t, end_t = turno_times[value]
+                    if value == "3":
+                        where_clauses.append("(TIME(p.end_time) >= '22:00:00' OR TIME(p.end_time) <= '05:59:59')")
+                    else:
+                        where_clauses.append("TIME(p.end_time) BETWEEN %s AND %s")
+                        params.extend([start_t, end_t])
+            elif key == "Intervallo Date" and value:
+                if "→" in value:
+                    parts = value.split(" → ")
+                    try:
+                        from_date = datetime.strptime(parts[0].strip(), "%d %b %Y").date()
+                        to_date = datetime.strptime(parts[1].strip(), "%d %b %Y").date()
+                        where_clauses.append("DATE(p.end_time) BETWEEN %s AND %s")
+                        params.extend([from_date, to_date])
+                    except Exception as e:
+                        print(f"Date parsing error: {e}")
+
+
+        where_sql = " AND ".join(where_clauses)
+        if where_sql:
+            where_sql = "WHERE " + where_sql
+
+        query = f"""
+            SELECT 
+            o.id_modulo, 
+            p.esito, 
+            p.operator_id, 
+            p.cycle_time, 
+            p.start_time, 
+            p.end_time,
+            s.name AS station_name,
+            pl.display_name AS line_display_name
+            FROM productions p
+            JOIN objects o ON p.object_id = o.id
+            JOIN stations s ON p.station_id = s.id
+            LEFT JOIN production_lines pl ON s.line_id = pl.id
+            {where_sql}
+            ORDER BY {order_by} {direction}
+            LIMIT %s
+        """
+        params.append(limit)
+
+        assert mysql_connection is not None
+        with mysql_connection.cursor() as cursor:
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+
+        print('Results: ')
+        print(rows)
+
+        return {"results": rows}
+
+    except Exception as e:
+        logging.error(f"Search API Error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":

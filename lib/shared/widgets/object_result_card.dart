@@ -22,6 +22,16 @@ class ObjectResultCard extends StatelessWidget {
 
   String _formatTime(dynamic dateTime) {
     if (dateTime == null) return 'Non disponibile';
+
+    // Convert ISO string to DateTime if needed
+    if (dateTime is String) {
+      try {
+        dateTime = DateTime.parse(dateTime);
+      } catch (e) {
+        return 'Data non valida';
+      }
+    }
+
     return DateFormat('dd MMM yyyy – HH:mm').format(dateTime);
   }
 
@@ -52,6 +62,19 @@ class ObjectResultCard extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  String _formatCycleTime(dynamic cycleTime) {
+    if (cycleTime == null) return '-';
+    if (cycleTime is String) return cycleTime;
+    if (cycleTime is int) {
+      final duration = Duration(seconds: cycleTime);
+      return duration.toString().split('.').first.padLeft(8, "0"); // HH:mm:ss
+    }
+    if (cycleTime is Duration) {
+      return cycleTime.toString().split('.').first.padLeft(8, "0");
+    }
+    return cycleTime.toString();
   }
 
   @override
@@ -122,10 +145,14 @@ class ObjectResultCard extends StatelessWidget {
               if (constraints.maxWidth > 900) columnCount = 3;
 
               final infoItems = [
+                _buildInfoRow(Icons.factory, 'Linea:',
+                    data['line_display_name'] ?? '-', Colors.white),
+                _buildInfoRow(Icons.precision_manufacturing, 'Stazione:',
+                    data['station_name'] ?? '-', Colors.white),
                 _buildInfoRow(Icons.person, 'Operatore:',
-                    data['operatore'] ?? '-', Colors.white),
+                    data['operator_id'] ?? '-', Colors.white),
                 _buildInfoRow(Icons.access_time, 'Tempo Ciclo:',
-                    data['cycle_time'] ?? '-', Colors.white),
+                    _formatCycleTime(data['cycle_time']), Colors.white),
                 _buildInfoRow(Icons.login, 'Ingresso:',
                     _formatTime(data['start_time']), Colors.white),
                 _buildInfoRow(Icons.logout, 'Uscita:',

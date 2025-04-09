@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'pages/dashboard/dashboard_home.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  initializeDateFormatting('it_IT');
+  await initializeDateFormatting('it_IT', null); // Make sure this is awaited
   runApp(const MyApp());
 }
 
@@ -16,13 +17,24 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     print('Building MyApp');
     return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'IX-Monitor Home',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          useMaterial3: true,
-          fontFamily: 'Roboto',
-        ),
-        home: DashboardHome());
+      debugShowCheckedModeBanner: false,
+      title: 'IX-Monitor Home',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+        fontFamily: 'Roboto',
+      ),
+      // 👇 Add these for localization support
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('it', 'IT'), // 🇮🇹 Italian
+      ],
+      locale: const Locale('it', 'IT'), // 👈 Force Italian everywhere
+      home: const DashboardHome(),
+    );
   }
 }

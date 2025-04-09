@@ -437,6 +437,9 @@ class _DataViewPageState extends State<DataViewPage> {
                         children: [
                           _buildHeaderCard(maxY, stations),
                           const SizedBox(height: 24),
+                          _buildLineaOverviewCard(
+                              stations, selectedLine, lineDisplayNames),
+                          const SizedBox(height: 24),
                           ...stations.map((entry) {
                             final stationCode = entry.key;
                             final stationData =
@@ -453,6 +456,252 @@ class _DataViewPageState extends State<DataViewPage> {
                     );
                   },
                 ),
+    );
+  }
+
+  double _parseCycleTime(dynamic value) {
+    if (value is num) return value.toDouble();
+
+    if (value is String) {
+      try {
+        final parts = value.split(':');
+        if (parts.length == 3) {
+          final hours = int.tryParse(parts[0]) ?? 0;
+          final minutes = int.tryParse(parts[1]) ?? 0;
+          final seconds = double.tryParse(parts[2]) ?? 0.0;
+          return hours * 3600 + minutes * 60 + seconds;
+        }
+      } catch (_) {
+        return 0.0;
+      }
+    }
+
+    return 0.0;
+  }
+
+  Widget _buildStatBox(
+      String label, int value, Color color, IconData iconData) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.2), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      height: 80,
+      child: Stack(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(iconData, color: color, size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Center(
+            child: Text(
+              '$value',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLineaOverviewCard(
+    List<MapEntry<String, dynamic>> stations,
+    String selectedLine,
+    Map<String, String> lineDisplayNames,
+  ) {
+    final m308 = stations.firstWhere((e) => e.key == 'M308',
+        orElse: () => MapEntry('M308', {}));
+    final m309 = stations.firstWhere((e) => e.key == 'M309',
+        orElse: () => MapEntry('M309', {}));
+
+    final m308Data = m308.value as Map<String, dynamic>? ?? {};
+    final m309Data = m309.value as Map<String, dynamic>? ?? {};
+
+    final m308Cycle = _parseCycleTime(m308Data['avg_cycle_time']);
+    final m309Cycle = _parseCycleTime(m309Data['avg_cycle_time']);
+
+    final cycleCount = [
+      if (m308Cycle > 0) m308Cycle,
+      if (m309Cycle > 0) m309Cycle,
+    ];
+
+    final avgCycleSeconds = cycleCount.isNotEmpty
+        ? cycleCount.reduce((a, b) => a + b) / cycleCount.length
+        : 0.0;
+
+    // Format as mm:ss
+    final minutes = avgCycleSeconds ~/ 60;
+    final seconds = (avgCycleSeconds % 60).round();
+    final avgCycleTime = '$minutes:${seconds.toString().padLeft(2, '0')}';
+
+    final okCount =
+        (m308Data['good_count'] ?? 0) + (m309Data['good_count'] ?? 0);
+    final koCount = (m308Data['bad_count'] ?? 0) + (m309Data['bad_count'] ?? 0);
+    final total = okCount + koCount;
+    final yield =
+        total > 0 ? (okCount / total * 100).toStringAsFixed(1) : "0.0";
+
+    final displayName = lineDisplayNames[selectedLine] ?? selectedLine;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$displayName,  QG2 ( M308 + M309 )',
+                style: const TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: _buildStatBox(
+                      'Prodotti',
+                      total,
+                      const Color(0xFF007AFF),
+                      Icons.precision_manufacturing_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatBox(
+                      'OK',
+                      okCount,
+                      const Color(0xFF34C759),
+                      Icons.check_circle_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatBox(
+                      'KO',
+                      koCount,
+                      const Color(0xFFFF3B30),
+                      Icons.cancel_rounded,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildInfoRow(
+                      Icons.check_circle_outline_rounded,
+                      'Yield (TPY)',
+                      '$yield%',
+                      const Color(0xFF34C759),
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildInfoRow(
+                      Icons.timer_outlined,
+                      'Ciclo Medio',
+                      '$avgCycleTime m:s',
+                      const Color(0xFF5856D6),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

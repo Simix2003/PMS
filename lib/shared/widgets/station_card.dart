@@ -200,6 +200,13 @@ class StationCard extends StatelessWidget {
                     children: [
                       Expanded(
                           child: _buildStatBox(
+                              "Prodotti",
+                              total,
+                              const Color(0xFF007AFF),
+                              Icons.precision_manufacturing_rounded)),
+                      const SizedBox(width: 16),
+                      Expanded(
+                          child: _buildStatBox(
                               "OK",
                               good,
                               const Color(0xFF34C759),
@@ -222,14 +229,6 @@ class StationCard extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        Expanded(
-                          child: _buildInfoRow(
-                            Icons.precision_manufacturing_rounded,
-                            'Prodotti',
-                            '$total',
-                            const Color(0xFF007AFF),
-                          ),
-                        ),
                         Expanded(
                           child: _buildInfoRow(
                             Icons.check_circle_outline_rounded,

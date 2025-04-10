@@ -247,3 +247,58 @@ void showObjectIssuesDialog({
     },
   );
 }
+
+class ExportConfirmationDialog extends StatelessWidget {
+  final int selectedCount;
+  final List<Map<String, String>> activeFilters;
+  final VoidCallback onConfirm;
+
+  const ExportConfirmationDialog({
+    super.key,
+    required this.selectedCount,
+    required this.activeFilters,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Conferma Esportazione'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Hai selezionato $selectedCount elementi da esportare.',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 16),
+          if (activeFilters.isNotEmpty) ...[
+            const Text(
+              'Filtri Attivi:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            ...activeFilters.map((f) => Text("• ${f['type']}: ${f['value']}")),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annulla'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            onConfirm();
+          },
+          style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF007AFF),
+              foregroundColor: Colors.white),
+          child: const Text('Conferma'),
+        ),
+      ],
+    );
+  }
+}

@@ -1,9 +1,11 @@
-// ignore_for_file: deprecated_member_use, non_constant_identifier_names, library_private_types_in_public_api
+// ignore_for_file: deprecated_member_use, non_constant_identifier_names, library_private_types_in_public_api, avoid_web_libraries_in_flutter, use_build_context_synchronously, avoid_print
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
+import 'dart:html' as html;
 import '../../shared/services/api_service.dart';
+import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
 
 class FindPage extends StatefulWidget {
@@ -876,52 +878,49 @@ class _FindPageState extends State<FindPage> {
                       showDialog(
                         context: context,
                         builder: (context) {
-                          return AlertDialog(
-                            title: const Text('Conferma Esportazione'),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Hai selezionato ${selectedObjectIds.length} elementi da esportare.',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: 16),
-                                if (activeFilters.isNotEmpty) ...[
-                                  const Text(
-                                    'Filtri Attivi:',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ...activeFilters.map((f) =>
-                                      Text("• ${f['type']}: ${f['value']}")),
-                                ],
-                              ],
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Annulla'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  print(
-                                      '📤 Exporting IDs: ${selectedObjectIds.toList()}');
-                                  setState(() => isSelecting = false);
-                                },
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF007AFF)),
-                                child: const Text('Conferma'),
-                              ),
-                            ],
+                          return ExportConfirmationDialog(
+                            selectedCount: selectedObjectIds.length,
+                            activeFilters: activeFilters,
+                            onConfirm: () async {
+                              final downloadUrl = await ApiService
+                                  .exportSelectedObjectsAndGetDownloadUrl(
+                                id_moduli: selectedObjectIds
+                                    .map((id) => id.toString())
+                                    .toList(),
+                                filters: activeFilters,
+                              );
+
+                              if (downloadUrl != null) {
+                                print(
+                                    "📁 File pronto per il download: $downloadUrl");
+                                setState(() => isSelecting = false);
+
+                                if (kIsWeb) {
+                                  html.window.open(downloadUrl, "_blank");
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(
+                                            "File generato: $downloadUrl")),
+                                  );
+                                }
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          "Errore durante l'esportazione")),
+                                );
+                              }
+                            },
                           );
                         },
                       );
                     } else {
-                      setState(() => isSelecting = true);
+                      // ✅ Entering selection mode: clear previous selections
+                      setState(() {
+                        isSelecting = true;
+                        selectedObjectIds.clear();
+                      });
                     }
                   },
                   icon: Icon(

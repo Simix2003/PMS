@@ -1,4 +1,6 @@
 // lib/shared/services/api_service.dart
+// ignore_for_file: non_constant_identifier_names
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -224,6 +226,29 @@ class ApiService {
     }
 
     return ""; // fallback
+  }
+
+  static Future<String?> exportSelectedObjectsAndGetDownloadUrl({
+    required List<String> id_moduli,
+    required List<Map<String, String>> filters,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/export_objects');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        "id_moduli": id_moduli,
+        "filters": filters,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final filename = data["filename"];
+      return "$baseUrl/api/download_export/$filename";
+    } else {
+      return null;
+    }
   }
 
   static Future<List<Map<String, dynamic>>> fetchSearchResults({

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/graphs/find_page.dart';
 import '../graphs/data_view.dart';
-import '../home_page/home_page.dart';
 
 class DashboardData extends StatefulWidget {
   const DashboardData({super.key});
@@ -14,7 +13,6 @@ class _DashboardDataState extends State<DashboardData> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = [
-    const HomePage(),
     const DataViewPage(
       canSearch: true,
     ),
@@ -30,12 +28,8 @@ class _DashboardDataState extends State<DashboardData> {
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.feedback),
-            label: 'Difetti',
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.today),
-            label: 'Oggi',
+            label: 'Dati',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.query_stats),

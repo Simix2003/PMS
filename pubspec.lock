@@ -493,6 +493,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.0+1"
+  simple_web_camera:
+    dependency: "direct main"
+    description:
+      name: simple_web_camera
+      sha256: ae17d2f0bd728f85439c74b441a6c75404471cf5a6bd23bdfd3967fe932ede10
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.11"
   sky_engine:
     dependency: transitive
     description: flutter

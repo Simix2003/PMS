@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use, library_private_types_in_public_api
 
+import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -289,6 +290,31 @@ class _DataViewPageState extends State<DataViewPage> {
       },
     );
   }
+
+  static const List<String> allDefectCategories = [
+    "Generali",
+    "Saldatura",
+    "Disallineamento",
+    "Mancanza Ribbon",
+    "Macchie ECA",
+    "Celle Rotte",
+    "Lunghezza\nString Ribbon",
+    "Altro",
+    "Generico",
+  ];
+
+  // iOS color palette - softer, more vibrant colors
+  static const Map<String, Color> defectColors = {
+    "Generali": Color(0xFF007AFF), // iOS Blue
+    "Saldatura": Color(0xFFFF9500), // iOS Orange
+    "Disallineamento": Color(0xFFFF3B30), // iOS Red
+    "Mancanza Ribbon": Color(0xFFFF2D55), // iOS Pink
+    "Macchie ECA": Color(0xFFAF52DE), // iOS Purple
+    "Celle Rotte": Color(0xFF5856D6), // iOS Indigo
+    "Lunghezza String Ribbon": Color(0xFFA2845E), // iOS Brown
+    "Altro": Color(0xFF8E8E93), // iOS Gray
+    "Generico": Color(0xFFFF3B30), // iOS Red
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -613,6 +639,24 @@ class _DataViewPageState extends State<DataViewPage> {
     final yield =
         total > 0 ? (okCount / total * 100).toStringAsFixed(1) : "0.0";
 
+    final m308defectsRaw = m308Data['defects'];
+    final m309defectsRaw = m309Data['defects'];
+
+    final m308defects =
+        m308defectsRaw is Map ? Map<String, dynamic>.from(m308defectsRaw) : {};
+    final m309defects =
+        m309defectsRaw is Map ? Map<String, dynamic>.from(m309defectsRaw) : {};
+
+    final defects = {...m308defects, ...m309defects};
+
+    // Fill missing categories with 0
+    final filledDefects = {
+      for (var key in allDefectCategories) key: (defects[key] ?? 0) as num
+    };
+
+    final chartMaxY =
+        filledDefects.values.map((e) => e.toDouble()).fold<double>(0, max) + 5;
+
     final displayName = lineDisplayNames[selectedLine] ?? selectedLine;
 
     return ClipRRect(
@@ -700,6 +744,140 @@ class _DataViewPageState extends State<DataViewPage> {
                   ),
                 ],
               ),
+              if (total > 0)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Distribuzione Difetti',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      height: 280,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: BarChart(
+                        BarChartData(
+                          maxY: chartMaxY,
+                          barTouchData: BarTouchData(
+                            enabled: true,
+                            touchTooltipData: BarTouchTooltipData(
+                              tooltipRoundedRadius: 12,
+                              getTooltipItem:
+                                  (group, groupIndex, rod, rodIndex) {
+                                return BarTooltipItem(
+                                  '',
+                                  const TextStyle(),
+                                  children: [
+                                    TextSpan(
+                                      text: rod.toY.toInt().toString(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                          titlesData: FlTitlesData(
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 90,
+                                getTitlesWidget: (value, meta) {
+                                  final label =
+                                      allDefectCategories[value.toInt()];
+                                  return Transform.rotate(
+                                    angle: -0.4,
+                                    child: SideTitleWidget(
+                                      meta: meta,
+                                      space: 16,
+                                      child: Text(
+                                        label,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 30,
+                                getTitlesWidget: (value, meta) {
+                                  return Text(
+                                    value.toInt().toString(),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            topTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            rightTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                          ),
+                          gridData: FlGridData(
+                            show: true,
+                            horizontalInterval: 5,
+                            getDrawingHorizontalLine: (value) {
+                              return FlLine(
+                                color: Colors.grey.shade200,
+                                strokeWidth: 1,
+                              );
+                            },
+                          ),
+                          borderData: FlBorderData(show: false),
+                          barGroups:
+                              allDefectCategories.asMap().entries.map((entry) {
+                            final name = entry.value;
+                            final count = filledDefects[name]!.toDouble();
+                            final color = defectColors[name] ?? Colors.grey;
+                            return BarChartGroupData(
+                              x: entry.key,
+                              barRods: [
+                                BarChartRodData(
+                                  toY: count,
+                                  color: color,
+                                  width: 24,
+                                  borderRadius: BorderRadius.circular(8),
+                                  backDrawRodData: BackgroundBarChartRodData(
+                                    show: true,
+                                    toY: chartMaxY,
+                                    color: color.withOpacity(0.1),
+                                  ),
+                                ),
+                              ],
+                              showingTooltipIndicators: [
+                                0
+                              ], // 👈 Always show tooltip for the 1st rod
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
         ),

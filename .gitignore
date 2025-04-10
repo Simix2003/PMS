@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# In .gitignore
+services/api/build/
+services/api/dist/

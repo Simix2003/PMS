@@ -22,9 +22,8 @@ from fastapi.responses import FileResponse
 import pandas as pd
 import os
 from datetime import datetime
-from uuid import uuid4
 from openpyxl.utils import get_column_letter
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 
@@ -195,15 +194,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     line_configs = load_station_configs("C:/IX-Monitor/stations.ini")
 
-    #for line, config in line_configs.items():
-    #    plc_ip = config["PLC"]["IP"]
-    #    plc_slot = config["PLC"]["SLOT"]
+    for line, config in line_configs.items():
+        plc_ip = config["PLC"]["IP"]
+        plc_slot = config["PLC"]["SLOT"]
 
-    #    for station in config["stations"]:
-    #        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
-    #        plc_connections[f"{line}.{station}"] = plc_conn
-    #        asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
-    #        print(f"🚀 Background task created for {line}.{station}")
+        for station in config["stations"]:
+            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+            plc_connections[f"{line}.{station}"] = plc_conn
+            asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
+            print(f"🚀 Background task created for {line}.{station}")
 
     yield
 
@@ -568,6 +567,38 @@ def export_full_excel(data: dict) -> str:
     wb.save(filepath)
     return filename
 
+from typing import Optional, Set
+from openpyxl.styles import Alignment
+from openpyxl.utils import get_column_letter
+
+def autofit_columns(ws, align_center_for: Optional[Set[str]] = None):
+    """
+    Adjust column widths based on header and cell values, and apply alignment.
+
+    :param ws: The worksheet to modify.
+    :param align_center_for: Optional set of column headers that should be center-aligned.
+    """
+    if align_center_for is None:
+        align_center_for = set()
+
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=1, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        header = ws[f"{col_letter}1"].value
+        max_len = len(str(header)) if header else 0
+
+        for cell in column_cells[1:]:  # Skip header
+            val_len = len(str(cell.value)) if cell.value else 0
+            max_len = max(max_len, val_len)
+
+            if header in align_center_for:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+
+        ws.column_dimensions[col_letter].width = max_len + 2
+
+
+
 def metadata_sheet(ws, data: dict):
     current_time = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
     id_moduli = data.get("id_moduli", [])
@@ -614,7 +645,6 @@ def risolutivo_sheet(ws, data: dict):
     Expects data to include keys: "id_moduli", "objects", "productions",
     "stations", "production_lines", and "object_defects".
     """
-    import pandas as pd
     id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -743,22 +773,11 @@ def risolutivo_sheet(ws, data: dict):
                 row_values.append(val)
         ws.append(row_values)
     
-    # Optional: apply styling (centering, autofit columns) as in your other sheet function.
-    from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
-    
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
-        col_letter = get_column_letter(col_idx)
-        header_value = ws[f"{col_letter}1"].value
-        if header_value in ["NG Generali", "NG Disall. Stringa", "NG Disall. Ribbon",
-                            "NG Saldatura", "NG Mancanza I_Ribbon", "NG Macchie ECA",
-                            "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Altro", "Esito"]:
-            for cell in column_cells:
-                cell.alignment = center_alignment
-        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
-        header_len = len(str(header_value) if header_value else "")
-        ws.column_dimensions[col_letter].width = max(max_length, header_len) + 2
+    autofit_columns(ws, align_center_for={
+    "Esito", "NG Generali", "NG Disall. Stringa", "NG Disall. Ribbon",
+    "NG Saldatura", "NG Mancanza I_Ribbon", "NG Macchie ECA",
+    "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Altro"
+})
 
 def ng_generali_sheet(ws, data: dict):
     """
@@ -871,21 +890,10 @@ def ng_generali_sheet(ws, data: dict):
         ]
         ws.append(row)
     
-    # Optional: apply alignment and auto-adjust column widths as you already do.
-    from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
-    
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
-        col_letter = get_column_letter(col_idx)
-        header_value = ws[f"{col_letter}1"].value
-        if header_value in ["Poe Scaduto", "Non Lav. Da Telecamere", "Materiale Esterno su Celle", "Bad Soldering", "Esito"]:
-            for cell in column_cells:
-                cell.alignment = center_alignment
-        # Auto-fit column width
-        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
-        header_len = len(str(header_value) if header_value else "")
-        ws.column_dimensions[col_letter].width = max(max_length, header_len) + 2
+    autofit_columns(ws, align_center_for={
+    "Esito", "Poe Scaduto", "Non Lav. Da Telecamere",
+    "Materiale Esterno su Celle", "Bad Soldering"
+})
 
 def ng_saldature_sheet(ws, data: dict):
     """
@@ -991,17 +999,7 @@ def ng_saldature_sheet(ws, data: dict):
 
         ws.append(row)
 
-    # Formatting
-    from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
-
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
-        col_letter = get_column_letter(col_idx)
-        for cell in column_cells:
-            cell.alignment = center_alignment
-        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
-        ws.column_dimensions[col_letter].width = max(max_length, len(ws[f"{col_letter}1"].value)) + 2
+    autofit_columns(ws, align_center_for=set(header))  # center all columns
 
 def ng_disall_ribbon_sheet(ws, data: dict):
     """
@@ -1105,17 +1103,7 @@ def ng_disall_ribbon_sheet(ws, data: dict):
 
         ws.append(row)
 
-    # Format cells
-    from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
-
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
-        col_letter = get_column_letter(col_idx)
-        for cell in column_cells:
-            cell.alignment = center_alignment
-        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
-        ws.column_dimensions[col_letter].width = max(max_length, len(ws[f"{col_letter}1"].value)) + 2
+    autofit_columns(ws, align_center_for=set(header))  # center all columns
 
 def ng_disall_stringa_sheet(ws, data: dict):
     """
@@ -1207,17 +1195,7 @@ def ng_disall_stringa_sheet(ws, data: dict):
 
         ws.append(row)
 
-    # Optional formatting
-    from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
-
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
-        col_letter = get_column_letter(col_idx)
-        for cell in column_cells:
-            cell.alignment = center_alignment
-        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
-        ws.column_dimensions[col_letter].width = max(max_length, len(ws[f"{col_letter}1"].value)) + 2
+    autofit_columns(ws, align_center_for=set(header))  # center all columns
 
 def ng_mancanza_ribbon_sheet(ws, data: dict):
     """
@@ -1330,17 +1308,7 @@ def ng_mancanza_ribbon_sheet(ws, data: dict):
 
         ws.append(row)
 
-    # Format columns
-    from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
-
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
-        col_letter = get_column_letter(col_idx)
-        for cell in column_cells:
-            cell.alignment = center_alignment
-        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
-        ws.column_dimensions[col_letter].width = max(max_length, len(ws[f"{col_letter}1"].value)) + 2
+    autofit_columns(ws, align_center_for=set(header))  # center all columns
 
 def ng_macchie_eca_sheet(ws, data: dict):
     """
@@ -1427,17 +1395,7 @@ def ng_macchie_eca_sheet(ws, data: dict):
 
         ws.append(row)
 
-    # Format columns: center alignment and auto width
-    from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
-
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
-        col_letter = get_column_letter(col_idx)
-        for cell in column_cells:
-            cell.alignment = center_alignment
-        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
-        ws.column_dimensions[col_letter].width = max(max_length, len(str(ws[f"{col_letter}1"].value))) + 2
+    autofit_columns(ws, align_center_for=set(header))  # center all columns
 
 def ng_celle_rotte_sheet(ws, data: dict):
     """
@@ -1524,17 +1482,8 @@ def ng_celle_rotte_sheet(ws, data: dict):
 
         ws.append(row)
 
-    # Format columns: center alignment and auto width
-    from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
+    autofit_columns(ws, align_center_for=set(header))  # center all columns
 
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
-        col_letter = get_column_letter(col_idx)
-        for cell in column_cells:
-            cell.alignment = center_alignment
-        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
-        ws.column_dimensions[col_letter].width = max(max_length, len(str(ws[f"{col_letter}1"].value))) + 2
 
 def ng_lunghezza_string_ribbon_sheet(ws, data: dict):
     """
@@ -1621,17 +1570,8 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict):
 
         ws.append(row)
 
-    # Format columns: center alignment and auto width
-    from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
+    autofit_columns(ws, align_center_for=set(header))  # center all columns
 
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
-        col_letter = get_column_letter(col_idx)
-        for cell in column_cells:
-            cell.alignment = center_alignment
-        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
-        ws.column_dimensions[col_letter].width = max(max_length, len(str(ws[f"{col_letter}1"].value))) + 2
 
 def ng_altro_sheet(ws, data: dict):
     """
@@ -1719,17 +1659,7 @@ def ng_altro_sheet(ws, data: dict):
 
         ws.append(row)
 
-    # Optional formatting
-    from openpyxl.styles import Alignment
-    from openpyxl.utils import get_column_letter
-
-    center_alignment = Alignment(horizontal="center", vertical="center")
-    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
-        col_letter = get_column_letter(col_idx)
-        for cell in column_cells:
-            cell.alignment = center_alignment
-        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
-        ws.column_dimensions[col_letter].width = max(max_length, len(str(ws[f"{col_letter}1"].value))) + 2
+    autofit_columns(ws, align_center_for=set(header))  # center all columns
 
 # --- Mapping sheet names to functions ---
 SHEET_FUNCTIONS = {

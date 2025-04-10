@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from controllers.plc import PLCConnection
 import uvicorn
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional, Set
 from contextlib import asynccontextmanager
 from pymysql.cursors import DictCursor
 import pymysql
@@ -194,15 +194,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     line_configs = load_station_configs("C:/IX-Monitor/stations.ini")
 
-    for line, config in line_configs.items():
-        plc_ip = config["PLC"]["IP"]
-        plc_slot = config["PLC"]["SLOT"]
+    #for line, config in line_configs.items():
+    #    plc_ip = config["PLC"]["IP"]
+    #    plc_slot = config["PLC"]["SLOT"]
 
-        for station in config["stations"]:
-            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
-            plc_connections[f"{line}.{station}"] = plc_conn
-            asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
-            print(f"🚀 Background task created for {line}.{station}")
+    #    for station in config["stations"]:
+    #        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+    #        plc_connections[f"{line}.{station}"] = plc_conn
+    #        asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
+    #        print(f"🚀 Background task created for {line}.{station}")
 
     yield
 
@@ -567,10 +567,6 @@ def export_full_excel(data: dict) -> str:
     wb.save(filepath)
     return filename
 
-from typing import Optional, Set
-from openpyxl.styles import Alignment
-from openpyxl.utils import get_column_letter
-
 def autofit_columns(ws, align_center_for: Optional[Set[str]] = None):
     """
     Adjust column widths based on header and cell values, and apply alignment.
@@ -596,8 +592,6 @@ def autofit_columns(ws, align_center_for: Optional[Set[str]] = None):
                 cell.alignment = Alignment(horizontal="left", vertical="center")
 
         ws.column_dimensions[col_letter].width = max_len + 2
-
-
 
 def metadata_sheet(ws, data: dict):
     current_time = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
@@ -958,6 +952,9 @@ def ng_saldature_sheet(ws, data: dict):
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Saldatura"
         ]
+        # If there are no 'Saldatura' defects, then skip this record
+        if not prod_defects:
+            continue
 
         # Map of (stringa, lato) → list of s_ribbon
         pin_map = {}
@@ -1067,7 +1064,8 @@ def ng_disall_ribbon_sheet(ws, data: dict):
             d.get("i_ribbon") is not None and
             d.get("ribbon_lato") in ["F", "M", "B"]
         ]
-
+        if not prod_defects:
+            continue
 
         # Initialize ribbon columns
         ribbon_cols = [""] * 10
@@ -1170,7 +1168,8 @@ def ng_disall_stringa_sheet(ws, data: dict):
             d.get("category") == "Disallineamento" and
             d.get("stringa") is not None
         ]
-
+        if not prod_defects:
+            continue
 
         stringa_cols = [""] * 12
         for defect in prod_defects:
@@ -1263,6 +1262,8 @@ def ng_mancanza_ribbon_sheet(ws, data: dict):
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Mancanza Ribbon"
         ]
+        if not prod_defects:
+            continue
 
         # Initialize ribbon columns (18 total: 3F + 4M + 3B)
         ribbon_cols = [""] * 10  # We'll map them shortly
@@ -1371,6 +1372,8 @@ def ng_macchie_eca_sheet(ws, data: dict):
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Macchie ECA"
         ]
+        if not prod_defects:
+            continue
 
         stringa_cols = [""] * 12
         for defect in prod_defects:
@@ -1458,6 +1461,8 @@ def ng_celle_rotte_sheet(ws, data: dict):
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Celle Rotte"
         ]
+        if not prod_defects:
+            continue
 
         stringa_cols = [""] * 12
         for defect in prod_defects:
@@ -1483,7 +1488,6 @@ def ng_celle_rotte_sheet(ws, data: dict):
         ws.append(row)
 
     autofit_columns(ws, align_center_for=set(header))  # center all columns
-
 
 def ng_lunghezza_string_ribbon_sheet(ws, data: dict):
     """
@@ -1546,6 +1550,8 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict):
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Lunghezza String Ribbon"
         ]
+        if not prod_defects:
+            continue
 
         stringa_cols = [""] * 12
         for defect in prod_defects:
@@ -1641,6 +1647,8 @@ def ng_altro_sheet(ws, data: dict):
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Altro"
         ]
+        if not prod_defects:
+            continue
         altro_found = {d.get("extra_data", "").strip() for d in prod_defects}
 
         # Build NG flags for each Altro column

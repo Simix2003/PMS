@@ -156,7 +156,7 @@ class StationCard extends StatelessWidget {
                 ),
               ],
               border: Border.all(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.black.withOpacity(0.5),
                 width: 1.5,
               ),
             ),

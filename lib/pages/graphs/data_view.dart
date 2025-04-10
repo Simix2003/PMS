@@ -668,7 +668,7 @@ class _DataViewPageState extends State<DataViewPage> {
             color: Colors.white.withOpacity(0.85),
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.black.withOpacity(0.2),
               width: 1.5,
             ),
             boxShadow: [
@@ -903,7 +903,7 @@ class _DataViewPageState extends State<DataViewPage> {
               ),
             ],
             border: Border.all(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.black.withOpacity(0.2),
               width: 1.5,
             ),
           ),

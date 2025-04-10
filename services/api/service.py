@@ -6,7 +6,7 @@ import json
 import logging
 import os
 import time
-from fastapi import FastAPI, Form, Query, UploadFile, WebSocket, WebSocketDisconnect, Request, APIRouter
+from fastapi import Body, FastAPI, Form, HTTPException, Query, WebSocket, WebSocketDisconnect, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from controllers.plc import PLCConnection
@@ -18,6 +18,15 @@ import pymysql
 import re
 from fastapi.staticfiles import StaticFiles
 from typing import Optional, Union, Dict, List
+from fastapi.responses import FileResponse
+import pandas as pd
+import os
+from datetime import datetime
+from uuid import uuid4
+from openpyxl.utils import get_column_letter
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment
+from openpyxl.worksheet.worksheet import Worksheet
 
 
 # ---------------- CONFIG & GLOBALS ----------------
@@ -186,15 +195,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     line_configs = load_station_configs("C:/IX-Monitor/stations.ini")
 
-    for line, config in line_configs.items():
-        plc_ip = config["PLC"]["IP"]
-        plc_slot = config["PLC"]["SLOT"]
+    #for line, config in line_configs.items():
+    #    plc_ip = config["PLC"]["IP"]
+    #    plc_slot = config["PLC"]["SLOT"]
 
-        for station in config["stations"]:
-            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
-            plc_connections[f"{line}.{station}"] = plc_conn
-            asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
-            print(f"🚀 Background task created for {line}.{station}")
+    #    for station in config["stations"]:
+    #        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+    #        plc_connections[f"{line}.{station}"] = plc_conn
+    #        asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
+    #        print(f"🚀 Background task created for {line}.{station}")
 
     yield
 
@@ -507,6 +516,1244 @@ async def read_data(
     except Exception as e:
         logging.error(f"[{full_id}] ❌ Error reading PLC data: {e}")
         return None
+
+# ---------------- EXPORT EXCEL ----------------
+EXPORT_DIR = "./exports"
+os.makedirs(EXPORT_DIR, exist_ok=True)
+
+EXCEL_DEFECT_COLUMNS = {
+    "NG Generali": "Generali",
+    "NG Disall. Stringa": "Disallineamento",  # specific to stringa
+    "NG Disall. Ribbon": "Disallineamento",   # specific to ribbon
+    "NG Saldatura": "Saldatura",
+    "NG Mancanza I_Ribbon": "Mancanza Ribbon",
+    "NG Macchie ECA": "Macchie ECA",
+    "NG Celle Rotte": "Celle Rotte",
+    "NG Altro": "Altro"
+}
+
+# --- Sheet names ---
+SHEET_NAMES = [
+    "Metadata", "Risolutivo", "NG Generali", "NG Saldature", "NG Disall. Ribbon",
+    "NG Disall. Stringa", "NG Mancanza Ribbon", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Altro"
+]
+
+def clean_old_exports(max_age_hours: int = 2):
+    now = time.time()
+    for filename in os.listdir(EXPORT_DIR):
+        path = os.path.join(EXPORT_DIR, filename)
+        if os.path.isfile(path):
+            age = now - os.path.getmtime(path)
+            if age > max_age_hours * 3600:
+                print(f"🗑️ Deleting old file: {filename}")
+                os.remove(path)
+
+def export_full_excel(data: dict) -> str:
+    filename = f"ixmonitor_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filepath = os.path.join(EXPORT_DIR, filename)
+
+    wb = Workbook()
+
+    # --- Fix: Ensure we remove only if active sheet is a Worksheet
+    default_sheet = wb.active
+    if isinstance(default_sheet, Worksheet):
+        wb.remove(default_sheet)
+
+    for sheet_name in SHEET_NAMES:
+        ws = wb.create_sheet(title=sheet_name)
+        func = SHEET_FUNCTIONS.get(sheet_name)
+        assert func is not None, f"Sheet function not found for sheet '{sheet_name}'"
+        func(ws, data)
+
+    wb.save(filepath)
+    return filename
+
+def metadata_sheet(ws, data: dict):
+    current_time = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+    id_moduli = data.get("id_moduli", [])
+    filters = data.get("filters", [])
+
+    ws.append(["📝 METADATI ESPORTAZIONE"])
+    ws.append([])
+
+    # General Info
+    ws.append(["Data e ora esportazione:", current_time])
+    ws.append(["Numero totale moduli esportati:", len(id_moduli)])
+    ws.append([])
+
+    # Filters
+    ws.append(["Filtri Attivi"])
+
+    if filters:
+        for f in filters:
+            raw_value = f.get("value", "")
+            # Clean the value by removing empty ' > ' parts
+            segments = [seg.strip() for seg in raw_value.split(">") if seg.strip()]
+            cleaned_value = " > ".join(segments)
+            ws.append([f.get("type", "Filtro"), cleaned_value])
+    else:
+        ws.append(["Nessun filtro applicato"])
+
+    ws.append([])
+
+    # Optional: Apply center-left alignment and auto-fit column widths
+    left_align = Alignment(horizontal="left", vertical="center")
+
+    for col_idx, col_cells in enumerate(ws.columns, start=1):
+        max_len = 0
+        for cell in col_cells:
+            cell.alignment = left_align
+            val = str(cell.value) if cell.value else ""
+            max_len = max(max_len, len(val))
+        col_letter = get_column_letter(col_idx)
+        ws.column_dimensions[col_letter].width = max_len + 4  # add some padding
+
+def risolutivo_sheet(ws, data: dict):
+    """
+    Generate the 'Risolutivo' sheet using pre-fetched data.
+    Expects data to include keys: "id_moduli", "objects", "productions",
+    "stations", "production_lines", and "object_defects".
+    """
+    import pandas as pd
+    id_moduli = data.get("id_moduli", [])
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+    
+    # Build lookup dictionaries
+    objects_by_modulo = {}
+    for obj in objects:
+        m = obj.get("id_modulo")
+        if m is not None:
+            objects_by_modulo[m] = obj
+
+    stations_by_id = {station["id"]: station for station in stations}
+    production_lines_by_id = {line["id"]: line for line in production_lines}
+    
+    rows = []
+    for id_modulo in id_moduli:
+        obj = objects_by_modulo.get(id_modulo)
+        if not obj:
+            continue
+        object_id = obj["id"]
+        
+        # Retrieve productions for this object
+        prods = [p for p in productions if p.get("object_id") == object_id]
+        if not prods:
+            continue
+        
+        # Get the most recent production (assumes start_time is a datetime)
+        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
+        production_id = latest_prod["id"]
+        start_time = latest_prod.get("start_time")
+        end_time = latest_prod.get("end_time")
+        esito = map_esito(latest_prod.get("esito"))
+        cycle_time = str(latest_prod.get("cycle_time") or "")
+        
+        # Look up station and production line info
+        station = stations_by_id.get(latest_prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+        line_display_name = "Unknown"
+        if station and station.get("line_id"):
+            pline = production_lines_by_id.get(station["line_id"])
+            if pline:
+                line_display_name = pline.get("display_name", "Unknown")
+        
+        # Look up stringatrice (from last_station_id)
+        last_station_id = latest_prod.get("last_station_id")
+        last_station_name = "N/A"
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+    
+        # Calculate NG flags over all defect categories related to this production
+        # (Logic similar to your original get_ng_flags_for_production)
+        flags = {
+            "NG Generali": "",
+            "NG Disall. Stringa": "",
+            "NG Disall. Ribbon": "",
+            "NG Saldatura": "",
+            "NG Mancanza I_Ribbon": "",
+            "NG Macchie ECA": "",
+            "NG Celle Rotte": "",
+            "NG Lunghezza String Ribbon": "",
+            "NG Altro": ""
+        }
+        prod_defects = [d for d in object_defects if d.get("production_id") == production_id]
+        for d in prod_defects:
+            cat = d.get("category")
+            if cat == "Disallineamento":
+                if d.get("stringa") is not None:
+                    flags["NG Disall. Stringa"] = "NG"
+                elif d.get("i_ribbon") is not None:
+                    flags["NG Disall. Ribbon"] = "NG"
+            elif cat == "Generali":
+                flags["NG Generali"] = "NG"
+            elif cat == "Saldatura":
+                flags["NG Saldatura"] = "NG"
+            elif cat == "Mancanza Ribbon":
+                flags["NG Mancanza I_Ribbon"] = "NG"
+            elif cat == "Macchie ECA":
+                flags["NG Macchie ECA"] = "NG"
+            elif cat == "Celle Rotte":
+                flags["NG Celle Rotte"] = "NG"
+            elif cat == "Lunghezza String Ribbon":
+                flags["NG Lunghezza String Ribbon"] = "NG"
+            elif cat == "Altro":
+                flags["NG Altro"] = "NG"
+    
+        row = {
+            "Linea": line_display_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time,
+            **flags
+        }
+        rows.append(row)
+    
+    # Convert rows to a DataFrame
+    df = pd.DataFrame(rows, columns=[
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
+        "NG Generali", "NG Disall. Stringa", "NG Disall. Ribbon",
+        "NG Saldatura", "NG Mancanza I_Ribbon", "NG Macchie ECA",
+        "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Altro"
+    ])
+    
+    # Write header and rows to the worksheet
+    ws.append(df.columns.tolist())
+    for _, row in df.iterrows():
+        # If dates are datetime objects, format them as strings
+        row_values = []
+        for col in df.columns:
+            val = row[col]
+            if col in ["Data Ingresso", "Data Uscita"] and val:
+                try:
+                    row_values.append(val.strftime('%Y-%m-%d %H:%M:%S'))
+                except Exception:
+                    row_values.append(val)
+            else:
+                row_values.append(val)
+        ws.append(row_values)
+    
+    # Optional: apply styling (centering, autofit columns) as in your other sheet function.
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+    
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        header_value = ws[f"{col_letter}1"].value
+        if header_value in ["NG Generali", "NG Disall. Stringa", "NG Disall. Ribbon",
+                            "NG Saldatura", "NG Mancanza I_Ribbon", "NG Macchie ECA",
+                            "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Altro", "Esito"]:
+            for cell in column_cells:
+                cell.alignment = center_alignment
+        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
+        header_len = len(str(header_value) if header_value else "")
+        ws.column_dimensions[col_letter].width = max(max_length, header_len) + 2
+
+def ng_generali_sheet(ws, data: dict):
+    """
+    Generate the 'NG Generali' sheet using pre-fetched data.
+    Expects data to be a dict with keys:
+      - "id_moduli", "objects", "productions", "stations",
+        "production_lines", "object_defects"
+    """
+    id_moduli = data.get("id_moduli", [])
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+    
+    # Create lookup dictionaries for faster access
+    objects_by_modulo = {}
+    for obj in objects:
+        m = obj.get("id_modulo")
+        if m is not None:
+            # If there could be more than one object per module,
+            # adjust the lookup logic appropriately.
+            objects_by_modulo[m] = obj
+
+    stations_by_id = {station["id"]: station for station in stations}
+    production_lines_by_id = {line["id"]: line for line in production_lines}
+    
+    # Write the header row for the sheet
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
+        "Poe Scaduto", "Non Lav. Da Telecamere",
+        "Materiale Esterno su Celle", "Bad Soldering"
+    ]
+    ws.append(header)
+    
+    # Loop through all module IDs
+    for id_modulo in id_moduli:
+        # Get the corresponding object for the module
+        obj = objects_by_modulo.get(id_modulo)
+        if obj is None:
+            continue
+        object_id = obj["id"]
+        
+        # Retrieve all production records for this object
+        prods = [p for p in productions if p.get("object_id") == object_id]
+        if not prods:
+            continue
+        
+        # Pick the latest production by comparing start_time values.
+        # (Assumes start_time is a datetime instance; if not, convert appropriately.)
+        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
+        production_id = latest_prod["id"]
+        start_time = latest_prod.get("start_time")
+        end_time = latest_prod.get("end_time")
+        esito = map_esito(latest_prod.get("esito"))
+        cycle_time = str(latest_prod.get("cycle_time") or "")
+    
+        # Look up station info (from production's station_id)
+        station = stations_by_id.get(latest_prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+    
+        # Determine the production line name via the station record's line_id
+        line_display_name = "Unknown"
+        if station and station.get("line_id"):
+            pline = production_lines_by_id.get(station["line_id"])
+            if pline:
+                line_display_name = pline.get("display_name", "Unknown")
+    
+        # Get "Stringatrice" info (from last_station_id, if available)
+        last_station_id = latest_prod.get("last_station_id")
+        last_station_name = "N/A"
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+    
+        # Filter pre-fetched defects for this production that have category 'Generali'
+        prod_defects = [
+            d for d in object_defects 
+            if d.get("production_id") == production_id and d.get("category") == "Generali"
+        ]
+        # If there are no 'Generali' defects, then skip this record
+        if not prod_defects:
+            continue
+        
+        # Create a set of defect_type values (this is your original logic)
+        general_defects = {d.get("defect_type") for d in prod_defects}
+    
+        # Define NG flags based on defect types
+        flag_poe = "NG" if "Non Lavorato Poe Scaduto" in general_defects else ""
+        flag_tel = "NG" if "Non Lavorato da Telecamere" in general_defects else ""
+        flag_materiale = "NG" if "Materiale Esterno su Celle" in general_defects else ""
+        flag_bad = "NG" if "Bad Soldering" in general_defects else ""
+    
+        # Construct the row as in your original sheet
+        row = [
+            line_display_name,  # Linea
+            station_name,       # Stazione
+            last_station_name,  # Stringatrice
+            id_modulo,          # ID Modulo
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time,
+            flag_poe,           # Poe Scaduto flag
+            flag_tel,           # Non Lav. Da Telecamere flag
+            flag_materiale,     # Materiale Esterno su Celle flag
+            flag_bad,           # Bad Soldering flag
+        ]
+        ws.append(row)
+    
+    # Optional: apply alignment and auto-adjust column widths as you already do.
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+    
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        header_value = ws[f"{col_letter}1"].value
+        if header_value in ["Poe Scaduto", "Non Lav. Da Telecamere", "Materiale Esterno su Celle", "Bad Soldering", "Esito"]:
+            for cell in column_cells:
+                cell.alignment = center_alignment
+        # Auto-fit column width
+        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
+        header_len = len(str(header_value) if header_value else "")
+        ws.column_dimensions[col_letter].width = max(max_length, header_len) + 2
+
+def ng_saldature_sheet(ws, data: dict):
+    """
+    Generate the 'NG Saldature' sheet using pre-fetched data.
+    """
+    id_moduli = data.get("id_moduli", [])
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+
+    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    # Header: Linea, Stazione, Stringatrice, ID Modulo, Data Ingresso, Data Uscita, Esito, Tempo Ciclo
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+    ]
+    for i in range(1, 13):
+        header.append(f"Stringa {i}")
+        header.append(f"Stringa {i}M")
+    ws.append(header)
+
+    for id_modulo in id_moduli:
+        obj = objects_by_modulo.get(id_modulo)
+        if not obj:
+            continue
+
+        object_id = obj["id"]
+        prods = [p for p in productions if p.get("object_id") == object_id]
+        if not prods:
+            continue
+
+        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
+        production_id = latest_prod["id"]
+        start_time = latest_prod.get("start_time")
+        end_time = latest_prod.get("end_time")
+        esito = map_esito(latest_prod.get("esito"))
+        cycle_time = str(latest_prod.get("cycle_time") or "")
+
+        station = stations_by_id.get(latest_prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = latest_prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        # Filter 'Saldatura' category defects
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and d.get("category") == "Saldatura"
+        ]
+
+        # Map of (stringa, lato) → list of s_ribbon
+        pin_map = {}
+        for defect in prod_defects:
+            stringa = defect.get("stringa")
+            lato = defect.get("ribbon_lato")
+            s_ribbon = defect.get("s_ribbon")
+
+            if stringa is None or lato is None or s_ribbon is None:
+                continue
+
+            try:
+                key = (int(stringa), str(lato))
+                pin_map.setdefault(key, []).append(str(s_ribbon))
+            except (ValueError, TypeError):
+                continue
+
+        # Build saldatura cells: 24 columns (Stringa 1, 1M, ..., 12, 12M)
+        saldatura_cols = [""] * 24
+        for (stringa_num, lato), pins in pin_map.items():
+            if not (1 <= stringa_num <= 12):
+                continue
+            formatted = f"NG: {';'.join(pins)};"
+            col_index = (stringa_num - 1) * 2
+            if lato == "M":
+                col_index += 1
+            saldatura_cols[col_index] = formatted
+
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time
+        ] + saldatura_cols
+
+        ws.append(row)
+
+    # Formatting
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        for cell in column_cells:
+            cell.alignment = center_alignment
+        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
+        ws.column_dimensions[col_letter].width = max(max_length, len(ws[f"{col_letter}1"].value)) + 2
+
+def ng_disall_ribbon_sheet(ws, data: dict):
+    """
+    Generate the 'NG Disallineamento Ribbon' sheet using pre-fetched data.
+    """
+    id_moduli = data.get("id_moduli", [])
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+
+    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    # Define header
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
+        "Ribbon 1 F", "Ribbon 2 F", "Ribbon 3 F",
+        "Ribbon 1 M", "Ribbon 2 M", "Ribbon 3 M", "Ribbon 4 M",
+        "Ribbon 1 B", "Ribbon 2 B", "Ribbon 3 B"
+    ]
+    ws.append(header)
+
+    for id_modulo in id_moduli:
+        obj = objects_by_modulo.get(id_modulo)
+        if not obj:
+            continue
+
+        object_id = obj["id"]
+        prods = [p for p in productions if p.get("object_id") == object_id]
+        if not prods:
+            continue
+
+        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
+        production_id = latest_prod["id"]
+        start_time = latest_prod.get("start_time")
+        end_time = latest_prod.get("end_time")
+        esito = map_esito(latest_prod.get("esito"))
+        cycle_time = str(latest_prod.get("cycle_time") or "")
+
+        station = stations_by_id.get(latest_prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = latest_prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        # Filter defects with category = 'Disallineamento' and valid ribbon data
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and
+            d.get("category") == "Disallineamento" and
+            d.get("i_ribbon") is not None and
+            d.get("ribbon_lato") in ["F", "M", "B"]
+        ]
+
+
+        # Initialize ribbon columns
+        ribbon_cols = [""] * 10
+
+        ribbon_map = {
+            ("F", 1): 0, ("F", 2): 1, ("F", 3): 2,
+            ("M", 1): 3, ("M", 2): 4, ("M", 3): 5, ("M", 4): 6,
+            ("B", 1): 7, ("B", 2): 8, ("B", 3): 9,
+        }
+
+        for defect in prod_defects:
+            lato = defect.get("ribbon_lato")
+            i_ribbon = defect.get("i_ribbon")
+
+            if lato in ["F", "M", "B"]:
+                try:
+                    idx = ribbon_map.get((str(lato), int(i_ribbon)))  # type: ignore
+                    if idx is not None:
+                        ribbon_cols[idx] = "NG"
+                except (ValueError, TypeError):
+                    continue
+
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time
+        ] + ribbon_cols
+
+        ws.append(row)
+
+    # Format cells
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        for cell in column_cells:
+            cell.alignment = center_alignment
+        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
+        ws.column_dimensions[col_letter].width = max(max_length, len(ws[f"{col_letter}1"].value)) + 2
+
+def ng_disall_stringa_sheet(ws, data: dict):
+    """
+    Generate the 'NG Disallineamento Stringa' sheet using pre-fetched data.
+    Expects data to be a dict with keys:
+      - "id_moduli", "objects", "productions", "stations",
+        "production_lines", "object_defects"
+    """
+    id_moduli = data.get("id_moduli", [])
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+
+    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    # Write header
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+    ] + [f"Stringa {i}" for i in range(1, 13)]
+    ws.append(header)
+
+    for id_modulo in id_moduli:
+        obj = objects_by_modulo.get(id_modulo)
+        if not obj:
+            continue
+
+        object_id = obj["id"]
+        prods = [p for p in productions if p.get("object_id") == object_id]
+        if not prods:
+            continue
+
+        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
+        production_id = latest_prod["id"]
+        start_time = latest_prod.get("start_time")
+        end_time = latest_prod.get("end_time")
+        esito = map_esito(latest_prod.get("esito"))
+        cycle_time = str(latest_prod.get("cycle_time") or "")
+
+        station = stations_by_id.get(latest_prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = latest_prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        # Filter only 'Disallineamento' category defects for this production
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and
+            d.get("category") == "Disallineamento" and
+            d.get("stringa") is not None
+        ]
+
+
+        stringa_cols = [""] * 12
+        for defect in prod_defects:
+            stringa_num = defect.get("stringa")
+            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
+                stringa_cols[stringa_num - 1] = "NG"
+            elif isinstance(stringa_num, str) and stringa_num.isdigit():
+                index = int(stringa_num)
+                if 1 <= index <= 12:
+                    stringa_cols[index - 1] = "NG"
+
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time
+        ] + stringa_cols
+
+        ws.append(row)
+
+    # Optional formatting
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        for cell in column_cells:
+            cell.alignment = center_alignment
+        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
+        ws.column_dimensions[col_letter].width = max(max_length, len(ws[f"{col_letter}1"].value)) + 2
+
+def ng_mancanza_ribbon_sheet(ws, data: dict):
+    """
+    Generate the 'NG Mancanza Ribbon' sheet using pre-fetched data.
+    Expects data to be a dict with keys:
+      - "id_moduli", "objects", "productions", "stations",
+        "production_lines", "object_defects"
+    """
+    id_moduli = data.get("id_moduli", [])
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+
+    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    # Define header
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
+        "Ribbon 1 F", "Ribbon 2 F", "Ribbon 3 F",
+        "Ribbon 1 M", "Ribbon 2 M", "Ribbon 3 M", "Ribbon 4 M",
+        "Ribbon 1 B", "Ribbon 2 B", "Ribbon 3 B"
+    ]
+    ws.append(header)
+
+    for id_modulo in id_moduli:
+        obj = objects_by_modulo.get(id_modulo)
+        if not obj:
+            continue
+
+        object_id = obj["id"]
+        prods = [p for p in productions if p.get("object_id") == object_id]
+        if not prods:
+            continue
+
+        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
+        production_id = latest_prod["id"]
+        start_time = latest_prod.get("start_time")
+        end_time = latest_prod.get("end_time")
+        esito = map_esito(latest_prod.get("esito"))
+        cycle_time = str(latest_prod.get("cycle_time") or "")
+
+        station = stations_by_id.get(latest_prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = latest_prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        # Filter defects with category = 'Mancanza Ribbon'
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and d.get("category") == "Mancanza Ribbon"
+        ]
+
+        # Initialize ribbon columns (18 total: 3F + 4M + 3B)
+        ribbon_cols = [""] * 10  # We'll map them shortly
+
+        # Mapping structure: (lato, index) => column index in final list
+        ribbon_map = {
+            ("F", 1): 0,
+            ("F", 2): 1,
+            ("F", 3): 2,
+            ("M", 1): 3,
+            ("M", 2): 4,
+            ("M", 3): 5,
+            ("M", 4): 6,
+            ("B", 1): 7,
+            ("B", 2): 8,
+            ("B", 3): 9,
+        }
+
+        for defect in prod_defects:
+            lato = defect.get("ribbon_lato")
+            i_ribbon = defect.get("i_ribbon")
+
+            if lato in ["F", "M", "B"]:
+                try:
+                    idx = ribbon_map.get((str(lato), int(i_ribbon)))  # type: ignore
+                    if idx is not None:
+                        ribbon_cols[idx] = "NG"
+                except (ValueError, TypeError):
+                    continue
+
+
+        # Final row
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time
+        ] + ribbon_cols
+
+        ws.append(row)
+
+    # Format columns
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        for cell in column_cells:
+            cell.alignment = center_alignment
+        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
+        ws.column_dimensions[col_letter].width = max(max_length, len(ws[f"{col_letter}1"].value)) + 2
+
+def ng_macchie_eca_sheet(ws, data: dict):
+    """
+    Generate the 'NG Macchie ECA' sheet using pre-fetched data.
+    Same structure as Disallineamento Stringa, but filters category='Macchie ECA'.
+    """
+    id_moduli = data.get("id_moduli", [])
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+
+    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    # Header
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+    ] + [f"Stringa {i}" for i in range(1, 13)]
+    ws.append(header)
+
+    for id_modulo in id_moduli:
+        obj = objects_by_modulo.get(id_modulo)
+        if not obj:
+            continue
+
+        object_id = obj["id"]
+        prods = [p for p in productions if p.get("object_id") == object_id]
+        if not prods:
+            continue
+
+        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
+        production_id = latest_prod["id"]
+        start_time = latest_prod.get("start_time")
+        end_time = latest_prod.get("end_time")
+        esito = map_esito(latest_prod.get("esito"))
+        cycle_time = str(latest_prod.get("cycle_time") or "")
+
+        station = stations_by_id.get(latest_prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = latest_prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        # Filter only 'Macchie ECA' category defects for this production
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and d.get("category") == "Macchie ECA"
+        ]
+
+        stringa_cols = [""] * 12
+        for defect in prod_defects:
+            stringa_num = defect.get("stringa")
+            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
+                stringa_cols[stringa_num - 1] = "NG"
+            elif isinstance(stringa_num, str) and stringa_num.isdigit():
+                index = int(stringa_num)
+                if 1 <= index <= 12:
+                    stringa_cols[index - 1] = "NG"
+
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time
+        ] + stringa_cols
+
+        ws.append(row)
+
+    # Format columns: center alignment and auto width
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        for cell in column_cells:
+            cell.alignment = center_alignment
+        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
+        ws.column_dimensions[col_letter].width = max(max_length, len(str(ws[f"{col_letter}1"].value))) + 2
+
+def ng_celle_rotte_sheet(ws, data: dict):
+    """
+    Generate the 'NG Celle Rotte' sheet using pre-fetched data.
+    Filters category='Celle Rotte'.
+    """
+    id_moduli = data.get("id_moduli", [])
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+
+    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    # Header
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+    ] + [f"Stringa {i}" for i in range(1, 13)]
+    ws.append(header)
+
+    for id_modulo in id_moduli:
+        obj = objects_by_modulo.get(id_modulo)
+        if not obj:
+            continue
+
+        object_id = obj["id"]
+        prods = [p for p in productions if p.get("object_id") == object_id]
+        if not prods:
+            continue
+
+        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
+        production_id = latest_prod["id"]
+        start_time = latest_prod.get("start_time")
+        end_time = latest_prod.get("end_time")
+        esito = map_esito(latest_prod.get("esito"))
+        cycle_time = str(latest_prod.get("cycle_time") or "")
+
+        station = stations_by_id.get(latest_prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = latest_prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        # Filter only 'Macchie ECA' category defects for this production
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and d.get("category") == "Celle Rotte"
+        ]
+
+        stringa_cols = [""] * 12
+        for defect in prod_defects:
+            stringa_num = defect.get("stringa")
+            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
+                stringa_cols[stringa_num - 1] = "NG"
+            elif isinstance(stringa_num, str) and stringa_num.isdigit():
+                index = int(stringa_num)
+                if 1 <= index <= 12:
+                    stringa_cols[index - 1] = "NG"
+
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time
+        ] + stringa_cols
+
+        ws.append(row)
+
+    # Format columns: center alignment and auto width
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        for cell in column_cells:
+            cell.alignment = center_alignment
+        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
+        ws.column_dimensions[col_letter].width = max(max_length, len(str(ws[f"{col_letter}1"].value))) + 2
+
+def ng_lunghezza_string_ribbon_sheet(ws, data: dict):
+    """
+    Generate the 'NG Lunghezza String Ribbon' sheet using pre-fetched data.
+    Filters category='Lunghezza String Ribbon'.
+    """
+    id_moduli = data.get("id_moduli", [])
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+
+    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    # Header
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+    ] + [f"Stringa {i}" for i in range(1, 13)]
+    ws.append(header)
+
+    for id_modulo in id_moduli:
+        obj = objects_by_modulo.get(id_modulo)
+        if not obj:
+            continue
+
+        object_id = obj["id"]
+        prods = [p for p in productions if p.get("object_id") == object_id]
+        if not prods:
+            continue
+
+        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
+        production_id = latest_prod["id"]
+        start_time = latest_prod.get("start_time")
+        end_time = latest_prod.get("end_time")
+        esito = map_esito(latest_prod.get("esito"))
+        cycle_time = str(latest_prod.get("cycle_time") or "")
+
+        station = stations_by_id.get(latest_prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = latest_prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        # Filter only 'Macchie ECA' category defects for this production
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and d.get("category") == "Lunghezza String Ribbon"
+        ]
+
+        stringa_cols = [""] * 12
+        for defect in prod_defects:
+            stringa_num = defect.get("stringa")
+            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
+                stringa_cols[stringa_num - 1] = "NG"
+            elif isinstance(stringa_num, str) and stringa_num.isdigit():
+                index = int(stringa_num)
+                if 1 <= index <= 12:
+                    stringa_cols[index - 1] = "NG"
+
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time
+        ] + stringa_cols
+
+        ws.append(row)
+
+    # Format columns: center alignment and auto width
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        for cell in column_cells:
+            cell.alignment = center_alignment
+        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
+        ws.column_dimensions[col_letter].width = max(max_length, len(str(ws[f"{col_letter}1"].value))) + 2
+
+def ng_altro_sheet(ws, data: dict):
+    """
+    Generate the 'NG Altro' sheet using pre-fetched data.
+    Dynamically creates columns based on unique `extra_data` values in 'Altro' defects.
+    """
+    id_moduli = data.get("id_moduli", [])
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+
+    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    # Step 1: gather unique Altro "extra_data" values
+    unique_altro_descriptions = sorted({
+        d.get("extra_data", "").strip()
+        for d in object_defects
+        if d.get("category") == "Altro" and d.get("extra_data")
+    })
+
+    # Step 2: Build the header
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+    ] + [f"{desc}" for i, desc in enumerate(unique_altro_descriptions)]
+    ws.append(header)
+
+    for id_modulo in id_moduli:
+        obj = objects_by_modulo.get(id_modulo)
+        if not obj:
+            continue
+
+        object_id = obj["id"]
+        prods = [p for p in productions if p.get("object_id") == object_id]
+        if not prods:
+            continue
+
+        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
+        production_id = latest_prod["id"]
+        start_time = latest_prod.get("start_time")
+        end_time = latest_prod.get("end_time")
+        esito = map_esito(latest_prod.get("esito"))
+        cycle_time = str(latest_prod.get("cycle_time") or "")
+
+        station = stations_by_id.get(latest_prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = latest_prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        # Get all "Altro" category defects for this production
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and d.get("category") == "Altro"
+        ]
+        altro_found = {d.get("extra_data", "").strip() for d in prod_defects}
+
+        # Build NG flags for each Altro column
+        altro_cols = ["NG" if desc in altro_found else "" for desc in unique_altro_descriptions]
+
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time
+        ] + altro_cols
+
+        ws.append(row)
+
+    # Optional formatting
+    from openpyxl.styles import Alignment
+    from openpyxl.utils import get_column_letter
+
+    center_alignment = Alignment(horizontal="center", vertical="center")
+    for col_idx, column_cells in enumerate(ws.iter_cols(min_row=2, max_row=ws.max_row), start=1):
+        col_letter = get_column_letter(col_idx)
+        for cell in column_cells:
+            cell.alignment = center_alignment
+        max_length = max((len(str(cell.value)) if cell.value else 0) for cell in column_cells)
+        ws.column_dimensions[col_letter].width = max(max_length, len(str(ws[f"{col_letter}1"].value))) + 2
+
+# --- Mapping sheet names to functions ---
+SHEET_FUNCTIONS = {
+    "Metadata": metadata_sheet,
+    "Risolutivo": risolutivo_sheet,
+    "NG Generali": ng_generali_sheet,
+    "NG Saldature": ng_saldature_sheet,
+    "NG Disall. Ribbon": ng_disall_ribbon_sheet,
+    "NG Disall. Stringa": ng_disall_stringa_sheet,
+    "NG Mancanza Ribbon": ng_mancanza_ribbon_sheet,
+    "NG Macchie ECA": ng_macchie_eca_sheet,
+    "NG Celle Rotte": ng_celle_rotte_sheet,
+    "NG Lunghezza String Ribbon": ng_lunghezza_string_ribbon_sheet,
+    "NG Altro": ng_altro_sheet,
+}
+
+def map_esito(value: Optional[int]) -> str:
+    if value == 1:
+        return "OK"
+    elif value == 2:
+        return "In Produzione"
+    elif value == 6:
+        return "NG"
+    return "N/A"
 
 
 # ---------------- MYSQL ----------------
@@ -1250,7 +2497,7 @@ async def get_overlay_config(
         print(f"➡️ Checking config: image = '{image_name}', path = '{config_path}'")
 
         if config_path.lower() == path.lower():
-            image_url = f"http://localhost:8000/images/{line_name}/{station}/{image_name}"
+            image_url = f"http://192.168.0.10:8000/images/{line_name}/{station}/{image_name}"
             print(f"✅ MATCH FOUND! Returning image: {image_url}")
             return {
                 "image_url": image_url,
@@ -1778,6 +3025,88 @@ async def search_results(request: Request):
     except Exception as e:
         logging.error(f"Search API Error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/export_objects")
+def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
+    id_moduli = data.get("id_moduli", [])
+    filters = data.get("filters", [])
+
+    global mysql_connection
+    if not mysql_connection:
+        return JSONResponse(status_code=500, content={"error": "MySQL connection not available"})
+
+    try:
+        export_data = {
+            "id_moduli": id_moduli,
+            "filters": filters,
+            "moduli_rows": [],
+            "objects": [],
+            "productions": [],
+            "stations": [],
+            "production_lines": [],
+            "object_defects": []
+        }
+
+        with mysql_connection.cursor() as cursor:
+            # Get objects by id_modulo
+            format_strings = ','.join(['%s'] * len(id_moduli))
+            cursor.execute(f"SELECT * FROM objects WHERE id_modulo IN ({format_strings})", id_moduli)
+            export_data["objects"] = cursor.fetchall()
+
+            # Get all productions related to those objects
+            object_ids = [o["id"] for o in export_data["objects"]]
+            if not object_ids:
+                return {"status": "ok", "filename": None}  # No data to export
+
+            format_strings = ','.join(['%s'] * len(object_ids))
+            cursor.execute(f"""
+                SELECT * FROM productions
+                WHERE object_id IN ({format_strings})
+                ORDER BY start_time DESC
+            """, object_ids)
+            export_data["productions"] = cursor.fetchall()
+
+            # Get stations
+            cursor.execute("SELECT * FROM stations")
+            export_data["stations"] = cursor.fetchall()
+
+            # Get lines
+            cursor.execute("SELECT * FROM production_lines")
+            export_data["production_lines"] = cursor.fetchall()
+
+            # Get defects
+            prod_ids = [p["id"] for p in export_data["productions"]]
+            if prod_ids:
+                format_strings = ','.join(['%s'] * len(prod_ids))
+                cursor.execute(f"""
+                    SELECT od.*, d.category
+                    FROM object_defects od
+                    JOIN defects d ON od.defect_id = d.id
+                    WHERE od.production_id IN ({format_strings})
+                """, prod_ids)
+                export_data["object_defects"] = cursor.fetchall()
+
+    except Exception as e:
+        logging.error(f"❌ Error during export: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    
+    print('export Data: %s' % export_data)
+
+    # ✅ Pass the entire export_data dict to all sheet functions
+    filename = export_full_excel(export_data)
+    background_tasks.add_task(clean_old_exports, max_age_hours=2)
+
+    return {"status": "ok", "filename": filename}
+
+# --- Download Route ---
+@app.get("/api/download_export/{filename}")
+def download_export(filename: str):
+    filepath = os.path.join(EXPORT_DIR, filename)
+    if os.path.exists(filepath):
+        return FileResponse(filepath, filename=filename,
+                            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":

@@ -1,17 +1,21 @@
-// ignore_for_file: deprecated_member_use, unrelated_type_equality_checks
+// ignore_for_file: deprecated_member_use, unrelated_type_equality_checks, use_build_context_synchronously
 import 'package:flutter/material.dart';
+import 'package:ix_monitor/pages/picture_gallery.dart';
+import 'package:ix_monitor/pages/picture_page.dart';
 import '../../shared/services/api_service.dart';
 
 class IssueSelectorWidget extends StatefulWidget {
   final String selectedLine;
   final String channelId;
   final Function(String fullPath) onIssueSelected;
+  final void Function(List<Map<String, String>> pictures)? onPicturesChanged;
 
   const IssueSelectorWidget({
     super.key,
     required this.selectedLine,
     required this.channelId,
     required this.onIssueSelected,
+    this.onPicturesChanged,
   });
 
   @override
@@ -31,6 +35,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   Size? imageSize;
   List<String> altroIssues = [];
   TextEditingController altroController = TextEditingController();
+  List<Map<String, String>> allPictures = [];
+  String? activeLeafDefect;
 
   // Updated main groups to exactly match backend keys:
   final List<String> mainGroups = [
@@ -70,20 +76,16 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
   Future<void> _fetchCurrentItems() async {
     setState(() => isLoading = true);
-
-    final line = widget.selectedLine;
-    final channel = widget.channelId;
-
     try {
       final issues = await ApiService.fetchIssues(
-        line: line,
-        station: channel,
+        line: widget.selectedLine,
+        station: widget.channelId,
         path: apiPath,
       );
 
       final overlay = await ApiService.fetchIssueOverlay(
-        line: line,
-        station: channel,
+        line: widget.selectedLine,
+        station: widget.channelId,
         path: apiPath,
       );
 
@@ -95,6 +97,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
             ? newImageUrl
             : currentImageUrl;
       });
+
+      _updateActiveLeafDefectIfSelected(); // 👈 this is key
     } catch (e) {
       setState(() {
         currentItems = [];
@@ -103,22 +107,52 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
       });
       debugPrint("❌ Error in _fetchCurrentItems: $e");
     }
-
     setState(() => isLoading = false);
   }
 
   void _onGroupSelected(String group) {
     setState(() {
       pathStack = [group];
+
+      // 👇 Automatically restore previously selected defect in Generali or Altro
+      if (group == "Generali") {
+        final match = selectedLeaves.firstWhere(
+          (defect) => defect.contains(".Generali."),
+          orElse: () => "",
+        );
+        activeLeafDefect = match.isNotEmpty ? match : null;
+      } else if (group == "Altro") {
+        final match = selectedLeaves.firstWhere(
+          (defect) => defect.contains("Altro: "),
+          orElse: () => "",
+        );
+        activeLeafDefect = match.isNotEmpty ? match : null;
+      } else {
+        activeLeafDefect = null; // reset for others
+      }
     });
+
     if (group != "Altro") {
       _fetchCurrentItems();
     }
   }
 
+  void _updateActiveLeafDefectIfSelected() {
+    if (_isLeafLevel()) {
+      for (var rect in currentRectangles) {
+        final String fullPath = "$apiPath.${rect['name']}";
+        if (selectedLeaves.contains(fullPath)) {
+          setState(() {
+            activeLeafDefect = fullPath;
+          });
+          break;
+        }
+      }
+    }
+  }
+
   void _onRectangleTapped(String name, String type) {
     // Full path of tapped rectangle is apiPath + "." + name.
-    final fullPath = "$apiPath.$name";
     if (type == "Folder") {
       // If folder, push new level.
       setState(() {
@@ -126,12 +160,18 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
       });
       _fetchCurrentItems();
     } else if (type == "Leaf") {
-      // If leaf, toggle selection.
+      final fullPath = "$apiPath.$name";
       setState(() {
         if (selectedLeaves.contains(fullPath)) {
           selectedLeaves.remove(fullPath);
+          if (activeLeafDefect == fullPath) {
+            activeLeafDefect = null;
+          }
         } else {
           selectedLeaves.add(fullPath);
+          activeLeafDefect = fullPath; // 👈 Update active defect
+          print('activeLeafDefect');
+          print(activeLeafDefect);
         }
       });
       widget.onIssueSelected(fullPath);
@@ -167,42 +207,142 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     return selectedLeaves.any((issuePath) => issuePath.contains(".$group."));
   }
 
-  Widget _buildNavigationButtons() {
+  Widget _buildNavigationButtons(bool isLeaf, fullPath) {
     if (pathStack.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.4),
-              borderRadius: BorderRadius.circular(12),
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Indietro
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                onPressed: _goBack,
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Indietro',
+                color: Colors.white,
+                iconSize: 28,
+              ),
             ),
-            child: IconButton(
-              onPressed: _goBack,
-              icon: const Icon(Icons.arrow_back),
-              tooltip: 'Indietro',
-              color: Colors.white,
-              iconSize: 28,
+
+            const SizedBox(width: 24),
+
+            // Home
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                onPressed: _goHome,
+                icon: const Icon(Icons.home),
+                tooltip: 'Home',
+                color: Colors.white,
+                iconSize: 28,
+              ),
             ),
-          ),
-          const SizedBox(width: 24),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.4),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              onPressed: _goHome,
-              icon: const Icon(Icons.home),
-              tooltip: 'Home',
-              color: Colors.white,
-              iconSize: 28,
-            ),
-          ),
-        ],
+
+            if (isLeaf && selectedLeaves.contains(fullPath) ||
+                activeLeafDefect != null) ...[
+              const SizedBox(width: 24),
+
+              // Scatta Foto
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextButton.icon(
+                  onPressed: () async {
+                    var res = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const TakePicturePage(),
+                      ),
+                    );
+
+                    if (res != null &&
+                        res is String &&
+                        activeLeafDefect != null) {
+                      setState(() {
+                        allPictures.add({
+                          'defect': activeLeafDefect!,
+                          'image': res,
+                        });
+
+                        // 🔁 Notifica al parent
+                        widget.onPicturesChanged?.call(allPictures);
+                      });
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Foto aggiunta con successo!"),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.camera_alt, color: Colors.white),
+                  label: const Text(
+                    "Scatta Foto",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              if (allPictures.isNotEmpty)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PictureGalleryPage(
+                            images: allPictures,
+                            onDelete: (index) {
+                              setState(() {
+                                allPictures.removeAt(index);
+                                // 🔁 Notifica al parent
+                                widget.onPicturesChanged?.call(allPictures);
+                              });
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.image, color: Colors.white),
+                    label: Text(
+                      "Immagini",
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -228,8 +368,12 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                     setState(() {
                       if (isSelected) {
                         selectedLeaves.remove(fullPath);
+                        if (activeLeafDefect == fullPath) {
+                          activeLeafDefect = null;
+                        }
                       } else {
                         selectedLeaves.add(fullPath);
+                        activeLeafDefect = fullPath;
                       }
                     });
                     widget.onIssueSelected(fullPath);
@@ -301,12 +445,14 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
               ElevatedButton(
                 onPressed: () {
                   final text = altroController.text.trim();
+                  final fullPath =
+                      "Dati.Esito.Esito_Scarto.Difetti.Altro: $text";
                   if (text.isNotEmpty && !altroIssues.contains(text)) {
                     setState(() {
                       altroIssues.add(text);
-                      widget.onIssueSelected(
-                        "Dati.Esito.Esito_Scarto.Difetti.Altro: $text",
-                      );
+                      selectedLeaves.add(fullPath); // ✅ make sure it's tracked
+                      activeLeafDefect = fullPath; // ✅ Add this
+                      widget.onIssueSelected(fullPath);
                       altroController.clear();
                     });
                   }
@@ -579,6 +725,14 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     );
   }
 
+  bool _isLeafLevel() {
+    return currentRectangles.every((r) => r['type'] != 'Folder');
+  }
+
+  String _fullPath() {
+    return pathStack.isEmpty ? '' : pathStack.join('.');
+  }
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -589,7 +743,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildNavigationButtons(),
+                  _buildNavigationButtons(_isLeafLevel(), _fullPath()),
                   _buildGuidedHint(),
                   if (pathStack.length == 1 && pathStack[0] == "Generali")
                     _buildGeneraliButtons()

@@ -25,6 +25,48 @@ class ApiService {
     }
   }
 
+  static Future<void> uploadImages({
+    required String objectId,
+    required List<Map<String, String>> images,
+  }) async {
+    if (images.isEmpty) return;
+
+    final uri = Uri.parse('$baseUrl/api/upload_images');
+    final request = http.MultipartRequest('POST', uri);
+
+    request.fields['object_id'] = objectId;
+
+    for (var i = 0; i < images.length; i++) {
+      final defect = images[i]['defect'] ?? 'unknown';
+      final base64Str = images[i]['image']!;
+      final imageBytes = base64Decode(base64Str);
+
+      // ✅ Add image file
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'images',
+          imageBytes,
+          filename: 'image_$i.jpg',
+        ),
+      );
+
+      // ✅ Add defect field as a form entry
+      request.files.add(
+        http.MultipartFile.fromString(
+          'defects',
+          defect,
+        ),
+      );
+    }
+
+    final response = await request.send();
+
+    if (response.statusCode != 200) {
+      final body = await response.stream.bytesToString();
+      throw Exception("Failed to upload images:\n$body");
+    }
+  }
+
   static Future<bool> submitIssues({
     required String selectedLine,
     required String selectedChannel,

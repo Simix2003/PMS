@@ -2475,7 +2475,7 @@ async def get_overlay_config(
         print(f"➡️ Checking config: image = '{image_name}', path = '{config_path}'")
 
         if config_path.lower() == path.lower():
-            image_url = f"http://localhost:8000/images/{line_name}/{station}/{image_name}"
+            image_url = f"http://192.168.0.10:8000/images/{line_name}/{station}/{image_name}"
             print(f"✅ MATCH FOUND! Returning image: {image_url}")
             return {
                 "image_url": image_url,

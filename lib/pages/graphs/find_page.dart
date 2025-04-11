@@ -823,7 +823,7 @@ class _FindPageState extends State<FindPage> {
 
     final config = CalendarDatePicker2WithActionButtonsConfig(
       weekdayLabels: const ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'],
-      firstDayOfWeek: 0, // 0 = Monday
+      firstDayOfWeek: 1, // 1 = Monday
       calendarType: CalendarDatePicker2Type.range,
       selectedDayHighlightColor: primaryColor,
       selectedRangeHighlightColor: primaryColor.withOpacity(0.15),

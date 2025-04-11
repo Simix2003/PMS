@@ -7,6 +7,8 @@ import 'dart:html' as html;
 import '../../shared/services/api_service.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
+import 'package:calendar_date_picker2/calendar_date_picker2.dart';
+import 'dart:ui';
 
 class FindPage extends StatefulWidget {
   const FindPage({super.key});
@@ -16,9 +18,13 @@ class FindPage extends StatefulWidget {
 }
 
 class _FindPageState extends State<FindPage> {
+  // Initially using a single date; if a range is selected, _selectedRange will be non-null
   String? selectedFilterType;
   String filterValue = '';
   DateTimeRange? selectedRange;
+  DateTime? pickedDate;
+  TimeOfDay? selectedStartTime;
+  TimeOfDay? selectedEndTime;
   String? selectedRibbonSide;
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _numericController = TextEditingController();
@@ -62,7 +68,7 @@ class _FindPageState extends State<FindPage> {
     'Esito',
     'Difetto',
     'ID Modulo',
-    'Intervallo Date',
+    'Data',
     'Turno',
     "Stringatrice",
     'Operatore',
@@ -279,6 +285,59 @@ class _FindPageState extends State<FindPage> {
           compositeValue += ' > ';
           break;
       }
+    } else if (selectedFilterType == 'Data') {
+      if (selectedRange == null && pickedDate == null) return;
+
+      DateTime? startDate;
+      DateTime? endDate;
+
+      if (selectedRange != null) {
+        startDate = selectedRange!.start;
+        endDate = selectedRange!.end;
+      } else if (pickedDate != null) {
+        startDate = pickedDate;
+        endDate = pickedDate;
+      }
+
+      if (startDate != null && endDate != null) {
+        final startDateTime = DateTime(
+          startDate.year,
+          startDate.month,
+          startDate.day,
+          selectedStartTime?.hour ?? 0,
+          selectedStartTime?.minute ?? 0,
+        );
+
+        final endDateTime = DateTime(
+          endDate.year,
+          endDate.month,
+          endDate.day,
+          selectedEndTime?.hour ?? 23,
+          selectedEndTime?.minute ?? 59,
+        );
+
+        compositeValue =
+            '${DateFormat('dd MMM y – HH:mm').format(startDateTime)} → ${DateFormat('dd MMM y – HH:mm').format(endDateTime)}';
+
+        setState(() {
+          activeFilters.add({
+            'type': 'Data',
+            'value': compositeValue,
+            'start': startDateTime.toIso8601String(),
+            'end': endDateTime.toIso8601String(),
+          });
+
+          // Reset selections
+          selectedFilterType = null;
+          filterValue = '';
+          selectedRange = null;
+          pickedDate = null;
+          selectedStartTime = null;
+          selectedEndTime = null;
+        });
+      }
+
+      return;
     } else {
       if (filterValue.isEmpty) return;
       compositeValue = filterValue;
@@ -605,30 +664,103 @@ class _FindPageState extends State<FindPage> {
           onChanged: (val) => filterValue = val,
         );
 
-      case 'Intervallo Date':
-        return TextButton.icon(
-          onPressed: () async {
-            final picked = await showDateRangePicker(
-              context: context,
-              firstDate: DateTime(DateTime.now().year - 1),
-              lastDate: DateTime.now(),
-            );
-            if (picked != null) {
-              setState(() {
-                selectedRange = picked;
-                filterValue =
-                    '${DateFormat('dd MMM y').format(picked.start)} → ${DateFormat('dd MMM y').format(picked.end)}';
-              });
-            }
-          },
-          icon: const Icon(Icons.date_range_rounded),
-          label: Text(
-            filterValue.isEmpty ? 'Seleziona Intervallo' : filterValue,
-            style: const TextStyle(
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF007AFF),
+      case 'Data':
+        return Row(
+          children: [
+            GestureDetector(
+              onTap: () async {
+                final DateTime firstDate = DateTime(DateTime.now().year - 1);
+                final DateTime lastDate = DateTime.now();
+
+                final DateSelectionResult? result =
+                    await _showCustomCalendarPicker(
+                        context, firstDate, lastDate);
+
+                if (result != null) {
+                  setState(() {
+                    pickedDate = result.singleDate;
+                    selectedRange = result.range;
+
+                    if (pickedDate != null) {
+                      selectedRange = null;
+                      filterValue = DateFormat('dd MMM y').format(pickedDate!);
+                    } else if (selectedRange != null) {
+                      pickedDate = null;
+                      filterValue =
+                          '${DateFormat('dd MMM y').format(selectedRange!.start)} → ${DateFormat('dd MMM y').format(selectedRange!.end)}';
+                    }
+                  });
+                }
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFF007AFF).withOpacity(0.3),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.date_range_rounded,
+                      color: Color(0xFF007AFF),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      filterValue.isEmpty ? "Seleziona Data" : filterValue,
+                      style: const TextStyle(
+                        color: Color(0xFF007AFF),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () async {
+                final picked = await showTimePicker(
+                  context: context,
+                  initialTime:
+                      selectedStartTime ?? TimeOfDay(hour: 0, minute: 0),
+                );
+                if (picked != null) {
+                  setState(() => selectedStartTime = picked);
+                }
+              },
+              child: _buildTimeContainer(
+                label: selectedStartTime != null
+                    ? selectedStartTime!.format(context)
+                    : 'Ora Inizio',
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () async {
+                final picked = await showTimePicker(
+                  context: context,
+                  initialTime:
+                      selectedEndTime ?? TimeOfDay(hour: 23, minute: 59),
+                );
+                if (picked != null) {
+                  setState(() => selectedEndTime = picked);
+                }
+              },
+              child: _buildTimeContainer(
+                label: selectedEndTime != null
+                    ? selectedEndTime!.format(context)
+                    : 'Ora Fine',
+              ),
+            ),
+          ],
         );
 
       case 'Turno':
@@ -657,6 +789,176 @@ class _FindPageState extends State<FindPage> {
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildTimeContainer({required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF007AFF).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF007AFF).withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF007AFF),
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+
+  Future<DateSelectionResult?> _showCustomCalendarPicker(
+      BuildContext context, DateTime firstDate, DateTime lastDate) async {
+    final Color backgroundColor = Colors.white.withOpacity(0.9);
+    final Color primaryColor = const Color(0xFF007AFF);
+    final Color textColor = Colors.black87;
+
+    List<DateTime?> selectedDates = [];
+
+    final config = CalendarDatePicker2WithActionButtonsConfig(
+      weekdayLabels: const ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'],
+      firstDayOfWeek: 0, // 0 = Monday
+      calendarType: CalendarDatePicker2Type.range,
+      selectedDayHighlightColor: primaryColor,
+      selectedRangeHighlightColor: primaryColor.withOpacity(0.15),
+      dayTextStyle: TextStyle(
+        color: textColor,
+        fontSize: 16,
+        fontWeight: FontWeight.normal,
+      ),
+      disabledDayTextStyle: TextStyle(
+        color: textColor.withOpacity(0.4),
+        fontSize: 16,
+        fontWeight: FontWeight.normal,
+      ),
+      weekdayLabelTextStyle: TextStyle(
+        color: textColor.withOpacity(0.7),
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+      controlsTextStyle: TextStyle(
+        color: textColor,
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+      ),
+      yearTextStyle: TextStyle(
+        color: textColor,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+      ),
+      todayTextStyle: TextStyle(
+        color: primaryColor,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+      ),
+      dayBorderRadius: BorderRadius.circular(10),
+      selectableDayPredicate: (day) => true,
+      controlsHeight: 60,
+      centerAlignModePicker: true,
+      customModePickerIcon: const SizedBox(),
+      cancelButtonTextStyle: const TextStyle(
+        color: Colors.red,
+        fontWeight: FontWeight.w600,
+        fontSize: 16,
+      ),
+      okButtonTextStyle: const TextStyle(
+        color: Color(0xFF007AFF),
+        fontWeight: FontWeight.w600,
+        fontSize: 16,
+      ),
+      cancelButton: Text(
+        'Annulla',
+        style: TextStyle(
+          color: const Color(0xFFFF3B30),
+          fontWeight: FontWeight.w600,
+          fontSize: 16,
+        ),
+      ),
+      okButton: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        decoration: BoxDecoration(
+          color: primaryColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Text(
+          'Conferma',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+      ),
+    );
+
+    return showDialog<DateSelectionResult>(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          backgroundColor: Colors.transparent,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: backgroundColor,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.2),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 15,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                width: MediaQuery.of(context).size.width * 0.85,
+                height: MediaQuery.of(context).size.height * 0.7,
+                child: CalendarDatePicker2WithActionButtons(
+                  config: config,
+                  value: selectedDates,
+                  onValueChanged: (dates) {
+                    selectedDates = dates;
+                  },
+                  onCancelTapped: () {
+                    Navigator.pop(context, (null, null));
+                  },
+                  onOkTapped: () {
+                    if (selectedDates.length == 1 && selectedDates[0] != null) {
+                      Navigator.pop(context,
+                          DateSelectionResult(singleDate: selectedDates[0]));
+                    } else if (selectedDates.length == 2 &&
+                        selectedDates[0] != null &&
+                        selectedDates[1] != null) {
+                      final range = DateTimeRange(
+                        start: selectedDates[0]!,
+                        end: selectedDates[1]!,
+                      );
+                      Navigator.pop(context, DateSelectionResult(range: range));
+                    } else {
+                      Navigator.pop(context, null);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildFilterRowCard() {
@@ -1110,4 +1412,11 @@ class _FindPageState extends State<FindPage> {
       ),
     );
   }
+}
+
+class DateSelectionResult {
+  final DateTime? singleDate;
+  final DateTimeRange? range;
+
+  const DateSelectionResult({this.singleDate, this.range});
 }

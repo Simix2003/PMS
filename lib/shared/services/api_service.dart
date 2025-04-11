@@ -80,8 +80,11 @@ class ApiService {
     DateTime? singleDate,
     DateTimeRange? range,
     int selectedTurno = 0,
+    DateTime? startTime,
+    DateTime? endTime,
   }) async {
     String url;
+
     if (range != null) {
       final from = _formatDate(range.start);
       final to = _formatDate(range.end);
@@ -95,6 +98,12 @@ class ApiService {
 
     if (selectedTurno != 0) {
       url += '&turno=$selectedTurno';
+    }
+
+    if (startTime != null && endTime != null) {
+      final startStr = Uri.encodeComponent(startTime.toIso8601String());
+      final endStr = Uri.encodeComponent(endTime.toIso8601String());
+      url += '&start_time=$startStr&end_time=$endStr';
     }
 
     final response = await http.get(Uri.parse(url));

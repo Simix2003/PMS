@@ -184,7 +184,15 @@ class _DataViewPageState extends State<DataViewPage> {
     List<DateTime?> selectedDates = [];
 
     final config = CalendarDatePicker2WithActionButtonsConfig(
-      weekdayLabels: const ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'],
+      weekdayLabels: const [
+        'Dom',
+        'Lun',
+        'Mar',
+        'Mer',
+        'Gio',
+        'Ven',
+        'Sab',
+      ],
       firstDayOfWeek: 1, // 1 = Monday
       calendarType: CalendarDatePicker2Type.range,
       selectedDayHighlightColor: primaryColor,

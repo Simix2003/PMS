@@ -25,6 +25,11 @@ class _DataViewPageState extends State<DataViewPage> {
   // Initially using a single date; if a range is selected, _selectedRange will be non-null
   DateTime _selectedDate = DateTime.now();
   DateTimeRange? _selectedRange;
+  // Initialize start and end time to default full-day range
+  TimeOfDay? selectedStartTime =
+      TimeOfDay(hour: 0, minute: 0); // Default: 00:00
+  TimeOfDay? selectedEndTime =
+      TimeOfDay(hour: 23, minute: 59); // Default: 23:59
 
   // Using 0 to represent "Full Day" and 1, 2, 3 for the three shifts.
   // Default is full day.
@@ -90,11 +95,37 @@ class _DataViewPageState extends State<DataViewPage> {
   }
 
   Future<Map<String, dynamic>> _fetchData() {
+    final startDateTime = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      selectedStartTime?.hour ?? 0,
+      selectedStartTime?.minute ?? 0,
+    );
+
+    final endDateTime = (_selectedRange != null
+        ? DateTime(
+            _selectedRange!.end.year,
+            _selectedRange!.end.month,
+            _selectedRange!.end.day,
+            selectedEndTime?.hour ?? 23,
+            selectedEndTime?.minute ?? 59,
+          )
+        : DateTime(
+            _selectedDate.year,
+            _selectedDate.month,
+            _selectedDate.day,
+            selectedEndTime?.hour ?? 23,
+            selectedEndTime?.minute ?? 59,
+          ));
+
     return ApiService.fetchProductionSummary(
       selectedLine: selectedLine,
-      singleDate: _selectedDate,
+      singleDate: _selectedRange == null ? _selectedDate : null,
       range: _selectedRange,
       selectedTurno: selectedTurno,
+      startTime: startDateTime,
+      endTime: endDateTime,
     );
   }
 
@@ -885,6 +916,23 @@ class _DataViewPageState extends State<DataViewPage> {
     );
   }
 
+  void _updateTime(TimeOfDay? start, TimeOfDay? end) {
+    setState(() {
+      selectedStartTime =
+          start ?? TimeOfDay(hour: 0, minute: 0); // default to 00:00
+      selectedEndTime =
+          end ?? TimeOfDay(hour: 23, minute: 59); // default to 23:59
+    });
+
+    _fetchData().then((data) {
+      if (mounted) {
+        setState(() {
+          _fetchedData = data;
+        });
+      }
+    });
+  }
+
   Widget _buildHeaderCard(
       double maxY, List<MapEntry<String, dynamic>> stations) {
     return ClipRRect(
@@ -941,7 +989,48 @@ class _DataViewPageState extends State<DataViewPage> {
                         ],
                       ),
                     ),
-                    _buildDateSelectButton(),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        _buildDateSelectButton(),
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () async {
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: selectedStartTime ??
+                                  const TimeOfDay(hour: 0, minute: 0),
+                            );
+                            if (picked != null) {
+                              _updateTime(picked, selectedEndTime);
+                            }
+                          },
+                          child: _buildTimeContainer(
+                            label: selectedStartTime != null
+                                ? selectedStartTime!.format(context)
+                                : 'Ora Inizio',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () async {
+                            final picked = await showTimePicker(
+                              context: context,
+                              initialTime: selectedEndTime ??
+                                  const TimeOfDay(hour: 23, minute: 59),
+                            );
+                            if (picked != null) {
+                              _updateTime(selectedStartTime, picked);
+                            }
+                          },
+                          child: _buildTimeContainer(
+                            label: selectedEndTime != null
+                                ? selectedEndTime!.format(context)
+                                : 'Ora Fine',
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -954,6 +1043,28 @@ class _DataViewPageState extends State<DataViewPage> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeContainer({required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF007AFF).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF007AFF).withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF007AFF),
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
         ),
       ),
     );

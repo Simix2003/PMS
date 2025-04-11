@@ -194,15 +194,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     line_configs = load_station_configs("C:/IX-Monitor/stations.ini")
 
-    #for line, config in line_configs.items():
-    #    plc_ip = config["PLC"]["IP"]
-    #    plc_slot = config["PLC"]["SLOT"]
+#    for line, config in line_configs.items():
+#        plc_ip = config["PLC"]["IP"]
+#        plc_slot = config["PLC"]["SLOT"]
 
-    #    for station in config["stations"]:
-    #        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
-    #        plc_connections[f"{line}.{station}"] = plc_conn
-    #        asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
-    #        print(f"🚀 Background task created for {line}.{station}")
+#        for station in config["stations"]:
+#            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+#            plc_connections[f"{line}.{station}"] = plc_conn
+#            asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
+#            print(f"🚀 Background task created for {line}.{station}")
 
     yield
 
@@ -2508,11 +2508,13 @@ async def available_overlay_paths(
 
 @app.get("/api/productions_summary")
 async def productions_summary(
-    date: str = Query(default=None),
-    from_date: str = Query(default=None, alias="from"),
-    to_date: str = Query(default=None, alias="to"),
-    line_name: str = Query(default=None),  # Optional filter by line
-    turno: int = Query(default=None),       # New turno parameter (1, 2, 3)
+    date: Optional[str] = Query(default=None),
+    from_date: Optional[str] = Query(default=None, alias="from"),
+    to_date: Optional[str] = Query(default=None, alias="to"),
+    line_name: Optional[str] = Query(default=None),
+    turno: Optional[int] = Query(default=None),
+    start_time: Optional[str] = Query(default=None),
+    end_time: Optional[str] = Query(default=None),
 ):
     global mysql_connection
     try:
@@ -2538,9 +2540,7 @@ async def productions_summary(
             else:
                 return JSONResponse(status_code=400, content={"error": "Missing 'date' or 'from' and 'to'"})
 
-            # Apply turno (shift) filter if provided.
             if turno:
-                # Define time ranges for each turno.
                 turno_times = {
                     1: ("06:00:00", "13:59:59"),
                     2: ("14:00:00", "21:59:59"),
@@ -2552,7 +2552,8 @@ async def productions_summary(
                         content={"error": "Invalid turno number (must be 1, 2, or 3)"}
                     )
 
-                start_time, end_time = turno_times[turno]
+                turno_start, turno_end = turno_times[turno]
+
                 if turno == 3:
                     if date:
                         shift_day = datetime.strptime(date, "%Y-%m-%d")
@@ -2578,9 +2579,22 @@ async def productions_summary(
                             content={"error": "Missing 'date' or 'from' and 'to'"}
                         )
                 else:
-                    # For turno 1 or 2, filter on the TIME component.
                     where_clause += " AND TIME(p.end_time) BETWEEN %s AND %s"
+                    params.extend([turno_start, turno_end])
+
+            # Optional start_time and end_time overrides
+            if start_time and end_time:
+                try:
+                    # Convert to proper datetime strings if needed
+                    _ = datetime.fromisoformat(start_time)
+                    _ = datetime.fromisoformat(end_time)
+                    where_clause += " AND p.end_time BETWEEN %s AND %s"
                     params.extend([start_time, end_time])
+                except ValueError:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"error": "start_time and end_time must be ISO 8601 formatted strings"}
+                    )
 
             # Filter by production line if provided.
             # In the new schema, we join production_lines (alias pl) via stations.
@@ -2794,17 +2808,20 @@ async def search_results(request: Request):
                         where_clauses.append("TIME(p.end_time) BETWEEN %s AND %s")
                         params.extend([start_t, end_t])
             
-            elif key == "Intervallo Date" and value:
-                if "→" in value:
-                    parts = value.split(" → ")
+            elif key == "Data":
+                from_iso = f.get("start")
+                to_iso = f.get("end")
+                if from_iso and to_iso:  # Make sure they're not None
                     try:
-                        from_date = datetime.strptime(parts[0].strip(), "%d %b %Y").date()
-                        to_date = datetime.strptime(parts[1].strip(), "%d %b %Y").date()
-                        where_clauses.append("DATE(p.end_time) BETWEEN %s AND %s")
-                        params.extend([from_date, to_date])
+                        from_dt = datetime.fromisoformat(from_iso)
+                        to_dt = datetime.fromisoformat(to_iso)
+                        where_clauses.append("p.end_time BETWEEN %s AND %s")
+                        params.extend([from_dt, to_dt])
                     except Exception as e:
-                        print(f"Date parsing error: {e}")
-            
+                        print(f"ISO datetime parsing error: {e}")
+                else:
+                    print("Missing 'start' or 'end' value in Data filter")
+
             elif key == "Stringatrice":
                 stringatrice_map = {
                     "1": "Str1",
@@ -2835,9 +2852,6 @@ async def search_results(request: Request):
                         where_clauses.append("od.defect_type = %s")
                         params.append(parts[1])
                 elif defect_category == "Saldatura":
-                    print('Saldtura Gang')
-                    print(parts)
-                    print(len(parts))
                     # Expected: Saldatura > Stringa[<num>] > Lato <letter> > Pin[<num>]
                     if len(parts) > 1 and parts[1].strip():
                         match = re.search(r'\[(\d+)\]', parts[1])

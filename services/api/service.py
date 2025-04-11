@@ -553,19 +553,25 @@ def export_full_excel(data: dict) -> str:
 
     wb = Workbook()
 
-    # --- Fix: Ensure we remove only if active sheet is a Worksheet
+    # --- Remove default sheet if present
     default_sheet = wb.active
     if isinstance(default_sheet, Worksheet):
         wb.remove(default_sheet)
 
     for sheet_name in SHEET_NAMES:
-        ws = wb.create_sheet(title=sheet_name)
         func = SHEET_FUNCTIONS.get(sheet_name)
         assert func is not None, f"Sheet function not found for sheet '{sheet_name}'"
-        func(ws, data)
+
+        ws = wb.create_sheet(title=sheet_name)
+        result = func(ws, data)
+
+        # Only keep sheet if result is True or function is not boolean-returning (e.g., Metadata)
+        if result is False:
+            wb.remove(ws)
 
     wb.save(filepath)
     return filename
+
 
 def autofit_columns(ws, align_center_for: Optional[Set[str]] = None):
     """
@@ -773,33 +779,23 @@ def risolutivo_sheet(ws, data: dict):
     "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Altro"
 })
 
-def ng_generali_sheet(ws, data: dict):
+def ng_generali_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Generali' sheet using pre-fetched data.
-    Expects data to be a dict with keys:
-      - "id_moduli", "objects", "productions", "stations",
-        "production_lines", "object_defects"
+    Returns True if at least one row is written (besides the header).
     """
+    rows_written = 0  # ✅ Count data rows
     id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
     production_lines = data.get("production_lines", [])
     object_defects = data.get("object_defects", [])
-    
-    # Create lookup dictionaries for faster access
-    objects_by_modulo = {}
-    for obj in objects:
-        m = obj.get("id_modulo")
-        if m is not None:
-            # If there could be more than one object per module,
-            # adjust the lookup logic appropriately.
-            objects_by_modulo[m] = obj
 
+    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     production_lines_by_id = {line["id"]: line for line in production_lines}
-    
-    # Write the header row for the sheet
+
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
@@ -807,92 +803,83 @@ def ng_generali_sheet(ws, data: dict):
         "Materiale Esterno su Celle", "Bad Soldering"
     ]
     ws.append(header)
-    
-    # Loop through all module IDs
+
     for id_modulo in id_moduli:
-        # Get the corresponding object for the module
         obj = objects_by_modulo.get(id_modulo)
         if obj is None:
             continue
         object_id = obj["id"]
-        
-        # Retrieve all production records for this object
         prods = [p for p in productions if p.get("object_id") == object_id]
         if not prods:
             continue
-        
-        # Pick the latest production by comparing start_time values.
-        # (Assumes start_time is a datetime instance; if not, convert appropriately.)
         latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
         production_id = latest_prod["id"]
         start_time = latest_prod.get("start_time")
         end_time = latest_prod.get("end_time")
         esito = map_esito(latest_prod.get("esito"))
         cycle_time = str(latest_prod.get("cycle_time") or "")
-    
-        # Look up station info (from production's station_id)
+
         station = stations_by_id.get(latest_prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-    
-        # Determine the production line name via the station record's line_id
+
         line_display_name = "Unknown"
         if station and station.get("line_id"):
             pline = production_lines_by_id.get(station["line_id"])
             if pline:
                 line_display_name = pline.get("display_name", "Unknown")
-    
-        # Get "Stringatrice" info (from last_station_id, if available)
-        last_station_id = latest_prod.get("last_station_id")
+
         last_station_name = "N/A"
+        last_station_id = latest_prod.get("last_station_id")
         if last_station_id:
             last_station = stations_by_id.get(last_station_id)
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
-    
-        # Filter pre-fetched defects for this production that have category 'Generali'
+
         prod_defects = [
             d for d in object_defects 
             if d.get("production_id") == production_id and d.get("category") == "Generali"
         ]
-        # If there are no 'Generali' defects, then skip this record
         if not prod_defects:
             continue
-        
-        # Create a set of defect_type values (this is your original logic)
+        rows_written += 1
+
         general_defects = {d.get("defect_type") for d in prod_defects}
-    
-        # Define NG flags based on defect types
         flag_poe = "NG" if "Non Lavorato Poe Scaduto" in general_defects else ""
         flag_tel = "NG" if "Non Lavorato da Telecamere" in general_defects else ""
         flag_materiale = "NG" if "Materiale Esterno su Celle" in general_defects else ""
         flag_bad = "NG" if "Bad Soldering" in general_defects else ""
-    
-        # Construct the row as in your original sheet
+
         row = [
-            line_display_name,  # Linea
-            station_name,       # Stazione
-            last_station_name,  # Stringatrice
-            id_modulo,          # ID Modulo
+            line_display_name,
+            station_name,
+            last_station_name,
+            id_modulo,
             start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
             end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
             esito,
             cycle_time,
-            flag_poe,           # Poe Scaduto flag
-            flag_tel,           # Non Lav. Da Telecamere flag
-            flag_materiale,     # Materiale Esterno su Celle flag
-            flag_bad,           # Bad Soldering flag
+            flag_poe,
+            flag_tel,
+            flag_materiale,
+            flag_bad
         ]
         ws.append(row)
-    
-    autofit_columns(ws, align_center_for={
-    "Esito", "Poe Scaduto", "Non Lav. Da Telecamere",
-    "Materiale Esterno su Celle", "Bad Soldering"
-})
 
-def ng_saldature_sheet(ws, data: dict):
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for={
+            "Esito", "Poe Scaduto", "Non Lav. Da Telecamere",
+            "Materiale Esterno su Celle", "Bad Soldering"
+        })
+        return True
+    else:
+        return False
+
+def ng_saldature_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Saldature' sheet using pre-fetched data.
+    Returns True if any rows were written, False otherwise.
     """
+    rows_written = 0
     id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -904,7 +891,6 @@ def ng_saldature_sheet(ws, data: dict):
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
-    # Header: Linea, Stazione, Stringatrice, ID Modulo, Data Ingresso, Data Uscita, Esito, Tempo Ciclo
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
@@ -947,14 +933,12 @@ def ng_saldature_sheet(ws, data: dict):
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
 
-        # Filter 'Saldatura' category defects
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Saldatura"
         ]
-        # If there are no 'Saldatura' defects, then skip this record
         if not prod_defects:
-            continue
+            continue  # No data for this row
 
         # Map of (stringa, lato) → list of s_ribbon
         pin_map = {}
@@ -995,13 +979,20 @@ def ng_saldature_sheet(ws, data: dict):
         ] + saldatura_cols
 
         ws.append(row)
+        rows_written += 1
 
-    autofit_columns(ws, align_center_for=set(header))  # center all columns
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
 
-def ng_disall_ribbon_sheet(ws, data: dict):
+def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Disallineamento Ribbon' sheet using pre-fetched data.
+    Returns True if any rows were written, False otherwise.
     """
+    rows_written = 0
     id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1013,7 +1004,6 @@ def ng_disall_ribbon_sheet(ws, data: dict):
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
-    # Define header
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
@@ -1100,16 +1090,20 @@ def ng_disall_ribbon_sheet(ws, data: dict):
         ] + ribbon_cols
 
         ws.append(row)
+        rows_written += 1
 
-    autofit_columns(ws, align_center_for=set(header))  # center all columns
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
 
-def ng_disall_stringa_sheet(ws, data: dict):
+def ng_disall_stringa_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Disallineamento Stringa' sheet using pre-fetched data.
-    Expects data to be a dict with keys:
-      - "id_moduli", "objects", "productions", "stations",
-        "production_lines", "object_defects"
+    Returns True if any rows were written, False otherwise.
     """
+    rows_written = 0
     id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1121,7 +1115,6 @@ def ng_disall_stringa_sheet(ws, data: dict):
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
-    # Write header
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
@@ -1161,7 +1154,6 @@ def ng_disall_stringa_sheet(ws, data: dict):
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
 
-        # Filter only 'Disallineamento' category defects for this production
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and
@@ -1193,16 +1185,20 @@ def ng_disall_stringa_sheet(ws, data: dict):
         ] + stringa_cols
 
         ws.append(row)
+        rows_written += 1
 
-    autofit_columns(ws, align_center_for=set(header))  # center all columns
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
 
-def ng_mancanza_ribbon_sheet(ws, data: dict):
+def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Mancanza Ribbon' sheet using pre-fetched data.
-    Expects data to be a dict with keys:
-      - "id_moduli", "objects", "productions", "stations",
-        "production_lines", "object_defects"
+    Returns True if any rows were written, False otherwise.
     """
+    rows_written = 0
     id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1214,7 +1210,6 @@ def ng_mancanza_ribbon_sheet(ws, data: dict):
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
-    # Define header
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
@@ -1265,21 +1260,12 @@ def ng_mancanza_ribbon_sheet(ws, data: dict):
         if not prod_defects:
             continue
 
-        # Initialize ribbon columns (18 total: 3F + 4M + 3B)
-        ribbon_cols = [""] * 10  # We'll map them shortly
+        ribbon_cols = [""] * 10
 
-        # Mapping structure: (lato, index) => column index in final list
         ribbon_map = {
-            ("F", 1): 0,
-            ("F", 2): 1,
-            ("F", 3): 2,
-            ("M", 1): 3,
-            ("M", 2): 4,
-            ("M", 3): 5,
-            ("M", 4): 6,
-            ("B", 1): 7,
-            ("B", 2): 8,
-            ("B", 3): 9,
+            ("F", 1): 0, ("F", 2): 1, ("F", 3): 2,
+            ("M", 1): 3, ("M", 2): 4, ("M", 3): 5, ("M", 4): 6,
+            ("B", 1): 7, ("B", 2): 8, ("B", 3): 9,
         }
 
         for defect in prod_defects:
@@ -1294,8 +1280,6 @@ def ng_mancanza_ribbon_sheet(ws, data: dict):
                 except (ValueError, TypeError):
                     continue
 
-
-        # Final row
         row = [
             line_name,
             station_name,
@@ -1308,14 +1292,20 @@ def ng_mancanza_ribbon_sheet(ws, data: dict):
         ] + ribbon_cols
 
         ws.append(row)
+        rows_written += 1
 
-    autofit_columns(ws, align_center_for=set(header))  # center all columns
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
 
-def ng_macchie_eca_sheet(ws, data: dict):
+def ng_macchie_eca_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Macchie ECA' sheet using pre-fetched data.
-    Same structure as Disallineamento Stringa, but filters category='Macchie ECA'.
+    Returns True if any rows are written (excluding the header).
     """
+    rows_written = 0
     id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1327,7 +1317,6 @@ def ng_macchie_eca_sheet(ws, data: dict):
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
-    # Header
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
@@ -1367,7 +1356,6 @@ def ng_macchie_eca_sheet(ws, data: dict):
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
 
-        # Filter only 'Macchie ECA' category defects for this production
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Macchie ECA"
@@ -1397,14 +1385,20 @@ def ng_macchie_eca_sheet(ws, data: dict):
         ] + stringa_cols
 
         ws.append(row)
+        rows_written += 1
 
-    autofit_columns(ws, align_center_for=set(header))  # center all columns
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
 
-def ng_celle_rotte_sheet(ws, data: dict):
+def ng_celle_rotte_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Celle Rotte' sheet using pre-fetched data.
-    Filters category='Celle Rotte'.
+    Returns True if any rows are written (excluding the header).
     """
+    rows_written = 0
     id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1416,7 +1410,6 @@ def ng_celle_rotte_sheet(ws, data: dict):
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
-    # Header
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
@@ -1456,7 +1449,6 @@ def ng_celle_rotte_sheet(ws, data: dict):
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
 
-        # Filter only 'Macchie ECA' category defects for this production
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Celle Rotte"
@@ -1486,14 +1478,20 @@ def ng_celle_rotte_sheet(ws, data: dict):
         ] + stringa_cols
 
         ws.append(row)
+        rows_written += 1
 
-    autofit_columns(ws, align_center_for=set(header))  # center all columns
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
 
-def ng_lunghezza_string_ribbon_sheet(ws, data: dict):
+def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Lunghezza String Ribbon' sheet using pre-fetched data.
-    Filters category='Lunghezza String Ribbon'.
+    Returns True if any rows are written (excluding the header).
     """
+    rows_written = 0
     id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1505,7 +1503,6 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict):
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
-    # Header
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
@@ -1545,7 +1542,6 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict):
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
 
-        # Filter only 'Macchie ECA' category defects for this production
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Lunghezza String Ribbon"
@@ -1575,15 +1571,21 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict):
         ] + stringa_cols
 
         ws.append(row)
+        rows_written += 1
 
-    autofit_columns(ws, align_center_for=set(header))  # center all columns
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
 
-
-def ng_altro_sheet(ws, data: dict):
+def ng_altro_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Altro' sheet using pre-fetched data.
     Dynamically creates columns based on unique `extra_data` values in 'Altro' defects.
+    Returns True if any rows are written (excluding the header).
     """
+    rows_written = 0
     id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1606,7 +1608,7 @@ def ng_altro_sheet(ws, data: dict):
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
-    ] + [f"{desc}" for i, desc in enumerate(unique_altro_descriptions)]
+    ] + [f"{desc}" for desc in unique_altro_descriptions]
     ws.append(header)
 
     for id_modulo in id_moduli:
@@ -1649,6 +1651,7 @@ def ng_altro_sheet(ws, data: dict):
         ]
         if not prod_defects:
             continue
+
         altro_found = {d.get("extra_data", "").strip() for d in prod_defects}
 
         # Build NG flags for each Altro column
@@ -1666,8 +1669,13 @@ def ng_altro_sheet(ws, data: dict):
         ] + altro_cols
 
         ws.append(row)
+        rows_written += 1
 
-    autofit_columns(ws, align_center_for=set(header))  # center all columns
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
 
 # --- Mapping sheet names to functions ---
 SHEET_FUNCTIONS = {

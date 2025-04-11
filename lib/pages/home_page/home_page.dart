@@ -50,6 +50,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     'Linea2': 'Linea B',
   };
 
+  List<Map<String, String>> _pictures = [];
+
   bool issuesSubmitted = false;
 
   final GlobalKey<IssueSelectorWidgetState> _issueSelectorKey =
@@ -178,6 +180,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
     final confirm = await showAddIssueConfirmationDialog(context);
     if (!confirm) return;
+
+    await ApiService.uploadImages(
+      objectId: objectId,
+      images: _pictures,
+    );
 
     final success = await ApiService.submitIssues(
       selectedLine: selectedLine,
@@ -543,8 +550,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                     setState(() {
                                       _issues.clear();
                                       _issues.addAll(loadedIssues);
-                                      issuesSubmitted =
-                                          false; // this triggers IssueSelector to appear
+                                      issuesSubmitted = false;
                                     });
                                   },
                                 ),
@@ -576,7 +582,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                   !isObjectOK &&
                                   !issuesSubmitted) ...[
                                 IssueSelectorWidget(
-                                  key: _issueSelectorKey, // pass key
+                                  key: _issueSelectorKey,
                                   selectedLine: selectedLine,
                                   channelId: selectedChannel,
                                   onIssueSelected: (issuePath) {
@@ -586,6 +592,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                       } else {
                                         _issues.add(issuePath);
                                       }
+                                    });
+                                  },
+                                  onPicturesChanged: (pics) {
+                                    setState(() {
+                                      _pictures = pics;
                                     });
                                   },
                                 ),

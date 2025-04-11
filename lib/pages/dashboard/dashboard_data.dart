@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/graphs/find_page.dart';
 import '../graphs/data_view.dart';
-import '../picture_page.dart';
 
 class DashboardData extends StatefulWidget {
   const DashboardData({super.key});
@@ -18,7 +17,6 @@ class _DashboardDataState extends State<DashboardData> {
       canSearch: true,
     ),
     const FindPage(),
-    takePicturePage()
   ];
 
   @override
@@ -36,10 +34,6 @@ class _DashboardDataState extends State<DashboardData> {
           BottomNavigationBarItem(
             icon: Icon(Icons.query_stats),
             label: 'Analisi Dati',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.camera_alt),
-            label: 'TEST FOTO',
           ),
         ],
       ),

@@ -6,7 +6,8 @@ import json
 import logging
 import os
 import time
-from fastapi import Body, FastAPI, Form, HTTPException, Query, WebSocket, WebSocketDisconnect, Request, BackgroundTasks
+from fastapi import Body, FastAPI, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, Request, BackgroundTasks, File
+import base64
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from controllers.plc import PLCConnection
@@ -194,15 +195,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     line_configs = load_station_configs("C:/IX-Monitor/stations.ini")
 
-#    for line, config in line_configs.items():
-#        plc_ip = config["PLC"]["IP"]
-#        plc_slot = config["PLC"]["SLOT"]
+    for line, config in line_configs.items():
+        plc_ip = config["PLC"]["IP"]
+        plc_slot = config["PLC"]["SLOT"]
 
-#        for station in config["stations"]:
-#            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
-#            plc_connections[f"{line}.{station}"] = plc_conn
-#            asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
-#            print(f"🚀 Background task created for {line}.{station}")
+        for station in config["stations"]:
+            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+            plc_connections[f"{line}.{station}"] = plc_conn
+            asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
+            print(f"🚀 Background task created for {line}.{station}")
 
     yield
 
@@ -2237,6 +2238,16 @@ async def websocket_endpoint(websocket: WebSocket, line_name: str, channel_id: s
         subscriptions[full_id].remove(websocket)
 
 
+# ---------------- HELPER ----------------
+def generate_unique_filename(base_path, base_name, extension):
+    i = 1
+    full_path = os.path.join(base_path, f"{base_name}{extension}")
+    while os.path.exists(full_path):
+        full_path = os.path.join(base_path, f"{base_name}_{i}{extension}")
+        i += 1
+    return full_path
+
+
 # ---------------- ROUTES ----------------
 @app.get("/api/plc_status")
 async def plc_status():
@@ -2254,6 +2265,27 @@ async def plc_status():
         statuses[line_name][channel_id] = "CONNECTED" if plc_conn.connected else "DISCONNECTED"
 
     return statuses
+
+@app.post("/api/upload_images")
+async def upload_images(
+    object_id: str = Form(...),
+    images: List[UploadFile] = File(...),
+    defects: List[str] = Form(...)
+):
+    folder_path = f"C:/IX-Monitor/images_submitted/{object_id}"
+    os.makedirs(folder_path, exist_ok=True)
+
+    for i, image_file in enumerate(images):
+        defect_name = defects[i].replace(" ", "_").replace(":", "_")
+        filename = image_file.filename or f"image_{i}.jpg"
+        ext = os.path.splitext(filename)[-1]
+        save_path = generate_unique_filename(folder_path, defect_name, ext)
+
+        with open(save_path, "wb") as f:
+            content = await image_file.read()
+            f.write(content)
+
+    return {"status": "ok", "saved": len(images)}
 
 @app.post("/api/set_issues")
 async def set_issues(request: Request):
@@ -2443,7 +2475,7 @@ async def get_overlay_config(
         print(f"➡️ Checking config: image = '{image_name}', path = '{config_path}'")
 
         if config_path.lower() == path.lower():
-            image_url = f"http://192.168.0.10:8000/images/{line_name}/{station}/{image_name}"
+            image_url = f"http://localhost:8000/images/{line_name}/{station}/{image_name}"
             print(f"✅ MATCH FOUND! Returning image: {image_url}")
             return {
                 "image_url": image_url,

@@ -78,19 +78,24 @@ class _DataLoadingScreenState extends State<DataLoadingScreen>
   }
 
   Future<void> _simulateLoading() async {
-    const totalSteps = 100;
-    for (int i = 0; i <= totalSteps; i++) {
-      await Future.delayed(const Duration(milliseconds: 20));
+    const duration = Duration(seconds: 2);
+    final start = DateTime.now();
+
+    // Animate progress from 0 to 1 over 2 seconds
+    while (DateTime.now().difference(start) < duration) {
+      final elapsed = DateTime.now().difference(start).inMilliseconds;
       if (mounted) {
         setState(() {
-          _loadingProgress = i / totalSteps;
+          _loadingProgress = elapsed / duration.inMilliseconds;
         });
       }
+      await Future.delayed(const Duration(milliseconds: 16)); // ~60 FPS
     }
 
-    // Navigate to dashboard after loading
-    await Future.delayed(const Duration(milliseconds: 300));
     if (mounted) {
+      setState(() {
+        _loadingProgress = 1.0;
+      });
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const DashboardData()),
       );

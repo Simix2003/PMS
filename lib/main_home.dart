@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
-
-import 'pages/dashboard/dashboard_home.dart';
+import 'package:ix_monitor/pages/loading_Screen/home_loading_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +17,7 @@ class MyApp extends StatelessWidget {
     print('Building MyApp');
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'IX-Monitor Home',
+      title: 'PMS',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
@@ -34,7 +33,7 @@ class MyApp extends StatelessWidget {
         Locale('it', 'IT'), // 🇮🇹 Italian
       ],
       locale: const Locale('it', 'IT'), // 👈 Force Italian everywhere
-      home: const DashboardHome(),
+      home: HomeLoadingScreen(),
     );
   }
 }

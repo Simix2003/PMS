@@ -543,32 +543,50 @@ class StationCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          _buildLastModuleInfoRow(
-            Icons.data_object_rounded,
-            'ID:',
-            lastObject,
-            Colors.white,
-          ),
-          const SizedBox(height: 8),
-          _buildLastModuleInfoRow(
-            Icons.timer_outlined,
-            'Tempo Ciclo:',
-            lastCycleTime,
-            Colors.white,
-          ),
-          const SizedBox(height: 8),
-          _buildLastModuleInfoRow(
-            Icons.login_rounded,
-            'Ingresso:',
-            lastInTime,
-            Colors.white,
-          ),
-          const SizedBox(height: 8),
-          _buildLastModuleInfoRow(
-            Icons.logout_rounded,
-            'Uscita:',
-            lastOutTime,
-            Colors.white,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildLastModuleInfoRow(
+                      Icons.data_object_rounded,
+                      'ID:',
+                      lastObject,
+                      Colors.white,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildLastModuleInfoRow(
+                      Icons.timer_outlined,
+                      'Tempo Ciclo:',
+                      lastCycleTime,
+                      Colors.white,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildLastModuleInfoRow(
+                      Icons.login_rounded,
+                      'Ingresso:',
+                      lastInTime,
+                      Colors.white,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildLastModuleInfoRow(
+                      Icons.logout_rounded,
+                      'Uscita:',
+                      lastOutTime,
+                      Colors.white,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

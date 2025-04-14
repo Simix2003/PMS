@@ -1104,6 +1104,11 @@ class _FindPageState extends State<FindPage> {
     setState(() => results.clear());
 
     try {
+      if (activeFilters.isEmpty) {
+        await showNoFiltersDialog(context);
+        return;
+      }
+
       final data = await ApiService.fetchSearchResults(
         filters: activeFilters,
         orderBy: selectedOrderBy,

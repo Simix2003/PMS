@@ -43,35 +43,24 @@ def fetch_production_summary(
         raise Exception(f"Errore durante il caricamento dei dati: {response.status_code} - {response.text}")
 
 def build_italian_prompt(summary_data: dict) -> str:
-    print("🧠 Costruzione del prompt per il modello Gemma...")
+    print("🧠 Costruzione del prompt per l'AI...")
     return f"""
-Agisci come un assistente AI specializzato nell'analisi della produzione industriale. Ti fornirò un riepilogo della produzione di una linea specifica, e il tuo compito è:
+Sei un assistente AI per il monitoraggio della produzione in fabbrica. Analizza i seguenti dati riepilogativi della produzione e fornisci:
 
-🧩 Ragionare passo-passo per:
-1. Identificare i **difetti più frequenti**, indicando **quante volte** sono apparsi e **in quali stazioni**.
-2. Calcolare per ogni stazione il **tasso di KO** = (pezzi KO / pezzi totali) e indicare le **peggiori stazioni**.
-3. Individuare **tendenze** tra i turni, come difetti che aumentano o diminuiscono da un turno all'altro.
-4. Rilevare **anomalie sospette**, ad esempio:
-   - stazioni inattive che presentano difetti
-   - stazioni con ciclo troppo veloce o troppo lento
-   - difetti concentrati in un solo turno
-5. Dare **raccomandazioni operative pratiche** per migliorare le stazioni problematiche.
-6. Scrivere un **riassunto finale** chiaro e sintetico per il responsabile.
+1. I difetti principali e le stazioni in cui si presentano più frequentemente (con conteggio).
+2. Le stazioni con il tasso di KO più elevato (percentuale KO su totale).
+3. Tendenze significative nei difetti tra i vari turni o tra le stazioni.
+4. Correlazioni sospette (es. KO solo in turno 3 o su una specifica macchina).
+5. Raccomandazioni operative specifiche per ogni stazione dove sono presenti problemi.
+6. Un riassunto finale dello stato della produzione.
 
-📊 Segui questo schema JSON esatto:
-
-```json
-{{
-  "main_defects": [{{"nome": "...", "conteggio": ..., "stazione": "..."}}],
-  "worst_stations": [{{"stazione": "...", "ko_percentuale": ..., "ko_count": ..., "totale": ...}}],
-  "defect_trends": [{{"difetto": "...", "turno": "...", "variazione": "..."}}],
-  "anomalies": ["..."],
-  "recommendations": {{
-    "nome_stazione": ["Suggerimento 1", "Suggerimento 2"]
-  }},
-  "summary": "..."
-}}
-
+Rispondi in JSON solo in ITALIANO con le seguenti chiavi:
+- main_defects (elenco di difetti più frequenti con stazione e conteggio)
+- worst_stations (stazioni con alto tasso di KO, con percentuali)
+- defect_trends (pattern nei difetti, se presenti)
+- anomalies (comportamenti anomali o inaspettati nei dati)
+- recommendations (suggerimenti specifici per migliorare la produzione)
+- summary (testo riassuntivo dell’intera analisi)
 
 Dati:
 {json.dumps(summary_data, indent=2, ensure_ascii=False)}

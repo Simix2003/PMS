@@ -302,3 +302,16 @@ class ExportConfirmationDialog extends StatelessWidget {
     );
   }
 }
+
+Future<void> showNoFiltersDialog(BuildContext context) {
+  return AwesomeDialog(
+    context: context,
+    width: 750,
+    dialogType: DialogType.noHeader,
+    animType: AnimType.bottomSlide,
+    title: 'Nessun filtro selezionato',
+    desc: 'Per favore, seleziona almeno un filtro prima di avviare la ricerca.',
+    btnOkOnPress: () {},
+    btnOkColor: Colors.green,
+  ).show();
+}

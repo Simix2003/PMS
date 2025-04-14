@@ -654,6 +654,9 @@ class _DataViewPageState extends State<DataViewPage> {
     final m308Data = m308.value as Map<String, dynamic>? ?? {};
     final m309Data = m309.value as Map<String, dynamic>? ?? {};
 
+    print('m308 data: $m308Data');
+    print('m309 data: $m309Data');
+
     final m308Cycle = _parseCycleTime(m308Data['avg_cycle_time']);
     final m309Cycle = _parseCycleTime(m309Data['avg_cycle_time']);
 
@@ -686,11 +689,17 @@ class _DataViewPageState extends State<DataViewPage> {
     final m309defects =
         m309defectsRaw is Map ? Map<String, dynamic>.from(m309defectsRaw) : {};
 
-    final defects = {...m308defects, ...m309defects};
+    final defects = <String, num>{};
+
+    for (final key in {...m308defects.keys, ...m309defects.keys}) {
+      final m308Val = m308defects[key] ?? 0;
+      final m309Val = m309defects[key] ?? 0;
+      defects[key] = (m308Val as num) + (m309Val as num);
+    }
 
     // Fill missing categories with 0
     final filledDefects = {
-      for (var key in allDefectCategories) key: (defects[key] ?? 0) as num
+      for (var key in allDefectCategories) key: (defects[key] ?? 0)
     };
 
     final chartMaxY =

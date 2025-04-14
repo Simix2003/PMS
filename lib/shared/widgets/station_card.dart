@@ -4,15 +4,20 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 
 class StationCard extends StatelessWidget {
   final String station;
   final Map<String, dynamic> stationData;
+  final DateTime? selectedDate;
+  final DateTimeRange? selectedRange;
 
   const StationCard({
     super.key,
     required this.station,
     required this.stationData,
+    required this.selectedDate,
+    required this.selectedRange,
   });
 
   static const List<String> allDefectCategories = [
@@ -193,6 +198,24 @@ class StationCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (selectedRange != null)
+                    Text(
+                      '${DateFormat("dd MMMM yyyy", "it_IT").format(selectedRange!.start)} → ${DateFormat("dd MMMM yyyy", "it_IT").format(selectedRange!.end)}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey,
+                      ),
+                    )
+                  else if (selectedDate != null)
+                    Text(
+                      DateFormat("dd MMMM yyyy", "it_IT").format(selectedDate!),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey,
+                      ),
+                    ),
                   const SizedBox(height: 24),
 
                   // OK / KO summary with iOS style

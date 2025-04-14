@@ -104,10 +104,12 @@ ISSUE_TREE = {
             "Esito_Scarto": {
                 "Difetti": {
                     "Generali": {
-                        "Non Lavorato Poe Scaduto": {},
-                        "Non Lavorato da Telecamere": {},
+                        "Non Lavorato Poe Scaduto": {}, 
+                        "No Good da Bussing": {}, #NO GOOD DA BUSSING............... old: Non Lavorato da Telecamere
                         "Materiale Esterno su Celle": {},
-                        "Bad Soldering": {}
+                        "Bad Soldering": {},
+                        "Passthroug": {},
+                        # PASSTHROUGH, Questi non devono essere calcolati nello Yield
                     },
                     "Saldatura": {
                         f"Stringa[{i}]": {
@@ -801,8 +803,8 @@ def ng_generali_sheet(ws, data: dict) -> bool:
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
-        "Poe Scaduto", "Non Lav. Da Telecamere",
-        "Materiale Esterno su Celle", "Bad Soldering"
+        "Poe Scaduto", "No Good da Bussing",
+        "Materiale Esterno su Celle", "Bad Soldering", "Passthroug"
     ]
     ws.append(header)
 
@@ -847,9 +849,10 @@ def ng_generali_sheet(ws, data: dict) -> bool:
 
         general_defects = {d.get("defect_type") for d in prod_defects}
         flag_poe = "NG" if "Non Lavorato Poe Scaduto" in general_defects else ""
-        flag_tel = "NG" if "Non Lavorato da Telecamere" in general_defects else ""
+        flag_bus = "NG" if "No Good da Bussing" in general_defects else ""
         flag_materiale = "NG" if "Materiale Esterno su Celle" in general_defects else ""
         flag_bad = "NG" if "Bad Soldering" in general_defects else ""
+        flag_passthrough = "NG" if "Passthroug" in general_defects else ""
 
         row = [
             line_display_name,
@@ -861,16 +864,17 @@ def ng_generali_sheet(ws, data: dict) -> bool:
             esito,
             cycle_time,
             flag_poe,
-            flag_tel,
+            flag_bus,
             flag_materiale,
-            flag_bad
+            flag_bad,
+            flag_passthrough
         ]
         ws.append(row)
 
     if rows_written > 0:
         autofit_columns(ws, align_center_for={
-            "Esito", "Poe Scaduto", "Non Lav. Da Telecamere",
-            "Materiale Esterno su Celle", "Bad Soldering"
+            "Esito", "Poe Scaduto", "No Good da Bussing",
+            "Materiale Esterno su Celle", "Bad Soldering", "Passthroug"
         })
         return True
     else:
@@ -2581,6 +2585,20 @@ async def productions_summary(
             else:
                 return JSONResponse(status_code=400, content={"error": "Missing 'date' or 'from' and 'to'"})
 
+            # Optional start_time and end_time overrides
+            if start_time and end_time and not turno:
+                try:
+                    # Convert to proper datetime strings if needed
+                    _ = datetime.fromisoformat(start_time)
+                    _ = datetime.fromisoformat(end_time)
+                    where_clause += " AND p.end_time BETWEEN %s AND %s"
+                    params.extend([start_time, end_time])
+                except ValueError:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"error": "start_time and end_time must be ISO 8601 formatted strings"}
+                    )
+                
             if turno:
                 turno_times = {
                     1: ("06:00:00", "13:59:59"),
@@ -2623,20 +2641,6 @@ async def productions_summary(
                     where_clause += " AND TIME(p.end_time) BETWEEN %s AND %s"
                     params.extend([turno_start, turno_end])
 
-            # Optional start_time and end_time overrides
-            if start_time and end_time:
-                try:
-                    # Convert to proper datetime strings if needed
-                    _ = datetime.fromisoformat(start_time)
-                    _ = datetime.fromisoformat(end_time)
-                    where_clause += " AND p.end_time BETWEEN %s AND %s"
-                    params.extend([start_time, end_time])
-                except ValueError:
-                    return JSONResponse(
-                        status_code=400,
-                        content={"error": "start_time and end_time must be ISO 8601 formatted strings"}
-                    )
-
             # Filter by production line if provided.
             # In the new schema, we join production_lines (alias pl) via stations.
             if line_name:
@@ -2672,8 +2676,6 @@ async def productions_summary(
                     "avg_cycle_time": str(row['avg_cycle_time']),
                     "last_cycle_time": "00:00:00"
                 }
-
-            print('stations: ', stations)
 
             # Fill in missing stations (for visual consistency).
             # CHANNELS should be defined elsewhere in your code.

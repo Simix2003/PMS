@@ -505,7 +505,12 @@ class _DataViewPageState extends State<DataViewPage> {
                           _buildHeaderCard(maxY, stations),
                           const SizedBox(height: 24),
                           _buildLineaOverviewCard(
-                              stations, selectedLine, lineDisplayNames),
+                            stations,
+                            selectedLine,
+                            lineDisplayNames,
+                            _selectedDate,
+                            _selectedRange,
+                          ),
                           const SizedBox(height: 24),
                           ...stations.map((entry) {
                             final stationCode = entry.key;
@@ -516,6 +521,8 @@ class _DataViewPageState extends State<DataViewPage> {
                             return StationCard(
                               station: visualName,
                               stationData: stationData,
+                              selectedDate: _selectedDate,
+                              selectedRange: _selectedRange,
                             );
                           }).toList(),
                         ],
@@ -645,6 +652,8 @@ class _DataViewPageState extends State<DataViewPage> {
     List<MapEntry<String, dynamic>> stations,
     String selectedLine,
     Map<String, String> lineDisplayNames,
+    DateTime? selectedDate,
+    DateTimeRange? selectedRange,
   ) {
     final m308 = stations.firstWhere((e) => e.key == 'M308',
         orElse: () => MapEntry('M308', {}));
@@ -653,9 +662,6 @@ class _DataViewPageState extends State<DataViewPage> {
 
     final m308Data = m308.value as Map<String, dynamic>? ?? {};
     final m309Data = m309.value as Map<String, dynamic>? ?? {};
-
-    print('m308 data: $m308Data');
-    print('m309 data: $m309Data');
 
     final m308Cycle = _parseCycleTime(m308Data['avg_cycle_time']);
     final m309Cycle = _parseCycleTime(m309Data['avg_cycle_time']);
@@ -739,6 +745,24 @@ class _DataViewPageState extends State<DataViewPage> {
                   letterSpacing: -0.5,
                 ),
               ),
+              if (selectedRange != null)
+                Text(
+                  '${DateFormat("dd MMMM yyyy", "it_IT").format(selectedRange.start)} → ${DateFormat("dd MMMM yyyy", "it_IT").format(selectedRange.end)}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey,
+                  ),
+                )
+              else if (selectedDate != null)
+                Text(
+                  DateFormat("dd MMMM yyyy", "it_IT").format(selectedDate),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey,
+                  ),
+                ),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

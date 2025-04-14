@@ -27,6 +27,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
+from collections import defaultdict
 
 
 # ---------------- CONFIG & GLOBALS ----------------
@@ -195,15 +196,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     line_configs = load_station_configs("C:/IX-Monitor/stations.ini")
 
-    for line, config in line_configs.items():
-        plc_ip = config["PLC"]["IP"]
-        plc_slot = config["PLC"]["SLOT"]
+    #for line, config in line_configs.items():
+    #    plc_ip = config["PLC"]["IP"]
+    #    plc_slot = config["PLC"]["SLOT"]
 
-        for station in config["stations"]:
-            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
-            plc_connections[f"{line}.{station}"] = plc_conn
-            asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
-            print(f"🚀 Background task created for {line}.{station}")
+    #    for station in config["stations"]:
+    #        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+    #        plc_connections[f"{line}.{station}"] = plc_conn
+    #        asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
+    #        print(f"🚀 Background task created for {line}.{station}")
 
     yield
 
@@ -2805,160 +2806,177 @@ async def search_results(request: Request):
             join_clauses.append("JOIN object_defects od ON p.id = od.production_id")
             join_clauses.append("JOIN defects d ON od.defect_id = d.id")
 
-        # Process all filters.
+        # Group filters by type
+        grouped_filters = defaultdict(list)
         for f in filters:
-            key, value = f.get("type"), f.get("value")
-            if key == "ID Modulo":
-                where_clauses.append("o.id_modulo LIKE %s")
-                params.append(f"%{value}%")
+            grouped_filters[f.get("type")].append(f)
+
+        # Process grouped filters
+        for filter_type, group in grouped_filters.items():
+            group_clauses = []
+            group_params = []
             
-            elif key == "Esito":
-                if value == "OK":
-                    where_clauses.append("p.esito = 1")
-                elif value == "KO":
-                    where_clauses.append("p.esito = 6")
-                elif value == "In Produzione":
-                    where_clauses.append("p.esito NOT IN (1, 6)")
-            
-            elif key == "Operatore":
-                where_clauses.append("p.operator_id LIKE %s")
-                params.append(f"%{value}%")
-            
-            elif key == "Linea":
-                where_clauses.append("pl.display_name = %s")
-                params.append(value)
-            
-            elif key == "Stazione":
-                where_clauses.append("s.name = %s")
-                params.append(value)
-            
-            elif key == "Turno":
-                turno_times = {
-                    "1": ("06:00:00", "13:59:59"),
-                    "2": ("14:00:00", "21:59:59"),
-                    "3": ("22:00:00", "05:59:59"),
-                }
-                if value in turno_times:
-                    start_t, end_t = turno_times[value]
-                    if value == "3":
-                        where_clauses.append(
-                            "(TIME(p.end_time) >= '22:00:00' OR TIME(p.end_time) <= '05:59:59')"
-                        )
+            for f in group:
+                key = f.get("type")
+                value = f.get("value")
+                if key == "ID Modulo":
+                    group_clauses.append("o.id_modulo LIKE %s")
+                    group_params.append(f"%{value}%")
+                
+                elif key == "Esito":
+                    if value == "OK":
+                        group_clauses.append("p.esito = 1")
+                    elif value == "KO":
+                        group_clauses.append("p.esito = 6")
+                    elif value == "In Produzione":
+                        group_clauses.append("p.esito NOT IN (1, 6)")
+                
+                elif key == "Operatore":
+                    group_clauses.append("p.operator_id LIKE %s")
+                    group_params.append(f"%{value}%")
+                
+                elif key == "Linea":
+                    group_clauses.append("pl.display_name = %s")
+                    group_params.append(value)
+                
+                elif key == "Stazione":
+                    group_clauses.append("s.name = %s")
+                    group_params.append(value)
+                
+                elif key == "Turno":
+                    turno_times = {
+                        "1": ("06:00:00", "13:59:59"),
+                        "2": ("14:00:00", "21:59:59"),
+                        "3": ("22:00:00", "05:59:59"),
+                    }
+                    if value in turno_times:
+                        start_t, end_t = turno_times[value]
+                        if value == "3":
+                            group_clauses.append(
+                                "(TIME(p.end_time) >= '22:00:00' OR TIME(p.end_time) <= '05:59:59')"
+                            )
+                        else:
+                            group_clauses.append("TIME(p.end_time) BETWEEN %s AND %s")
+                            group_params.extend([start_t, end_t])
+                
+                elif key == "Data":
+                    from_iso = f.get("start")
+                    to_iso = f.get("end")
+                    if from_iso and to_iso:  # Make sure they're not None
+                        try:
+                            from_dt = datetime.fromisoformat(from_iso)
+                            to_dt = datetime.fromisoformat(to_iso)
+                            group_clauses.append("p.end_time BETWEEN %s AND %s")
+                            group_params.extend([from_dt, to_dt])
+                        except Exception as e:
+                            print(f"ISO datetime parsing error: {e}")
                     else:
-                        where_clauses.append("TIME(p.end_time) BETWEEN %s AND %s")
-                        params.extend([start_t, end_t])
-            
-            elif key == "Data":
-                from_iso = f.get("start")
-                to_iso = f.get("end")
-                if from_iso and to_iso:  # Make sure they're not None
-                    try:
-                        from_dt = datetime.fromisoformat(from_iso)
-                        to_dt = datetime.fromisoformat(to_iso)
-                        where_clauses.append("p.end_time BETWEEN %s AND %s")
-                        params.extend([from_dt, to_dt])
-                    except Exception as e:
-                        print(f"ISO datetime parsing error: {e}")
-                else:
-                    print("Missing 'start' or 'end' value in Data filter")
+                        print("Missing 'start' or 'end' value in Data filter")
 
-            elif key == "Stringatrice":
-                stringatrice_map = {
-                    "1": "Str1",
-                    "2": "Str2",
-                    "3": "Str3",
-                    "4": "Str4",
-                    "5": "Str5"
-                }
-                if value in stringatrice_map:
-                    # Add a second join to stations table (aliased as ls for last_station)
-                    join_clauses.append("LEFT JOIN stations ls ON p.last_station_id = ls.id")
-                    where_clauses.append("ls.name = %s")
-                    params.append(stringatrice_map[value])
-            
-            elif key == "Difetto" and value:
-                # Split the composite defect filter by " > "
-                parts = value.split(" > ")
-                if not parts:
-                    continue
-                # Always filter by defect category.
-                defect_category = parts[0]
-                where_clauses.append("d.category = %s")
-                params.append(defect_category)
+                elif key == "Stringatrice":
+                    stringatrice_map = {
+                        "1": "Str1",
+                        "2": "Str2",
+                        "3": "Str3",
+                        "4": "Str4",
+                        "5": "Str5"
+                    }
+                    if value in stringatrice_map:
+                        # Add a second join to stations table (aliased as ls for last_station)
+                        join_clauses.append("LEFT JOIN stations ls ON p.last_station_id = ls.id")
+                        group_clauses.append("ls.name = %s")
+                        group_params.append(stringatrice_map[value])
+                
+                elif key == "Difetto" and value:
+                    # Split the composite defect filter by " > "
+                    parts = value.split(" > ")
+                    if not parts:
+                        continue
+                    # Always filter by defect category.
+                    defect_category = parts[0]
+                    group_clauses.append("d.category = %s")
+                    group_params.append(defect_category)
 
-                if defect_category == "Generali":
-                    if len(parts) > 1 and parts[1].strip():
-                        # For Generali, second part is defect_type.
-                        where_clauses.append("od.defect_type = %s")
-                        params.append(parts[1])
-                elif defect_category == "Saldatura":
-                    # Expected: Saldatura > Stringa[<num>] > Lato <letter> > Pin[<num>]
-                    if len(parts) > 1 and parts[1].strip():
-                        match = re.search(r'\[(\d+)\]', parts[1])
-                        if match:
-                            stringa_num = int(match.group(1))
-                            where_clauses.append("od.stringa = %s")
-                            params.append(stringa_num)
-                    if len(parts) > 2 and parts[2].strip():
-                        lato = parts[2].replace("Lato ", "").strip()
-                        where_clauses.append("od.ribbon_lato = %s")
-                        params.append(lato)
-                    if len(parts) > 3 and parts[3].strip():
-                        match = re.search(r'\[(\d+)\]', parts[3])
-                        if match:
-                            pin_num = int(match.group(1))
-                            where_clauses.append("od.s_ribbon = %s")
-                            params.append(pin_num)
-                elif defect_category == "Disallineamento":
-                    # Expected can be either:
-                    #   "Disallineamento > Stringa > Stringa[<num>]"
-                    #   or "Disallineamento > Ribbon > Lato <letter> > Ribbon[<num>]"
-                    if len(parts) > 1 and parts[1].strip():
-                        mode = parts[1]
-                        if mode == "Stringa":
-                            if len(parts) > 2 and parts[2].strip():
-                                match = re.search(r'\[(\d+)\]', parts[2])
-                                if match:
-                                    stringa_num = int(match.group(1))
-                                    where_clauses.append("od.stringa = %s")
-                                    params.append(stringa_num)
-                        elif mode == "Ribbon":
-                            if len(parts) > 2 and parts[2].strip():
-                                lato = parts[2].replace("Lato ", "").strip()
-                                where_clauses.append("od.ribbon_lato = %s")
-                                params.append(lato)
-                            if len(parts) > 3 and parts[3].strip():
-                                match = re.search(r'\[(\d+)\]', parts[3])
-                                if match:
-                                    ribbon_num = int(match.group(1))
-                                    # For Disallineamento in Ribbon mode, use i_ribbon.
-                                    where_clauses.append("od.i_ribbon = %s")
-                                    params.append(ribbon_num)
-                elif defect_category == "Mancanza Ribbon":
-                    # Expected: Mancanza Ribbon > Lato <letter> > Ribbon[<num>]
-                    if len(parts) > 1 and parts[1].strip():
-                        lato = parts[1].replace("Lato ", "").strip()
-                        where_clauses.append("od.ribbon_lato = %s")
-                        params.append(lato)
-                    if len(parts) > 2 and parts[2].strip():
-                        match = re.search(r'\[(\d+)\]', parts[2])
-                        if match:
-                            ribbon_num = int(match.group(1))
-                            # For Mancanza Ribbon use i_ribbon.
-                            where_clauses.append("od.i_ribbon = %s")
-                            params.append(ribbon_num)
-                elif defect_category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon"):
-                    # Expected: e.g., "Macchie ECA > Stringa[<num>]"
-                    if len(parts) > 1 and parts[1].strip():
-                        match = re.search(r'\[(\d+)\]', parts[1])
-                        if match:
-                            stringa_num = int(match.group(1))
-                            where_clauses.append("od.stringa = %s")
-                            params.append(stringa_num)
-                elif defect_category == "Altro":
-                    if len(parts) > 1 and parts[1].strip():
-                        where_clauses.append("od.extra_data LIKE %s")
-                        params.append(f"%{parts[1]}%")
+                    if defect_category == "Generali":
+                        if len(parts) > 1 and parts[1].strip():
+                            # For Generali, second part is defect_type.
+                            group_clauses.append("od.defect_type = %s")
+                            group_params.append(parts[1])
+                    elif defect_category == "Saldatura":
+                        # Expected: Saldatura > Stringa[<num>] > Lato <letter> > Pin[<num>]
+                        if len(parts) > 1 and parts[1].strip():
+                            match = re.search(r'\[(\d+)\]', parts[1])
+                            if match:
+                                stringa_num = int(match.group(1))
+                                group_clauses.append("od.stringa = %s")
+                                group_params.append(stringa_num)
+                        if len(parts) > 2 and parts[2].strip():
+                            lato = parts[2].replace("Lato ", "").strip()
+                            group_clauses.append("od.ribbon_lato = %s")
+                            group_params.append(lato)
+                        if len(parts) > 3 and parts[3].strip():
+                            match = re.search(r'\[(\d+)\]', parts[3])
+                            if match:
+                                pin_num = int(match.group(1))
+                                group_clauses.append("od.s_ribbon = %s")
+                                group_params.append(pin_num)
+                    elif defect_category == "Disallineamento":
+                        # Expected can be either:
+                        #   "Disallineamento > Stringa > Stringa[<num>]"
+                        #   or "Disallineamento > Ribbon > Lato <letter> > Ribbon[<num>]"
+                        if len(parts) > 1 and parts[1].strip():
+                            mode = parts[1]
+                            if mode == "Stringa":
+                                if len(parts) > 2 and parts[2].strip():
+                                    match = re.search(r'\[(\d+)\]', parts[2])
+                                    if match:
+                                        stringa_num = int(match.group(1))
+                                        group_clauses.append("od.stringa = %s")
+                                        group_params.append(stringa_num)
+                            elif mode == "Ribbon":
+                                if len(parts) > 2 and parts[2].strip():
+                                    lato = parts[2].replace("Lato ", "").strip()
+                                    group_clauses.append("od.ribbon_lato = %s")
+                                    group_params.append(lato)
+                                if len(parts) > 3 and parts[3].strip():
+                                    match = re.search(r'\[(\d+)\]', parts[3])
+                                    if match:
+                                        ribbon_num = int(match.group(1))
+                                        # For Disallineamento in Ribbon mode, use i_ribbon.
+                                        group_clauses.append("od.i_ribbon = %s")
+                                        group_params.append(ribbon_num)
+                    elif defect_category == "Mancanza Ribbon":
+                        # Expected: Mancanza Ribbon > Lato <letter> > Ribbon[<num>]
+                        if len(parts) > 1 and parts[1].strip():
+                            lato = parts[1].replace("Lato ", "").strip()
+                            group_clauses.append("od.ribbon_lato = %s")
+                            group_params.append(lato)
+                        if len(parts) > 2 and parts[2].strip():
+                            match = re.search(r'\[(\d+)\]', parts[2])
+                            if match:
+                                ribbon_num = int(match.group(1))
+                                # For Mancanza Ribbon use i_ribbon.
+                                group_clauses.append("od.i_ribbon = %s")
+                                group_params.append(ribbon_num)
+                    elif defect_category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon"):
+                        # Expected: e.g., "Macchie ECA > Stringa[<num>]"
+                        if len(parts) > 1 and parts[1].strip():
+                            match = re.search(r'\[(\d+)\]', parts[1])
+                            if match:
+                                stringa_num = int(match.group(1))
+                                group_clauses.append("od.stringa = %s")
+                                group_params.append(stringa_num)
+                    elif defect_category == "Altro":
+                        if len(parts) > 1 and parts[1].strip():
+                            group_clauses.append("od.extra_data LIKE %s")
+                            group_params.append(f"%{parts[1]}%")
+
+        if len(group_clauses) == 1:
+            where_clauses.append(group_clauses[0])
+        elif len(group_clauses) > 1:
+            where_clauses.append("(" + " OR ".join(group_clauses) + ")")
+        params.extend(group_params)
+
 
         # Build final JOIN and WHERE SQL parts.
         join_sql = " ".join(join_clauses)

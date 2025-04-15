@@ -328,4 +328,24 @@ class ApiService {
       throw Exception("Errore durante la ricerca");
     }
   }
+
+  static Future<List<String>> fetchInitialIssuesForObject(
+      String idModulo) async {
+    try {
+      final uri =
+          Uri.parse('$baseUrl/api/issues/for_object?id_modulo=$idModulo');
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.cast<String>(); // Converti dinamicamente a List<String>
+      } else {
+        debugPrint("❌ Failed to fetch initial issues: ${response.statusCode}");
+        return [];
+      }
+    } catch (e) {
+      debugPrint("❌ Exception in fetchInitialIssuesForObject: $e");
+      return [];
+    }
+  }
 }

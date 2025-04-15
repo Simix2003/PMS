@@ -36,10 +36,11 @@ class _DataViewPageState extends State<DataViewPage> {
   int selectedTurno = 0;
 
   String selectedLine = "Linea2";
-  final List<String> availableLines = ["Linea1", "Linea2"];
+  final List<String> availableLines = ["Linea1", "Linea2", "Linea3"];
   final Map<String, String> lineDisplayNames = {
     'Linea1': 'Linea A',
     'Linea2': 'Linea B',
+    'Linea3': 'Linea C',
   };
 
   Map<String, dynamic>? _fetchedData;

@@ -9,6 +9,8 @@ class IssueSelectorWidget extends StatefulWidget {
   final String channelId;
   final Function(String fullPath) onIssueSelected;
   final void Function(List<Map<String, String>> pictures)? onPicturesChanged;
+  final bool isReworkMode; // defaults to false
+  final List<String> initiallySelectedIssues; // used in rework
 
   const IssueSelectorWidget({
     super.key,
@@ -16,6 +18,8 @@ class IssueSelectorWidget extends StatefulWidget {
     required this.channelId,
     required this.onIssueSelected,
     this.onPicturesChanged,
+    this.isReworkMode = false,
+    this.initiallySelectedIssues = const [],
   });
 
   @override
@@ -53,7 +57,10 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   @override
   void initState() {
     super.initState();
-    // Show main groups initially.
+
+    if (widget.isReworkMode) {
+      selectedLeaves = widget.initiallySelectedIssues.toSet();
+    }
   }
 
   // Build the full API path using the new backend structure.
@@ -162,16 +169,26 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     } else if (type == "Leaf") {
       final fullPath = "$apiPath.$name";
       setState(() {
-        if (selectedLeaves.contains(fullPath)) {
-          selectedLeaves.remove(fullPath);
-          if (activeLeafDefect == fullPath) {
-            activeLeafDefect = null;
+        if (widget.isReworkMode) {
+          if (selectedLeaves.contains(fullPath)) {
+            selectedLeaves.remove(fullPath); // fixed defect
+            if (activeLeafDefect == fullPath) {
+              activeLeafDefect = null;
+            }
+          } else {
+            selectedLeaves.add(fullPath); // undo fix
+            activeLeafDefect = fullPath;
           }
         } else {
-          selectedLeaves.add(fullPath);
-          activeLeafDefect = fullPath; // 👈 Update active defect
-          print('activeLeafDefect');
-          print(activeLeafDefect);
+          if (selectedLeaves.contains(fullPath)) {
+            selectedLeaves.remove(fullPath);
+            if (activeLeafDefect == fullPath) {
+              activeLeafDefect = null;
+            }
+          } else {
+            selectedLeaves.add(fullPath);
+            activeLeafDefect = fullPath;
+          }
         }
       });
       widget.onIssueSelected(fullPath);
@@ -639,8 +656,12 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                     final String type = rect['type'] ?? "Leaf";
                     final fullPath = "$apiPath.$name";
                     // Highlight if this rectangle was directly selected or is a parent
-                    final isSelected = selectedLeaves.contains(fullPath) ||
-                        selectedLeaves.any((leaf) => leaf.startsWith(fullPath));
+                    final isSelected = widget.isReworkMode
+                        ? selectedLeaves.contains(
+                            fullPath) // in Rework mode, these are still KO
+                        : selectedLeaves.contains(fullPath) ||
+                            selectedLeaves
+                                .any((leaf) => leaf.startsWith(fullPath));
 
                     return Positioned(
                       left: x,

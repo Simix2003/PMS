@@ -53,16 +53,16 @@ CHANNELS = {
             "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
             "stringatrice": {"db": 19606, "byte": 94, "length": 5},
         },
-    "M326": {
-            "trigger": {"db": 19606, "byte": 96, "bit": 4},
-            "id_modulo": {"db": 19606, "byte": 98, "length": 20},
-            "id_utente": {"db": 19606, "byte": 120, "length": 20},
-            "fine_buona": {"db": 19606, "byte": 96, "bit": 4},
-            "fine_scarto": {"db": 19606, "byte": 96, "bit": 5},
-            "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
-            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
-            "stringatrice": {"db": 19606, "byte": 142, "length": 5},
-        },
+        "M326": {
+                "trigger": {"db": 19606, "byte": 96, "bit": 4},
+                "id_modulo": {"db": 19606, "byte": 98, "length": 20},
+                "id_utente": {"db": 19606, "byte": 120, "length": 20},
+                "fine_buona": {"db": 19606, "byte": 96, "bit": 4},
+                "fine_scarto": {"db": 19606, "byte": 96, "bit": 5},
+                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
+                "stringatrice": {"db": 19606, "byte": 142, "length": 5},
+            },
     },
     "Linea2": {
         "M308": {
@@ -85,16 +85,48 @@ CHANNELS = {
             "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
             "stringatrice": {"db": 19606, "byte": 94, "length": 5},
         },
-    "M326": {
-            "trigger": {"db": 19606, "byte": 96, "bit": 4},
-            "id_modulo": {"db": 19606, "byte": 98, "length": 20},
-            "id_utente": {"db": 19606, "byte": 120, "length": 20},
-            "fine_buona": {"db": 19606, "byte": 96, "bit": 4},
-            "fine_scarto": {"db": 19606, "byte": 96, "bit": 5},
-            "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
-            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
-            "stringatrice": {"db": 19606, "byte": 142, "length": 5},
+        "M326": {
+                "trigger": {"db": 19606, "byte": 96, "bit": 4},
+                "id_modulo": {"db": 19606, "byte": 98, "length": 20},
+                "id_utente": {"db": 19606, "byte": 120, "length": 20},
+                "fine_buona": {"db": 19606, "byte": 96, "bit": 4},
+                "fine_scarto": {"db": 19606, "byte": 96, "bit": 5},
+                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
+                "stringatrice": {"db": 19606, "byte": 142, "length": 5},
+            },
+    },
+    "Linea3": {
+        "M308": {
+            "trigger": {"db": 19606, "byte": 0, "bit": 4},
+            "id_modulo": {"db": 19606, "byte": 2, "length": 20},
+            "id_utente": {"db": 19606, "byte": 24, "length": 20},
+            "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
+            "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
+            "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
+            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
+            "stringatrice": {"db": 19606, "byte": 46, "length": 5},
         },
+        "M309": {
+            "trigger": {"db": 19606, "byte": 48, "bit": 4},
+            "id_modulo": {"db": 19606, "byte": 50, "length": 20},
+            "id_utente": {"db": 19606, "byte": 72, "length": 20},
+            "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
+            "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
+            "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
+            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
+            "stringatrice": {"db": 19606, "byte": 94, "length": 5},
+        },
+        "M326": {
+                "trigger": {"db": 19606, "byte": 96, "bit": 4},
+                "id_modulo": {"db": 19606, "byte": 98, "length": 20},
+                "id_utente": {"db": 19606, "byte": 120, "length": 20},
+                "fine_buona": {"db": 19606, "byte": 96, "bit": 4},
+                "fine_scarto": {"db": 19606, "byte": 96, "bit": 5},
+                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
+                "stringatrice": {"db": 19606, "byte": 142, "length": 5},
+            },
     },
 }
 
@@ -198,15 +230,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     line_configs = load_station_configs("C:/IX-Monitor/stations.ini")
 
-    #for line, config in line_configs.items():
-    #    plc_ip = config["PLC"]["IP"]
-    #    plc_slot = config["PLC"]["SLOT"]
+    for line, config in line_configs.items():
+        plc_ip = config["PLC"]["IP"]
+        plc_slot = config["PLC"]["SLOT"]
 
-    #    for station in config["stations"]:
-    #        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
-    #        plc_connections[f"{line}.{station}"] = plc_conn
-    #        asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
-    #        print(f"🚀 Background task created for {line}.{station}")
+        for station in config["stations"]:
+            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+            plc_connections[f"{line}.{station}"] = plc_conn
+            asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
+            print(f"🚀 Background task created for {line}.{station}")
 
     yield
 
@@ -3119,6 +3151,88 @@ def download_export(filename: str):
                             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     else:
         raise HTTPException(status_code=404, detail="File not found")
+
+@app.get("/api/issues/for_object")
+async def get_issues_for_object(id_modulo: str):
+    try:
+        assert mysql_connection is not None
+        with mysql_connection.cursor() as cursor:
+            # 1. Trova l'object_id
+            cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
+            obj = cursor.fetchone()
+            if not obj:
+                raise HTTPException(status_code=404, detail="Oggetto non trovato.")
+
+            object_id = obj["id"]
+            print('ObjectId: %s' % object_id)
+
+            # 2. Trova l'ultima production associata
+            cursor.execute("""
+                SELECT id FROM productions 
+                WHERE object_id = %s 
+                ORDER BY end_time DESC 
+                LIMIT 1
+            """, (object_id,))
+            prod = cursor.fetchone()
+            if not prod:
+                return []
+
+            production_id = prod["id"]
+            print('ProductionId: %s' % production_id)
+
+            # 3. Estrai i difetti associati
+            cursor.execute("""
+                SELECT d.category, od.defect_type, od.i_ribbon, od.stringa, 
+                       od.ribbon_lato, od.s_ribbon, od.extra_data
+                FROM object_defects od
+                JOIN defects d ON od.defect_id = d.id
+                WHERE od.production_id = %s
+            """, (production_id,))
+
+            defects = cursor.fetchall()
+            print(f'defects: {defects}')
+            issue_paths = []
+
+            for row in defects:
+                cat = row["category"]
+
+                if cat == "Generali":
+                    if row["defect_type"]:
+                        issue_paths.append(f"Dati.Esito.Esito_Scarto.Difetti.Generali.{row['defect_type']}")
+
+                elif cat == "Altro":
+                    if row["extra_data"]:
+                        issue_paths.append(f"Dati.Esito.Esito_Scarto.Difetti.Altro: {row['extra_data']}")
+
+                elif cat == "Saldatura":
+                    issue_paths.append(
+                        f"Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[{row['stringa']}].Pin[{row['s_ribbon']}].{row['ribbon_lato']}"
+                    )
+
+                elif cat == "Disallineamento":
+                    if row["stringa"]:
+                        issue_paths.append(f"Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[{row['stringa']}]")
+                    elif row["i_ribbon"] and row["ribbon_lato"]:
+                        issue_paths.append(
+                            f"Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
+                        )
+
+                elif cat == "Mancanza Ribbon":
+                    issue_paths.append(
+                        f"Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
+                    )
+
+                elif cat in ["Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon"]:
+                    issue_paths.append(
+                        f"Dati.Esito.Esito_Scarto.Difetti.{cat}.Stringa[{row['stringa']}]"
+                    )
+            
+            print('Issue Paths: %s' % issue_paths)
+            return issue_paths
+
+    except Exception as e:
+        logging.error(f"❌ Errore nel recupero dei difetti per id_modulo={id_modulo}: {e}")
+        raise HTTPException(status_code=500, detail="Errore nel server.")
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":

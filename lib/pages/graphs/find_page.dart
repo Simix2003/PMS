@@ -463,7 +463,7 @@ class _FindPageState extends State<FindPage> {
         return _buildStyledDropdown(
           hint: 'Linea',
           value: filterValue.isNotEmpty ? filterValue : null,
-          items: ['Linea A', 'Linea B'],
+          items: ['Linea A', 'Linea B', 'Linea C'],
           onChanged: (val) => setState(() => filterValue = val ?? ''),
         );
 

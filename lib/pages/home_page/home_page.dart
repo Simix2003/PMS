@@ -44,10 +44,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // LINES
   String selectedLine = "Linea2";
-  final List<String> availableLines = ["Linea1", "Linea2"];
+  final List<String> availableLines = ["Linea1", "Linea2", "Linea3"];
   final Map<String, String> lineDisplayNames = {
     'Linea1': 'Linea A',
     'Linea2': 'Linea B',
+    'Linea3': 'Linea C',
   };
 
   List<Map<String, String>> _pictures = [];
@@ -87,7 +88,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     webSocketService.connect(
       line: selectedLine,
       channel: selectedChannel,
-      onMessage: (decoded) {
+      onMessage: (decoded) async {
         setState(() {
           connectionStatus = ConnectionStatus.online;
         });
@@ -101,14 +102,29 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         }
 
         if (decoded['trigger'] == true) {
+          final newObjectId = decoded['objectId'] ?? '';
+          final newStringatrice = decoded['stringatrice'] ?? '';
+
           setState(() {
-            objectId = decoded['objectId'] ?? '';
-            stringatrice = decoded['stringatrice'] ?? '';
+            objectId = newObjectId;
+            stringatrice = newStringatrice;
             hasBeenEvaluated = false;
-            issuesSubmitted = decoded['issuesSubmitted'] ?? false;
             cicloIniziato = true;
             _issues.clear();
+            _pictures.clear();
           });
+
+          if (selectedChannel == "M326" && newObjectId.isNotEmpty) {
+            try {
+              final previouslySelected =
+                  await ApiService.fetchInitialIssuesForObject(newObjectId);
+              setState(() {
+                _issues.addAll(previouslySelected);
+              });
+            } catch (e) {
+              print("❌ Error fetching rework issues: $e");
+            }
+          }
         } else if (decoded['trigger'] == false) {
           setState(() {
             objectId = "";
@@ -490,7 +506,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ),
       body: SafeArea(
         child: selectedChannel == "M326"
-            ? M326HomePage(context)
+            ? M326HomePage(context,
+                objectId: objectId,
+                stringatrice: stringatrice,
+                selectedLine: selectedLine,
+                selectedChannel: selectedChannel,
+                onSubmitOK: () => print("G"),
+                onSubmitKO: () => print("NG"))
             : Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -599,7 +621,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                       _pictures = pics;
                                     });
                                   },
-                                ),
+                                  isReworkMode: selectedChannel == "M326",
+                                  initiallySelectedIssues: _issues
+                                      .toList(), // will work for rework mode
+                                )
                               ] else if (hasBeenEvaluated &&
                                   !isObjectOK &&
                                   issuesSubmitted) ...[

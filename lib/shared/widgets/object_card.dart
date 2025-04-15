@@ -13,6 +13,7 @@ class ObjectCard extends StatefulWidget {
   String selectedChannel;
   final bool issuesSubmitted;
   final Function(List<String>) onIssuesLoaded;
+  bool reWork;
 
   ObjectCard({
     super.key,
@@ -24,6 +25,7 @@ class ObjectCard extends StatefulWidget {
     required this.selectedChannel,
     required this.issuesSubmitted,
     required this.onIssuesLoaded,
+    required this.reWork,
   });
 
   @override
@@ -40,11 +42,11 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
     });
 
     final success = await ApiService.sendObjectOutcome(
-      lineName: widget.selectedLine,
-      channelId: widget.selectedChannel,
-      objectId: widget.objectId,
-      outcome: outcome,
-    );
+        lineName: widget.selectedLine,
+        channelId: widget.selectedChannel,
+        objectId: widget.objectId,
+        outcome: outcome,
+        rework: widget.reWork);
 
     if (success) {
       setState(() {
@@ -182,12 +184,13 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
             const SizedBox(height: 20),
             Row(
               children: [
-                // KO Button
                 Expanded(
                   child: _buildFlatButton(
-                    label: "Inserisci Difetti del Modulo",
+                    label: widget.reWork
+                        ? "Controlla Difetti del Modulo"
+                        : "Inserisci Difetti del Modulo",
                     icon: Icons.close_rounded,
-                    color: Colors.red,
+                    color: widget.reWork ? Colors.yellow.shade800 : Colors.red,
                     onPressed: () => _sendOutcome(context, "scarto"),
                     isHovering: _isHoveringKO,
                     onHoverChanged: (value) =>

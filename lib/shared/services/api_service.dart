@@ -217,9 +217,10 @@ class ApiService {
     required String line,
     required String station,
     required String path,
+    String? object_id,
   }) async {
     final url = Uri.parse(
-        '$baseUrl/api/overlay_config?path=$path&line_name=$line&station=$station');
+        '$baseUrl/api/overlay_config?path=$path&line_name=$line&station=$station&object_id=$object_id');
     final response = await http.get(url);
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -233,6 +234,7 @@ class ApiService {
     required String channelId,
     required String objectId,
     required String outcome,
+    required bool rework,
   }) async {
     final url = Uri.parse('$baseUrl/api/set_outcome');
     final response = await http.post(
@@ -243,6 +245,7 @@ class ApiService {
         "channel_id": channelId,
         "object_id": objectId,
         "outcome": outcome,
+        "rework": rework,
       }),
     );
     return response.statusCode == 200;
@@ -254,17 +257,51 @@ class ApiService {
         '${date.day.toString().padLeft(2, '0')}';
   }
 
-  static String buildOverlayImageUrl({
+  static Future<String?> fetchStationForObject(String idModulo) async {
+    try {
+      final uri =
+          Uri.parse('$baseUrl/api/station_for_object?id_modulo=$idModulo');
+      final response = await http.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['station'] as String;
+      } else {
+        debugPrint("❌ Station not found: ${response.statusCode}");
+        return null;
+      }
+    } catch (e) {
+      debugPrint("❌ Error fetching station: $e");
+      return null;
+    }
+  }
+
+  static Future<String> buildOverlayImageUrl({
     required String line,
     required String station,
     required List<String> pathStack,
-  }) {
+    required String object_id,
+  }) async {
     if (pathStack.isEmpty) return "";
+
+    String effectiveStation = station;
+
+    // 🛠 If we are in rework, use the original QC station instead
+    if (station == "M326") {
+      final oldStation = await fetchStationForObject(object_id);
+      if (oldStation != null) {
+        effectiveStation = oldStation;
+      } else {
+        debugPrint(
+            "❌ Could not resolve old QC station for object_id: $object_id");
+        return "";
+      }
+    }
 
     final base = pathStack.first.toLowerCase(); // e.g., "saldatura"
 
     if (pathStack.length == 1) {
-      return "$baseUrl/images/$line/$station/$base.jpg";
+      return "$baseUrl/images/$line/$effectiveStation/$base.jpg";
     }
 
     // Special handling for stringa layers
@@ -273,7 +310,7 @@ class ApiService {
 
     if (match != null) {
       final stringaIndex = match.group(1);
-      return "$baseUrl/images/$line/$station/${base}_stringa_$stringaIndex.jpg";
+      return "$baseUrl/images/$line/$effectiveStation/${base}_stringa_$stringaIndex.jpg";
     }
 
     return ""; // fallback

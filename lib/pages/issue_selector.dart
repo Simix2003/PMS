@@ -11,6 +11,7 @@ class IssueSelectorWidget extends StatefulWidget {
   final void Function(List<Map<String, String>> pictures)? onPicturesChanged;
   final bool isReworkMode; // defaults to false
   final List<String> initiallySelectedIssues; // used in rework
+  final String objectId;
 
   const IssueSelectorWidget({
     super.key,
@@ -20,6 +21,7 @@ class IssueSelectorWidget extends StatefulWidget {
     this.onPicturesChanged,
     this.isReworkMode = false,
     this.initiallySelectedIssues = const [],
+    required this.objectId,
   });
 
   @override
@@ -72,15 +74,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     }
   }
 
-  // Updated overlay URL builder can be kept as is if your backend overlay config is in the same format.
-  String get currentImageUrl {
-    return ApiService.buildOverlayImageUrl(
-      line: widget.selectedLine,
-      station: widget.channelId,
-      pathStack: pathStack,
-    );
-  }
-
   Future<void> _fetchCurrentItems() async {
     setState(() => isLoading = true);
     try {
@@ -94,6 +87,15 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         line: widget.selectedLine,
         station: widget.channelId,
         path: apiPath,
+        object_id: widget.objectId,
+      );
+
+      // ⬇️ Use your overlay logic first, fallback to API-based image URL
+      final fallbackUrl = await ApiService.buildOverlayImageUrl(
+        line: widget.selectedLine,
+        station: widget.channelId,
+        pathStack: pathStack,
+        object_id: widget.objectId,
       );
 
       setState(() {
@@ -102,15 +104,22 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         final newImageUrl = overlay['image_url'];
         backgroundImageUrl = (newImageUrl != null && newImageUrl.isNotEmpty)
             ? newImageUrl
-            : currentImageUrl;
+            : fallbackUrl;
       });
 
-      _updateActiveLeafDefectIfSelected(); // 👈 this is key
+      _updateActiveLeafDefectIfSelected();
     } catch (e) {
+      final fallbackUrl = await ApiService.buildOverlayImageUrl(
+        line: widget.selectedLine,
+        station: widget.channelId,
+        pathStack: pathStack,
+        object_id: widget.objectId,
+      );
+
       setState(() {
         currentItems = [];
         currentRectangles = [];
-        backgroundImageUrl = currentImageUrl;
+        backgroundImageUrl = fallbackUrl;
       });
       debugPrint("❌ Error in _fetchCurrentItems: $e");
     }
@@ -167,28 +176,22 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
       });
       _fetchCurrentItems();
     } else if (type == "Leaf") {
-      final fullPath = "$apiPath.$name";
+      final fullPath = "$apiPath.${normalizeName(name)}";
+
+      // ⛔ Prevent changes in ReWork mode
+      if (widget.isReworkMode) {
+        return;
+      }
+
       setState(() {
-        if (widget.isReworkMode) {
-          if (selectedLeaves.contains(fullPath)) {
-            selectedLeaves.remove(fullPath); // fixed defect
-            if (activeLeafDefect == fullPath) {
-              activeLeafDefect = null;
-            }
-          } else {
-            selectedLeaves.add(fullPath); // undo fix
-            activeLeafDefect = fullPath;
+        if (selectedLeaves.contains(fullPath)) {
+          selectedLeaves.remove(fullPath);
+          if (activeLeafDefect == fullPath) {
+            activeLeafDefect = null;
           }
         } else {
-          if (selectedLeaves.contains(fullPath)) {
-            selectedLeaves.remove(fullPath);
-            if (activeLeafDefect == fullPath) {
-              activeLeafDefect = null;
-            }
-          } else {
-            selectedLeaves.add(fullPath);
-            activeLeafDefect = fullPath;
-          }
+          selectedLeaves.add(fullPath);
+          activeLeafDefect = fullPath;
         }
       });
       widget.onIssueSelected(fullPath);
@@ -588,6 +591,27 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     ];
   }
 
+  bool _isPathSelected(String fullPath) {
+    for (final leaf in selectedLeaves) {
+      if (leaf.trim() == fullPath.trim()) {
+        return true;
+      }
+      if (leaf.trim().startsWith("${fullPath.trim()}.")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String normalizeName(String name) {
+    // Trasforma "Pin[6] - B" in "Pin[6].B"
+    if (name.contains(' - ')) {
+      final parts = name.split(' - ');
+      return "${parts[0]}.${parts[1]}";
+    }
+    return name;
+  }
+
   Widget _buildOverlayView() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -654,14 +678,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
                     final String name = rect['name'];
                     final String type = rect['type'] ?? "Leaf";
-                    final fullPath = "$apiPath.$name";
-                    // Highlight if this rectangle was directly selected or is a parent
-                    final isSelected = widget.isReworkMode
-                        ? selectedLeaves.contains(
-                            fullPath) // in Rework mode, these are still KO
-                        : selectedLeaves.contains(fullPath) ||
-                            selectedLeaves
-                                .any((leaf) => leaf.startsWith(fullPath));
+                    final fullPath = "$apiPath.${normalizeName(name)}";
+                    final isSelected = _isPathSelected(fullPath);
 
                     return Positioned(
                       left: x,

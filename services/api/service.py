@@ -42,6 +42,7 @@ CHANNELS = {
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
             "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
             "stringatrice": {"db": 19606, "byte": 46, "length": 5},
+            "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
         },
         "M309": {
             "trigger": {"db": 19606, "byte": 48, "bit": 4},
@@ -52,13 +53,14 @@ CHANNELS = {
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
             "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
             "stringatrice": {"db": 19606, "byte": 94, "length": 5},
+            "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
         },
         "M326": {
                 "trigger": {"db": 19606, "byte": 96, "bit": 4},
                 "id_modulo": {"db": 19606, "byte": 98, "length": 20},
                 "id_utente": {"db": 19606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 96, "bit": 4},
-                "fine_scarto": {"db": 19606, "byte": 96, "bit": 5},
+                "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
+                "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
                 "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
                 "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
                 "stringatrice": {"db": 19606, "byte": 142, "length": 5},
@@ -74,6 +76,7 @@ CHANNELS = {
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
             "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
             "stringatrice": {"db": 19606, "byte": 46, "length": 5},
+            "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
         },
         "M309": {
             "trigger": {"db": 19606, "byte": 48, "bit": 4},
@@ -84,13 +87,14 @@ CHANNELS = {
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
             "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
             "stringatrice": {"db": 19606, "byte": 94, "length": 5},
+            "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
         },
         "M326": {
                 "trigger": {"db": 19606, "byte": 96, "bit": 4},
                 "id_modulo": {"db": 19606, "byte": 98, "length": 20},
                 "id_utente": {"db": 19606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 96, "bit": 4},
-                "fine_scarto": {"db": 19606, "byte": 96, "bit": 5},
+                "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
+                "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
                 "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
                 "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
                 "stringatrice": {"db": 19606, "byte": 142, "length": 5},
@@ -106,6 +110,7 @@ CHANNELS = {
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
             "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
             "stringatrice": {"db": 19606, "byte": 46, "length": 5},
+            "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
         },
         "M309": {
             "trigger": {"db": 19606, "byte": 48, "bit": 4},
@@ -116,13 +121,14 @@ CHANNELS = {
             "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
             "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
             "stringatrice": {"db": 19606, "byte": 94, "length": 5},
+            "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
         },
         "M326": {
                 "trigger": {"db": 19606, "byte": 96, "bit": 4},
                 "id_modulo": {"db": 19606, "byte": 98, "length": 20},
                 "id_utente": {"db": 19606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 96, "bit": 4},
-                "fine_scarto": {"db": 19606, "byte": 96, "bit": 5},
+                "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
+                "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
                 "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
                 "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
                 "stringatrice": {"db": 19606, "byte": 142, "length": 5},
@@ -1863,7 +1869,7 @@ async def insert_initial_production_data(data, station_name, connection):
         logging.error(f"Error inserting initial production data: {e}")
         return None
 
-async def update_production_final(production_id, data, station_name, connection):
+async def update_production_final(production_id, data, station_name, connection, fine_buona, fine_scarto):
     """
     Always update end_time. Update esito only if the current value is 2.
     """
@@ -1878,6 +1884,8 @@ async def update_production_final(production_id, data, station_name, connection)
 
             current_esito = row["esito"]
             final_esito = 6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1
+            if station_name == "M326":
+                final_esito = 5 if fine_buona else 6
             end_time = data.get("DataFine")
 
             # Step 2: Conditional update
@@ -2170,7 +2178,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     production_id = incomplete_productions.get(full_station_id)
                     if production_id:
                         # Update the initial production record with final data.
-                        await update_production_final(production_id, result, channel_id, mysql_connection)
+                        await update_production_final(production_id, result, channel_id, mysql_connection, fine_buona, fine_scarto)
                         incomplete_productions.pop(full_station_id)
                     else:
                         logging.warning(f"⚠️ No initial production record found for {full_station_id}; skipping update.")
@@ -2253,6 +2261,40 @@ def generate_unique_filename(base_path, base_name, extension):
 
 
 # ---------------- ROUTES ----------------
+@app.get("/api/station_for_object")
+async def get_station_for_object(id_modulo: str):
+    global mysql_connection
+    """
+    Return the last QC station (M308 or M309) that worked on a given object.
+    """
+    try:
+        assert mysql_connection is not None
+        with mysql_connection.cursor() as cursor:
+            cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
+            obj = cursor.fetchone()
+            if not obj:
+                raise HTTPException(status_code=404, detail="Object not found.")
+
+            obj_id = obj["id"]
+
+            cursor.execute("""
+                SELECT s.name AS station_name
+                FROM productions p
+                JOIN stations s ON p.station_id = s.id
+                WHERE p.object_id = %s AND s.type = 'qc'
+                ORDER BY p.end_time DESC
+                LIMIT 1
+            """, (obj_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="QC station not found for this object.")
+
+            return {"station": row["station_name"]}
+
+    except Exception as e:
+        logging.error(f"❌ Error in get_station_for_object({id_modulo}): {e}")
+        raise HTTPException(status_code=500, detail="Server error.")
+
 @app.get("/api/plc_status")
 async def plc_status():
     statuses = {}
@@ -2387,6 +2429,7 @@ async def set_outcome(request: Request):
     channel_id = data.get("channel_id")
     object_id = data.get("object_id")
     outcome = data.get("outcome")  # "buona" or "scarto"
+    rework = data.get("rework")
 
     if not line_name or not channel_id or outcome not in ["buona", "scarto"]:
         return JSONResponse(status_code=400, content={"error": "Invalid data"})
@@ -2402,13 +2445,17 @@ async def set_outcome(request: Request):
 
     # Read current object_id from PLC
     read_conf = config["id_modulo"]
-    current_object_id = await asyncio.to_thread(
+    try:
+        current_object_id = await asyncio.to_thread(
         plc_connection.read_string,
         read_conf["db"], read_conf["byte"], read_conf["length"]
-    )
+        )
+    except Exception as e:
+        logging.error(f"❌ Error reading PLC data: {e}")
 
-    if str(current_object_id) != str(object_id):
-        return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
+    if not rework:
+        if str(current_object_id) != str(object_id):
+            return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
 
     # Optional: Write outcome back to PLC if needed (currently commented out)
     # outcome_conf = config["fine_buona"] if outcome == "buona" else config["fine_scarto"]
@@ -2456,9 +2503,17 @@ async def get_issue_tree(
 async def get_overlay_config(
     path: str,
     line_name: str = Query(...),
-    station: str = Query(...)
+    station: str = Query(...),
+    object_id: str = Query(...)
 ):
     config_file = f"C:/IX-Monitor/images/{line_name}/{station}/overlay_config.json"
+    if station == "M326":
+        if object_id:
+            comes_from = get_station_for_object(object_id)
+            config_file = f"C:/IX-Monitor/images/{line_name}/M308/overlay_config.json"
+            if comes_from == 'M309':
+                config_file = f"C:/IX-Monitor/images/{line_name}/M309/overlay_config.json"
+
     print(f"🔍 Requested overlay config for path: '{path}' (line: {line_name}, station: {station})")
     print(f"📄 Looking for config file at: {config_file}")
 
@@ -2480,7 +2535,12 @@ async def get_overlay_config(
 
         if config_path.lower() == path.lower():
             image_url = f"http://192.168.0.10:8000/images/{line_name}/{station}/{image_name}"
-            print(f"✅ MATCH FOUND! Returning image: {image_url}")
+            if station == "M326":
+                if object_id:
+                    image_url = f"http://192.168.0.10:8000/images/{line_name}/M308/{image_name}"
+                    if comes_from == 'M309':
+                        image_url = f"http://192.168.0.10:8000/images/{line_name}/M309/{image_name}"
+
             return {
                 "image_url": image_url,
                 "rectangles": config.get("rectangles", [])

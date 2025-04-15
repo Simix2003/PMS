@@ -19,3 +19,12 @@ pyinstaller --onefile --add-binary="C:\Users\papar\Desktop\Prova_Comunicazione_P
 cd services
 cd api
 pyinstaller --clean service.spec
+
+Per installare MySQL se esce errore 13, bisogna andare sotto C/Users e nella cartella "Default" asegnare ad "EVERYONE" tutti i permessi per la cartella.
+
+Se si vuole aggiungere la password al server mysql:
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'Master36!';
+FLUSH PRIVILEGES;
+
+Per Resettare l'Auto Increment:
+ALTER TABLE your_table_name AUTO_INCREMENT = 1;

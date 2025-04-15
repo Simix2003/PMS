@@ -115,7 +115,6 @@ class PLCConnection:
             self._ensure_connection()
             try:
                 byte_array = self.client.db_read(db_number, byte_index, 1)
-                print(f"Read BOOL {db_number}.{byte_index}.{bit_index}: {byte_array}")
                 return u.get_bool(byte_array, 0, bit_index)
             except Exception as e:
                 logging.warning(f"⚠️ Error reading BOOL (first try) DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
@@ -135,7 +134,6 @@ class PLCConnection:
             try:
                 byte_array = self.client.db_read(db_number, byte_index, 1)
                 u.set_bool(byte_array, 0, bit_index, value)
-                print(f"Wrote BOOL {db_number}.{byte_index}.{bit_index}: {byte_array}")
                 self.client.db_write(db_number, byte_index, byte_array)
             except Exception as e:
                 logging.warning(f"⚠️ Error writing BOOL (first try) DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")

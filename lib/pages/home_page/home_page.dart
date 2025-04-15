@@ -566,6 +566,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 issuesSubmitted = false;
                               });
                             },
+                            reWork: selectedChannel == "M326",
                           ),
                           const SizedBox(height: 24),
                         ] else ...[
@@ -614,6 +615,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             },
                             isReworkMode: selectedChannel == "M326",
                             initiallySelectedIssues: _issues.toList(),
+                            objectId: objectId,
                           )
                         ] else if (hasBeenEvaluated &&
                             !isObjectOK &&
@@ -632,7 +634,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              if (hasBeenEvaluated && !isObjectOK)
+              if (hasBeenEvaluated && !isObjectOK && selectedChannel != "M326")
                 Padding(
                   padding: const EdgeInsets.only(top: 16),
                   child: Row(

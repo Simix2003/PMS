@@ -532,7 +532,7 @@ async def read_data(
         data["Tempo_Ciclo"] = str(tempo_ciclo)
 
         # Set linea_in_lavorazione if needed
-        data["Linea_in_Lavorazione"] = [line_name == "Linea1", line_name == "Linea2", False, False, False]
+        data["Linea_in_Lavorazione"] = [line_name == "Linea1", line_name == "Linea2", line_name == "Linea3", line_name == "Linea4", line_name == "Linea5"]
 
         # Read stringatrice bits if relevant
         str_conf = config["stringatrice"]

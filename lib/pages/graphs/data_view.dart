@@ -490,6 +490,7 @@ class _DataViewPageState extends State<DataViewPage> {
                   builder: (context) {
                     final data = _fetchedData!;
                     final stations = data['stations'].entries.toList();
+                    print('Stations: $stations');
 
                     final maxY = stations.map((entry) {
                           final counts = entry.value as Map<String, dynamic>;
@@ -511,21 +512,33 @@ class _DataViewPageState extends State<DataViewPage> {
                             lineDisplayNames,
                             _selectedDate,
                             _selectedRange,
+                            selectedStartTime,
+                            selectedEndTime,
                           ),
                           const SizedBox(height: 24),
-                          ...stations.map((entry) {
-                            final stationCode = entry.key;
-                            final stationData =
-                                entry.value as Map<String, dynamic>;
-                            final visualName =
-                                stationData['display'] ?? stationCode;
-                            return StationCard(
-                              station: visualName,
-                              stationData: stationData,
-                              selectedDate: _selectedDate,
-                              selectedRange: _selectedRange,
-                            );
-                          }).toList(),
+                          ...['M308', 'M309', 'M326']
+                              .map((stationCode) {
+                                final entry = stations.firstWhere(
+                                  (e) => e.key == stationCode,
+                                  orElse: () => const MapEntry('', {}),
+                                );
+                                if (entry == null) {
+                                  return const SizedBox(); // Or skip / return empty container
+                                }
+                                final stationData = entry.value;
+                                final visualName =
+                                    stationData['display'] ?? entry.key;
+                                return StationCard(
+                                  station: visualName,
+                                  stationData: stationData,
+                                  selectedDate: _selectedDate,
+                                  selectedRange: _selectedRange,
+                                  selectedStartTime: selectedStartTime,
+                                  selectedEndTime: selectedEndTime,
+                                );
+                              })
+                              .whereType<Widget>() // removes nulls
+                              .toList(),
                         ],
                       ),
                     );
@@ -655,6 +668,8 @@ class _DataViewPageState extends State<DataViewPage> {
     Map<String, String> lineDisplayNames,
     DateTime? selectedDate,
     DateTimeRange? selectedRange,
+    TimeOfDay? selectedStartTime,
+    TimeOfDay? selectedEndTime,
   ) {
     final m308 = stations.firstWhere((e) => e.key == 'M308',
         orElse: () => MapEntry('M308', {}));
@@ -762,6 +777,15 @@ class _DataViewPageState extends State<DataViewPage> {
                     fontSize: 18,
                     fontWeight: FontWeight.w500,
                     color: Colors.grey,
+                  ),
+                ),
+              if (selectedStartTime != null && selectedEndTime != null)
+                Text(
+                  '${selectedStartTime.format(context)} → ${selectedEndTime.format(context)}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.blueGrey,
                   ),
                 ),
               const SizedBox(height: 20),

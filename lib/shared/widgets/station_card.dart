@@ -11,6 +11,8 @@ class StationCard extends StatelessWidget {
   final Map<String, dynamic> stationData;
   final DateTime? selectedDate;
   final DateTimeRange? selectedRange;
+  final TimeOfDay? selectedStartTime;
+  final TimeOfDay? selectedEndTime;
 
   const StationCard({
     super.key,
@@ -18,6 +20,8 @@ class StationCard extends StatelessWidget {
     required this.stationData,
     required this.selectedDate,
     required this.selectedRange,
+    required this.selectedStartTime,
+    required this.selectedEndTime,
   });
 
   static const List<String> allDefectCategories = [
@@ -214,6 +218,15 @@ class StationCard extends StatelessWidget {
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
                         color: Colors.grey,
+                      ),
+                    ),
+                  if (selectedStartTime != null && selectedEndTime != null)
+                    Text(
+                      '${selectedStartTime?.format(context)} → ${selectedEndTime?.format(context)}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.blueGrey,
                       ),
                     ),
                   const SizedBox(height: 24),

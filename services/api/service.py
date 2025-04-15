@@ -687,90 +687,65 @@ def risolutivo_sheet(ws, data: dict):
     stations = data.get("stations", [])
     production_lines = data.get("production_lines", [])
     object_defects = data.get("object_defects", [])
-    
-    # Build lookup dictionaries
-    objects_by_modulo = {}
-    for obj in objects:
-        m = obj.get("id_modulo")
-        if m is not None:
-            objects_by_modulo[m] = obj
 
+    # Build lookup dictionaries
+    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects if obj.get("id_modulo") is not None}
     stations_by_id = {station["id"]: station for station in stations}
     production_lines_by_id = {line["id"]: line for line in production_lines}
-    
+
     rows = []
     for id_modulo in id_moduli:
         obj = objects_by_modulo.get(id_modulo)
         if not obj:
             continue
         object_id = obj["id"]
-        
+
         # Retrieve productions for this object
         prods = [p for p in productions if p.get("object_id") == object_id]
         if not prods:
             continue
-        
-        # Get the most recent production (assumes start_time is a datetime)
+
         latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
         production_id = latest_prod["id"]
         start_time = latest_prod.get("start_time")
         end_time = latest_prod.get("end_time")
         esito = map_esito(latest_prod.get("esito"))
         cycle_time = str(latest_prod.get("cycle_time") or "")
-        
-        # Look up station and production line info
+
+        # Line and station info
         station = stations_by_id.get(latest_prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_display_name = "Unknown"
-        if station and station.get("line_id"):
-            pline = production_lines_by_id.get(station["line_id"])
-            if pline:
-                line_display_name = pline.get("display_name", "Unknown")
-        
-        # Look up stringatrice (from last_station_id)
+        line_display_name = production_lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown") if station else "Unknown"
+
+        # Last station (stringatrice)
         last_station_id = latest_prod.get("last_station_id")
-        last_station_name = "N/A"
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
-    
-        # Calculate NG flags over all defect categories related to this production
-        # (Logic similar to your original get_ng_flags_for_production)
-        flags = {
-            "NG Generali": "",
-            "NG Disall. Stringa": "",
-            "NG Disall. Ribbon": "",
-            "NG Saldatura": "",
-            "NG Mancanza I_Ribbon": "",
-            "NG Macchie ECA": "",
-            "NG Celle Rotte": "",
-            "NG Lunghezza String Ribbon": "",
-            "NG Altro": ""
-        }
+        last_station_name = stations_by_id.get(last_station_id, {}).get("display_name", "N/A") if last_station_id else "N/A"
+
+        # Collect defect labels
         prod_defects = [d for d in object_defects if d.get("production_id") == production_id]
+        ng_labels = set()
         for d in prod_defects:
             cat = d.get("category")
             if cat == "Disallineamento":
                 if d.get("stringa") is not None:
-                    flags["NG Disall. Stringa"] = "NG"
+                    ng_labels.add("NG Disall. Stringa")
                 elif d.get("i_ribbon") is not None:
-                    flags["NG Disall. Ribbon"] = "NG"
+                    ng_labels.add("NG Disall. Ribbon")
             elif cat == "Generali":
-                flags["NG Generali"] = "NG"
+                ng_labels.add("NG Generali")
             elif cat == "Saldatura":
-                flags["NG Saldatura"] = "NG"
+                ng_labels.add("NG Saldatura")
             elif cat == "Mancanza Ribbon":
-                flags["NG Mancanza I_Ribbon"] = "NG"
+                ng_labels.add("NG Mancanza I_Ribbon")
             elif cat == "Macchie ECA":
-                flags["NG Macchie ECA"] = "NG"
+                ng_labels.add("NG Macchie ECA")
             elif cat == "Celle Rotte":
-                flags["NG Celle Rotte"] = "NG"
+                ng_labels.add("NG Celle Rotte")
             elif cat == "Lunghezza String Ribbon":
-                flags["NG Lunghezza String Ribbon"] = "NG"
+                ng_labels.add("NG Lunghezza String Ribbon")
             elif cat == "Altro":
-                flags["NG Altro"] = "NG"
-    
+                ng_labels.add("NG Altro")
+
         row = {
             "Linea": line_display_name,
             "Stazione": station_name,
@@ -780,23 +755,19 @@ def risolutivo_sheet(ws, data: dict):
             "Data Uscita": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time,
-            **flags
+            "NG Causale": ";".join(sorted(ng_labels)) if ng_labels else ""
         }
         rows.append(row)
-    
-    # Convert rows to a DataFrame
+
+    # Convert rows to DataFrame
     df = pd.DataFrame(rows, columns=[
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
-        "NG Generali", "NG Disall. Stringa", "NG Disall. Ribbon",
-        "NG Saldatura", "NG Mancanza I_Ribbon", "NG Macchie ECA",
-        "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Altro"
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo", "NG Causale"
     ])
-    
-    # Write header and rows to the worksheet
+
+    # Write to worksheet
     ws.append(df.columns.tolist())
     for _, row in df.iterrows():
-        # If dates are datetime objects, format them as strings
         row_values = []
         for col in df.columns:
             val = row[col]
@@ -808,12 +779,8 @@ def risolutivo_sheet(ws, data: dict):
             else:
                 row_values.append(val)
         ws.append(row_values)
-    
-    autofit_columns(ws, align_center_for={
-    "Esito", "NG Generali", "NG Disall. Stringa", "NG Disall. Ribbon",
-    "NG Saldatura", "NG Mancanza I_Ribbon", "NG Macchie ECA",
-    "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Altro"
-})
+
+    autofit_columns(ws, align_center_for={"Esito", "NG Causale"})
 
 def ng_generali_sheet(ws, data: dict) -> bool:
     """
@@ -1732,7 +1699,7 @@ SHEET_FUNCTIONS = {
 
 def map_esito(value: Optional[int]) -> str:
     if value == 1:
-        return "OK"
+        return "G"
     elif value == 2:
         return "In Produzione"
     elif value == 6:

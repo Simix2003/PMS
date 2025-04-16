@@ -50,7 +50,7 @@ class _DataViewPageState extends State<DataViewPage> {
   @override
   void initState() {
     super.initState();
-    _loadThreshold();
+    _loadSettings();
     _initializeWebSocket();
     _fetchData().then((data) {
       if (mounted) {
@@ -61,15 +61,16 @@ class _DataViewPageState extends State<DataViewPage> {
     });
   }
 
-  Future<void> _loadThreshold() async {
+  Future<void> _loadSettings() async {
     try {
-      final valore = await ApiService.getProductionThreshold();
+      final settings = await ApiService.getAllSettings();
       setState(() {
-        _thresholdSeconds = valore;
+        _thresholdSeconds = (settings['min_cycle_threshold'] as num).toDouble();
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Errore nel caricamento della soglia: $e')),
+        SnackBar(
+            content: Text('Errore nel caricamento delle impostazioni: $e')),
       );
     }
   }
@@ -573,6 +574,7 @@ class _DataViewPageState extends State<DataViewPage> {
                                   selectedRange: _selectedRange,
                                   selectedStartTime: selectedStartTime,
                                   selectedEndTime: selectedEndTime,
+                                  thresholdSeconds: _thresholdSeconds,
                                 );
                               })
                               .whereType<Widget>() // removes nulls
@@ -734,12 +736,29 @@ class _DataViewPageState extends State<DataViewPage> {
     final seconds = (avgCycleSeconds % 60).round();
     final avgCycleTime = '$minutes:${seconds.toString().padLeft(2, '0')}';
 
-    final okCount =
-        (m308Data['good_count'] ?? 0) + (m309Data['good_count'] ?? 0);
     final koCount = (m308Data['bad_count'] ?? 0) + (m309Data['bad_count'] ?? 0);
-    final total = okCount + koCount;
-    final yield =
-        total > 0 ? (okCount / total * 100).toStringAsFixed(1) : "0.0";
+
+// ✅ Combine cycle times from both M308 and M309
+    final m308Cycles = (m308Data['cycle_times'] as List?)?.cast<num>() ?? [];
+    final m309Cycles = (m309Data['cycle_times'] as List?)?.cast<num>() ?? [];
+    final allCycles = [...m308Cycles, ...m309Cycles];
+
+    int gCount = 0;
+    int ncCount = 0;
+
+    for (final cycle in allCycles) {
+      if (cycle >= _thresholdSeconds) {
+        gCount++;
+      } else {
+        ncCount++;
+      }
+    }
+
+    final total = gCount + ncCount + koCount;
+
+    final yield = total > 0
+        ? ((gCount + ncCount) / total * 100).toStringAsFixed(1)
+        : "0.0";
 
     final m308defectsRaw = m308Data['defects'];
     final m309defectsRaw = m309Data['defects'];
@@ -832,8 +851,8 @@ class _DataViewPageState extends State<DataViewPage> {
                 children: [
                   Expanded(
                     child: _buildStatBox(
-                      'Prodotti',
-                      total,
+                      'Totale Prodotti',
+                      total as int,
                       const Color(0xFF007AFF),
                       Icons.precision_manufacturing_rounded,
                     ),
@@ -841,22 +860,65 @@ class _DataViewPageState extends State<DataViewPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildStatBox(
-                      'OK',
-                      okCount,
+                      'Good',
+                      gCount,
                       const Color(0xFF34C759),
                       Icons.check_circle_rounded,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: _buildStatBox(
+                      'Non Controllati QG2',
+                      ncCount,
+                      const Color(0xFFFF9500),
+                      Icons.warning_amber_rounded,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildStatBox(
-                      'KO',
+                      'No Good',
                       koCount,
                       const Color(0xFFFF3B30),
                       Icons.cancel_rounded,
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF9E6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFFE0B2), width: 1),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.access_time_rounded,
+                      size: 16,
+                      color: Color(0xFFFF9500),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Non Controllati QG2: cicli inferiori a $_thresholdSeconds secondi',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFFB76E00),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 32),
               Row(
@@ -1003,9 +1065,7 @@ class _DataViewPageState extends State<DataViewPage> {
                                   ),
                                 ),
                               ],
-                              showingTooltipIndicators: [
-                                0
-                              ], // 👈 Always show tooltip for the 1st rod
+                              showingTooltipIndicators: [0],
                             );
                           }).toList(),
                         ),
@@ -1155,6 +1215,16 @@ class _DataViewPageState extends State<DataViewPage> {
                   height: 250,
                   child: _buildProductionChart(maxY, orderedStations),
                 ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildLegend("Good", Color(0xFF34C759)),
+                    const SizedBox(width: 12),
+                    _buildLegend("Non Controllati QG2", Color(0xFFFF9500)),
+                    const SizedBox(width: 12),
+                    _buildLegend("No Good", Color(0xFFFF3B30)),
+                  ],
+                )
               ],
             ),
           ),
@@ -1288,14 +1358,13 @@ class _DataViewPageState extends State<DataViewPage> {
             tooltipPadding: const EdgeInsets.all(12),
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final value = rod.toY.toInt();
-
               return BarTooltipItem(
                 '',
                 const TextStyle(),
                 children: [
                   TextSpan(
                     text: value.toString(),
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
@@ -1310,11 +1379,22 @@ class _DataViewPageState extends State<DataViewPage> {
           final idx = entry.key;
           final counts = entry.value.value as Map<String, dynamic>;
 
-          final goodCount = (entry.value.key == 'M326'
-                  ? (counts['ok_op_count'] ?? 0)
-                  : (counts['good_count'] ?? 0))
-              .toDouble();
+          final cycleTimes =
+              (counts['cycle_times'] as List?)?.cast<num>() ?? [];
 
+          int ncCount = 0;
+          int gCount = 0;
+
+          for (final cycle in cycleTimes) {
+            if (cycle < _thresholdSeconds) {
+              ncCount++;
+            } else {
+              gCount++;
+            }
+          }
+
+          final goodCount = gCount.toDouble();
+          final nonControlledCount = ncCount.toDouble();
           final badCount = (counts['bad_count'] ?? 0).toDouble();
 
           return BarChartGroupData(
@@ -1333,8 +1413,19 @@ class _DataViewPageState extends State<DataViewPage> {
                 ),
               ),
               BarChartRodData(
+                toY: nonControlledCount,
+                color: const Color(0xFFFF9500), // Orange for NC
+                width: 32,
+                borderRadius: BorderRadius.circular(6),
+                backDrawRodData: BackgroundBarChartRodData(
+                  show: true,
+                  toY: maxY,
+                  color: const Color(0xFFFF9500).withOpacity(0.1),
+                ),
+              ),
+              BarChartRodData(
                 toY: badCount,
-                color: const Color(0xFFFF3B30),
+                color: const Color(0xFFFF3B30), // Red
                 width: 32,
                 borderRadius: BorderRadius.circular(6),
                 backDrawRodData: BackgroundBarChartRodData(
@@ -1344,8 +1435,8 @@ class _DataViewPageState extends State<DataViewPage> {
                 ),
               ),
             ],
-            barsSpace: 8,
-            showingTooltipIndicators: [0, 1],
+            barsSpace: 6,
+            showingTooltipIndicators: [0, 1, 2],
           );
         }).toList(),
         titlesData: FlTitlesData(
@@ -1412,6 +1503,26 @@ class _DataViewPageState extends State<DataViewPage> {
         ),
         borderData: FlBorderData(show: false),
       ),
+    );
+  }
+
+  Widget _buildLegend(String label, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        ),
+      ],
     );
   }
 }

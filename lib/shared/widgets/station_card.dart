@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, prefer_typing_uninitialized_variables
 
 import 'dart:math';
 import 'dart:ui';
@@ -13,6 +13,7 @@ class StationCard extends StatelessWidget {
   final DateTimeRange? selectedRange;
   final TimeOfDay? selectedStartTime;
   final TimeOfDay? selectedEndTime;
+  final thresholdSeconds;
 
   const StationCard({
     super.key,
@@ -22,6 +23,7 @@ class StationCard extends StatelessWidget {
     required this.selectedRange,
     required this.selectedStartTime,
     required this.selectedEndTime,
+    required this.thresholdSeconds,
   });
 
   static const List<String> allDefectCategories = [
@@ -134,10 +136,26 @@ class StationCard extends StatelessWidget {
 
     final rawCycleTime = stationData["avg_cycle_time"] ?? "00:00:00";
     final avgCycleTime = formatCycleTimeToMinutes(rawCycleTime);
-    final good = stationData["good_count"] ?? 0;
-    final bad = stationData["bad_count"] ?? 0;
-    final total = good + bad;
-    final yield = total > 0 ? (good / total * 100).toStringAsFixed(1) : "0.0";
+    final koCount = (stationData['bad_count'] ?? 0);
+
+    final allCycles = (stationData['cycle_times'] as List?)?.cast<num>() ?? [];
+
+    int gCount = 0;
+    int ncCount = 0;
+
+    for (final cycle in allCycles) {
+      if (cycle >= thresholdSeconds) {
+        gCount++;
+      } else {
+        ncCount++;
+      }
+    }
+
+    final total = gCount + ncCount + koCount;
+
+    final yield = total > 0
+        ? ((gCount + ncCount) / total * 100).toStringAsFixed(1)
+        : "0.0";
 
     print('Station: $station');
     // Fill missing categories with 0
@@ -232,27 +250,80 @@ class StationCard extends StatelessWidget {
                     ),
                   const SizedBox(height: 24),
 
-                  // OK / KO summary with iOS style
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                          child: _buildStatBox(
-                              "Prodotti",
-                              total,
-                              const Color(0xFF007AFF),
-                              Icons.precision_manufacturing_rounded)),
-                      const SizedBox(width: 16),
+                        child: _buildStatBox(
+                          'Totale Prodotti',
+                          total as int,
+                          const Color(0xFF007AFF),
+                          Icons.precision_manufacturing_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
-                          child: _buildStatBox(
-                              "OK",
-                              good,
-                              const Color(0xFF34C759),
-                              Icons.check_circle_rounded)),
-                      const SizedBox(width: 16),
-                      Expanded(
-                          child: _buildStatBox("KO", bad,
-                              const Color(0xFFFF3B30), Icons.cancel_rounded)),
+                        child: _buildStatBox(
+                          'Good',
+                          gCount,
+                          const Color(0xFF34C759),
+                          Icons.check_circle_rounded,
+                        ),
+                      ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: _buildStatBox(
+                          'Non Controllati QG2',
+                          ncCount,
+                          const Color(0xFFFF9500),
+                          Icons.warning_amber_rounded,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildStatBox(
+                          'No Good',
+                          koCount,
+                          const Color(0xFFFF3B30),
+                          Icons.cancel_rounded,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF9E6),
+                      borderRadius: BorderRadius.circular(12),
+                      border:
+                          Border.all(color: const Color(0xFFFFE0B2), width: 1),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.access_time_rounded,
+                          size: 16,
+                          color: Color(0xFFFF9500),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Non Controllati QG2: cicli inferiori a $thresholdSeconds secondi',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFFB76E00),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
 
                   const SizedBox(height: 24),

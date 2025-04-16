@@ -157,6 +157,14 @@ class ApiService {
         station['last_cycle_time'] ??= 'No Data';
         station['last_in_time'] ??= 'No Data';
         station['last_out_time'] ??= 'No Data';
+
+        // Ensure cycle_times is a List<num>
+        if (station['cycle_times'] is List) {
+          station['cycle_times'] =
+              (station['cycle_times'] as List).map((e) => (e as num)).toList();
+        } else {
+          station['cycle_times'] = <num>[]; // fallback
+        }
       }
       return Map<String, dynamic>.from(jsonMap);
     } else {
@@ -386,27 +394,24 @@ class ApiService {
     }
   }
 
-  static Future<double> getProductionThreshold() async {
-    final response =
-        await http.get(Uri.parse('$baseUrl/api/settings/production_threshold'));
-
+  static Future<Map<String, dynamic>> getAllSettings() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/settings'));
     if (response.statusCode == 200) {
-      final json = jsonDecode(response.body);
-      return (json['threshold'] as num).toDouble();
+      return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to load threshold');
+      throw Exception('Failed to load settings');
     }
   }
 
-  static Future<void> setProductionThreshold(double threshold) async {
+  static Future<void> setAllSettings(Map<String, dynamic> settings) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/api/settings/production_threshold'),
+      Uri.parse('$baseUrl/api/settings'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'threshold': threshold}),
+      body: jsonEncode(settings),
     );
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to save threshold');
+      throw Exception('Failed to save settings');
     }
   }
 }

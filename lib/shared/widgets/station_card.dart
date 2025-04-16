@@ -139,6 +139,7 @@ class StationCard extends StatelessWidget {
     final total = good + bad;
     final yield = total > 0 ? (good / total * 100).toStringAsFixed(1) : "0.0";
 
+    print('Station: $station');
     // Fill missing categories with 0
     final filledDefects = {
       for (var key in allDefectCategories) key: (defects[key] ?? 0) as num
@@ -288,7 +289,8 @@ class StationCard extends StatelessWidget {
                   const SizedBox(height: 24),
 
                   // Defect chart with iOS styling
-                  if (total > 0)
+                  if (total > 0 && station != 'M326 - ReWork' ||
+                      station == 'M326')
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

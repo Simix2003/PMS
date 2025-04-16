@@ -75,9 +75,10 @@ class _FindPageState extends State<FindPage> {
   ];
 
   final List<String> esitoOptions = [
-    'OK',
-    'KO',
+    'G',
+    'NG',
     'In Produzione',
+    'OK Operatore',
   ];
 
   final List<String> generaliOptions = [
@@ -1329,7 +1330,7 @@ class _FindPageState extends State<FindPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${results.length} Elementi Visualizzati',
+                              '${results.length} Eventi Visualizzati',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 20,
@@ -1338,7 +1339,7 @@ class _FindPageState extends State<FindPage> {
                             ),
                             if (isSelecting)
                               Text(
-                                '${selectedObjectIds.length} Elementi Selezionati',
+                                '${selectedObjectIds.length} Moduli Selezionati',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w500,
                                   fontSize: 16,

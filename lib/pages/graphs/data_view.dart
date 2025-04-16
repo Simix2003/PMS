@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use, library_private_types_in_public_api
+// ignore_for_file: deprecated_member_use, library_private_types_in_public_api, use_build_context_synchronously
 
 import 'dart:math';
 import 'dart:ui';
@@ -9,6 +9,7 @@ import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/station_card.dart';
+import '../settings_page.dart';
 
 class DataViewPage extends StatefulWidget {
   final bool canSearch;
@@ -44,10 +45,12 @@ class _DataViewPageState extends State<DataViewPage> {
   };
 
   Map<String, dynamic>? _fetchedData;
+  double _thresholdSeconds = 3;
 
   @override
   void initState() {
     super.initState();
+    _loadThreshold();
     _initializeWebSocket();
     _fetchData().then((data) {
       if (mounted) {
@@ -56,6 +59,19 @@ class _DataViewPageState extends State<DataViewPage> {
         });
       }
     });
+  }
+
+  Future<void> _loadThreshold() async {
+    try {
+      final valore = await ApiService.getProductionThreshold();
+      setState(() {
+        _thresholdSeconds = valore;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Errore nel caricamento della soglia: $e')),
+      );
+    }
   }
 
   @override
@@ -360,10 +376,24 @@ class _DataViewPageState extends State<DataViewPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
+// Inside your Scaffold widget:
       appBar: AppBar(
         backgroundColor: Colors.white,
         scrolledUnderElevation: 0,
         elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.settings,
+            color: Colors.grey[800],
+          ),
+          tooltip: 'Impostazioni',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsPage()),
+            );
+          },
+        ),
         title: const Text(
           'Analisi Dati',
           style: TextStyle(
@@ -422,6 +452,7 @@ class _DataViewPageState extends State<DataViewPage> {
           ),
         ],
       ),
+
       body: _fetchedData == null
           ? const Center(
               child: CircularProgressIndicator(
@@ -490,7 +521,6 @@ class _DataViewPageState extends State<DataViewPage> {
                   builder: (context) {
                     final data = _fetchedData!;
                     final stations = data['stations'].entries.toList();
-                    print('Stations: $stations');
 
                     final maxY = stations.map((entry) {
                           final counts = entry.value as Map<String, dynamic>;
@@ -522,12 +552,20 @@ class _DataViewPageState extends State<DataViewPage> {
                                   (e) => e.key == stationCode,
                                   orElse: () => const MapEntry('', {}),
                                 );
-                                if (entry == null) {
-                                  return const SizedBox(); // Or skip / return empty container
+
+                                if (entry.key.isEmpty) return const SizedBox();
+
+                                final stationData = Map<String, dynamic>.from(
+                                    entry.value); // Clone to safely override
+
+                                if (stationCode == 'M326') {
+                                  stationData['good_count'] =
+                                      stationData['ok_op_count'] ?? 0;
                                 }
-                                final stationData = entry.value;
+
                                 final visualName =
                                     stationData['display'] ?? entry.key;
+
                                 return StationCard(
                                   station: visualName,
                                   stationData: stationData,
@@ -1001,6 +1039,17 @@ class _DataViewPageState extends State<DataViewPage> {
 
   Widget _buildHeaderCard(
       double maxY, List<MapEntry<String, dynamic>> stations) {
+    const stationOrder = ['M308', 'M309', 'M326'];
+
+    // Apply the order to the passed-in stations
+    final orderedStations = stationOrder
+        .map((code) => stations.firstWhere(
+              (entry) => entry.key == code,
+              orElse: () => const MapEntry('', {}),
+            ))
+        .where((entry) => entry.key.isNotEmpty)
+        .toList();
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
       child: BackdropFilter(
@@ -1104,7 +1153,7 @@ class _DataViewPageState extends State<DataViewPage> {
                 const SizedBox(height: 24),
                 SizedBox(
                   height: 250,
-                  child: _buildProductionChart(maxY, stations),
+                  child: _buildProductionChart(maxY, orderedStations),
                 ),
               ],
             ),
@@ -1260,8 +1309,13 @@ class _DataViewPageState extends State<DataViewPage> {
         barGroups: stations.asMap().entries.map<BarChartGroupData>((entry) {
           final idx = entry.key;
           final counts = entry.value.value as Map<String, dynamic>;
-          final goodCount = (counts['good_count'] as int).toDouble();
-          final badCount = (counts['bad_count'] as int).toDouble();
+
+          final goodCount = (entry.value.key == 'M326'
+                  ? (counts['ok_op_count'] ?? 0)
+                  : (counts['good_count'] ?? 0))
+              .toDouble();
+
+          final badCount = (counts['bad_count'] ?? 0).toDouble();
 
           return BarChartGroupData(
             x: idx,
@@ -1291,10 +1345,7 @@ class _DataViewPageState extends State<DataViewPage> {
               ),
             ],
             barsSpace: 8,
-            showingTooltipIndicators: [
-              0,
-              1
-            ], // 👈 ALWAYS show tooltips for both bars
+            showingTooltipIndicators: [0, 1],
           );
         }).toList(),
         titlesData: FlTitlesData(

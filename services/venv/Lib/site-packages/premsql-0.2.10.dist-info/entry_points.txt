@@ -1,0 +1,3 @@
+[console_scripts]
+premsql=premsql.cli:cli
+

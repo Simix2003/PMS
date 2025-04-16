@@ -10,6 +10,7 @@ from fastapi import Body, FastAPI, Form, HTTPException, Query, UploadFile, WebSo
 import base64
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from controllers.plc import PLCConnection
 import uvicorn
 from typing import AsyncGenerator, Optional, Set
@@ -189,6 +190,7 @@ ISSUE_TREE = {
 }
 
 TEMP_STORAGE_PATH = os.path.join("C:/IX-Monitor", "temp_data.json")
+SETTINGS_PATH = os.path.join("C:/IX-Monitor", "settings.json")
 
 # These globals are used to track WebSocket subscriptions and PLC subscription state.
 subscriptions = {}
@@ -1708,6 +1710,8 @@ def map_esito(value: Optional[int]) -> str:
         return "G"
     elif value == 2:
         return "In Produzione"
+    elif value == 5:
+        return "OK Operatore"
     elif value == 6:
         return "NG"
     return "N/A"
@@ -2627,22 +2631,7 @@ async def productions_summary(
 
             # Build base WHERE clause for production filtering on end_time (new schema)
             params = []
-            where_clause = ""
-            if from_date and to_date:
-                where_clause = "WHERE DATE(p.end_time) BETWEEN %s AND %s"
-                params.extend([from_date, to_date])
-            elif date:
-                if turno and turno == 3:
-                    # For turno 3, use a datetime range: from 22:00 on the selected date to 05:59:59 on the next day.
-                    start_dt = f"{date} 22:00:00"
-                    end_dt = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d 05:59:59")
-                    where_clause = "WHERE p.end_time BETWEEN %s AND %s"
-                    params.extend([start_dt, end_dt])
-                else:
-                    where_clause = "WHERE DATE(p.end_time) = %s"
-                    params.append(date)
-            else:
-                return JSONResponse(status_code=400, content={"error": "Missing 'date' or 'from' and 'to'"})
+            where_clause = "WHERE 1=1"
 
             # Optional start_time and end_time overrides
             if start_time and end_time and not turno:
@@ -2717,6 +2706,8 @@ async def productions_summary(
                     s.display_name AS station_display,
                     SUM(CASE WHEN p.esito = 1 THEN 1 ELSE 0 END) AS good_count,
                     SUM(CASE WHEN p.esito = 6 THEN 1 ELSE 0 END) AS bad_count,
+                    SUM(CASE WHEN p.esito = 2 THEN 1 ELSE 0 END) AS in_prod_count,
+                    SUM(CASE WHEN p.esito = 5 THEN 1 ELSE 0 END) AS ok_op_count,
                     SEC_TO_TIME(AVG(TIME_TO_SEC(p.cycle_time))) AS avg_cycle_time
                 FROM productions p
                 JOIN stations s ON p.station_id = s.id
@@ -2729,9 +2720,11 @@ async def productions_summary(
             for row in cursor.fetchall():
                 name = row['station_name']
                 stations[name] = {
-                    "display": row['station_display'],  # M308 - QG2 di M306
+                    "display": row['station_display'],
                     "good_count": int(row['good_count']),
                     "bad_count": int(row['bad_count']),
+                    "in_prod_count": int(row['in_prod_count']),
+                    "ok_op_count": int(row['ok_op_count']),
                     "avg_cycle_time": str(row['avg_cycle_time']),
                     "last_cycle_time": "00:00:00"
                 }
@@ -2748,6 +2741,8 @@ async def productions_summary(
                     "display": station,  # fallback to code if display is missing
                     "good_count": 0,
                     "bad_count": 0,
+                    "in_prod_count": 0,
+                    "ok_op_count": 0,
                     "avg_cycle_time": "00:00:00",
                     "last_cycle_time": "00:00:00"
                 })
@@ -2818,11 +2813,15 @@ async def productions_summary(
                     seen_stations.add(station)
 
             good_count_total = sum(s["good_count"] for s in stations.values())
+            in_prod_count_total = sum(s["in_prod_count"] for s in stations.values())
+            ok_op_count_total = sum(s["ok_op_count"] for s in stations.values())
             bad_count_total = sum(s["bad_count"] for s in stations.values())
 
             return {
                 "good_count": good_count_total,
                 "bad_count": bad_count_total,
+                "in_prod_count": in_prod_count_total,
+                "ok_op_count": ok_op_count_total,
                 "stations": stations,
             }
 
@@ -2849,62 +2848,56 @@ async def search_results(request: Request):
         payload = await request.json()
         print(payload)
 
-        filters: List[Dict[str, str]] = payload.get("filters", [])
+        filters = payload.get("filters", [])
         order_by_input = payload.get("order_by", "Data")
         order_by = column_map.get(order_by_input, "p.end_time")
-        order_direction: str = payload.get("order_direction", "DESC")
-        limit: int = int(payload.get("limit", 1000))
+        order_direction = payload.get("order_direction", "DESC")
+        limit = int(payload.get("limit", 1000))
         direction = "ASC" if order_direction.lower() == "crescente" else "DESC"
 
-        # Initialize join and where clauses.
         join_clauses = []
         where_clauses = []
         params = []
 
-        # If any filter is for defects, include the defects join.
         has_defect_filter = any(f.get("type") == "Difetto" for f in filters)
         if has_defect_filter:
             join_clauses.append("JOIN object_defects od ON p.id = od.production_id")
             join_clauses.append("JOIN defects d ON od.defect_id = d.id")
 
-        # Group filters by type
         grouped_filters = defaultdict(list)
         for f in filters:
             grouped_filters[f.get("type")].append(f)
 
-        # Process grouped filters
         for filter_type, group in grouped_filters.items():
             group_clauses = []
             group_params = []
-            
+
             for f in group:
-                key = f.get("type")
                 value = f.get("value")
-                if key == "ID Modulo":
+
+                if filter_type == "ID Modulo":
                     group_clauses.append("o.id_modulo LIKE %s")
                     group_params.append(f"%{value}%")
-                
-                elif key == "Esito":
-                    if value == "OK":
-                        group_clauses.append("p.esito = 1")
-                    elif value == "KO":
-                        group_clauses.append("p.esito = 6")
-                    elif value == "In Produzione":
-                        group_clauses.append("p.esito NOT IN (1, 6)")
-                
-                elif key == "Operatore":
+
+                elif filter_type == "Esito":
+                    esito_map = {"G": 1, "NG": 6, "In Produzione": 2, "OK Operatore": 5}
+                    if value in esito_map:
+                        group_clauses.append("p.esito = %s")
+                        group_params.append(esito_map[value])
+
+                elif filter_type == "Operatore":
                     group_clauses.append("p.operator_id LIKE %s")
                     group_params.append(f"%{value}%")
-                
-                elif key == "Linea":
+
+                elif filter_type == "Linea":
                     group_clauses.append("pl.display_name = %s")
                     group_params.append(value)
-                
-                elif key == "Stazione":
+
+                elif filter_type == "Stazione":
                     group_clauses.append("s.name = %s")
                     group_params.append(value)
-                
-                elif key == "Turno":
+
+                elif filter_type == "Turno":
                     turno_times = {
                         "1": ("06:00:00", "13:59:59"),
                         "2": ("14:00:00", "21:59:59"),
@@ -2913,139 +2906,94 @@ async def search_results(request: Request):
                     if value in turno_times:
                         start_t, end_t = turno_times[value]
                         if value == "3":
-                            group_clauses.append(
-                                "(TIME(p.end_time) >= '22:00:00' OR TIME(p.end_time) <= '05:59:59')"
-                            )
+                            group_clauses.append("(TIME(p.end_time) >= '22:00:00' OR TIME(p.end_time) <= '05:59:59')")
                         else:
                             group_clauses.append("TIME(p.end_time) BETWEEN %s AND %s")
                             group_params.extend([start_t, end_t])
-                
-                elif key == "Data":
+
+                elif filter_type == "Data":
                     from_iso = f.get("start")
                     to_iso = f.get("end")
-                    if from_iso and to_iso:  # Make sure they're not None
-                        try:
-                            from_dt = datetime.fromisoformat(from_iso)
-                            to_dt = datetime.fromisoformat(to_iso)
-                            group_clauses.append("p.end_time BETWEEN %s AND %s")
-                            group_params.extend([from_dt, to_dt])
-                        except Exception as e:
-                            print(f"ISO datetime parsing error: {e}")
-                    else:
-                        print("Missing 'start' or 'end' value in Data filter")
+                    if from_iso and to_iso:
+                        from_dt = datetime.fromisoformat(from_iso)
+                        to_dt = datetime.fromisoformat(to_iso)
+                        group_clauses.append("p.end_time BETWEEN %s AND %s")
+                        group_params.extend([from_dt, to_dt])
 
-                elif key == "Stringatrice":
-                    stringatrice_map = {
-                        "1": "Str1",
-                        "2": "Str2",
-                        "3": "Str3",
-                        "4": "Str4",
-                        "5": "Str5"
-                    }
+                elif filter_type == "Stringatrice":
+                    stringatrice_map = {"1": "Str1", "2": "Str2", "3": "Str3", "4": "Str4", "5": "Str5"}
                     if value in stringatrice_map:
-                        # Add a second join to stations table (aliased as ls for last_station)
                         join_clauses.append("LEFT JOIN stations ls ON p.last_station_id = ls.id")
                         group_clauses.append("ls.name = %s")
                         group_params.append(stringatrice_map[value])
-                
-                elif key == "Difetto" and value:
-                    # Split the composite defect filter by " > "
+
+                elif filter_type == "Difetto" and value:
                     parts = value.split(" > ")
-                    if not parts:
-                        continue
-                    # Always filter by defect category.
                     defect_category = parts[0]
                     group_clauses.append("d.category = %s")
                     group_params.append(defect_category)
 
-                    if defect_category == "Generali":
-                        if len(parts) > 1 and parts[1].strip():
-                            # For Generali, second part is defect_type.
-                            group_clauses.append("od.defect_type = %s")
-                            group_params.append(parts[1])
+                    if defect_category == "Generali" and len(parts) > 1:
+                        group_clauses.append("od.defect_type = %s")
+                        group_params.append(parts[1])
                     elif defect_category == "Saldatura":
-                        # Expected: Saldatura > Stringa[<num>] > Lato <letter> > Pin[<num>]
-                        if len(parts) > 1 and parts[1].strip():
+                        if len(parts) > 1:
                             match = re.search(r'\[(\d+)\]', parts[1])
                             if match:
-                                stringa_num = int(match.group(1))
                                 group_clauses.append("od.stringa = %s")
-                                group_params.append(stringa_num)
-                        if len(parts) > 2 and parts[2].strip():
+                                group_params.append(int(match.group(1)))
+                        if len(parts) > 2:
                             lato = parts[2].replace("Lato ", "").strip()
                             group_clauses.append("od.ribbon_lato = %s")
                             group_params.append(lato)
-                        if len(parts) > 3 and parts[3].strip():
+                        if len(parts) > 3:
                             match = re.search(r'\[(\d+)\]', parts[3])
                             if match:
-                                pin_num = int(match.group(1))
                                 group_clauses.append("od.s_ribbon = %s")
-                                group_params.append(pin_num)
+                                group_params.append(int(match.group(1)))
                     elif defect_category == "Disallineamento":
-                        # Expected can be either:
-                        #   "Disallineamento > Stringa > Stringa[<num>]"
-                        #   or "Disallineamento > Ribbon > Lato <letter> > Ribbon[<num>]"
-                        if len(parts) > 1 and parts[1].strip():
-                            mode = parts[1]
-                            if mode == "Stringa":
-                                if len(parts) > 2 and parts[2].strip():
-                                    match = re.search(r'\[(\d+)\]', parts[2])
-                                    if match:
-                                        stringa_num = int(match.group(1))
-                                        group_clauses.append("od.stringa = %s")
-                                        group_params.append(stringa_num)
-                            elif mode == "Ribbon":
-                                if len(parts) > 2 and parts[2].strip():
-                                    lato = parts[2].replace("Lato ", "").strip()
-                                    group_clauses.append("od.ribbon_lato = %s")
-                                    group_params.append(lato)
-                                if len(parts) > 3 and parts[3].strip():
-                                    match = re.search(r'\[(\d+)\]', parts[3])
-                                    if match:
-                                        ribbon_num = int(match.group(1))
-                                        # For Disallineamento in Ribbon mode, use i_ribbon.
-                                        group_clauses.append("od.i_ribbon = %s")
-                                        group_params.append(ribbon_num)
+                        if len(parts) > 1 and parts[1] == "Stringa" and len(parts) > 2:
+                            match = re.search(r'\[(\d+)\]', parts[2])
+                            if match:
+                                group_clauses.append("od.stringa = %s")
+                                group_params.append(int(match.group(1)))
+                        elif len(parts) > 1 and parts[1] == "Ribbon":
+                            if len(parts) > 2:
+                                lato = parts[2].replace("Lato ", "").strip()
+                                group_clauses.append("od.ribbon_lato = %s")
+                                group_params.append(lato)
+                            if len(parts) > 3:
+                                match = re.search(r'\[(\d+)\]', parts[3])
+                                if match:
+                                    group_clauses.append("od.i_ribbon = %s")
+                                    group_params.append(int(match.group(1)))
                     elif defect_category == "Mancanza Ribbon":
-                        # Expected: Mancanza Ribbon > Lato <letter> > Ribbon[<num>]
-                        if len(parts) > 1 and parts[1].strip():
+                        if len(parts) > 1:
                             lato = parts[1].replace("Lato ", "").strip()
                             group_clauses.append("od.ribbon_lato = %s")
                             group_params.append(lato)
-                        if len(parts) > 2 and parts[2].strip():
+                        if len(parts) > 2:
                             match = re.search(r'\[(\d+)\]', parts[2])
                             if match:
-                                ribbon_num = int(match.group(1))
-                                # For Mancanza Ribbon use i_ribbon.
                                 group_clauses.append("od.i_ribbon = %s")
-                                group_params.append(ribbon_num)
-                    elif defect_category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon"):
-                        # Expected: e.g., "Macchie ECA > Stringa[<num>]"
-                        if len(parts) > 1 and parts[1].strip():
-                            match = re.search(r'\[(\d+)\]', parts[1])
-                            if match:
-                                stringa_num = int(match.group(1))
-                                group_clauses.append("od.stringa = %s")
-                                group_params.append(stringa_num)
-                    elif defect_category == "Altro":
-                        if len(parts) > 1 and parts[1].strip():
-                            group_clauses.append("od.extra_data LIKE %s")
-                            group_params.append(f"%{parts[1]}%")
+                                group_params.append(int(match.group(1)))
+                    elif defect_category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon") and len(parts) > 1:
+                        match = re.search(r'\[(\d+)\]', parts[1])
+                        if match:
+                            group_clauses.append("od.stringa = %s")
+                            group_params.append(int(match.group(1)))
+                    elif defect_category == "Altro" and len(parts) > 1:
+                        group_clauses.append("od.extra_data LIKE %s")
+                        group_params.append(f"%{parts[1]}%")
 
-        if len(group_clauses) == 1:
-            where_clauses.append(group_clauses[0])
-        elif len(group_clauses) > 1:
-            where_clauses.append("(" + " OR ".join(group_clauses) + ")")
-        params.extend(group_params)
+            if group_clauses:
+                clause = f"({' OR '.join(group_clauses)})" if len(group_clauses) > 1 else group_clauses[0]
+                where_clauses.append(clause)
+                params.extend(group_params)
 
-
-        # Build final JOIN and WHERE SQL parts.
         join_sql = " ".join(join_clauses)
-        where_sql = " AND ".join(where_clauses)
-        if where_sql:
-            where_sql = "WHERE " + where_sql
+        where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
-        # Special ordering logic for NULLs in esito/cycle_time.
         if order_by in {"p.esito", "p.cycle_time"}:
             order_clause = f"ORDER BY ISNULL({order_by}), {order_by} {direction}"
         else:
@@ -3260,6 +3208,33 @@ async def get_issues_for_object(id_modulo: str):
     except Exception as e:
         logging.error(f"❌ Errore nel recupero dei difetti per id_modulo={id_modulo}: {e}")
         raise HTTPException(status_code=500, detail="Errore nel server.")
+
+class ThresholdSetting(BaseModel):
+    threshold: float
+
+def load_settings():
+    if os.path.exists(SETTINGS_PATH):
+        with open(SETTINGS_PATH, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_settings(data: dict):
+    os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+@app.get("/api/settings/production_threshold")
+def get_production_threshold():
+    settings = load_settings()
+    threshold = settings.get("threshold", 3.0)
+    return {"threshold": threshold}
+
+@app.post("/api/settings/production_threshold")
+def set_production_threshold(data: ThresholdSetting):
+    settings = load_settings()
+    settings["threshold"] = data.threshold
+    save_settings(settings)
+    return {"message": "Threshold saved"}
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":

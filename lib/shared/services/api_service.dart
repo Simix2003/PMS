@@ -385,4 +385,28 @@ class ApiService {
       return [];
     }
   }
+
+  static Future<double> getProductionThreshold() async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/settings/production_threshold'));
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return (json['threshold'] as num).toDouble();
+    } else {
+      throw Exception('Failed to load threshold');
+    }
+  }
+
+  static Future<void> setProductionThreshold(double threshold) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/settings/production_threshold'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'threshold': threshold}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to save threshold');
+    }
+  }
 }

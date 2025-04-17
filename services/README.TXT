@@ -11,7 +11,7 @@ flutter build web --web-renderer html --release -t lib/main_home.dart -o build/w
 flutter build web --web-renderer html --release -t lib/main_data.dart -o build/web_data
 
 # Build for port 8082 (Stringatrici)
-flutter build web --web-renderer html --release -t lib/main_data.dart -o build/web_data
+flutter build web --web-renderer html --release -t lib/main_stringatrici.dart -o build/web_stringatrici
 
 flutter run -d chrome --web-renderer html -t lib/main_home.dart
 flutter run -d chrome --web-renderer html -t lib/main_data.dart

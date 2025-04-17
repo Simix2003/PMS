@@ -1,6 +1,9 @@
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously, avoid_print
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:wakelock/wakelock.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
@@ -25,6 +28,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool hasBeenEvaluated = false;
   final Set<String> _issues = {};
   final WebSocketService webSocketService = WebSocketService();
+
+  Timer? _reconnectTimer;
 
   bool cicloIniziato = false;
   bool pezzoOK = false;
@@ -62,12 +67,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    Wakelock.enable();
     _startup();
+    _startReconnectChecker(); // 🟢 check connection every X seconds
   }
 
   Future<void> _startup() async {
-    _connectWebSocket();
     _fetchPLCStatus();
+  }
+
+  void _startReconnectChecker() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!webSocketService.isConnected) {
+        debugPrint("🔁 Attempting to reconnect WebSocket...");
+        webSocketService.close();
+        _connectWebSocket();
+      }
+    });
   }
 
   void _fetchPLCStatus() async {
@@ -227,6 +244,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void dispose() {
     webSocketService.close();
     _objectIdController.dispose();
+    _reconnectTimer?.cancel(); // 🧹 stop timer
     super.dispose();
   }
 

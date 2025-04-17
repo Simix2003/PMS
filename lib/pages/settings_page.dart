@@ -1,6 +1,8 @@
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:wakelock/wakelock.dart';
 import 'dart:ui';
 import '../shared/services/api_service.dart';
 
@@ -35,6 +37,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
+    Wakelock.enable();
     _loadSettings();
   }
 
@@ -82,321 +85,461 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await ApiService.setAllSettings(settings);
       await ApiService.refreshBackendSettings();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impostazioni salvate e aggiornate')),
+
+      // ✅ Show lightweight Cupertino-style confirmation at the bottom
+      showCupertinoModalPopup(
+        context: context,
+        barrierDismissible: true,
+        builder: (BuildContext context) => SafeArea(
+          child: Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+            decoration: BoxDecoration(
+              color: CupertinoColors.systemGrey6,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 10,
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(CupertinoIcons.check_mark_circled,
+                    color: CupertinoColors.activeGreen, size: 24),
+                SizedBox(width: 12),
+                Text(
+                  'Impostazioni salvate',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: CupertinoColors.black),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
+
+      // Auto dismiss after 1.5 seconds
+      await Future.delayed(const Duration(milliseconds: 1500));
+      Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Errore nel salvataggio: $e')),
+      // ❌ Clean, native error popup
+      showCupertinoDialog(
+        context: context,
+        builder: (_) => CupertinoAlertDialog(
+          title: const Text('Errore'),
+          content: Text('Impossibile salvare le impostazioni:\n$e'),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('OK'),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
       );
     }
   }
 
-  Widget _buildGroupTitle(String title, IconData icon, Color color) {
-    return Row(
-      children: [
-        Icon(icon, color: color),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: color,
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 24, bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: CupertinoColors.systemGrey),
+          const SizedBox(width: 8),
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
+              color: CupertinoColors.systemGrey,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCard(Widget child) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, 2),
+            blurRadius: 6,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: const Color(0xFFF5F5F7), // Apple background color
+        body: const Center(
+          child: CupertinoActivityIndicator(radius: 16),
+        ),
       );
     }
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F7), // Apple background color
       appBar: AppBar(
-        title: const Text('Impostazioni'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.blue),
-        foregroundColor: Colors.blue,
-      ),
-      extendBodyBehindAppBar: true,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade50, Colors.purple.shade50],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+        centerTitle: true,
+        title: const Text(
+          'Impostazioni',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w500,
           ),
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(30),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.75),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(
-                        color: Colors.white.withOpacity(0.8), width: 1.5),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 20,
-                        spreadRadius: 5,
+        elevation: 0.5,
+        backgroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Color(0xFF007AFF)), // Apple blue
+      ),
+      body: SafeArea(
+        child: ListView(
+          children: [
+            // Cycle Time Section
+            _buildSectionHeader('Tempo Ciclo', CupertinoIcons.timer),
+            _buildCard(
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Tempo Ciclo Minimo',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
                       ),
-                    ],
-                  ),
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      // 🔶 Tempo Ciclo Minimo Card
-                      Card(
-                        color: Colors.orange.shade50,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        child: Padding(
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Minimo tempo (in secondi) per considerare un ciclo come "Controllato"',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: CupertinoSlider(
+                            value: _minCycleSeconds,
+                            min: 1,
+                            max: 30,
+                            divisions: 29,
+                            onChanged: (val) {
+                              setState(() => _minCycleSeconds = val);
+                            },
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE9E9EB),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${_minCycleSeconds.round()}s',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w500,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Stringatrice Section
+            _buildSectionHeader(
+                'Stringatrice', CupertinoIcons.exclamationmark_triangle),
+            _buildCard(
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Configurazione Difetti',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Configura soglie per allarmi specifici a difetto',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ..._stringaDefects.map((defect) => Container(
+                          margin: const EdgeInsets.only(bottom: 20),
                           padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9F9FB),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFE5E5EA)),
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildGroupTitle("Tempo Ciclo Minimo",
-                                  Icons.timer, Colors.orange),
-                              const SizedBox(height: 12),
                               Text(
-                                'Minimo tempo (in secondi) per considerare un ciclo come "Controllato":',
-                                style: TextStyle(color: Colors.orange.shade700),
+                                defect,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                ),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
                               Row(
                                 children: [
                                   Expanded(
-                                    child: Slider(
-                                      value: _minCycleSeconds,
-                                      min: 1,
-                                      max: 30,
-                                      divisions: 29,
-                                      label: '${_minCycleSeconds.round()}s',
-                                      onChanged: (val) {
-                                        setState(() => _minCycleSeconds = val);
-                                      },
-                                    ),
-                                  ),
-                                  Text(
-                                    '${_minCycleSeconds.round()}s',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.orange.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // 🟦 Stringatrice Card
-                      Card(
-                        color: Colors.teal.shade50,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildGroupTitle("Stringatrice",
-                                  Icons.warning_amber_rounded, Colors.teal),
-                              const SizedBox(height: 8),
-                              const Text(
-                                  "Configura soglie per allarmi specifici a difetto:"),
-                              const SizedBox(height: 12),
-                              ..._stringaDefects.map((defect) => Container(
-                                    margin: const EdgeInsets.only(bottom: 20),
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: Colors.teal.shade200),
-                                    ),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(defect,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16,
-                                                color: Colors.teal)),
-                                        const SizedBox(height: 8),
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: TextFormField(
-                                                initialValue:
-                                                    _moduliWindow[defect]
-                                                        ?.toString(),
-                                                keyboardType:
-                                                    TextInputType.number,
-                                                decoration:
-                                                    const InputDecoration(
-                                                        labelText:
-                                                            "Numero Moduli"),
-                                                onChanged: (val) {
-                                                  final parsed =
-                                                      int.tryParse(val);
-                                                  if (parsed != null) {
-                                                    setState(() =>
-                                                        _moduliWindow[defect] =
-                                                            parsed);
-                                                  }
-                                                },
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: TextFormField(
-                                                initialValue:
-                                                    _thresholds[defect]
-                                                        ?.toString(),
-                                                keyboardType:
-                                                    TextInputType.number,
-                                                decoration:
-                                                    const InputDecoration(
-                                                        labelText: "Soglia KO"),
-                                                onChanged: (val) {
-                                                  final parsed =
-                                                      int.tryParse(val);
-                                                  if (parsed != null) {
-                                                    setState(() =>
-                                                        _thresholds[defect] =
-                                                            parsed);
-                                                  }
-                                                },
-                                              ),
-                                            ),
-                                          ],
+                                        Text(
+                                          'Range di Moduli',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.grey.shade600,
+                                          ),
                                         ),
-                                        SwitchListTile(
-                                          title: const Text(
-                                              "Abilita avviso su KO consecutivi"),
-                                          value: _enableConsecutiveKO[defect] ??
-                                              false,
-                                          activeColor: Colors.teal,
+                                        const SizedBox(height: 8),
+                                        CupertinoTextField(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 12),
+                                          placeholder: 'Moduli',
+                                          keyboardType: TextInputType.number,
+                                          decoration: BoxDecoration(
+                                            color: CupertinoColors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                                color: const Color(0xFFD1D1D6)),
+                                          ),
+                                          controller: TextEditingController(
+                                              text: _moduliWindow[defect]
+                                                  ?.toString()),
                                           onChanged: (val) {
-                                            setState(() =>
-                                                _enableConsecutiveKO[defect] =
-                                                    val);
+                                            final parsed = int.tryParse(val);
+                                            if (parsed != null) {
+                                              setState(() =>
+                                                  _moduliWindow[defect] =
+                                                      parsed);
+                                            }
                                           },
                                         ),
-                                        if (_enableConsecutiveKO[defect] ==
-                                            true)
-                                          TextFormField(
-                                            initialValue:
-                                                _consecutiveKOLimit[defect]
-                                                    ?.toString(),
-                                            keyboardType: TextInputType.number,
-                                            decoration: const InputDecoration(
-                                                labelText:
-                                                    "Numero KO consecutivi"),
-                                            onChanged: (val) {
-                                              final parsed = int.tryParse(val);
-                                              if (parsed != null) {
-                                                setState(() =>
-                                                    _consecutiveKOLimit[
-                                                        defect] = parsed);
-                                              }
-                                            },
-                                          ),
                                       ],
                                     ),
-                                  )),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // 🟢 Yield Card
-                      Card(
-                        color: Colors.green.shade50,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            children: [
-                              _buildGroupTitle("Calcolo Yield (TPY)",
-                                  Icons.percent, Colors.green),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Numero NG',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        CupertinoTextField(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 12),
+                                          placeholder: 'Soglia',
+                                          keyboardType: TextInputType.number,
+                                          decoration: BoxDecoration(
+                                            color: CupertinoColors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                                color: const Color(0xFFD1D1D6)),
+                                          ),
+                                          controller: TextEditingController(
+                                              text: _thresholds[defect]
+                                                  ?.toString()),
+                                          onChanged: (val) {
+                                            final parsed = int.tryParse(val);
+                                            if (parsed != null) {
+                                              setState(() =>
+                                                  _thresholds[defect] = parsed);
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                               const SizedBox(height: 16),
-                              SwitchListTile(
-                                title: const Text(
-                                    'Includi "NC" nel calcolo dello Yield'),
-                                value: _includeNCInYield,
-                                activeColor: Colors.green,
-                                onChanged: (val) {
-                                  setState(() => _includeNCInYield = val);
-                                },
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Abilita avviso su NG consecutivi',
+                                    style: TextStyle(fontSize: 15),
+                                  ),
+                                  CupertinoSwitch(
+                                    value:
+                                        _enableConsecutiveKO[defect] ?? false,
+                                    activeColor: const Color(0xFF007AFF),
+                                    onChanged: (val) {
+                                      setState(() =>
+                                          _enableConsecutiveKO[defect] = val);
+                                    },
+                                  ),
+                                ],
                               ),
-                              SwitchListTile(
-                                title: const Text(
-                                    'Escludi difetti di Saldatura dallo Yield'),
-                                value: _excludeSaldaturaDefects,
-                                activeColor: Colors.green,
-                                onChanged: (val) {
-                                  setState(
-                                      () => _excludeSaldaturaDefects = val);
-                                },
-                              ),
+                              if (_enableConsecutiveKO[defect] == true) ...[
+                                const SizedBox(height: 16),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Numero NG Consecutivi',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    CupertinoTextField(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 12),
+                                      placeholder: 'NG Consecutivi',
+                                      keyboardType: TextInputType.number,
+                                      decoration: BoxDecoration(
+                                        color: CupertinoColors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: const Color(0xFFD1D1D6)),
+                                      ),
+                                      controller: TextEditingController(
+                                          text: _consecutiveKOLimit[defect]
+                                              ?.toString()),
+                                      onChanged: (val) {
+                                        final parsed = int.tryParse(val);
+                                        if (parsed != null) {
+                                          setState(() =>
+                                              _consecutiveKOLimit[defect] =
+                                                  parsed);
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      // 💾 Save Button
-                      Center(
-                        child: ElevatedButton.icon(
-                          onPressed: _saveSettings,
-                          icon: const Icon(Icons.save, color: Colors.white),
-                          label: const Text('Salva Impostazioni',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade600,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 32, vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                        )),
+                  ],
                 ),
               ),
             ),
-          ),
+
+            // Yield Calculation Section
+            _buildSectionHeader('Calcolo Yield', CupertinoIcons.chart_bar),
+            _buildCard(
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Calcolo TPY',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Configurazione parametri per il calcolo dello yield',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9F9FB),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFE5E5EA)),
+                      ),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            title: const Text(
+                                'Includi "NC" nel calcolo dello Yield'),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 16),
+                            trailing: CupertinoSwitch(
+                              value: _includeNCInYield,
+                              activeColor: const Color(0xFF007AFF),
+                              onChanged: (val) {
+                                setState(() => _includeNCInYield = val);
+                              },
+                            ),
+                          ),
+                          const Divider(height: 1, indent: 16, endIndent: 16),
+                          ListTile(
+                            title: const Text(
+                                'Escludi difetti di Saldatura dallo Yield'),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 16),
+                            trailing: CupertinoSwitch(
+                              value: _excludeSaldaturaDefects,
+                              activeColor: const Color(0xFF007AFF),
+                              onChanged: (val) {
+                                setState(() => _excludeSaldaturaDefects = val);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _saveSettings,
+        backgroundColor: const Color(0xFF007AFF), // Apple blue
+        child: const Icon(Icons.save, color: Colors.white),
       ),
     );
   }

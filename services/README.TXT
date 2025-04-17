@@ -10,6 +10,9 @@ flutter build web --web-renderer html --release -t lib/main_home.dart -o build/w
 # Build for port 8081 (DataView + OverlayEditor)
 flutter build web --web-renderer html --release -t lib/main_data.dart -o build/web_data
 
+# Build for port 8082 (Stringatrici)
+flutter build web --web-renderer html --release -t lib/main_data.dart -o build/web_data
+
 flutter run -d chrome --web-renderer html -t lib/main_home.dart
 flutter run -d chrome --web-renderer html -t lib/main_data.dart
 

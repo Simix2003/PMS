@@ -52,11 +52,18 @@ class _FindPageState extends State<FindPage> {
   String? selectedMancanzaRibbonSide; // Lato F, M, B
   String? selectedMancanzaRibbon;
 
+// === I RIBBON LEADWIRE ===
+  String? selectedLeadwireRibbonSide; // Lato M
+  String? selectedLeadwireRibbon;
+
 // === MACCHIE ECA ===
   String? selectedMacchieECAStringa;
 
 // === CELLE ROTTE ===
   String? selectedCelleRotteStringa;
+
+// === GRAFFIO SU CELLA ===
+  String? selectedGraffioSuCellaStringa;
 
 // === LUNGHEZZA STRING RIBBON ===
   String? selectedLunghezzaStringa;
@@ -88,7 +95,8 @@ class _FindPageState extends State<FindPage> {
     'No Good da Bussing',
     'Materiale Esterno su Celle',
     'Bad Soldering',
-    'Passthroug'
+    'Passthroug',
+    'Poe in Eccesso'
   ];
 
   final List<String> saldaturaOptions_1 = [
@@ -168,6 +176,13 @@ class _FindPageState extends State<FindPage> {
     'Ribbon[4]',
   ];
 
+  final List<String> leadwireRibbonOptions = [
+    'Ribbon[1]',
+    'Ribbon[2]',
+    'Ribbon[3]',
+    'Ribbon[4]',
+  ];
+
   final List<String> macchieECAOptions = [
     'Stringa[1]',
     'Stringa[2]',
@@ -184,6 +199,21 @@ class _FindPageState extends State<FindPage> {
   ];
 
   final List<String> celle_rotteOptions = [
+    'Stringa[1]',
+    'Stringa[2]',
+    'Stringa[3]',
+    'Stringa[4]',
+    'Stringa[5]',
+    'Stringa[6]',
+    'Stringa[7]',
+    'Stringa[8]',
+    'Stringa[9]',
+    'Stringa[10]',
+    'Stringa[11]',
+    'Stringa[12]',
+  ];
+
+  final List<String> graffioSuCellaOptions = [
     'Stringa[1]',
     'Stringa[2]',
     'Stringa[3]',
@@ -227,7 +257,7 @@ class _FindPageState extends State<FindPage> {
     'Tempo Ciclo',
   ];
 
-  final List<String> limitOptions = ['100', '500', '1000', '5000'];
+  final List<String> limitOptions = ['100', '500', '1000', '5000', '10000'];
   final orderDirections = ['Crescente', 'Decrescente']; // A-Z / Z-A
 
   final List<Map<String, dynamic>> results = [];
@@ -502,7 +532,9 @@ class _FindPageState extends State<FindPage> {
                 'Mancanza Ribbon',
                 'Macchie ECA',
                 'Celle Rotte',
+                'I Ribbon Leadwire',
                 'Lunghezza String Ribbon',
+                'Graffio su Cella',
                 'Altro',
               ],
               onChanged: (val) {
@@ -519,9 +551,12 @@ class _FindPageState extends State<FindPage> {
                   selectedDisallineamentoRibbon = null;
                   selectedMancanzaRibbonSide = null;
                   selectedMancanzaRibbon = null;
+                  selectedLeadwireRibbonSide = null;
+                  selectedLeadwireRibbon = null;
                   selectedMacchieECAStringa = null;
                   selectedCelleRotteStringa = null;
                   selectedLunghezzaStringa = null;
+                  selectedGraffioSuCellaStringa = null;
                 });
               },
             ),
@@ -629,6 +664,18 @@ class _FindPageState extends State<FindPage> {
               ),
             ],
 
+            // === I RIBBON LEADWIRE ===
+            if (selectedDifettoGroup == 'I Ribbon Leadwire') ...[
+              const SizedBox(width: 8),
+              _buildStyledDropdown(
+                hint: 'Ribbon',
+                value: selectedLeadwireRibbon,
+                items: leadwireRibbonOptions,
+                onChanged: (val) =>
+                    setState(() => selectedLeadwireRibbon = val),
+              ),
+            ],
+
             // === MACCHIE ECA ===
             if (selectedDifettoGroup == 'Macchie ECA')
               _buildStyledDropdown(
@@ -657,6 +704,16 @@ class _FindPageState extends State<FindPage> {
                 items: lunghezzaStringRibbonOptions,
                 onChanged: (val) =>
                     setState(() => selectedLunghezzaStringa = val),
+              ),
+
+            // === GRAFFIO SU CELLA ===
+            if (selectedDifettoGroup == 'Graffio su Cella')
+              _buildStyledDropdown(
+                hint: 'Stringa',
+                value: selectedGraffioSuCellaStringa,
+                items: graffioSuCellaOptions,
+                onChanged: (val) =>
+                    setState(() => selectedGraffioSuCellaStringa = val),
               ),
           ],
         );

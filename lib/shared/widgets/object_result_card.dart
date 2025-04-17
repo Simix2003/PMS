@@ -19,13 +19,19 @@ class ObjectResultCard extends StatelessWidget {
 
   Color _getStatusColor(int? esito) {
     if (esito == 1) return const Color(0xFF34C759); // OK
+    if (esito == 2) return Colors.grey; // In Progress
+    if (esito == 4) return const Color.fromARGB(255, 199, 189, 52); // Escluso
+    if (esito == 5) return const Color(0xFF34C759); // G Operatore
     if (esito == 6) return const Color(0xFFFF3B30); // KO
     return Colors.grey; // N/A
   }
 
   String _getStatusLabel(int? esito) {
-    if (esito == 1) return 'OK';
-    if (esito == 6) return 'KO';
+    if (esito == 1) return 'G';
+    if (esito == 2) return 'In Produzione';
+    if (esito == 4) return 'Escluso';
+    if (esito == 5) return 'G Operatore';
+    if (esito == 6) return 'NG';
     return 'N/A';
   }
 

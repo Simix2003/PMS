@@ -1,41 +1,54 @@
 from premsql.agents import BaseLineAgent
 from premsql.generators import Text2SQLGeneratorHF
-from premsql.executors import SQLiteExecutor  # <-- If you're using SQLite, otherwise replace
-from premsql.agents.tools import SimpleMatplotlibTool  # ✅ This is the key missing piece!
+from premsql.agents.tools import SimpleMatplotlibTool
+from sqlalchemy import create_engine
+import pandas as pd
+from premsql.executors.base import BaseExecutor
 
-# Use your actual MySQL connection URI
+class MySQLExecutor(BaseExecutor):
+    def __init__(self, db_uri: str):
+        self.engine = create_engine(db_uri)
+
+    def execute_sql(self, sql: str) -> pd.DataFrame:
+        with self.engine.connect() as conn:
+            return pd.read_sql_query(sql, conn)
+
+
+# DB connection
 db_uri = "mysql+pymysql://root:Master36%21@localhost:3306/ix_monitor"
 
-# Initialize the Text-to-SQL generator
+print("⏳ Caricamento modello...")
 generator = Text2SQLGeneratorHF(
     model_or_name_or_path="premai-io/prem-1B-SQL",
     experiment_name="prem_sql_test",
-    device="cpu",  # "cuda:0" if using GPU
+    device="cpu",
     type="test"
 )
+print("✅ Modello caricato.")
 
-# Use SimpleMatplotlibTool as the required plot_tool
 plotter = SimpleMatplotlibTool()
 
-# Initialize the agent
+print("⏳ Inizializzazione agente...")
 agent = BaseLineAgent(
     session_name="test_session",
     db_connection_uri=db_uri,
     specialized_model1=generator,
     specialized_model2=generator,
-    executor=SQLiteExecutor(),  # Or use your actual MySQLExecutor if implemented
+    executor=MySQLExecutor(db_uri),
     plot_tool=plotter
 )
+print("✅ Agente pronto.")
 
-# Prompt the user
+# Prompt
 user_query = input("Scrivi la tua richiesta in italiano:\n> ")
-response = agent(f"/query {user_query}")
+print(f"🧠 Elaborazione richiesta: {user_query}")
 
-# Try to display SQL and table
+response = agent(f"/query {user_query}")
+print("✅ Risposta ricevuta!")
+
 try:
     print("\n=== RESPONSE ===\n")
     print(response)
-
 except Exception as e:
     print("Errore:", e)
     print("Oggetto response:", response)

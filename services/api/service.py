@@ -218,7 +218,6 @@ for line in CHANNELS:
         stop_threads[key] = False
         passato_flags[key] = False
 
-
 plc_connections = {} 
 
 # GLOBAL
@@ -301,7 +300,7 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
 
         ###############################################################################################################################
         if debug:
-            object_id = '1234'
+            object_id = "3SBHBGHC25407300"
         else:
             object_id = await asyncio.to_thread(
                 plc_connection.read_string,
@@ -489,7 +488,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
 
         ###############################################################################################################################
         if debug:
-            object_id = '1234'
+            object_id = '3SBHBGHC25407300'
         else:
             object_id = await asyncio.to_thread(plc_connection.read_string, id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"])    
         ###############################################################################################################################
@@ -572,7 +571,7 @@ async def read_data(
 
         ###############################################################################################################################
         if debug:
-            data["Id_Modulo"] = '1234'
+            data["Id_Modulo"] = '3SBHBGHC25407300'
         else:
             data["Id_Modulo"] = await asyncio.to_thread(
                 plc_connection.read_string,
@@ -718,6 +717,7 @@ def metadata_sheet(ws, data: dict):
     no_good = 0
     ok_op = 0
     not_checked = 0
+    escluso = 0
     in_production = 0
 
     for p in productions:
@@ -748,12 +748,15 @@ def metadata_sheet(ws, data: dict):
                 ok_op += 1
         elif raw_esito == 2:
             in_production += 1
+        elif raw_esito == 4:
+            escluso += 1
 
     # Add to sheet
     ws.append(["Good:", good])
     ws.append(["Good Operatore (ReWork):", ok_op])
     ws.append(["No Good:", no_good])
     ws.append(["Not Controllati QG2:", not_checked])
+    ws.append(["Escluso:", escluso])
     ws.append(["In Produzione:", in_production])
 
     # Threshold info

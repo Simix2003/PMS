@@ -325,7 +325,7 @@ class ApiService {
   }
 
   static Future<String?> exportSelectedObjectsAndGetDownloadUrl({
-    required List<String> id_moduli,
+    required List<int> productionIds,
     required List<Map<String, String>> filters,
   }) async {
     final url = Uri.parse('$baseUrl/api/export_objects');
@@ -333,7 +333,7 @@ class ApiService {
       url,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        "id_moduli": id_moduli,
+        "production_ids": productionIds,
         "filters": filters,
       }),
     );
@@ -341,10 +341,12 @@ class ApiService {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       final filename = data["filename"];
-      return "$baseUrl/api/download_export/$filename";
-    } else {
-      return null;
+      if (filename != null) {
+        return "$baseUrl/api/download_export/$filename";
+      }
     }
+
+    return null;
   }
 
   static Future<List<Map<String, dynamic>>> fetchSearchResults({
@@ -412,6 +414,16 @@ class ApiService {
 
     if (response.statusCode != 200) {
       throw Exception('Failed to save settings');
+    }
+  }
+
+  static Future<void> refreshBackendSettings() async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/settings/refresh'),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to refresh settings');
     }
   }
 }

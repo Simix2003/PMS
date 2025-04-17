@@ -53,6 +53,26 @@ class WebSocketService {
     );
   }
 
+  void connectToWarnings({
+    required String selectedLine,
+    required void Function(Map<String, dynamic>) onMessage,
+    void Function()? onDone,
+    void Function(dynamic)? onError,
+  }) {
+    _channel?.sink.close();
+    final uri = Uri.parse('$baseUrl/ws/warnings/$selectedLine');
+    _channel = WebSocketChannel.connect(uri);
+
+    _channel!.stream.listen(
+      (message) {
+        final decoded = jsonDecode(message);
+        onMessage(decoded);
+      },
+      onDone: onDone,
+      onError: onError,
+    );
+  }
+
   void close() {
     _channel?.sink.close();
   }

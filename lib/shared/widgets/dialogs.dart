@@ -312,6 +312,6 @@ Future<void> showNoFiltersDialog(BuildContext context) {
     title: 'Nessun filtro selezionato',
     desc: 'Per favore, seleziona almeno un filtro prima di avviare la ricerca.',
     btnOkOnPress: () {},
-    btnOkColor: Colors.green,
+    btnOkColor: Colors.orange,
   ).show();
 }

@@ -149,6 +149,7 @@ ISSUE_TREE = {
                         "Materiale Esterno su Celle": {},
                         "Bad Soldering": {},
                         "Passthroug": {},
+                        "Poe in Eccesso": {}
                     },
                     "Saldatura": {
                         f"Stringa[{i}]": {
@@ -174,6 +175,11 @@ ISSUE_TREE = {
                             "B": None
                         } for i in range(1, 11)
                     },
+                     "I Ribbon Leadwire": {
+                        f"Ribbon[{i}]": {
+                            "M": None,
+                        } for i in range(1, 5)
+                    },
                     "Macchie ECA": {
                         f"Stringa[{i}]": None for i in range(1, 13)
                     },
@@ -181,6 +187,9 @@ ISSUE_TREE = {
                         f"Stringa[{i}]": None for i in range(1, 13)
                     },
                      "Lunghezza String Ribbon": {
+                        f"Stringa[{i}]": None for i in range(1, 13)
+                    },
+                    "Graffio su Cella": {
                         f"Stringa[{i}]": None for i in range(1, 13)
                     },
                 }
@@ -616,15 +625,17 @@ EXCEL_DEFECT_COLUMNS = {
     "NG Disall. Ribbon": "Disallineamento",   # specific to ribbon
     "NG Saldatura": "Saldatura",
     "NG Mancanza I_Ribbon": "Mancanza Ribbon",
+    "NG I_Ribbon Leadwire": "I_Ribbon Leadwire",
     "NG Macchie ECA": "Macchie ECA",
     "NG Celle Rotte": "Celle Rotte",
-    "NG Altro": "Altro"
+    "NG Altro": "Altro",
+    "NG Graffio su Cella": "Graffio su Cella",
 }
 
 # --- Sheet names ---
 SHEET_NAMES = [
     "Metadata", "Risolutivo", "NG Generali", "NG Saldature", "NG Disall. Ribbon",
-    "NG Disall. Stringa", "NG Mancanza Ribbon", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Altro"
+    "NG Disall. Stringa", "NG Mancanza Ribbon", "I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "Graffio su Cella", "NG Altro"
 ]
 
 def clean_old_exports(max_age_hours: int = 2):
@@ -833,12 +844,16 @@ def risolutivo_sheet(ws, data: dict):
                 ng_labels.add("NG Saldatura")
             elif cat == "Mancanza Ribbon":
                 ng_labels.add("NG Mancanza I_Ribbon")
+            elif cat == "I_Ribbon Leadwire":
+                ng_labels.add("NG I_Ribbon Leadwire")                
             elif cat == "Macchie ECA":
                 ng_labels.add("NG Macchie ECA")
             elif cat == "Celle Rotte":
                 ng_labels.add("NG Celle Rotte")
             elif cat == "Lunghezza String Ribbon":
                 ng_labels.add("NG Lunghezza String Ribbon")
+            elif cat == "Graffio su Cella":
+                ng_labels.add("NG Graffio su Cella")
             elif cat == "Altro":
                 ng_labels.add("NG Altro")
 
@@ -897,7 +912,7 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
         "Poe Scaduto", "No Good da Bussing",
-        "Materiale Esterno su Celle", "Bad Soldering", "Passthroug"
+        "Materiale Esterno su Celle", "Bad Soldering", "Passthroug", "Poe in Eccesso"
     ]
     ws.append(header)
 
@@ -953,6 +968,7 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         flag_materiale = "NG" if "Materiale Esterno su Celle" in general_defects else ""
         flag_bad = "NG" if "Bad Soldering" in general_defects else ""
         flag_passthrough = "NG" if "Passthroug" in general_defects else ""
+        flag_poe_in_eccesso = "NG" if "Poe in Eccesso" in general_defects else ""
 
         row = [
             line_display_name,
@@ -967,14 +983,15 @@ def ng_generali_sheet(ws, data: dict) -> bool:
             flag_bus,
             flag_materiale,
             flag_bad,
-            flag_passthrough
+            flag_passthrough,
+            flag_poe_in_eccesso
         ]
         ws.append(row)
 
     if rows_written > 0:
         autofit_columns(ws, align_center_for={
             "Esito", "Poe Scaduto", "No Good da Bussing",
-            "Materiale Esterno su Celle", "Bad Soldering", "Passthroug"
+            "Materiale Esterno su Celle", "Bad Soldering", "Passthroug", "Poe in Eccesso"
         })
         return True
     else:
@@ -1438,6 +1455,119 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
         return True
     else:
         return False
+    
+def ng_iribbon_leadwire_sheet(ws, data: dict) -> bool:
+    """
+    Generate the 'NG I_Ribbon Leadwire' sheet using pre-fetched data.
+    One row per production with at least one I_Ribbon Leadwire defect (only side M ribbons 1–4).
+    """
+    rows_written = 0
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+    min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
+
+    objects_by_id = {obj["id"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
+        "Ribbon 1 M", "Ribbon 2 M", "Ribbon 3 M", "Ribbon 4 M"
+    ]
+    ws.append(header)
+
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
+        if not obj:
+            continue
+
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
+            continue
+
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
+        cycle_time_str = str(cycle_time_obj or "")
+
+        # ✅ Convert cycle time to seconds
+        cycle_seconds = None
+        if cycle_time_obj:
+            try:
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
+            except Exception:
+                pass
+
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
+
+        station = stations_by_id.get(prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and d.get("category") == "I_Ribbon Leadwire"
+        ]
+        if not prod_defects:
+            continue
+
+        ribbon_cols = [""] * 4  # Only 4 ribbons on M side
+        ribbon_map = {
+            1: 0,
+            2: 1,
+            3: 2,
+            4: 3,
+        }
+
+        for defect in prod_defects:
+            lato = defect.get("ribbon_lato")
+            i_ribbon = defect.get("i_ribbon")
+            if lato == "M":
+                try:
+                    idx = ribbon_map.get(int(i_ribbon))  # type: ignore
+                    if idx is not None:
+                        ribbon_cols[idx] = "NG"
+                except (ValueError, TypeError):
+                    continue
+
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time_str
+        ] + ribbon_cols
+
+        ws.append(row)
+        rows_written += 1
+
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
 
 def ng_macchie_eca_sheet(ws, data: dict) -> bool:
     """
@@ -1748,6 +1878,110 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
     else:
         return False
 
+def ng_graffio_su_cella_sheet(ws, data: dict) -> bool:
+    """
+    Generate the 'NG Graffio su Cella' sheet using pre-fetched data.
+    One row per production with at least one 'Graffio su Cella' defect.
+    """
+    rows_written = 0
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+    min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
+
+    objects_by_id = {obj["id"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+    ] + [f"Stringa {i}" for i in range(1, 13)]
+    ws.append(header)
+
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
+        if not obj:
+            continue
+
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
+            continue
+
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
+        cycle_time_str = str(cycle_time_obj or "")
+
+        # ✅ Convert cycle time to seconds
+        cycle_seconds = None
+        if cycle_time_obj:
+            try:
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
+            except Exception:
+                pass
+
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
+
+        station = stations_by_id.get(prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        # ✅ This is the key change!
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and d.get("category") == "Graffio su Cella"
+        ]
+        if not prod_defects:
+            continue
+
+        stringa_cols = [""] * 12
+        for defect in prod_defects:
+            stringa_num = defect.get("stringa")
+            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
+                stringa_cols[stringa_num - 1] = "NG"
+            elif isinstance(stringa_num, str) and stringa_num.isdigit():
+                index = int(stringa_num)
+                if 1 <= index <= 12:
+                    stringa_cols[index - 1] = "NG"
+
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time_str
+        ] + stringa_cols
+
+        ws.append(row)
+        rows_written += 1
+
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
+    
 def ng_altro_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Altro' sheet using pre-fetched data.
@@ -1862,9 +2096,11 @@ SHEET_FUNCTIONS = {
     "NG Disall. Ribbon": ng_disall_ribbon_sheet,
     "NG Disall. Stringa": ng_disall_stringa_sheet,
     "NG Mancanza Ribbon": ng_mancanza_ribbon_sheet,
+    "NG I_Ribbon Leadwire": ng_iribbon_leadwire_sheet,
     "NG Macchie ECA": ng_macchie_eca_sheet,
     "NG Celle Rotte": ng_celle_rotte_sheet,
     "NG Lunghezza String Ribbon": ng_lunghezza_string_ribbon_sheet,
+    "NG Graffio su Cella": ng_graffio_su_cella_sheet,
     "NG Altro": ng_altro_sheet,
 }
 
@@ -1922,7 +2158,7 @@ Il database contiene le seguenti tabelle:
 
 5 `defects`
 - id (PK)
-- category (ENUM: 'Generali', 'Saldatura', 'Disallineamento', 'Mancanza Ribbon', 'Macchie ECA', 'Celle Rotte', 'Lunghezza String Ribbon', 'Altro')
+- category (ENUM: 'Generali', 'Saldatura', 'Disallineamento', 'Mancanza Ribbon', 'I_Ribbon Leadwire', 'Macchie ECA', 'Celle Rotte', 'Lunghezza String Ribbon', 'Graffio su Cella', 'Altro')
 
 6 `object_defects`
 - id (PK)
@@ -2149,7 +2385,7 @@ def parse_issue_path(path: str, category: str):
         "defect_type": ...   # For Generali
         "stringa": ...       # For Saldatura, Disallineamento, Macchie ECA, etc.
         "s_ribbon": ...      # For Saldatura (Pin)
-        "i_ribbon": ...      # For Disallineamento/Mancanza Ribbon
+        "i_ribbon": ...      # For Disallineamento/Mancanza Ribbon, I_Ribbon Leadwire
         "ribbon_lato": ...   # Possibly 'F','M','B'
       }
     """
@@ -2214,6 +2450,16 @@ def parse_issue_path(path: str, category: str):
             res["i_ribbon"] = int(rib_match.group(1))
         if side_match:
             res["ribbon_lato"] = side_match.group(1)
+    
+    elif category == "I_Ribbon Leadwire":
+        # e.g. "I_Ribbon Leadwire.Ribbon[2].M"
+        # i_ribbon=2, ribbon_lato='M'
+        rib_match = re.search(r"Ribbon\[(\d+)\]", path)
+        side_match = re.search(r"\ - (F|M|B)$", path)
+        if rib_match:
+            res["i_ribbon"] = int(rib_match.group(1))
+        if side_match:
+            res["ribbon_lato"] = side_match.group(1)
 
     elif category == "Macchie ECA":
         # e.g. "Macchie ECA.Stringa[4]"
@@ -2229,6 +2475,12 @@ def parse_issue_path(path: str, category: str):
 
     elif category == "Lunghezza String Ribbon":
         # e.g. "Lunghezza String Ribbon.Stringa[2]"
+        str_match = re.search(r"Stringa\[(\d+)\]", path)
+        if str_match:
+            res["stringa"] = int(str_match.group(1))
+
+    elif category == "Graffio su Cella":
+        # e.g. "Graffio su Cella.Stringa[2]"
         str_match = re.search(r"Stringa\[(\d+)\]", path)
         if str_match:
             res["stringa"] = int(str_match.group(1))
@@ -2332,13 +2584,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             object_id = last_prod["object_id"]
             last_station_id = last_prod["last_station_id"]
 
-            print(f"\n🆕 Last production:")
-            print(f"   • ProdID: {prod_id}")
-            print(f"   • ObjectID: {object_id}")
-            print(f"   • Last Station ID: {last_station_id}")
-
             if last_station_id is None:
-                print("   ❌ No last_station_id found.")
                 return
 
             # Step 2: Get station info
@@ -2351,11 +2597,9 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             station = cursor.fetchone()
 
             if not station:
-                print("   ❌ Station not found.")
                 return
 
             full_station_id = f"{station['line_name']}.{station['name']}"
-            print(f"✅ This object came from → Line: {station['line_name']} | Station: {station['name']} ({station['display_name']})")
 
             # Step 3: Fetch the most recent 49 productions by end_time
             cursor.execute("""
@@ -2396,10 +2640,6 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             # Combine them (manual entry first)
             productions = [current] + recent_productions
 
-            print(f"✅ Last 50 productions from Station ID {last_station_id}:")
-            for p in productions:
-                print(f"   • ProdID: {p['production_id']} | ObjectID: {p['object_id']} | End: {p['end_time']} | Esito: {p['esito']}")
-
             # Step 4: Analyze based on settings
             thresholds = settings.get("thresholds", {})
             moduli_window = settings.get("moduli_window", {})
@@ -2411,12 +2651,6 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                 threshold = thresholds[defect_name]
                 enable_consecutive = enable_consecutive_ko.get(defect_name, False)
                 consecutive_limit = consecutive_ko_limit.get(defect_name, 2)
-
-                print(f"\n🔧 Settings for [{defect_name}] on {full_station_id}:")
-                print(f"   • Threshold: {threshold}")
-                print(f"   • Window: {window}")
-                print(f"   • Consecutive KO Enabled: {enable_consecutive}")
-                print(f"   • Consecutive KO Limit: {consecutive_limit}")
 
                 count = 0
                 consecutive = 0
@@ -2430,7 +2664,6 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                     if defect_name in all_defects:
                         count += 1
                         consecutive += 1
-                        print(f"     ✅ [{i+1}] ProdID {p['production_id']} → includes {defect_name}")
 
                         if enable_consecutive and consecutive >= consecutive_limit:
                             print(f"🔴 Warning (consecutive KO)")
@@ -2449,7 +2682,6 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
 
                             break  # ✅ Optional: stop loop after warning
                     else:
-                        print(f"     ❌ [{i+1}] ProdID {p['production_id']} → OK")
                         consecutive = 0
 
                 # ✅ Check threshold AFTER the loop
@@ -3198,9 +3430,14 @@ async def productions_summary(
                         stations[station_code].setdefault("defects", {})[category] = count
 
             fetch_defect_summary("Mancanza Ribbon", "Mancanza Ribbon")
+            fetch_defect_summary("I_Ribbon Leadwire", "I_Ribbon Leadwire")
             fetch_defect_summary("Saldatura", "Saldatura")
             fetch_defect_summary("Disallineamento", "Disallineamento")
             fetch_defect_summary("Generali", "Generali")
+            fetch_defect_summary("Macchie ECA", "Macchie ECA")
+            fetch_defect_summary("Celle Rotte", "Celle Rotte")
+            fetch_defect_summary("Lunghezza String Ribbon", "Lunghezza String Ribbon")
+            fetch_defect_summary("Graffio su Cella", "Graffio su Cella")
 
             # Calculate "KO Generico" (generic KO) for each station.
             for station, data in stations.items():
@@ -3452,7 +3689,17 @@ async def search_results(request: Request):
                             if match:
                                 group_clauses.append("od.i_ribbon = %s")
                                 group_params.append(int(match.group(1)))
-                    elif defect_category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon") and len(parts) > 1:
+                    elif defect_category == "I_Ribbon Leadwire":
+                        if len(parts) > 1:
+                            lato = parts[1].replace("Lato ", "").strip()
+                            group_clauses.append("od.ribbon_lato = %s")
+                            group_params.append(lato)
+                        if len(parts) > 2:
+                            match = re.search(r'\[(\d+)\]', parts[2])
+                            if match:
+                                group_clauses.append("od.i_ribbon = %s")
+                                group_params.append(int(match.group(1)))
+                    elif defect_category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella") and len(parts) > 1:
                         match = re.search(r'\[(\d+)\]', parts[1])
                         if match:
                             group_clauses.append("od.stringa = %s")
@@ -3680,7 +3927,12 @@ async def get_issues_for_object(id_modulo: str):
                         f"Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
                     )
 
-                elif cat in ["Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon"]:
+                elif cat == "I_Ribbon Leadwire":
+                    issue_paths.append(
+                        f"Dati.Esito.Esito_Scarto.Difetti.I_Ribbon Leadwire.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
+                    )
+
+                elif cat in ["Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella"]:
                     issue_paths.append(
                         f"Dati.Esito.Esito_Scarto.Difetti.{cat}.Stringa[{row['stringa']}]"
                     )

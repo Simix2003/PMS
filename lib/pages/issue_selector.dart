@@ -53,7 +53,9 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     "Generali",
     "Macchie ECA",
     "Celle Rotte",
+    "I Ribbon Leadwire",
     "Lunghezza String Ribbon",
+    "Graffio su Cella",
     "Altro",
   ];
 

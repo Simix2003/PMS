@@ -5,77 +5,96 @@ import '../utils/constants.dart';
 class WebSocketService {
   static String baseUrl = 'ws://$ipAddress:$port';
   WebSocketChannel? _channel;
-  Function(Map<String, dynamic>)? onMessage;
-  Function? onError;
-  Function? onDone;
+  bool isConnected = false;
 
-  void connect({
-    required String line,
-    required String channel,
-    required void Function(Map<String, dynamic> decodedMessage) onMessage,
+  void _handleStream({
+    required Stream stream,
+    required void Function(dynamic message) onMessage,
     void Function()? onDone,
     void Function(dynamic error)? onError,
   }) {
-    _channel?.sink.close();
+    isConnected = true;
+
+    stream.listen(
+      (message) => onMessage(message),
+      onDone: () {
+        isConnected = false;
+        if (onDone != null) onDone();
+      },
+      onError: (error) {
+        isConnected = false;
+        if (onError != null) onError(error);
+      },
+      cancelOnError: true,
+    );
+  }
+
+  // ----------------- GENERIC CONNECT -----------------
+  void connect({
+    required String line,
+    required String channel,
+    required void Function(Map<String, dynamic>) onMessage,
+    void Function()? onDone,
+    void Function(dynamic)? onError,
+  }) {
+    close();
 
     final uri = Uri.parse('$baseUrl/ws/$line/$channel');
     _channel = WebSocketChannel.connect(uri);
 
-    this.onMessage = onMessage;
-    this.onDone = onDone;
-    this.onError = onError;
-
-    _channel!.stream.listen(
-      (message) {
-        final decoded = jsonDecode(message);
-        onMessage(decoded);
-      },
+    _handleStream(
+      stream: _channel!.stream,
+      onMessage: (msg) => onMessage(jsonDecode(msg)),
       onDone: onDone,
       onError: onError,
     );
   }
 
+  // ----------------- SUMMARY -----------------
   void connectToSummary({
     required String selectedLine,
     required void Function() onMessage,
     void Function()? onDone,
     void Function(dynamic)? onError,
   }) {
-    _channel?.sink.close();
+    close();
+
     _channel = WebSocketChannel.connect(
       Uri.parse('$baseUrl/ws/summary/$selectedLine'),
     );
 
-    _channel!.stream.listen(
-      (_) => onMessage(),
+    _handleStream(
+      stream: _channel!.stream,
+      onMessage: (_) => onMessage(),
       onDone: onDone,
       onError: onError,
     );
   }
 
-  void connectToWarnings({
-    required String selectedLine,
+  // ----------------- STRINGATRICE WARNINGS -----------------
+  void connectToStringatriceWarnings({
+    required String line,
     required void Function(Map<String, dynamic>) onMessage,
     void Function()? onDone,
     void Function(dynamic)? onError,
   }) {
-    _channel?.sink.close();
-    final uri = Uri.parse('$baseUrl/ws/warnings/$selectedLine');
+    close();
+
+    final uri = Uri.parse('$baseUrl/ws/warnings/$line');
     _channel = WebSocketChannel.connect(uri);
 
-    _channel!.stream.listen(
-      (message) {
-        final decoded = jsonDecode(message);
-        onMessage(decoded);
-      },
+    _handleStream(
+      stream: _channel!.stream,
+      onMessage: (msg) => onMessage(jsonDecode(msg)),
       onDone: onDone,
       onError: onError,
     );
   }
 
+  // ----------------- CLOSE -----------------
   void close() {
+    isConnected = false;
     _channel?.sink.close();
+    _channel = null;
   }
-
-  bool isConnected() => _channel != null;
 }

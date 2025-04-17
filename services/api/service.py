@@ -17,6 +17,7 @@ from typing import AsyncGenerator, Optional, Set
 from contextlib import asynccontextmanager
 from pymysql.cursors import DictCursor
 import pymysql
+import pymysql.cursors
 import re
 from fastapi.staticfiles import StaticFiles
 from typing import Optional, Union, Dict, List
@@ -359,6 +360,18 @@ async def broadcast(line_name: str, channel_id: str, message: dict):
             await ws.send_json(message)
         except Exception:
             subscriptions[summary_key].remove(ws)
+
+async def broadcast_stringatrice_warning(line_name: str, warning: dict):
+    """
+    Send a warning packet to every subscriber of /ws/warnings/{line_name}
+    """
+    key = f"{line_name}.warnings"
+    websockets = subscriptions.get(key, set()).copy()   # snapshot avoids RuntimeError
+    for ws in websockets:
+        try:
+            await ws.send_json(warning)
+        except Exception:
+            subscriptions[key].discard(ws)
 
 async def scan_issues(node, base_path):
     selected = []
@@ -2260,6 +2273,45 @@ def load_station_configs(file_path):
 
     return line_configs
 
+def save_warning_on_mysql(warning_payload: dict, mysql_conn, station: dict, defect_name: str):
+    """
+    Save a Stringatrice warning into the MySQL database.
+
+    Args:
+        warning_payload (dict): The warning details (type, value, limit, timestamp).
+        mysql_conn: A live MySQL connection object.
+        station (dict): Contains 'line_name', 'name', and 'display_name'.
+        defect_name (str): The name of the defect triggering the warning.
+    """
+    try:
+        with mysql_conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO stringatrice_warnings (
+                    line_name,
+                    station_name,
+                    station_display,
+                    defect,
+                    type,
+                    value,
+                    limit_value,
+                    timestamp
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                station["line_name"],
+                station["name"],
+                station["display_name"],
+                defect_name,
+                warning_payload["type"],
+                warning_payload["value"],
+                warning_payload["limit"],
+                datetime.now()
+            ))
+            mysql_conn.commit()
+            print(f"💾 Warning saved in DB for {station['line_name']} | {station['display_name']} - {defect_name}")
+    except Exception as e:
+        logging.error(f"❌ Failed to save warning to MySQL: {e}")
+
+
 async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
     try:
         with mysql_conn.cursor() as cursor:
@@ -2379,26 +2431,43 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                         count += 1
                         consecutive += 1
                         print(f"     ✅ [{i+1}] ProdID {p['production_id']} → includes {defect_name}")
+
+                        if enable_consecutive and consecutive >= consecutive_limit:
+                            print(f"🔴 Warning (consecutive KO)")
+                            warning_payload = {
+                                "timestamp": datetime.now().isoformat(),
+                                "station_name": station["name"],
+                                "station_display": station["display_name"],
+                                "line_name": station["line_name"],
+                                "defect": defect_name,
+                                "type": "consecutive",
+                                "value": consecutive,
+                                "limit": consecutive_limit,
+                            }
+                            await broadcast_stringatrice_warning(station["line_name"], warning_payload)
+                            save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name)
+
+                            break  # ✅ Optional: stop loop after warning
                     else:
                         print(f"     ❌ [{i+1}] ProdID {p['production_id']} → OK")
                         consecutive = 0
 
-                if count >= threshold or enable_consecutive and consecutive >= consecutive_limit:
-                    print(f"🔴 Warning")
+                # ✅ Check threshold AFTER the loop
+                if count >= threshold:
+                    print(f"🔴 Warning (threshold)")
                     warning_payload = {
                         "timestamp": datetime.now().isoformat(),
                         "station_name": station["name"],
                         "station_display": station["display_name"],
                         "line_name": station["line_name"],
                         "defect": defect_name,
-                        "type": "threshold" if count >= threshold else "consecutive",
-                        "value": count if count >= threshold else consecutive,
-                        "limit": threshold if count >= threshold else consecutive_limit,
+                        "type": "threshold",
+                        "value": count,
+                        "limit": threshold,
                     }
-                    key = f"{station['line_name']}.warnings"
-                    for ws in subscriptions.get(key, []):
-                        await ws.send_json(warning_payload)
-                        print(f"✅ Warning sent to {key}")
+                    await broadcast_stringatrice_warning(station["line_name"], warning_payload)
+                    save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name)
+
     except Exception as e:
         logging.error(f"❌ Error fetching last production origin: {e}")
 
@@ -2507,6 +2576,23 @@ async def websocket_summary(websocket: WebSocket, line_name: str):
         print(f"❌ Dashboard summary client for {line_name} disconnected")
         subscriptions[key].remove(websocket)
 
+@app.websocket("/ws/warnings/{line_name}")
+async def websocket_warnings(websocket: WebSocket, line_name: str):
+    """
+    Sends realtime 'Stringatrice' warning packets for the requested line.
+    """
+    await websocket.accept()
+    key = f"{line_name}.warnings"         # <── channel key
+    print(f"🚨 Stringatrice‑warning client connected for {line_name}")
+    subscriptions.setdefault(key, set()).add(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()   # keep‑alive
+    except WebSocketDisconnect:
+        print(f"❌ Stringatrice‑warning client for {line_name} disconnected")
+        subscriptions[key].remove(websocket)
+
 @app.websocket("/ws/{line_name}/{channel_id}")
 async def websocket_endpoint(websocket: WebSocket, line_name: str, channel_id: str):
     full_id = f"{line_name}.{channel_id}"
@@ -2547,22 +2633,6 @@ async def websocket_endpoint(websocket: WebSocket, line_name: str, channel_id: s
         print(f"⚠️ Client disconnected from {full_id}")
     finally:
         subscriptions[full_id].remove(websocket)
-
-@app.websocket("/ws/warnings/{line_name}")
-async def websocket_warnings(websocket: WebSocket, line_name: str):
-    await websocket.accept()
-    key = f"{line_name}.warnings"
-    print(f"⚠️ Warning socket client connected for {line_name}")
-
-    subscriptions.setdefault(key, set()).add(websocket)
-
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        print(f"❌ Warning socket client for {line_name} disconnected")
-        subscriptions[key].remove(websocket)
-
 
 # ---------------- HELPER ----------------
 def generate_unique_filename(base_path, base_name, extension):
@@ -2705,6 +2775,7 @@ async def set_issues(request: Request):
 
             # 🔍 NEW: Check if stringatrice should raise a warning
             current_settings = get_current_settings()
+            print('about to checkkkk')
             await check_stringatrice_warnings(line_name, mysql_connection, current_settings)
 
             print(f"✅ Defects inserted + warnings checked for {object_id} (prod_id: {production_id})")
@@ -3180,6 +3251,35 @@ async def productions_summary(
     except Exception as e:
         logging.error(f"MySQL Error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/api/warnings/{line_name}")
+def get_unacknowledged_warnings(line_name: str):
+    global mysql_connection
+    assert mysql_connection is not None
+
+    with mysql_connection.cursor(DictCursor) as cursor:
+        cursor.execute("""
+            SELECT * FROM stringatrice_warnings
+            WHERE line_name = %s AND acknowledged = 0
+            ORDER BY timestamp DESC
+        """, (line_name,))
+        return cursor.fetchall()
+
+@app.post("/api/warnings/acknowledge/{warning_id}")
+def acknowledge_warning(warning_id: int):
+    global mysql_connection
+    assert mysql_connection is not None
+
+    with mysql_connection.cursor() as cursor:
+        cursor.execute("""
+            UPDATE stringatrice_warnings
+            SET acknowledged = 1
+            WHERE id = %s
+        """, (warning_id,))
+        mysql_connection.commit()
+
+    return {"message": "Warning acknowledged"}
+
 
 # ---------------- SEARCH ----------------
 # Mapping from client order field names to DB columns.

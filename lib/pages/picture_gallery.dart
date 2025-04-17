@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:wakelock/wakelock.dart';
 
 class PictureGalleryPage extends StatefulWidget {
   final List<Map<String, String>> images;
@@ -21,6 +22,7 @@ class _PictureGalleryPageState extends State<PictureGalleryPage> {
   @override
   void initState() {
     super.initState();
+    Wakelock.enable();
     galleryImages = List.from(widget.images); // Make a copy
   }
 

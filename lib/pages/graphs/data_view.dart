@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
+import 'package:wakelock/wakelock.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/station_card.dart';
@@ -52,6 +53,7 @@ class _DataViewPageState extends State<DataViewPage> {
     super.initState();
     _loadSettings();
     _initializeWebSocket();
+    Wakelock.enable();
     _fetchData().then((data) {
       if (mounted) {
         setState(() {
@@ -78,6 +80,7 @@ class _DataViewPageState extends State<DataViewPage> {
   @override
   void dispose() {
     _webSocketService.close();
+    Wakelock.disable();
     super.dispose();
   }
 

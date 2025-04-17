@@ -426,4 +426,27 @@ class ApiService {
       throw Exception('Failed to refresh settings');
     }
   }
+
+  static Future<List<Map<String, dynamic>>> getUnacknowledgedWarnings(
+      String line) async {
+    final url = Uri.http('$ipAddress:$port', '/api/warnings/$line');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.cast<Map<String, dynamic>>();
+    } else {
+      throw Exception('Errore durante il recupero degli allarmi');
+    }
+  }
+
+  static Future<void> acknowledgeWarning(int warningId) async {
+    final url =
+        Uri.http('$ipAddress:$port', '/api/warnings/acknowledge/$warningId');
+    final response = await http.post(url);
+
+    if (response.statusCode != 200) {
+      throw Exception('Errore durante l\'acknowledge del warning');
+    }
+  }
 }

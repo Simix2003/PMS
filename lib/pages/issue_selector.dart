@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/picture_gallery.dart';
 import 'package:ix_monitor/pages/picture_page.dart';
+import 'package:wakelock/wakelock.dart';
 import '../../shared/services/api_service.dart';
 
 class IssueSelectorWidget extends StatefulWidget {
@@ -59,6 +60,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   @override
   void initState() {
     super.initState();
+    Wakelock.enable();
 
     if (widget.isReworkMode) {
       selectedLeaves = widget.initiallySelectedIssues.toSet();

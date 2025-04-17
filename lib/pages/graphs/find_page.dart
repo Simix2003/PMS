@@ -29,9 +29,10 @@ class _FindPageState extends State<FindPage> {
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _numericController = TextEditingController();
   bool isSelecting = false;
-  final Set<String> selectedObjectIds = {};
+  final Set<int> selectedProductionIds = {};
   // Main selection for 'Difetto'
   String? selectedDifettoGroup;
+  bool isExporting = false;
 
 // === GENERALI ===
   String? selectedGenerali;
@@ -77,15 +78,17 @@ class _FindPageState extends State<FindPage> {
   final List<String> esitoOptions = [
     'G',
     'NG',
+    'Escluso',
     'In Produzione',
-    'OK Operatore',
+    'G Operatore',
   ];
 
   final List<String> generaliOptions = [
     'Non Lavorato Poe Scaduto',
-    'Non Lavorato da Telecamere',
+    'No Good da Bussing',
     'Materiale Esterno su Celle',
     'Bad Soldering',
+    'Passthroug'
   ];
 
   final List<String> saldaturaOptions_1 = [
@@ -1161,8 +1164,8 @@ class _FindPageState extends State<FindPage> {
                   TextButton(
                     onPressed: () {
                       setState(() {
-                        selectedObjectIds
-                            .addAll(results.map((r) => r['id_modulo']));
+                        selectedProductionIds
+                            .addAll(results.map((r) => r['production_id']));
                       });
                     },
                     child: const Text(
@@ -1176,7 +1179,7 @@ class _FindPageState extends State<FindPage> {
                   TextButton(
                     onPressed: () {
                       setState(() {
-                        selectedObjectIds.clear();
+                        selectedProductionIds.clear();
                       });
                     },
                     child: const Text(
@@ -1190,26 +1193,33 @@ class _FindPageState extends State<FindPage> {
                 ],
                 TextButton.icon(
                   onPressed: () {
-                    if (isSelecting && selectedObjectIds.isNotEmpty) {
+                    if (isSelecting && selectedProductionIds.isNotEmpty) {
                       showDialog(
                         context: context,
                         builder: (context) {
                           return ExportConfirmationDialog(
-                            selectedCount: selectedObjectIds.length,
+                            selectedCount: selectedProductionIds.length,
                             activeFilters: activeFilters,
                             onConfirm: () async {
+                              final selectedIds =
+                                  selectedProductionIds.toList();
+
+                              setState(
+                                () => isExporting = true,
+                              );
+
                               final downloadUrl = await ApiService
                                   .exportSelectedObjectsAndGetDownloadUrl(
-                                id_moduli: selectedObjectIds
-                                    .map((id) => id.toString())
-                                    .toList(),
+                                productionIds: selectedIds,
                                 filters: activeFilters,
                               );
 
                               if (downloadUrl != null) {
                                 print(
                                     "📁 File pronto per il download: $downloadUrl");
-                                setState(() => isSelecting = false);
+                                setState(
+                                  () => isSelecting = false,
+                                );
 
                                 if (kIsWeb) {
                                   html.window.open(downloadUrl, "_blank");
@@ -1227,6 +1237,7 @@ class _FindPageState extends State<FindPage> {
                                           "Errore durante l'esportazione")),
                                 );
                               }
+                              isExporting = false;
                             },
                           );
                         },
@@ -1235,7 +1246,7 @@ class _FindPageState extends State<FindPage> {
                       // ✅ Entering selection mode: clear previous selections
                       setState(() {
                         isSelecting = true;
-                        selectedObjectIds.clear();
+                        selectedProductionIds.clear();
                       });
                     }
                   },
@@ -1244,7 +1255,7 @@ class _FindPageState extends State<FindPage> {
                     color: const Color(0xFF007AFF),
                   ),
                   label: Text(
-                    isSelecting ? 'Fine selezione' : 'Esporta',
+                    isSelecting ? 'Inizia Esportazione' : 'Esporta',
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF007AFF),
@@ -1254,176 +1265,238 @@ class _FindPageState extends State<FindPage> {
               ]
             : null,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildFilterRowCard(),
-            if (activeFilters.isNotEmpty) _buildSectionTitle("Filtri Attivi"),
-            if (activeFilters.isNotEmpty) _buildFilterChips(),
-            const SizedBox(height: 20),
-
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth > 1000;
-                final controls = [
-                  _buildStyledDropdown(
-                    hint: 'Ordina per',
-                    value: selectedOrderBy,
-                    items: orderOptions,
-                    onChanged: (val) {
-                      setState(() => selectedOrderBy = val);
-                      if (results.isNotEmpty) {
-                        _onSearchPressed();
-                      }
-                    },
-                    description: 'Ordina per',
-                  ),
-                  _buildStyledDropdown(
-                    hint: '↑ ↓',
-                    value: selectedOrderDirection,
-                    items: orderDirections,
-                    onChanged: (val) {
-                      setState(() => selectedOrderDirection = val);
-                      if (results.isNotEmpty) {
-                        _onSearchPressed();
-                      }
-                    },
-                  ),
-                  _buildStyledDropdown(
-                    hint: 'Limite',
-                    value: selectedLimit,
-                    items: limitOptions,
-                    onChanged: (val) {
-                      setState(() => selectedLimit = val);
-                      if (results.isNotEmpty) {
-                        _onSearchPressed();
-                      }
-                    },
-                    description: 'Limita a',
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: _onSearchPressed,
-                    icon: const Icon(
-                      Icons.search,
-                      color: Colors.white,
-                      size: 25,
+      body: isExporting
+          ? Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                  alignment: Alignment.center,
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 20,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
                     ),
-                    label: const Text("Cerca"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF007AFF),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        SizedBox(
+                          width: 48,
+                          height: 48,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 5,
+                            color: Color(0xFF007AFF),
+                          ),
+                        ),
+                        SizedBox(height: 20),
+                        Text(
+                          "Esportazione in corso...",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "Attendere qualche secondo...",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ];
+                ),
+              ),
+            )
+          : Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildFilterRowCard(),
+                  if (activeFilters.isNotEmpty)
+                    _buildSectionTitle("Filtri Attivi"),
+                  if (activeFilters.isNotEmpty) _buildFilterChips(),
+                  const SizedBox(height: 20),
 
-                final countLabel = results.isNotEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.only(right: 12, bottom: 12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth > 1000;
+                      final controls = [
+                        _buildStyledDropdown(
+                          hint: 'Ordina per',
+                          value: selectedOrderBy,
+                          items: orderOptions,
+                          onChanged: (val) {
+                            setState(() => selectedOrderBy = val);
+                            if (results.isNotEmpty) {
+                              _onSearchPressed();
+                            }
+                          },
+                          description: 'Ordina per',
+                        ),
+                        _buildStyledDropdown(
+                          hint: '↑ ↓',
+                          value: selectedOrderDirection,
+                          items: orderDirections,
+                          onChanged: (val) {
+                            setState(() => selectedOrderDirection = val);
+                            if (results.isNotEmpty) {
+                              _onSearchPressed();
+                            }
+                          },
+                        ),
+                        _buildStyledDropdown(
+                          hint: 'Limite',
+                          value: selectedLimit,
+                          items: limitOptions,
+                          onChanged: (val) {
+                            setState(() => selectedLimit = val);
+                            if (results.isNotEmpty) {
+                              _onSearchPressed();
+                            }
+                          },
+                          description: 'Limita a',
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: _onSearchPressed,
+                          icon: const Icon(
+                            Icons.search,
+                            color: Colors.white,
+                            size: 25,
+                          ),
+                          label: const Text("Cerca"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF007AFF),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ];
+
+                      final countLabel = results.isNotEmpty
+                          ? Padding(
+                              padding:
+                                  const EdgeInsets.only(right: 12, bottom: 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${results.length} Eventi Visualizzati',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 20,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  if (isSelecting)
+                                    Text(
+                                      '${selectedProductionIds.length} Eventi Selezionati',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 16,
+                                        color: Color(0xFF007AFF),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            )
+                          : const SizedBox();
+
+                      if (isWide) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Text(
-                              '${results.length} Eventi Visualizzati',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 20,
-                                color: Colors.black87,
+                            countLabel,
+                            const Spacer(),
+                            ...controls.map((w) => Padding(
+                                  padding: const EdgeInsets.only(left: 12),
+                                  child: w,
+                                )),
+                          ],
+                        );
+                      } else {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Align(
+                                alignment: Alignment.centerLeft,
+                                child: countLabel),
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              alignment: WrapAlignment.end,
+                              children: controls,
+                            ),
+                          ],
+                        );
+                      }
+                    },
+                  ),
+
+                  _buildSectionTitle("Dati"),
+
+                  // 🧩 Cards Scrollable Area
+                  Expanded(
+                    child: results.isEmpty
+                        ? Center(
+                            child: Text(
+                              'Nessun dato da mostrare',
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontStyle: FontStyle.italic,
                               ),
                             ),
-                            if (isSelecting)
-                              Text(
-                                '${selectedObjectIds.length} Moduli Selezionati',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 16,
-                                  color: Color(0xFF007AFF),
+                          )
+                        : ListView.builder(
+                            itemCount: results.length,
+                            itemBuilder: (context, index) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 16),
+                                child: ObjectResultCard(
+                                  data: results[index],
+                                  isSelectable: isSelecting,
+                                  isSelected: selectedProductionIds.contains(
+                                      results[index]['production_id']),
+                                  onTap: isSelecting
+                                      ? () {
+                                          final int productionId =
+                                              results[index]['production_id'];
+                                          setState(() {
+                                            if (selectedProductionIds
+                                                .contains(productionId)) {
+                                              selectedProductionIds
+                                                  .remove(productionId);
+                                            } else {
+                                              selectedProductionIds
+                                                  .add(productionId);
+                                            }
+                                          });
+                                        }
+                                      : null,
                                 ),
-                              ),
-                          ],
-                        ),
-                      )
-                    : const SizedBox();
-
-                if (isWide) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      countLabel,
-                      const Spacer(),
-                      ...controls.map((w) => Padding(
-                            padding: const EdgeInsets.only(left: 12),
-                            child: w,
-                          )),
-                    ],
-                  );
-                } else {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Align(alignment: Alignment.centerLeft, child: countLabel),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        alignment: WrapAlignment.end,
-                        children: controls,
-                      ),
-                    ],
-                  );
-                }
-              },
-            ),
-
-            _buildSectionTitle("Dati"),
-
-            // 🧩 Cards Scrollable Area
-            Expanded(
-              child: results.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Nessun dato da mostrare',
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: results.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: ObjectResultCard(
-                            data: results[index],
-                            isSelectable: isSelecting,
-                            isSelected: selectedObjectIds
-                                .contains(results[index]['id_modulo']),
-                            onTap: isSelecting
-                                ? () {
-                                    final id = results[index]['id_modulo'];
-                                    setState(() {
-                                      if (selectedObjectIds.contains(id)) {
-                                        selectedObjectIds.remove(id);
-                                      } else {
-                                        selectedObjectIds.add(id);
-                                      }
-                                    });
-                                  }
-                                : null,
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
     );
   }
 }

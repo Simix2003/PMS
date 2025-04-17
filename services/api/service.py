@@ -30,7 +30,7 @@ from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 from collections import defaultdict
 
-
+debug = False
 # ---------------- CONFIG & GLOBALS ----------------
 CHANNELS = {
     "Linea1": {
@@ -148,7 +148,6 @@ ISSUE_TREE = {
                         "Materiale Esterno su Celle": {},
                         "Bad Soldering": {},
                         "Passthroug": {},
-                        # PASSTHROUGH, Questi non devono essere calcolati nello Yield
                     },
                     "Saldatura": {
                         f"Stringa[{i}]": {
@@ -191,6 +190,8 @@ ISSUE_TREE = {
 
 TEMP_STORAGE_PATH = os.path.join("C:/IX-Monitor", "temp_data.json")
 SETTINGS_PATH = os.path.join("C:/IX-Monitor", "settings.json")
+# In-memory cache
+REFRESHED_SETTINGS = {}
 
 # These globals are used to track WebSocket subscriptions and PLC subscription state.
 subscriptions = {}
@@ -237,6 +238,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     print("🟢 MySQL connected!")
 
     line_configs = load_station_configs("C:/IX-Monitor/stations.ini")
+
+    get_current_settings()
 
     for line, config in line_configs.items():
         plc_ip = config["PLC"]["IP"]
@@ -285,10 +288,16 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
 
     if trigger_value:
         id_mod_conf = paths["id_modulo"]
-        object_id = await asyncio.to_thread(
-            plc_connection.read_string,
-            id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
-        )
+
+        ###############################################################################################################################
+        if debug:
+            object_id = '1234'
+        else:
+            object_id = await asyncio.to_thread(
+                plc_connection.read_string,
+                id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
+            )
+        ###############################################################################################################################
 
         # 🔁 FIX THIS LINE – it was still accessing CHANNELS by only channel_id!
         str_conf = paths["stringatrice"]  # ✅ Use `paths` here
@@ -455,7 +464,13 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
 
         # Read initial values.
         id_mod_conf = paths["id_modulo"]
-        object_id = await asyncio.to_thread(plc_connection.read_string, id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"])
+
+        ###############################################################################################################################
+        if debug:
+            object_id = '1234'
+        else:
+            object_id = await asyncio.to_thread(plc_connection.read_string, id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"])    
+        ###############################################################################################################################
 
         str_conf = paths["stringatrice"]
         values = [await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i) for i in range(str_conf["length"])]
@@ -473,8 +488,18 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         # Read the initial data from the PLC using read_data.
         data_inizio = trigger_timestamps[full_id]
         initial_data = await read_data(plc_connection, line_name, channel_id, richiesta_ok=False, richiesta_ko=False, data_inizio=data_inizio)
-        # Insert the initial production record (with esito = 2) and store the production_id.
-        prod_id = await insert_initial_production_data(initial_data, channel_id, mysql_connection)
+        
+        escl_conf = paths.get("stazione_esclusa")
+        if escl_conf:
+            esclusione_attiva = await asyncio.to_thread(
+                plc_connection.read_bool, escl_conf["db"], escl_conf["byte"], escl_conf["bit"]
+            )
+        else:
+            esclusione_attiva = False
+
+
+        esito = 4 if esclusione_attiva else 2
+        prod_id = await insert_initial_production_data(initial_data, channel_id, mysql_connection, esito)
         if prod_id:
             incomplete_productions[full_id] = prod_id
 
@@ -522,10 +547,18 @@ async def read_data(
 
         # Read Id_Modulo
         id_mod_conf = config["id_modulo"]
-        data["Id_Modulo"] = await asyncio.to_thread(
-            plc_connection.read_string,
-            id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
-        )
+
+        ###############################################################################################################################
+        if debug:
+            data["Id_Modulo"] = '1234'
+        else:
+            data["Id_Modulo"] = await asyncio.to_thread(
+                plc_connection.read_string,
+                id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
+            )
+        ###############################################################################################################################
+        
+        
 
         # Read Id_Utente
         id_utente_conf = config["id_utente"]
@@ -644,18 +677,62 @@ def autofit_columns(ws, align_center_for: Optional[Set[str]] = None):
         ws.column_dimensions[col_letter].width = max_len + 2
 
 def metadata_sheet(ws, data: dict):
+    from datetime import datetime
+
     current_time = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-    id_moduli = data.get("id_moduli", [])
+    productions = data.get("productions", [])
     filters = data.get("filters", [])
-    min_cycle_threshold = data.get("min_cycle_threshold", 3.0)  # <- Add this
+    min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
     ws.append(["📝 METADATI ESPORTAZIONE"])
     ws.append([])
-
     ws.append(["Data e ora esportazione:", current_time])
-    ws.append(["Numero totale moduli esportati:", len(id_moduli)])
+    ws.append(["Numero totale produzioni esportate:", len(productions)])
 
-    # ✅ Add threshold metadata
+    # ➕ Breakdown by adjusted esito logic
+    good = 0
+    no_good = 0
+    ok_op = 0
+    not_checked = 0
+    in_production = 0
+
+    for p in productions:
+        raw_esito = p.get("esito")
+        cycle_time_obj = p.get("cycle_time")
+
+        # Convert to seconds if possible
+        cycle_seconds = None
+        if cycle_time_obj:
+            try:
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
+            except:
+                pass
+
+        # Classification logic (similar to map_esito)
+        if raw_esito == 6:
+            no_good += 1
+        elif raw_esito == 1:
+            if cycle_seconds is not None and cycle_seconds < min_cycle_threshold:
+                not_checked += 1
+            else:
+                good += 1
+        elif raw_esito == 5:
+            if cycle_seconds is not None and cycle_seconds < min_cycle_threshold:
+                not_checked += 1
+            else:
+                ok_op += 1
+        elif raw_esito == 2:
+            in_production += 1
+
+    # Add to sheet
+    ws.append(["Good:", good])
+    ws.append(["Good Operatore (ReWork):", ok_op])
+    ws.append(["No Good:", no_good])
+    ws.append(["Not Controllati QG2:", not_checked])
+    ws.append(["In Produzione:", in_production])
+
+    # Threshold info
     ws.append(["Soglia Minima Tempo Ciclo (sec):", f"{min_cycle_threshold:.1f}"])
     ws.append([])
 
@@ -670,6 +747,7 @@ def metadata_sheet(ws, data: dict):
         ws.append(["Nessun filtro applicato"])
     ws.append([])
 
+    # Autofit
     left_align = Alignment(horizontal="left", vertical="center")
     for col_idx, col_cells in enumerate(ws.columns, start=1):
         max_len = 0
@@ -681,7 +759,6 @@ def metadata_sheet(ws, data: dict):
         ws.column_dimensions[col_letter].width = max_len + 4
 
 def risolutivo_sheet(ws, data: dict):
-    id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -689,46 +766,43 @@ def risolutivo_sheet(ws, data: dict):
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects if obj.get("id_modulo") is not None}
+    objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     production_lines_by_id = {line["id"]: line for line in production_lines}
 
     rows = []
-    for id_modulo in id_moduli:
-        obj = objects_by_modulo.get(id_modulo)
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
         if not obj:
             continue
-        object_id = obj["id"]
 
-        prods = [p for p in productions if p.get("object_id") == object_id]
-        if not prods:
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
             continue
 
-        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
-        production_id = latest_prod["id"]
-        start_time = latest_prod.get("start_time")
-        end_time = latest_prod.get("end_time")
-        cycle_time_obj = latest_prod.get("cycle_time")
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
-                time_parts = str(cycle_time_obj).split(":")
-                if len(time_parts) == 3:
-                    h, m, s = map(float, time_parts)
-                    cycle_seconds = h * 3600 + m * 60 + s
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
 
-        esito = map_esito(latest_prod.get("esito"), cycle_seconds, min_cycle_threshold)
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
-        station = stations_by_id.get(latest_prod.get("station_id"))
+        station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
         line_display_name = production_lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown") if station else "Unknown"
 
-        last_station_id = latest_prod.get("last_station_id")
+        last_station_id = prod.get("last_station_id")
         last_station_name = stations_by_id.get(last_station_id, {}).get("display_name", "N/A") if last_station_id else "N/A"
 
         prod_defects = [d for d in object_defects if d.get("production_id") == production_id]
@@ -792,10 +866,9 @@ def risolutivo_sheet(ws, data: dict):
 def ng_generali_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Generali' sheet using pre-fetched data.
-    Returns True if at least one row is written (besides the header).
+    One row per production that has at least one 'Generali' defect.
     """
-    rows_written = 0  # ✅ Count data rows
-    id_moduli = data.get("id_moduli", [])
+    rows_written = 0
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -803,9 +876,9 @@ def ng_generali_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
-    production_lines_by_id = {line["id"]: line for line in production_lines}
+    lines_by_id = {line["id"]: line for line in production_lines}
 
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
@@ -815,56 +888,50 @@ def ng_generali_sheet(ws, data: dict) -> bool:
     ]
     ws.append(header)
 
-    for id_modulo in id_moduli:
-        obj = objects_by_modulo.get(id_modulo)
-        if obj is None:
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
+        if not obj:
             continue
-        object_id = obj["id"]
-        prods = [p for p in productions if p.get("object_id") == object_id]
-        if not prods:
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
             continue
-        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
-        production_id = latest_prod["id"]
-        start_time = latest_prod.get("start_time")
-        end_time = latest_prod.get("end_time")
-        cycle_time_obj = latest_prod.get("cycle_time")
+
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
-                time_parts = str(cycle_time_obj).split(":")
-                if len(time_parts) == 3:
-                    h, m, s = map(float, time_parts)
-                    cycle_seconds = h * 3600 + m * 60 + s
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
 
-        esito = map_esito(latest_prod.get("esito"), cycle_seconds, min_cycle_threshold)
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
-        station = stations_by_id.get(latest_prod.get("station_id"))
+        station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-
-        line_display_name = "Unknown"
-        if station and station.get("line_id"):
-            pline = production_lines_by_id.get(station["line_id"])
-            if pline:
-                line_display_name = pline.get("display_name", "Unknown")
+        line_display_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
 
         last_station_name = "N/A"
-        last_station_id = latest_prod.get("last_station_id")
+        last_station_id = prod.get("last_station_id")
         if last_station_id:
             last_station = stations_by_id.get(last_station_id)
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
 
         prod_defects = [
-            d for d in object_defects 
+            d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Generali"
         ]
         if not prod_defects:
             continue
+
         rows_written += 1
 
         general_defects = {d.get("defect_type") for d in prod_defects}
@@ -903,10 +970,9 @@ def ng_generali_sheet(ws, data: dict) -> bool:
 def ng_saldature_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Saldature' sheet using pre-fetched data.
-    Returns True if any rows were written, False otherwise.
+    One row per production that has at least one 'Saldatura' defect.
     """
     rows_written = 0
-    id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -914,7 +980,7 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
@@ -927,37 +993,34 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
         header.append(f"Stringa {i}M")
     ws.append(header)
 
-    for id_modulo in id_moduli:
-        obj = objects_by_modulo.get(id_modulo)
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
         if not obj:
             continue
 
-        object_id = obj["id"]
-        prods = [p for p in productions if p.get("object_id") == object_id]
-        if not prods:
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
             continue
 
-        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
-        production_id = latest_prod["id"]
-        start_time = latest_prod.get("start_time")
-        end_time = latest_prod.get("end_time")
-        cycle_time_obj = latest_prod.get("cycle_time")
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
-                time_parts = str(cycle_time_obj).split(":")
-                if len(time_parts) == 3:
-                    h, m, s = map(float, time_parts)
-                    cycle_seconds = h * 3600 + m * 60 + s
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
 
-        esito = map_esito(latest_prod.get("esito"), cycle_seconds, min_cycle_threshold)
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
-        station = stations_by_id.get(latest_prod.get("station_id"))
+        station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
 
         line_name = "Unknown"
@@ -967,18 +1030,19 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
                 line_name = line.get("display_name", "Unknown")
 
         last_station_name = "N/A"
-        last_station_id = latest_prod.get("last_station_id")
+        last_station_id = prod.get("last_station_id")
         if last_station_id:
             last_station = stations_by_id.get(last_station_id)
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
 
+        # Only include productions with at least one "Saldatura" defect
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Saldatura"
         ]
         if not prod_defects:
-            continue  # No data for this row
+            continue
 
         # Map of (stringa, lato) → list of s_ribbon
         pin_map = {}
@@ -1030,10 +1094,9 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
 def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Disallineamento Ribbon' sheet using pre-fetched data.
-    Returns True if any rows were written, False otherwise.
+    One row per production with at least one Disallineamento Ribbon defect.
     """
     rows_written = 0
-    id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -1041,7 +1104,7 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
@@ -1054,37 +1117,40 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
     ]
     ws.append(header)
 
-    for id_modulo in id_moduli:
-        obj = objects_by_modulo.get(id_modulo)
+    ribbon_map = {
+        ("F", 1): 0, ("F", 2): 1, ("F", 3): 2,
+        ("M", 1): 3, ("M", 2): 4, ("M", 3): 5, ("M", 4): 6,
+        ("B", 1): 7, ("B", 2): 8, ("B", 3): 9,
+    }
+
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
         if not obj:
             continue
 
-        object_id = obj["id"]
-        prods = [p for p in productions if p.get("object_id") == object_id]
-        if not prods:
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
             continue
 
-        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
-        production_id = latest_prod["id"]
-        start_time = latest_prod.get("start_time")
-        end_time = latest_prod.get("end_time")
-        cycle_time_obj = latest_prod.get("cycle_time")
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
-                time_parts = str(cycle_time_obj).split(":")
-                if len(time_parts) == 3:
-                    h, m, s = map(float, time_parts)
-                    cycle_seconds = h * 3600 + m * 60 + s
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
 
-        esito = map_esito(latest_prod.get("esito"), cycle_seconds, min_cycle_threshold)
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
-        station = stations_by_id.get(latest_prod.get("station_id"))
+        station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
 
         line_name = "Unknown"
@@ -1094,7 +1160,7 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
                 line_name = line.get("display_name", "Unknown")
 
         last_station_name = "N/A"
-        last_station_id = latest_prod.get("last_station_id")
+        last_station_id = prod.get("last_station_id")
         if last_station_id:
             last_station = stations_by_id.get(last_station_id)
             if last_station:
@@ -1104,33 +1170,23 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and
-            d.get("category") == "Disallineamento" and
-            d.get("i_ribbon") is not None and
-            d.get("ribbon_lato") in ["F", "M", "B"]
+               d.get("category") == "Disallineamento" and
+               d.get("i_ribbon") is not None and
+               d.get("ribbon_lato") in ["F", "M", "B"]
         ]
         if not prod_defects:
             continue
 
-        # Initialize ribbon columns
         ribbon_cols = [""] * 10
-
-        ribbon_map = {
-            ("F", 1): 0, ("F", 2): 1, ("F", 3): 2,
-            ("M", 1): 3, ("M", 2): 4, ("M", 3): 5, ("M", 4): 6,
-            ("B", 1): 7, ("B", 2): 8, ("B", 3): 9,
-        }
-
         for defect in prod_defects:
             lato = defect.get("ribbon_lato")
             i_ribbon = defect.get("i_ribbon")
-
-            if lato in ["F", "M", "B"]:
-                try:
-                    idx = ribbon_map.get((str(lato), int(i_ribbon)))  # type: ignore
-                    if idx is not None:
-                        ribbon_cols[idx] = "NG"
-                except (ValueError, TypeError):
-                    continue
+            try:
+                idx = ribbon_map.get((str(lato), int(i_ribbon))) # type: ignore
+                if idx is not None:
+                    ribbon_cols[idx] = "NG"
+            except (ValueError, TypeError):
+                continue
 
         row = [
             line_name,
@@ -1155,10 +1211,9 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
 def ng_disall_stringa_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Disallineamento Stringa' sheet using pre-fetched data.
-    Returns True if any rows were written, False otherwise.
+    One row per production with at least one Disallineamento Stringa defect.
     """
     rows_written = 0
-    id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -1166,7 +1221,7 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
@@ -1176,37 +1231,34 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
     ] + [f"Stringa {i}" for i in range(1, 13)]
     ws.append(header)
 
-    for id_modulo in id_moduli:
-        obj = objects_by_modulo.get(id_modulo)
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
         if not obj:
             continue
 
-        object_id = obj["id"]
-        prods = [p for p in productions if p.get("object_id") == object_id]
-        if not prods:
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
             continue
 
-        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
-        production_id = latest_prod["id"]
-        start_time = latest_prod.get("start_time")
-        end_time = latest_prod.get("end_time")
-        cycle_time_obj = latest_prod.get("cycle_time")
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
-                time_parts = str(cycle_time_obj).split(":")
-                if len(time_parts) == 3:
-                    h, m, s = map(float, time_parts)
-                    cycle_seconds = h * 3600 + m * 60 + s
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
 
-        esito = map_esito(latest_prod.get("esito"), cycle_seconds, min_cycle_threshold)
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
-        station = stations_by_id.get(latest_prod.get("station_id"))
+        station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
 
         line_name = "Unknown"
@@ -1216,7 +1268,7 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
                 line_name = line.get("display_name", "Unknown")
 
         last_station_name = "N/A"
-        last_station_id = latest_prod.get("last_station_id")
+        last_station_id = prod.get("last_station_id")
         if last_station_id:
             last_station = stations_by_id.get(last_station_id)
             if last_station:
@@ -1225,8 +1277,8 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and
-            d.get("category") == "Disallineamento" and
-            d.get("stringa") is not None
+               d.get("category") == "Disallineamento" and
+               d.get("stringa") is not None
         ]
         if not prod_defects:
             continue
@@ -1234,12 +1286,12 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
         stringa_cols = [""] * 12
         for defect in prod_defects:
             stringa_num = defect.get("stringa")
-            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
-                stringa_cols[stringa_num - 1] = "NG"
-            elif isinstance(stringa_num, str) and stringa_num.isdigit():
+            try:
                 index = int(stringa_num)
                 if 1 <= index <= 12:
                     stringa_cols[index - 1] = "NG"
+            except (ValueError, TypeError):
+                continue
 
         row = [
             line_name,
@@ -1264,10 +1316,9 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
 def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Mancanza Ribbon' sheet using pre-fetched data.
-    Returns True if any rows were written, False otherwise.
+    One row per production with at least one Mancanza Ribbon defect.
     """
     rows_written = 0
-    id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -1275,7 +1326,7 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
@@ -1288,37 +1339,34 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
     ]
     ws.append(header)
 
-    for id_modulo in id_moduli:
-        obj = objects_by_modulo.get(id_modulo)
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
         if not obj:
             continue
 
-        object_id = obj["id"]
-        prods = [p for p in productions if p.get("object_id") == object_id]
-        if not prods:
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
             continue
 
-        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
-        production_id = latest_prod["id"]
-        start_time = latest_prod.get("start_time")
-        end_time = latest_prod.get("end_time")
-        cycle_time_obj = latest_prod.get("cycle_time")
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
-                time_parts = str(cycle_time_obj).split(":")
-                if len(time_parts) == 3:
-                    h, m, s = map(float, time_parts)
-                    cycle_seconds = h * 3600 + m * 60 + s
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
 
-        esito = map_esito(latest_prod.get("esito"), cycle_seconds, min_cycle_threshold)
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
-        station = stations_by_id.get(latest_prod.get("station_id"))
+        station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
 
         line_name = "Unknown"
@@ -1328,13 +1376,12 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
                 line_name = line.get("display_name", "Unknown")
 
         last_station_name = "N/A"
-        last_station_id = latest_prod.get("last_station_id")
+        last_station_id = prod.get("last_station_id")
         if last_station_id:
             last_station = stations_by_id.get(last_station_id)
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
 
-        # Filter defects with category = 'Mancanza Ribbon'
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Mancanza Ribbon"
@@ -1343,7 +1390,6 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
             continue
 
         ribbon_cols = [""] * 10
-
         ribbon_map = {
             ("F", 1): 0, ("F", 2): 1, ("F", 3): 2,
             ("M", 1): 3, ("M", 2): 4, ("M", 3): 5, ("M", 4): 6,
@@ -1353,14 +1399,12 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
         for defect in prod_defects:
             lato = defect.get("ribbon_lato")
             i_ribbon = defect.get("i_ribbon")
-
-            if lato in ["F", "M", "B"]:
-                try:
-                    idx = ribbon_map.get((str(lato), int(i_ribbon)))  # type: ignore
-                    if idx is not None:
-                        ribbon_cols[idx] = "NG"
-                except (ValueError, TypeError):
-                    continue
+            try:
+                idx = ribbon_map.get((str(lato), int(i_ribbon))) # type: ignore
+                if idx is not None:
+                    ribbon_cols[idx] = "NG"
+            except (ValueError, TypeError):
+                continue
 
         row = [
             line_name,
@@ -1385,10 +1429,9 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
 def ng_macchie_eca_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Macchie ECA' sheet using pre-fetched data.
-    Returns True if any rows are written (excluding the header).
+    One row per production with at least one Macchie ECA defect.
     """
     rows_written = 0
-    id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -1396,7 +1439,7 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
@@ -1406,37 +1449,34 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
     ] + [f"Stringa {i}" for i in range(1, 13)]
     ws.append(header)
 
-    for id_modulo in id_moduli:
-        obj = objects_by_modulo.get(id_modulo)
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
         if not obj:
             continue
 
-        object_id = obj["id"]
-        prods = [p for p in productions if p.get("object_id") == object_id]
-        if not prods:
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
             continue
 
-        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
-        production_id = latest_prod["id"]
-        start_time = latest_prod.get("start_time")
-        end_time = latest_prod.get("end_time")
-        cycle_time_obj = latest_prod.get("cycle_time")
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
-                time_parts = str(cycle_time_obj).split(":")
-                if len(time_parts) == 3:
-                    h, m, s = map(float, time_parts)
-                    cycle_seconds = h * 3600 + m * 60 + s
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
 
-        esito = map_esito(latest_prod.get("esito"), cycle_seconds, min_cycle_threshold)
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
-        station = stations_by_id.get(latest_prod.get("station_id"))
+        station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
 
         line_name = "Unknown"
@@ -1446,7 +1486,7 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
                 line_name = line.get("display_name", "Unknown")
 
         last_station_name = "N/A"
-        last_station_id = latest_prod.get("last_station_id")
+        last_station_id = prod.get("last_station_id")
         if last_station_id:
             last_station = stations_by_id.get(last_station_id)
             if last_station:
@@ -1492,10 +1532,9 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
 def ng_celle_rotte_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Celle Rotte' sheet using pre-fetched data.
-    Returns True if any rows are written (excluding the header).
+    One row per production with at least one Celle Rotte defect.
     """
     rows_written = 0
-    id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -1503,7 +1542,7 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
@@ -1513,37 +1552,34 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
     ] + [f"Stringa {i}" for i in range(1, 13)]
     ws.append(header)
 
-    for id_modulo in id_moduli:
-        obj = objects_by_modulo.get(id_modulo)
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
         if not obj:
             continue
 
-        object_id = obj["id"]
-        prods = [p for p in productions if p.get("object_id") == object_id]
-        if not prods:
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
             continue
 
-        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
-        production_id = latest_prod["id"]
-        start_time = latest_prod.get("start_time")
-        end_time = latest_prod.get("end_time")
-        cycle_time_obj = latest_prod.get("cycle_time")
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
-                time_parts = str(cycle_time_obj).split(":")
-                if len(time_parts) == 3:
-                    h, m, s = map(float, time_parts)
-                    cycle_seconds = h * 3600 + m * 60 + s
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
 
-        esito = map_esito(latest_prod.get("esito"), cycle_seconds, min_cycle_threshold)
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
-        station = stations_by_id.get(latest_prod.get("station_id"))
+        station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
 
         line_name = "Unknown"
@@ -1553,7 +1589,7 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
                 line_name = line.get("display_name", "Unknown")
 
         last_station_name = "N/A"
-        last_station_id = latest_prod.get("last_station_id")
+        last_station_id = prod.get("last_station_id")
         if last_station_id:
             last_station = stations_by_id.get(last_station_id)
             if last_station:
@@ -1599,10 +1635,9 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
 def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Lunghezza String Ribbon' sheet using pre-fetched data.
-    Returns True if any rows are written (excluding the header).
+    One row per production with at least one relevant defect.
     """
     rows_written = 0
-    id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -1610,7 +1645,7 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
@@ -1620,37 +1655,34 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
     ] + [f"Stringa {i}" for i in range(1, 13)]
     ws.append(header)
 
-    for id_modulo in id_moduli:
-        obj = objects_by_modulo.get(id_modulo)
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
         if not obj:
             continue
 
-        object_id = obj["id"]
-        prods = [p for p in productions if p.get("object_id") == object_id]
-        if not prods:
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
             continue
 
-        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
-        production_id = latest_prod["id"]
-        start_time = latest_prod.get("start_time")
-        end_time = latest_prod.get("end_time")
-        cycle_time_obj = latest_prod.get("cycle_time")
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
-                time_parts = str(cycle_time_obj).split(":")
-                if len(time_parts) == 3:
-                    h, m, s = map(float, time_parts)
-                    cycle_seconds = h * 3600 + m * 60 + s
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
 
-        esito = map_esito(latest_prod.get("esito"), cycle_seconds, min_cycle_threshold)
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
-        station = stations_by_id.get(latest_prod.get("station_id"))
+        station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
 
         line_name = "Unknown"
@@ -1660,7 +1692,7 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
                 line_name = line.get("display_name", "Unknown")
 
         last_station_name = "N/A"
-        last_station_id = latest_prod.get("last_station_id")
+        last_station_id = prod.get("last_station_id")
         if last_station_id:
             last_station = stations_by_id.get(last_station_id)
             if last_station:
@@ -1706,11 +1738,9 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
 def ng_altro_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Altro' sheet using pre-fetched data.
-    Dynamically creates columns based on unique `extra_data` values in 'Altro' defects.
-    Returns True if any rows are written (excluding the header).
+    One row per production. Columns are dynamically created from unique 'extra_data' descriptions.
     """
     rows_written = 0
-    id_moduli = data.get("id_moduli", [])
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -1718,55 +1748,52 @@ def ng_altro_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_modulo = {obj["id_modulo"]: obj for obj in objects}
+    objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
 
-    # Step 1: gather unique Altro "extra_data" values
+    # Step 1: gather all unique "Altro" extra_data values
     unique_altro_descriptions = sorted({
         d.get("extra_data", "").strip()
         for d in object_defects
         if d.get("category") == "Altro" and d.get("extra_data")
     })
 
-    # Step 2: Build the header
+    # Step 2: build header
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
-    ] + [f"{desc}" for desc in unique_altro_descriptions]
+    ] + unique_altro_descriptions
     ws.append(header)
 
-    for id_modulo in id_moduli:
-        obj = objects_by_modulo.get(id_modulo)
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
         if not obj:
             continue
 
-        object_id = obj["id"]
-        prods = [p for p in productions if p.get("object_id") == object_id]
-        if not prods:
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
             continue
 
-        latest_prod = max(prods, key=lambda p: p.get("start_time") or 0)
-        production_id = latest_prod["id"]
-        start_time = latest_prod.get("start_time")
-        end_time = latest_prod.get("end_time")
-        cycle_time_obj = latest_prod.get("cycle_time")
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
-                time_parts = str(cycle_time_obj).split(":")
-                if len(time_parts) == 3:
-                    h, m, s = map(float, time_parts)
-                    cycle_seconds = h * 3600 + m * 60 + s
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
 
-        esito = map_esito(latest_prod.get("esito"), cycle_seconds, min_cycle_threshold)
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
-        station = stations_by_id.get(latest_prod.get("station_id"))
+        station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
 
         line_name = "Unknown"
@@ -1776,13 +1803,12 @@ def ng_altro_sheet(ws, data: dict) -> bool:
                 line_name = line.get("display_name", "Unknown")
 
         last_station_name = "N/A"
-        last_station_id = latest_prod.get("last_station_id")
+        last_station_id = prod.get("last_station_id")
         if last_station_id:
             last_station = stations_by_id.get(last_station_id)
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
 
-        # Get all "Altro" category defects for this production
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Altro"
@@ -1792,7 +1818,6 @@ def ng_altro_sheet(ws, data: dict) -> bool:
 
         altro_found = {d.get("extra_data", "").strip() for d in prod_defects}
 
-        # Build NG flags for each Altro column
         altro_cols = ["NG" if desc in altro_found else "" for desc in unique_altro_descriptions]
 
         row = [
@@ -1837,8 +1862,10 @@ def map_esito(value: Optional[int], cycle_seconds: Optional[float] = None, thres
         return "G"
     elif value == 2:
         return "In Produzione"
+    elif value == 4:
+        return "Escluso"
     elif value == 5:
-        return "OK Operatore"
+        return "G Operatore"
     elif value == 6:
         return "NG"
     return "N/A"
@@ -1902,7 +1929,7 @@ Il database contiene le seguenti tabelle:
 
 """""
 
-async def insert_initial_production_data(data, station_name, connection):
+async def insert_initial_production_data(data, station_name, connection, esito):
     """
     Inserts a production record using data available at cycle start.
     It sets the end_time to NULL and uses esito = 2 (in progress).
@@ -1985,7 +2012,7 @@ async def insert_initial_production_data(data, station_name, connection):
                 real_station_id,
                 data.get("DataInizio"),  # starting timestamp
                 None,                     # end_time left as NULL
-                2,                        # esito 2 means "in progress"
+                esito,                        # esito 2 means "in progress", 4 means Escluso
                 data.get("Id_Utente"),
                 last_station_id
             ))
@@ -2233,6 +2260,147 @@ def load_station_configs(file_path):
 
     return line_configs
 
+async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
+    try:
+        with mysql_conn.cursor() as cursor:
+            # Step 1: Get the most recent production
+            cursor.execute("""
+                SELECT p.id AS production_id, p.object_id, p.last_station_id, p.end_time
+                FROM productions p
+                ORDER BY p.id DESC
+                LIMIT 1
+            """)
+            last_prod = cursor.fetchone()
+
+            if not last_prod:
+                print("⚠️ No production data found.")
+                return
+
+            prod_id = last_prod["production_id"]
+            object_id = last_prod["object_id"]
+            last_station_id = last_prod["last_station_id"]
+
+            print(f"\n🆕 Last production:")
+            print(f"   • ProdID: {prod_id}")
+            print(f"   • ObjectID: {object_id}")
+            print(f"   • Last Station ID: {last_station_id}")
+
+            if last_station_id is None:
+                print("   ❌ No last_station_id found.")
+                return
+
+            # Step 2: Get station info
+            cursor.execute("""
+                SELECT s.name, s.display_name, pl.name AS line_name
+                FROM stations s
+                JOIN production_lines pl ON s.line_id = pl.id
+                WHERE s.id = %s
+            """, (last_station_id,))
+            station = cursor.fetchone()
+
+            if not station:
+                print("   ❌ Station not found.")
+                return
+
+            full_station_id = f"{station['line_name']}.{station['name']}"
+            print(f"✅ This object came from → Line: {station['line_name']} | Station: {station['name']} ({station['display_name']})")
+
+            # Step 3: Fetch the most recent 49 productions by end_time
+            cursor.execute("""
+                SELECT 
+                    p.id AS production_id, 
+                    p.object_id, 
+                    p.end_time, 
+                    p.esito,
+                    GROUP_CONCAT(DISTINCT d.category) AS defect_categories,
+                    GROUP_CONCAT(DISTINCT od.defect_type) AS custom_defects
+                FROM productions p
+                LEFT JOIN object_defects od ON p.id = od.production_id
+                LEFT JOIN defects d ON od.defect_id = d.id
+                WHERE p.last_station_id = %s AND p.id != %s
+                GROUP BY p.id
+                ORDER BY p.end_time DESC
+                LIMIT 49
+            """, (last_station_id, prod_id))
+            recent_productions = cursor.fetchall()
+
+            # Step 3.1: Fetch defect categories for the most recent one manually
+            cursor.execute("""
+                SELECT 
+                    p.id AS production_id, 
+                    p.object_id, 
+                    p.end_time, 
+                    p.esito,
+                    GROUP_CONCAT(DISTINCT d.category) AS defect_categories,
+                    GROUP_CONCAT(DISTINCT od.defect_type) AS custom_defects
+                FROM productions p
+                LEFT JOIN object_defects od ON p.id = od.production_id
+                LEFT JOIN defects d ON od.defect_id = d.id
+                WHERE p.id = %s
+                GROUP BY p.id
+            """, (prod_id,))
+            current = cursor.fetchone()
+
+            # Combine them (manual entry first)
+            productions = [current] + recent_productions
+
+            print(f"✅ Last 50 productions from Station ID {last_station_id}:")
+            for p in productions:
+                print(f"   • ProdID: {p['production_id']} | ObjectID: {p['object_id']} | End: {p['end_time']} | Esito: {p['esito']}")
+
+            # Step 4: Analyze based on settings
+            thresholds = settings.get("thresholds", {})
+            moduli_window = settings.get("moduli_window", {})
+            enable_consecutive_ko = settings.get("enable_consecutive_ko", {})
+            consecutive_ko_limit = settings.get("consecutive_ko_limit", {})
+
+            for defect_name in thresholds:
+                window = moduli_window.get(defect_name, 10)
+                threshold = thresholds[defect_name]
+                enable_consecutive = enable_consecutive_ko.get(defect_name, False)
+                consecutive_limit = consecutive_ko_limit.get(defect_name, 2)
+
+                print(f"\n🔧 Settings for [{defect_name}] on {full_station_id}:")
+                print(f"   • Threshold: {threshold}")
+                print(f"   • Window: {window}")
+                print(f"   • Consecutive KO Enabled: {enable_consecutive}")
+                print(f"   • Consecutive KO Limit: {consecutive_limit}")
+
+                count = 0
+                consecutive = 0
+
+                for i, p in enumerate(productions[:window]):
+                    categories = p.get("defect_categories", "")
+                    customs = p.get("custom_defects", "")
+                    all_defects = (categories or "").split(",") + (customs or "").split(",")
+                    all_defects = [d.strip() for d in all_defects if d]
+
+                    if defect_name in all_defects:
+                        count += 1
+                        consecutive += 1
+                        print(f"     ✅ [{i+1}] ProdID {p['production_id']} → includes {defect_name}")
+                    else:
+                        print(f"     ❌ [{i+1}] ProdID {p['production_id']} → OK")
+                        consecutive = 0
+
+                if count >= threshold or enable_consecutive and consecutive >= consecutive_limit:
+                    print(f"🔴 Warning")
+                    warning_payload = {
+                        "timestamp": datetime.now().isoformat(),
+                        "station_name": station["name"],
+                        "station_display": station["display_name"],
+                        "line_name": station["line_name"],
+                        "defect": defect_name,
+                        "type": "threshold" if count >= threshold else "consecutive",
+                        "value": count if count >= threshold else consecutive,
+                        "limit": threshold if count >= threshold else consecutive_limit,
+                    }
+                    key = f"{station['line_name']}.warnings"
+                    for ws in subscriptions.get(key, []):
+                        await ws.send_json(warning_payload)
+                        print(f"✅ Warning sent to {key}")
+    except Exception as e:
+        logging.error(f"❌ Error fetching last production origin: {e}")
 
 # ---------------- BACKGROUND TASK ----------------
 def make_status_callback(full_station_id: str):
@@ -2380,6 +2548,21 @@ async def websocket_endpoint(websocket: WebSocket, line_name: str, channel_id: s
     finally:
         subscriptions[full_id].remove(websocket)
 
+@app.websocket("/ws/warnings/{line_name}")
+async def websocket_warnings(websocket: WebSocket, line_name: str):
+    await websocket.accept()
+    key = f"{line_name}.warnings"
+    print(f"⚠️ Warning socket client connected for {line_name}")
+
+    subscriptions.setdefault(key, set()).add(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        print(f"❌ Warning socket client for {line_name} disconnected")
+        subscriptions[key].remove(websocket)
+
 
 # ---------------- HELPER ----------------
 def generate_unique_filename(base_path, base_name, extension):
@@ -2516,14 +2699,20 @@ async def set_issues(request: Request):
             }
             await insert_defects(result, production_id, channel_id, line_name, cursor=cursor)
             await update_esito(6, production_id, cursor=cursor)
+            print('Updated Esito for productionId: %s' % production_id)
             mysql_connection.commit()
             cursor.close()
-            print(f"✅ Defects inserted immediately for {object_id} (prod_id: {production_id})")
+
+            # 🔍 NEW: Check if stringatrice should raise a warning
+            current_settings = get_current_settings()
+            await check_stringatrice_warnings(line_name, mysql_connection, current_settings)
+
+            print(f"✅ Defects inserted + warnings checked for {object_id} (prod_id: {production_id})")
+
         except Exception as e:
             assert mysql_connection is not None
             mysql_connection.rollback()
             logging.error(f"❌ Error inserting defects early for {full_id}: {e}")
-
 
     await asyncio.to_thread(plc_connection.write_bool, target["db"], target["byte"], target["bit"], True)
 
@@ -2584,9 +2773,10 @@ async def set_outcome(request: Request):
     except Exception as e:
         logging.error(f"❌ Error reading PLC data: {e}")
 
-    if not rework:
-        if str(current_object_id) != str(object_id):
-            return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
+    if not debug:
+        if not rework:
+            if str(current_object_id) != str(object_id):
+                return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
 
     # Optional: Write outcome back to PLC if needed (currently commented out)
     # outcome_conf = config["fine_buona"] if outcome == "buona" else config["fine_scarto"]
@@ -2817,6 +3007,15 @@ async def productions_summary(
                         shift_day = datetime.strptime(date, "%Y-%m-%d").strftime("%Y-%m-%d")
                         where_clause += " AND DATE(p.end_time) = %s AND TIME(p.end_time) BETWEEN %s AND %s"
                         params.extend([shift_day, turno_start, turno_end])
+                    elif from_date and to_date:
+                        from_dt = datetime.strptime(from_date, "%Y-%m-%d")
+                        to_dt = datetime.strptime(to_date, "%Y-%m-%d")
+                        days = [(from_dt + timedelta(days=i)).strftime("%Y-%m-%d")
+                                for i in range((to_dt - from_dt).days + 1)]
+                        
+                        placeholders = ", ".join(["%s"] * len(days))
+                        where_clause += f" AND DATE(p.end_time) IN ({placeholders}) AND TIME(p.end_time) BETWEEN %s AND %s"
+                        params.extend(days + [turno_start, turno_end])
                     else:
                         return JSONResponse(
                             status_code=400,
@@ -2863,14 +3062,16 @@ async def productions_summary(
                     "last_cycle_time": "00:00:00"
                 }
             
-             # ✅ Fetch all good cycle_times per station
             query_time_cycles = f"""
                 SELECT s.name as station_code, TIME_TO_SEC(p.cycle_time) as cycle_seconds
                 FROM productions p
                 JOIN stations s ON p.station_id = s.id
                 LEFT JOIN production_lines pl ON s.line_id = pl.id
-                {where_clause} AND p.esito = 1
+                {where_clause} AND (
+                    p.esito = 1 OR (s.name = 'M326' AND p.esito = 5)
+                )
             """
+
 
             cursor.execute(query_time_cycles, tuple(params))
             for row in cursor.fetchall():
@@ -3031,7 +3232,7 @@ async def search_results(request: Request):
                     group_params.append(f"%{value}%")
 
                 elif filter_type == "Esito":
-                    esito_map = {"G": 1, "NG": 6, "In Produzione": 2, "OK Operatore": 5}
+                    esito_map = {"G": 1, "In Produzione": 2, "Escluso": 4, "G Operatore": 5, "NG": 6}
                     if value in esito_map:
                         group_clauses.append("p.esito = %s")
                         group_params.append(esito_map[value])
@@ -3174,6 +3375,7 @@ async def search_results(request: Request):
             order_clause = f"ORDER BY {order_by} {direction}"
 
         select_fields = """
+            p.id AS production_id,
             o.id_modulo, 
             p.esito, 
             p.operator_id, 
@@ -3183,6 +3385,7 @@ async def search_results(request: Request):
             s.name AS station_name,
             pl.display_name AS line_display_name
         """
+
 
         if has_defect_filter:
             select_fields += """,
@@ -3221,8 +3424,11 @@ async def search_results(request: Request):
 
 @app.post("/api/export_objects")
 def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
-    id_moduli = data.get("id_moduli", [])
-    filters = data.get("filters", [])
+    production_ids: List[int] = data.get("production_ids", [])
+    filters: List[Dict] = data.get("filters", [])
+
+    if not production_ids:
+        return {"status": "ok", "filename": None}
 
     global mysql_connection
     if not mysql_connection:
@@ -3230,61 +3436,66 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
 
     try:
         export_data = {
-            "id_moduli": id_moduli,
             "filters": filters,
             "moduli_rows": [],
             "objects": [],
             "productions": [],
             "stations": [],
             "production_lines": [],
-            "object_defects": []
+            "object_defects": [],
         }
 
-        # ✅ Load threshold from settings
         settings = load_settings()
         export_data["min_cycle_threshold"] = settings.get("min_cycle_threshold", 3.0)
 
         with mysql_connection.cursor() as cursor:
-            # Get objects by id_modulo
-            format_strings = ','.join(['%s'] * len(id_moduli))
-            cursor.execute(f"SELECT * FROM objects WHERE id_modulo IN ({format_strings})", id_moduli)
-            export_data["objects"] = cursor.fetchall()
-
-            object_ids = [o["id"] for o in export_data["objects"]]
-            if not object_ids:
-                return {"status": "ok", "filename": None}  # No data to export
-
-            format_strings = ','.join(['%s'] * len(object_ids))
-            cursor.execute(f"""
-                SELECT * FROM productions
-                WHERE object_id IN ({format_strings})
-                ORDER BY start_time DESC
-            """, object_ids)
-            export_data["productions"] = cursor.fetchall()
-
+            # Reference data
             cursor.execute("SELECT * FROM stations")
             export_data["stations"] = cursor.fetchall()
 
             cursor.execute("SELECT * FROM production_lines")
             export_data["production_lines"] = cursor.fetchall()
 
-            prod_ids = [p["id"] for p in export_data["productions"]]
-            if prod_ids:
-                format_strings = ','.join(['%s'] * len(prod_ids))
-                cursor.execute(f"""
-                    SELECT od.*, d.category
-                    FROM object_defects od
-                    JOIN defects d ON od.defect_id = d.id
-                    WHERE od.production_id IN ({format_strings})
-                """, prod_ids)
-                export_data["object_defects"] = cursor.fetchall()
+            # Filtered productions
+            format_strings = ','.join(['%s'] * len(production_ids))
+            cursor.execute(f"SELECT * FROM productions WHERE id IN ({format_strings})", production_ids)
+            productions = cursor.fetchall()
+            export_data["productions"] = productions
+
+            # Get unique object IDs
+            object_ids = list({p["object_id"] for p in productions})
+            if object_ids:
+                format_strings = ','.join(['%s'] * len(object_ids))
+                cursor.execute(f"SELECT * FROM objects WHERE id IN ({format_strings})", object_ids)
+                objects = cursor.fetchall()
+                export_data["objects"] = objects
+                export_data["id_moduli"] = [obj["id_modulo"] for obj in objects if "id_modulo" in obj]
+
+
+            # Defects related to selected productions
+            format_strings = ','.join(['%s'] * len(production_ids))
+            cursor.execute(f"""
+                SELECT od.*, d.category
+                FROM object_defects od
+                JOIN defects d ON od.defect_id = d.id
+                WHERE od.production_id IN ({format_strings})
+            """, production_ids)
+            defects = cursor.fetchall()
+
+            # Apply filter: Difetto
+            for f in filters:
+                if f["type"] == "Difetto":
+                    value = f["value"].lower()
+                    defects = [d for d in defects if value in d["path"].lower()]
+
+            export_data["object_defects"] = defects
 
     except Exception as e:
         logging.error(f"❌ Error during export: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-    # ✅ Pass full export data
     filename = export_full_excel(export_data)
+
     background_tasks.add_task(clean_old_exports, max_age_hours=2)
 
     return {"status": "ok", "filename": filename}
@@ -3383,9 +3594,12 @@ async def get_issues_for_object(id_modulo: str):
 
 class AllSettings(BaseModel):
     min_cycle_threshold: float
-    eca_threshold: int
     include_nc_in_yield: bool
     exclude_saldatura_from_yield: bool
+    thresholds: Dict[str, int]
+    moduli_window: Dict[str, int]
+    enable_consecutive_ko: Dict[str, bool]
+    consecutive_ko_limit: Dict[str, int]
 
 def load_settings():
     if os.path.exists(SETTINGS_PATH):
@@ -3403,15 +3617,30 @@ def get_all_settings():
     settings = load_settings()
     return {
         "min_cycle_threshold": settings.get("min_cycle_threshold", 3.0),
-        "eca_threshold": settings.get("eca_threshold", 5),
         "include_nc_in_yield": settings.get("include_nc_in_yield", True),
-        "exclude_saldatura_from_yield": settings.get("exclude_saldatura_from_yield", False)
+        "exclude_saldatura_from_yield": settings.get("exclude_saldatura_from_yield", False),
+        "thresholds": settings.get("thresholds", {}),
+        "moduli_window": settings.get("moduli_window", {}),
+        "enable_consecutive_ko": settings.get("enable_consecutive_ko", {}),
+        "consecutive_ko_limit": settings.get("consecutive_ko_limit", {}),
     }
 
 @app.post("/api/settings")
 def set_all_settings(data: AllSettings):
     save_settings(data.dict())
     return {"message": "Settings saved"}
+
+@app.post("/api/settings/refresh")
+def refresh_settings():
+    global REFRESHED_SETTINGS
+    REFRESHED_SETTINGS = load_settings()
+    return {"message": "Settings refreshed", "settings": REFRESHED_SETTINGS}
+
+def get_current_settings():
+    global REFRESHED_SETTINGS
+    if not REFRESHED_SETTINGS:
+        REFRESHED_SETTINGS = load_settings()
+    return REFRESHED_SETTINGS
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":

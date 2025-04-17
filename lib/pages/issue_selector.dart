@@ -66,6 +66,14 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
     if (widget.isReworkMode) {
       selectedLeaves = widget.initiallySelectedIssues.toSet();
+
+      // Extract ALTRO issues from selectedLeaves
+      for (final issue in widget.initiallySelectedIssues) {
+        if (issue.startsWith("Dati.Esito.Esito_Scarto.Difetti.Altro: ")) {
+          final text = issue.split("Altro: ").last;
+          altroIssues.add(text);
+        }
+      }
     }
   }
 
@@ -160,7 +168,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   void _updateActiveLeafDefectIfSelected() {
     if (_isLeafLevel()) {
       for (var rect in currentRectangles) {
-        final String fullPath = "$apiPath.${rect['name']}";
+        final String fullPath = "$apiPath.${normalizeName(rect['name'])}";
         if (selectedLeaves.contains(fullPath)) {
           setState(() {
             activeLeafDefect = fullPath;
@@ -614,6 +622,15 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
       return "${parts[0]}.${parts[1]}";
     }
     return name;
+  }
+
+  String denormalizeName(String normalized) {
+    // Converts "Pin[6].B" back to "Pin[6] - B"
+    if (normalized.contains('.')) {
+      final parts = normalized.split('.');
+      return "${parts[0]} - ${parts[1]}";
+    }
+    return normalized;
   }
 
   Widget _buildOverlayView() {

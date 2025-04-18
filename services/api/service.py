@@ -2420,7 +2420,7 @@ def parse_issue_path(path: str, category: str):
         # e.g. parts[4]="Stringa[2]", parts[5]="Pin[5]", parts[6]="M"
         str_match = re.search(r"Stringa\[(\d+)\]", path)
         pin_match = re.search(r"Pin\[(\d+)\]", path)
-        side_match = re.search(r"\ - (F|M|B)$", path)  # the last segment
+        side_match = re.search(r"\.(F|M|B)$", path)
 
         if str_match:
             res["stringa"] = int(str_match.group(1))
@@ -2438,7 +2438,7 @@ def parse_issue_path(path: str, category: str):
             # else check Ribbon
             # e.g. "Disallineamento.Ribbon[5].M"
             rib_match = re.search(r"Ribbon\[(\d+)\]", path)
-            side_match = re.search(r"\ - (F|M|B)$", path)
+            side_match = re.search(r"\.(F|M|B)$", path)
             if rib_match:
                 res["i_ribbon"] = int(rib_match.group(1))
             if side_match:
@@ -2448,7 +2448,7 @@ def parse_issue_path(path: str, category: str):
         # e.g. "Mancanza Ribbon.Ribbon[2].B"
         # i_ribbon=2, ribbon_lato='B'
         rib_match = re.search(r"Ribbon\[(\d+)\]", path)
-        side_match = re.search(r"\ - (F|M|B)$", path)
+        side_match = re.search(r"\.(F|M|B)$", path)
         if rib_match:
             res["i_ribbon"] = int(rib_match.group(1))
         if side_match:
@@ -2458,7 +2458,7 @@ def parse_issue_path(path: str, category: str):
         # e.g. "I_Ribbon Leadwire.Ribbon[2].M"
         # i_ribbon=2, ribbon_lato='M'
         rib_match = re.search(r"Ribbon\[(\d+)\]", path)
-        side_match = re.search(r"\ - (F|M|B)$", path)
+        side_match = re.search(r"\.(F|M|B)$", path)
         if rib_match:
             res["i_ribbon"] = int(rib_match.group(1))
         if side_match:

@@ -2298,7 +2298,8 @@ async def update_production_final(production_id, data, station_name, connection,
             end_time = data.get("DataFine")
 
             # Step 2: Conditional update
-            if current_esito == 2:
+            if current_esito == 2 or station_name == "M326":
+
                 sql_update = """
                     UPDATE productions 
                     SET end_time = %s, esito = %s 
@@ -3342,9 +3343,10 @@ async def productions_summary(
                     s.name AS station_name,
                     s.display_name AS station_display,
                     SUM(CASE WHEN p.esito = 1 THEN 1 ELSE 0 END) AS good_count,
-                    SUM(CASE WHEN p.esito = 6 THEN 1 ELSE 0 END) AS bad_count,
                     SUM(CASE WHEN p.esito = 2 THEN 1 ELSE 0 END) AS in_prod_count,
+                    SUM(CASE WHEN p.esito = 4 THEN 1 ELSE 0 END) AS escluso_count,
                     SUM(CASE WHEN p.esito = 5 THEN 1 ELSE 0 END) AS ok_op_count,
+                    SUM(CASE WHEN p.esito = 6 THEN 1 ELSE 0 END) AS bad_count,
                     SEC_TO_TIME(AVG(TIME_TO_SEC(p.cycle_time))) AS avg_cycle_time
                 FROM productions p
                 JOIN stations s ON p.station_id = s.id
@@ -3360,6 +3362,7 @@ async def productions_summary(
                     "display": row['station_display'],
                     "good_count": int(row['good_count']),
                     "bad_count": int(row['bad_count']),
+                    "escluso_count": int(row['escluso_count']),
                     "in_prod_count": int(row['in_prod_count']),
                     "ok_op_count": int(row['ok_op_count']),
                     "avg_cycle_time": str(row['avg_cycle_time']),
@@ -3396,6 +3399,7 @@ async def productions_summary(
                     "display": station,  # fallback to code if display is missing
                     "good_count": 0,
                     "bad_count": 0,
+                    "escluso_count": 0,
                     "in_prod_count": 0,
                     "ok_op_count": 0,
                     "avg_cycle_time": "00:00:00",
@@ -3475,12 +3479,14 @@ async def productions_summary(
 
             good_count_total = sum(s["good_count"] for s in stations.values())
             in_prod_count_total = sum(s["in_prod_count"] for s in stations.values())
+            escluso_count_total = sum(s["escluso_count"] for s in stations.values())
             ok_op_count_total = sum(s["ok_op_count"] for s in stations.values())
             bad_count_total = sum(s["bad_count"] for s in stations.values())
 
             return {
                 "good_count": good_count_total,
                 "bad_count": bad_count_total,
+                "escluso_count": escluso_count_total,
                 "in_prod_count": in_prod_count_total,
                 "ok_op_count": ok_op_count_total,
                 "stations": stations,

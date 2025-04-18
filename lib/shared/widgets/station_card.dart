@@ -237,7 +237,9 @@ class StationCard extends StatelessWidget {
     final avgCycleTime = formatCycleTimeToMinutes(rawCycleTime);
     final koCount = (stationData['bad_count'] ?? 0);
 
+// ✅ Get cycle times and escluso count
     final allCycles = (stationData['cycle_times'] as List?)?.cast<num>() ?? [];
+    final int esclusoCount = stationData['escluso_count'] ?? 0;
 
     int gCount = 0;
     int ncCount = 0;
@@ -249,6 +251,9 @@ class StationCard extends StatelessWidget {
         ncCount++;
       }
     }
+
+// ✅ Add esclusi to NC count
+    ncCount += esclusoCount;
 
     final total = gCount + ncCount + koCount;
 

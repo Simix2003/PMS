@@ -633,8 +633,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           const SizedBox(height: 40),
                           Center(
                             child: Text(
-                              'ANDARE A PREMERE PULSANTE KO FISICO',
-                              style: TextStyle(fontSize: 36),
+                              selectedChannel == "M326"
+                                  ? 'ANDARE A PREMERE PULSANTE OK / KO SU HMI'
+                                  : 'ANDARE A PREMERE PULSANTE KO FISICO',
+                              style: const TextStyle(fontSize: 36),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                           const SizedBox(height: 24),

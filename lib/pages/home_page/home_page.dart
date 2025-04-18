@@ -3,7 +3,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:wakelock/wakelock.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
@@ -73,7 +72,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Future<void> _startup() async {
     _connectWebSocket();
     _fetchPLCStatus();
-    Wakelock.enable();
   }
 
   void _fetchPLCStatus() async {

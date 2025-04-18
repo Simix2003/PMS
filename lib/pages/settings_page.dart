@@ -2,8 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:wakelock/wakelock.dart';
-import 'dart:ui';
 import '../shared/services/api_service.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -37,7 +35,6 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    Wakelock.enable();
     _loadSettings();
   }
 
@@ -244,8 +241,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           child: CupertinoSlider(
                             value: _minCycleSeconds,
                             min: 1,
-                            max: 30,
-                            divisions: 29,
+                            max: 60,
+                            divisions: 59,
                             onChanged: (val) {
                               setState(() => _minCycleSeconds = val);
                             },

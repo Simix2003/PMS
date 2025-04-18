@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:wakelock/wakelock.dart';
 import '../shared/services/api_service.dart';
 import '../shared/services/socket_service.dart';
 import 'settings_page.dart';
@@ -31,7 +30,6 @@ class _WarningsPageState extends State<WarningsPage> {
   @override
   void initState() {
     super.initState();
-    Wakelock.enable();
     _loadWarningsAndSubscribe();
     _startReconnectChecker(); // 🟢 Start periodic reconnection checker
   }
@@ -84,7 +82,6 @@ class _WarningsPageState extends State<WarningsPage> {
   @override
   void dispose() {
     socketService.close();
-    Wakelock.disable();
     _reconnectTimer?.cancel();
     super.dispose();
   }

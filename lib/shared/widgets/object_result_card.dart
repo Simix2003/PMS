@@ -195,6 +195,58 @@ class ObjectResultCard extends StatelessWidget {
                     );
                   },
                 ),
+                const SizedBox(height: 12),
+
+                if (data['defect_categories'] != null &&
+                    (data['defect_categories'] as String).trim().isNotEmpty)
+                  Builder(
+                    builder: (context) {
+                      final categories = (data['defect_categories'] as String)
+                          .split(',')
+                          .map((e) => e.trim())
+                          .where((e) => e.isNotEmpty)
+                          .toList();
+
+                      final labelText =
+                          categories.length > 1 ? 'Difetti:' : 'Difetto:';
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            labelText,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: categories
+                                .map((category) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Text(
+                                        category,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
               ],
             ),
           ),

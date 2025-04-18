@@ -33,6 +33,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool pezzoOK = false;
   bool pezzoKO = false;
 
+  bool canAdd = true;
+
   String plcStatus = "CHECKING"; // or values like "CONNECTED", "DISCONNECTED"
 
   // STATIONS
@@ -121,6 +123,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             try {
               final previouslySelected =
                   await ApiService.fetchInitialIssuesForObject(newObjectId);
+              if (previouslySelected.isEmpty) {
+                canAdd = true;
+              } else {
+                canAdd = false;
+              }
               setState(() {
                 _issues.addAll(previouslySelected);
               });
@@ -617,6 +624,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 _pictures = pics;
                               });
                             },
+                            canAdd: canAdd,
                             isReworkMode: selectedChannel == "M326",
                             initiallySelectedIssues: _issues.toList(),
                             objectId: objectId,
@@ -638,7 +646,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   ),
                 ),
               ),
-              if (hasBeenEvaluated && !isObjectOK && selectedChannel != "M326")
+              if (hasBeenEvaluated &&
+                      !isObjectOK &&
+                      selectedChannel != "M326" ||
+                  canAdd)
                 Padding(
                   padding: const EdgeInsets.only(top: 16),
                   child: Row(

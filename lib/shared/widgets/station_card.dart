@@ -13,6 +13,7 @@ class StationCard extends StatelessWidget {
   final DateTimeRange? selectedRange;
   final TimeOfDay? selectedStartTime;
   final TimeOfDay? selectedEndTime;
+  final int turno;
   final thresholdSeconds;
 
   const StationCard({
@@ -23,6 +24,7 @@ class StationCard extends StatelessWidget {
     required this.selectedRange,
     required this.selectedStartTime,
     required this.selectedEndTime,
+    required this.turno,
     required this.thresholdSeconds,
   });
 
@@ -78,53 +80,146 @@ class StationCard extends StatelessWidget {
 
   Widget _buildStatBox(
       String label, int value, Color color, IconData iconData) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      height: 80,
-      child: Stack(
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(iconData, color: color, size: 24),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Center(
-            child: Text(
-              '$value',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 300;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(0.2), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+          height: isNarrow ? null : 80, // auto-height if stacked
+          child: isNarrow
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(iconData, color: color, size: 24),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '$value',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: color,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(iconData, color: color, size: 24),
+                        const SizedBox(width: 8),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    Text(
+                      '$value',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget buildWarningBox(int thresholdSeconds) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 300;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF9E6),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFFFE0B2), width: 1),
+          ),
+          child: isNarrow
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.access_time_rounded,
+                      size: 16,
+                      color: Color(0xFFFF9500),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Good Non Controllati QG2: cicli inferiori a $thresholdSeconds secondi',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFFB76E00),
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.access_time_rounded,
+                      size: 16,
+                      color: Color(0xFFFF9500),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Good Non Controllati QG2: cicli inferiori a $thresholdSeconds secondi',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFFB76E00),
+                      ),
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
 
@@ -157,7 +252,6 @@ class StationCard extends StatelessWidget {
         ? ((gCount + ncCount) / total * 100).toStringAsFixed(1)
         : "0.0";
 
-    print('Station: $station');
     // Fill missing categories with 0
     final filledDefects = {
       for (var key in allDefectCategories) key: (defects[key] ?? 0) as num
@@ -239,7 +333,9 @@ class StationCard extends StatelessWidget {
                         color: Colors.grey,
                       ),
                     ),
-                  if (selectedStartTime != null && selectedEndTime != null)
+                  if (selectedStartTime != null &&
+                      selectedEndTime != null &&
+                      turno == 0)
                     Text(
                       '${selectedStartTime?.format(context)} → ${selectedEndTime?.format(context)}',
                       style: const TextStyle(
@@ -248,8 +344,16 @@ class StationCard extends StatelessWidget {
                         color: Colors.blueGrey,
                       ),
                     ),
+                  if (turno != 0)
+                    Text(
+                      'Turno $turno',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.blueGrey,
+                      ),
+                    ),
                   const SizedBox(height: 24),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -273,58 +377,53 @@ class StationCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: _buildStatBox(
-                          'Non Controllati QG2',
-                          ncCount,
-                          const Color(0xFFFF9500),
-                          Icons.warning_amber_rounded,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatBox(
-                          'No Good',
-                          koCount,
-                          const Color(0xFFFF3B30),
-                          Icons.cancel_rounded,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF9E6),
-                      borderRadius: BorderRadius.circular(12),
-                      border:
-                          Border.all(color: const Color(0xFFFFE0B2), width: 1),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+
+// 🟠 Show 'Good Non Controllati' only when NOT M326
+                  if (station != 'M326 - ReWork' && station != 'M326') ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Icon(
-                          Icons.access_time_rounded,
-                          size: 16,
-                          color: Color(0xFFFF9500),
+                        Expanded(
+                          child: _buildStatBox(
+                            'Good Non Controllati QG2',
+                            ncCount,
+                            const Color(0xFFFF9500),
+                            Icons.warning_amber_rounded,
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Non Controllati QG2: cicli inferiori a $thresholdSeconds secondi',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFFB76E00),
+                        const SizedBox(width: 12),
+
+                        // ✅ No Good is shown here too
+                        Expanded(
+                          child: _buildStatBox(
+                            'No Good',
+                            koCount,
+                            const Color(0xFFFF3B30),
+                            Icons.cancel_rounded,
                           ),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    buildWarningBox(thresholdSeconds),
+                  ],
+
+// 🔴 Show only 'No Good' when in M326
+                  if (station == 'M326 - ReWork' || station == 'M326') ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: _buildStatBox(
+                            'No Good',
+                            koCount,
+                            const Color(0xFFFF3B30),
+                            Icons.cancel_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
 
                   const SizedBox(height: 24),
 
@@ -361,7 +460,7 @@ class StationCard extends StatelessWidget {
 
                   // Defect chart with iOS styling
                   if (total > 0 && station != 'M326 - ReWork' ||
-                      station == 'M326')
+                      station != 'M326')
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

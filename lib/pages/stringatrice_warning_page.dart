@@ -95,6 +95,19 @@ class _WarningsPageState extends State<WarningsPage> {
         : 'NG consecutivi';
   }
 
+  String _formatTimestamp(String isoString) {
+    try {
+      final dateTime = DateTime.parse(isoString).toLocal();
+      final formattedDate =
+          '${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year}';
+      final formattedTime =
+          '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+      return "$formattedDate alle $formattedTime";
+    } catch (e) {
+      return isoString;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -296,8 +309,9 @@ class _WarningsPageState extends State<WarningsPage> {
                             ),
                             _infoRow(
                               Icons.access_time,
-                              "Data e ora: ${warning['timestamp']}",
+                              "Data e ora: ${_formatTimestamp(warning['timestamp'])}",
                             ),
+
                             _infoRow(
                               Icons.show_chart,
                               "Valore: ${warning['value']} (limite: ${warning['limit']})",
@@ -358,23 +372,31 @@ class _WarningsPageState extends State<WarningsPage> {
   }
 
   Widget _infoRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.grey.shade700),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade800,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        double baseFontSize = constraints.maxWidth < 350 ? 16 : 20;
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: baseFontSize + 10, color: Colors.grey.shade700),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    fontSize: baseFontSize,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

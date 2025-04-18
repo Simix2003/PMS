@@ -672,7 +672,6 @@ def export_full_excel(data: dict) -> str:
     wb.save(filepath)
     return filename
 
-
 def autofit_columns(ws, align_center_for: Optional[Set[str]] = None):
     """
     Adjust column widths based on header and cell values, and apply alignment.
@@ -2566,7 +2565,6 @@ def save_warning_on_mysql(warning_payload: dict, mysql_conn, station: dict, defe
     except Exception as e:
         logging.error(f"❌ Failed to save warning to MySQL: {e}")
 
-
 async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
     try:
         with mysql_conn.cursor() as cursor:
@@ -3538,7 +3536,6 @@ async def search_results(request: Request):
     global mysql_connection
     try:
         payload = await request.json()
-        print(payload)
 
         filters = payload.get("filters", [])
         order_by_input = payload.get("order_by", "Data")
@@ -3552,9 +3549,10 @@ async def search_results(request: Request):
         params = []
 
         has_defect_filter = any(f.get("type") == "Difetto" for f in filters)
-        if has_defect_filter:
-            join_clauses.append("JOIN object_defects od ON p.id = od.production_id")
-            join_clauses.append("JOIN defects d ON od.defect_id = d.id")
+
+        # ✅ Always join defects for category info
+        join_clauses.append("LEFT JOIN object_defects od ON p.id = od.production_id")
+        join_clauses.append("LEFT JOIN defects d ON od.defect_id = d.id")
 
         grouped_filters = defaultdict(list)
         for f in filters:
@@ -3589,37 +3587,81 @@ async def search_results(request: Request):
                     group_clauses.append("s.name = %s")
                     group_params.append(value)
 
+                elif filter_type == "Tempo Ciclo":
+                    condition = f.get("condition")  # e.g., "Minore Di", "Maggiore Di", etc.
+                    seconds = f.get("seconds")
+
+                    if seconds:
+                        try:
+                            seconds_float = float(seconds)
+                        except ValueError:
+                            continue  # skip if invalid number
+
+                        if condition == "Minore Di":
+                            group_clauses.append("p.cycle_time < %s")
+                        elif condition == "Maggiore Di":
+                            group_clauses.append("p.cycle_time > %s")
+                        elif condition == "Uguale A":
+                            group_clauses.append("p.cycle_time = %s")
+                        elif condition == "Minore o Uguale a":
+                            group_clauses.append("p.cycle_time <= %s")
+                        elif condition == "Maggiore o Uguale a":
+                            group_clauses.append("p.cycle_time >= %s")
+                        else:
+                            continue  # skip unknown condition
+
+                        group_params.append(seconds_float)
+
                 elif filter_type == "Turno":
                     turno_times = {
                         "1": ("06:00:00", "13:59:59"),
                         "2": ("14:00:00", "21:59:59"),
                         "3": ("22:00:00", "05:59:59"),
                     }
+
                     if value in turno_times:
                         start_t, end_t = turno_times[value]
-
-                        # Look for accompanying date filter
                         date_filters = grouped_filters.get("Data", [])
+
                         if date_filters:
                             from_iso = date_filters[0].get("start")
-                            if from_iso:
-                                shift_day = datetime.fromisoformat(from_iso).strftime("%Y-%m-%d")
+                            to_iso = date_filters[0].get("end")
 
-                                if value == "3":
-                                    next_day = (datetime.fromisoformat(from_iso) + timedelta(days=1)).strftime("%Y-%m-%d")
-                                    group_clauses.append(f"""
-                                        (
-                                            (DATE(p.end_time) = %s AND TIME(p.end_time) >= '22:00:00')
-                                            OR
-                                            (DATE(p.end_time) = %s AND TIME(p.end_time) <= '05:59:59')
-                                        )
-                                    """)
-                                    group_params.extend([shift_day, next_day])
-                                else:
-                                    group_clauses.append("DATE(p.end_time) = %s AND TIME(p.end_time) BETWEEN %s AND %s")
-                                    group_params.extend([shift_day, start_t, end_t])
+                            if from_iso and to_iso:
+                                from_dt = datetime.fromisoformat(from_iso).date()
+                                to_dt = datetime.fromisoformat(to_iso).date()
+
+                                date_clauses = []
+                                date_params = []
+
+                                current_day = from_dt
+                                while current_day <= to_dt:
+                                    if value == "3":
+                                        next_day = current_day + timedelta(days=1)
+                                        date_clauses.append("""
+                                            (
+                                                (DATE(p.end_time) = %s AND TIME(p.end_time) >= '22:00:00')
+                                                OR
+                                                (DATE(p.end_time) = %s AND TIME(p.end_time) <= '05:59:59')
+                                            )
+                                        """)
+                                        date_params.extend([current_day.strftime("%Y-%m-%d"), next_day.strftime("%Y-%m-%d")])
+                                    else:
+                                        date_clauses.append("""
+                                            (DATE(p.end_time) = %s AND TIME(p.end_time) BETWEEN %s AND %s)
+                                        """)
+                                        date_params.extend([
+                                            current_day.strftime("%Y-%m-%d"),
+                                            start_t,
+                                            end_t
+                                        ])
+                                    current_day += timedelta(days=1)
+
+                                if date_clauses:
+                                    group_clauses.append("(" + " OR ".join(date_clauses) + ")")
+                                    group_params.extend(date_params)
                         else:
-                            # If no Data filter is present, fallback to global time-based filter
+                            # Fallback if no date filter
                             if value == "3":
                                 group_clauses.append("(TIME(p.end_time) >= '22:00:00' OR TIME(p.end_time) <= '05:59:59')")
                             else:
@@ -3724,6 +3766,7 @@ async def search_results(request: Request):
         else:
             order_clause = f"ORDER BY {order_by} {direction}"
 
+        # ✅ Add defect_categories field always
         select_fields = """
             p.id AS production_id,
             o.id_modulo, 
@@ -3733,7 +3776,8 @@ async def search_results(request: Request):
             p.start_time, 
             p.end_time,
             s.name AS station_name,
-            pl.display_name AS line_display_name
+            pl.display_name AS line_display_name,
+            GROUP_CONCAT(DISTINCT d.category) AS defect_categories
         """
 
 

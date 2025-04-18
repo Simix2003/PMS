@@ -11,13 +11,30 @@ class DashboardData extends StatefulWidget {
 
 class _DashboardDataState extends State<DashboardData> {
   int _currentIndex = 0;
+  List<Map<String, String>>? filtersForFindPage;
+  bool autoSearch = false;
 
-  final List<Widget> _pages = [
-    const DataViewPage(
-      canSearch: true,
-    ),
-    const FindPage(),
-  ];
+  List<Widget> get _pages => [
+        DataViewPage(
+          canSearch: true,
+          onBarTap: (filters) {
+            setState(() {
+              filtersForFindPage = filters;
+              autoSearch = true;
+              _currentIndex = 1;
+            });
+          },
+        ),
+        FindPage(
+          initialFilters: filtersForFindPage,
+          autoSearch: autoSearch,
+          onSearchCompleted: () {
+            setState(() {
+              autoSearch = false;
+            });
+          },
+        ),
+      ];
 
   @override
   Widget build(BuildContext context) {

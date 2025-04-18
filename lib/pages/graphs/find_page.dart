@@ -11,7 +11,16 @@ import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'dart:ui';
 
 class FindPage extends StatefulWidget {
-  const FindPage({super.key});
+  final List<Map<String, String>>? initialFilters;
+  final bool autoSearch;
+  final VoidCallback? onSearchCompleted;
+
+  const FindPage({
+    super.key,
+    this.initialFilters,
+    this.autoSearch = false,
+    this.onSearchCompleted,
+  });
 
   @override
   _FindPageState createState() => _FindPageState();
@@ -33,6 +42,8 @@ class _FindPageState extends State<FindPage> {
   // Main selection for 'Difetto'
   String? selectedDifettoGroup;
   bool isExporting = false;
+
+  String? selectedCycleTimeCondition;
 
 // === GENERALI ===
   String? selectedGenerali;
@@ -80,6 +91,7 @@ class _FindPageState extends State<FindPage> {
     'Turno',
     "Stringatrice",
     'Operatore',
+    'Tempo Ciclo',
   ];
 
   final List<String> esitoOptions = [
@@ -262,7 +274,92 @@ class _FindPageState extends State<FindPage> {
 
   final List<Map<String, dynamic>> results = [];
 
-  void _addFilter() {
+  @override
+  void initState() {
+    super.initState();
+
+    if (widget.initialFilters != null) {
+      for (final filter in widget.initialFilters!) {
+        final type = filter['type']?.toString();
+        final value = filter['value'];
+
+        if (type == 'Data' &&
+            filter.containsKey('start') &&
+            filter.containsKey('end')) {
+          final startRaw = filter['start'];
+          final endRaw = filter['end'];
+
+          final start = startRaw is String ? DateTime.tryParse(startRaw) : null;
+          final end = endRaw is String ? DateTime.tryParse(endRaw) : null;
+
+          if (start != null && end != null) {
+            selectedFilterType = 'Data';
+            selectedStartTime =
+                TimeOfDay(hour: start.hour, minute: start.minute);
+            selectedEndTime = TimeOfDay(hour: end.hour, minute: end.minute);
+
+            if (start.year == end.year &&
+                start.month == end.month &&
+                start.day == end.day) {
+              // Single day
+              pickedDate = start;
+              selectedRange = null;
+            } else {
+              // It's a range!
+              pickedDate = start; // still useful as fallback
+              selectedRange = DateTimeRange(start: start, end: end);
+            }
+
+            _addFilter('Data', value.toString());
+
+            Future.microtask(() {
+              setState(() {
+                selectedFilterType = null;
+              });
+            });
+          }
+        }
+
+        // ✅ Restore Tempo Ciclo filter with special fields
+        else if (type == 'Tempo Ciclo') {
+          final condition = filter['condition']?.toString();
+          final seconds = filter['seconds']?.toString();
+
+          if (condition != null && seconds != null) {
+            selectedFilterType = 'Tempo Ciclo';
+            selectedCycleTimeCondition = condition;
+
+            _addFilter(
+                'Tempo Ciclo', seconds); // Triggers special composite logic
+            // Delay reset to next frame so UI can react properly
+            Future.microtask(() {
+              setState(() {
+                selectedFilterType = null;
+              });
+            });
+          }
+        }
+
+        // ✅ All other filters (Stazione, Esito, etc.)
+        else if (type != null && value != null) {
+          selectedFilterType = type;
+          _addFilter(type, value.toString());
+          // Delay reset to next frame so UI can react properly
+          Future.microtask(() {
+            setState(() {
+              selectedFilterType = null;
+            });
+          });
+        }
+      }
+    }
+
+    if (widget.autoSearch) {
+      _onSearchPressed();
+    }
+  }
+
+  void _addFilter(selectedFilterType, filterValue) {
     if (selectedFilterType == null) return;
 
     String compositeValue = '';
@@ -275,50 +372,47 @@ class _FindPageState extends State<FindPage> {
         case 'Generali':
           compositeValue += ' > ${selectedGenerali ?? ''}';
           break;
-
         case 'Saldatura':
           compositeValue += ' > ${selectedSaldaturaStringa ?? ''}';
           compositeValue += ' > ${selectedSaldaturaSide ?? ''}';
           compositeValue += ' > ${selectedSaldaturaPin ?? ''}';
           break;
-
         case 'Disallineamento':
           compositeValue += ' > ${selectedDisallineamentoMode ?? ''}';
           if (selectedDisallineamentoMode == 'Stringa') {
             compositeValue += ' > ${selectedDisallineamentoStringa ?? ''}';
-            // Pad to 4 parts
             compositeValue += ' > ';
           } else if (selectedDisallineamentoMode == 'Ribbon') {
             compositeValue += ' > ${selectedDisallineamentoRibbonSide ?? ''}';
             compositeValue += ' > ${selectedDisallineamentoRibbon ?? ''}';
           } else {
-            // pad both
             compositeValue += ' >  > ';
           }
           break;
-
         case 'Mancanza Ribbon':
           compositeValue += ' > ${selectedMancanzaRibbonSide ?? ''}';
           compositeValue += ' > ${selectedMancanzaRibbon ?? ''}';
           break;
-
         case 'Macchie ECA':
           compositeValue += ' > ${selectedMacchieECAStringa ?? ''}';
           break;
-
         case 'Celle Rotte':
           compositeValue += ' > ${selectedCelleRotteStringa ?? ''}';
           break;
-
         case 'Lunghezza String Ribbon':
           compositeValue += ' > ${selectedLunghezzaStringa ?? ''}';
           break;
-
         case 'Altro':
-          // Optionally add extra input in the future
           compositeValue += ' > ';
           break;
       }
+
+      setState(() {
+        activeFilters.add({
+          'type': selectedFilterType!,
+          'value': compositeValue,
+        });
+      });
     } else if (selectedFilterType == 'Data') {
       if (selectedRange == null && pickedDate == null) return;
 
@@ -360,51 +454,59 @@ class _FindPageState extends State<FindPage> {
             'start': startDateTime.toIso8601String(),
             'end': endDateTime.toIso8601String(),
           });
-
-          // Reset selections
-          selectedFilterType = null;
-          filterValue = '';
-          selectedRange = null;
-          pickedDate = null;
-          selectedStartTime = null;
-          selectedEndTime = null;
         });
       }
+    } else if (selectedFilterType == 'Tempo Ciclo') {
+      if (selectedCycleTimeCondition == null || filterValue.isEmpty) return;
+      compositeValue = '${selectedCycleTimeCondition!} $filterValue secondi';
 
-      return;
+      setState(() {
+        activeFilters.add({
+          'type': 'Tempo Ciclo',
+          'value': compositeValue,
+          'condition': selectedCycleTimeCondition!,
+          'seconds': filterValue,
+        });
+      });
     } else {
       if (filterValue.isEmpty) return;
-      compositeValue = filterValue;
-    }
 
-    if (compositeValue.isNotEmpty) {
+      compositeValue = filterValue;
+
       setState(() {
         activeFilters.add({
           'type': selectedFilterType!,
           'value': compositeValue,
         });
-
-        // Reset all selections
-        selectedFilterType = null;
-        filterValue = '';
-        selectedDifettoGroup = null;
-        selectedGenerali = null;
-        selectedSaldaturaStringa = null;
-        selectedSaldaturaSide = null;
-        selectedSaldaturaPin = null;
-        selectedDisallineamentoMode = null;
-        selectedDisallineamentoStringa = null;
-        selectedDisallineamentoRibbonSide = null;
-        selectedDisallineamentoRibbon = null;
-        selectedMancanzaRibbonSide = null;
-        selectedMancanzaRibbon = null;
-        selectedMacchieECAStringa = null;
-        selectedCelleRotteStringa = null;
-        selectedLunghezzaStringa = null;
-        _textController.clear();
-        _numericController.clear();
       });
     }
+
+    // ✅ Reset all fields after adding filter (no matter the type)
+    setState(() {
+      selectedFilterType = null;
+      filterValue = '';
+      selectedDifettoGroup = null;
+      selectedGenerali = null;
+      selectedSaldaturaStringa = null;
+      selectedSaldaturaSide = null;
+      selectedSaldaturaPin = null;
+      selectedDisallineamentoMode = null;
+      selectedDisallineamentoStringa = null;
+      selectedDisallineamentoRibbonSide = null;
+      selectedDisallineamentoRibbon = null;
+      selectedMancanzaRibbonSide = null;
+      selectedMancanzaRibbon = null;
+      selectedMacchieECAStringa = null;
+      selectedCelleRotteStringa = null;
+      selectedLunghezzaStringa = null;
+      selectedRange = null;
+      pickedDate = null;
+      selectedStartTime = null;
+      selectedEndTime = null;
+      selectedCycleTimeCondition = null;
+      _textController.clear();
+      _numericController.clear();
+    });
   }
 
   void _removeFilter(int index) {
@@ -515,6 +617,33 @@ class _FindPageState extends State<FindPage> {
           value: filterValue.isNotEmpty ? filterValue : null,
           items: esitoOptions,
           onChanged: (val) => setState(() => filterValue = val ?? ''),
+        );
+
+      case 'Tempo Ciclo':
+        return Row(
+          children: [
+            _buildStyledDropdown(
+              hint: 'Condizione',
+              value: selectedCycleTimeCondition,
+              items: [
+                'Minore Di',
+                'Minore o Uguale a',
+                'Maggiore Di',
+                'Maggiore o Uguale a',
+                'Uguale A'
+              ],
+              onChanged: (val) => setState(() {
+                selectedCycleTimeCondition = val;
+              }),
+            ),
+            const SizedBox(width: 8),
+            _buildStyledTextField(
+              controller: _numericController,
+              hint: 'Secondi',
+              isNumeric: true,
+              onChanged: (val) => filterValue = val,
+            ),
+          ],
         );
 
       case 'Difetto':
@@ -1061,6 +1190,7 @@ class _FindPageState extends State<FindPage> {
               selectedFilterType = value;
               filterValue = '';
               _textController.clear();
+              selectedCycleTimeCondition = null;
               _numericController.clear();
               selectedRibbonSide = null;
             });
@@ -1068,7 +1198,18 @@ class _FindPageState extends State<FindPage> {
         );
 
         final addButton = ElevatedButton(
-          onPressed: _addFilter,
+          onPressed: () {
+            final currentFilterType = selectedFilterType;
+            final currentFilterValue = filterValue;
+            _addFilter(currentFilterType, currentFilterValue);
+
+            // Delay reset to next frame so UI can react properly
+            Future.microtask(() {
+              setState(() {
+                selectedFilterType = null;
+              });
+            });
+          },
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF007AFF),
             shape: const CircleBorder(),
@@ -1179,6 +1320,10 @@ class _FindPageState extends State<FindPage> {
 
       setState(() {
         results.addAll(data);
+
+        if (widget.onSearchCompleted != null) {
+          widget.onSearchCompleted!();
+        }
       });
     } catch (e) {
       print("❌ Errore nel caricamento dei risultati: $e");

@@ -3,7 +3,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:simple_web_camera/simple_web_camera.dart';
-import 'package:wakelock/wakelock.dart';
 
 class TakePicturePage extends StatefulWidget {
   const TakePicturePage({super.key});
@@ -23,7 +22,6 @@ class _TakePicturePageState extends State<TakePicturePage>
   @override
   void initState() {
     super.initState();
-    Wakelock.enable();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),

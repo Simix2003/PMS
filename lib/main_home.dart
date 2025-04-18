@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:ix_monitor/pages/loading_Screen/home_loading_screen.dart';
-import 'package:wakelock/wakelock.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('it_IT', null); // Make sure this is awaited
-
-  // 👇 Prevent the device from sleeping globally
-  Wakelock.enable();
 
   runApp(const MyApp());
 }

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
-import 'package:wakelock/wakelock.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/station_card.dart';
@@ -14,8 +13,13 @@ import '../settings_page.dart';
 
 class DataViewPage extends StatefulWidget {
   final bool canSearch;
+  final void Function(List<Map<String, String>> filters)? onBarTap;
 
-  const DataViewPage({super.key, required this.canSearch});
+  const DataViewPage({
+    super.key,
+    required this.canSearch,
+    this.onBarTap,
+  });
 
   @override
   _DataViewPageState createState() => _DataViewPageState();
@@ -53,7 +57,6 @@ class _DataViewPageState extends State<DataViewPage> {
     super.initState();
     _loadSettings();
     _initializeWebSocket();
-    Wakelock.enable();
     _fetchData().then((data) {
       if (mounted) {
         setState(() {
@@ -80,7 +83,6 @@ class _DataViewPageState extends State<DataViewPage> {
   @override
   void dispose() {
     _webSocketService.close();
-    Wakelock.disable();
     super.dispose();
   }
 
@@ -1428,6 +1430,80 @@ class _DataViewPageState extends State<DataViewPage> {
               );
             },
           ),
+          touchCallback: (event, response) {
+            if (event is FlTapUpEvent &&
+                response != null &&
+                response.spot != null) {
+              final groupIndex = response.spot!.touchedBarGroupIndex;
+              final rodIndex = response.spot!.touchedRodDataIndex;
+              final stationEntry = stations[groupIndex];
+              final stationName = stationEntry.key;
+
+              final isM326 = stationName == 'M326';
+
+              final filters = <Map<String, String>>[
+                {'type': 'Stazione', 'value': stationName},
+              ];
+
+              // Apply Esito + Tempo Ciclo logic
+              if (rodIndex == 0) {
+                filters.add(
+                    {'type': 'Esito', 'value': isM326 ? 'G Operatore' : 'G'});
+                filters.add({
+                  'type': 'Tempo Ciclo',
+                  'condition': 'Maggiore o Uguale a',
+                  'seconds': _thresholdSeconds.toString(),
+                });
+              } else if (rodIndex == 1) {
+                filters.add(
+                    {'type': 'Esito', 'value': isM326 ? 'G Operatore' : 'G'});
+                filters.add({
+                  'type': 'Tempo Ciclo',
+                  'condition': 'Minore Di',
+                  'seconds': _thresholdSeconds.toString(),
+                });
+              } else if (rodIndex == 2) {
+                filters.add({'type': 'Esito', 'value': 'NG'});
+              }
+
+              // Always add Turno if selected
+              if (selectedTurno != 0) {
+                filters
+                    .add({'type': 'Turno', 'value': selectedTurno.toString()});
+              }
+
+              // Always add Data filter (required for Turno filtering in backend)
+              if (selectedStartTime != null && selectedEndTime != null) {
+                DateTime combineDateAndTime(DateTime date, TimeOfDay time) {
+                  return DateTime(
+                      date.year, date.month, date.day, time.hour, time.minute);
+                }
+
+                // ✅ FIX: Use _selectedRange if available
+                final startDate = _selectedRange?.start ?? _selectedDate;
+                final endDate = _selectedRange?.end ?? _selectedDate;
+
+                final startDateTime =
+                    combineDateAndTime(startDate, selectedStartTime!);
+                final endDateTime =
+                    combineDateAndTime(endDate, selectedEndTime!);
+
+                final formattedRange =
+                    '${DateFormat('dd MMM y – HH:mm').format(startDateTime)} → ${DateFormat('dd MMM y – HH:mm').format(endDateTime)}';
+
+                filters.add({
+                  'type': 'Data',
+                  'value': formattedRange,
+                  'start': startDateTime.toIso8601String(),
+                  'end': endDateTime.toIso8601String(),
+                });
+              }
+
+              if (widget.onBarTap != null) {
+                widget.onBarTap!(filters);
+              }
+            }
+          },
         ),
         barGroups: stations.asMap().entries.map<BarChartGroupData>((entry) {
           final idx = entry.key;
@@ -1489,7 +1565,7 @@ class _DataViewPageState extends State<DataViewPage> {
                 ),
               ),
             ],
-            barsSpace: 6,
+            barsSpace: 24,
             showingTooltipIndicators: [0, 1, 2],
           );
         }).toList(),

@@ -225,6 +225,10 @@ class StationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lastEsito = stationData['last_esito'];
+    final statusColor = _getStatusColor(lastEsito);
+    final statusLabel = _getStatusLabel(lastEsito);
+
     final defectsRaw = stationData['defects'];
     final defects =
         defectsRaw is Map ? Map<String, dynamic>.from(defectsRaw) : {};
@@ -601,7 +605,7 @@ class StationCard extends StatelessWidget {
                   const SizedBox(height: 24),
 
                   // Last cycle card - Apple Card inspired
-                  _buildLastModuleCard(),
+                  _buildLastModuleCard(statusColor, statusLabel),
                 ],
               ),
             ),
@@ -654,17 +658,25 @@ class StationCard extends StatelessWidget {
     );
   }
 
-  Widget _buildLastModuleCard() {
-    final lastEsito = stationData['last_esito'];
-    final isSuccess = lastEsito == 1;
-    final isNoData = lastEsito != 1 && lastEsito != 6;
+  Color _getStatusColor(int? esito) {
+    if (esito == 1) return const Color(0xFF34C759); // OK
+    if (esito == 2) return Colors.grey; // In Progress
+    if (esito == 4) return const Color.fromARGB(255, 199, 189, 52); // Escluso
+    if (esito == 5) return const Color(0xFF34C759); // G Operatore
+    if (esito == 6) return const Color(0xFFFF3B30); // KO
+    return Colors.grey; // N/A
+  }
 
-    final statusColor = isNoData
-        ? Colors.grey
-        : (isSuccess ? const Color(0xFF34C759) : const Color(0xFFFF3B30));
+  String _getStatusLabel(int? esito) {
+    if (esito == 1) return 'G';
+    if (esito == 2) return 'In Produzione';
+    if (esito == 4) return 'Escluso';
+    if (esito == 5) return 'G Operatore';
+    if (esito == 6) return 'NG';
+    return 'N/A';
+  }
 
-    final statusLabel = isNoData ? 'N/A' : (isSuccess ? 'OK' : 'KO');
-
+  Widget _buildLastModuleCard(statusColor, statusLabel) {
     final lastObject = stationData['last_object'] ?? 'ID non disponibile';
     final lastCycleTime =
         stationData['last_cycle_time'] ?? 'Tempo non disponibile';

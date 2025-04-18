@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:html' as html;
+import '../../shared/production_details_page.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
@@ -1675,22 +1676,33 @@ class _FindPageState extends State<FindPage> {
                                   isSelectable: isSelecting,
                                   isSelected: selectedProductionIds.contains(
                                       results[index]['production_id']),
-                                  onTap: isSelecting
-                                      ? () {
-                                          final int productionId =
-                                              results[index]['production_id'];
-                                          setState(() {
-                                            if (selectedProductionIds
-                                                .contains(productionId)) {
-                                              selectedProductionIds
-                                                  .remove(productionId);
-                                            } else {
-                                              selectedProductionIds
-                                                  .add(productionId);
-                                            }
-                                          });
+                                  onTap: () {
+                                    final int productionId =
+                                        results[index]['production_id'];
+                                    if (isSelecting) {
+                                      setState(() {
+                                        if (selectedProductionIds
+                                            .contains(productionId)) {
+                                          selectedProductionIds
+                                              .remove(productionId);
+                                        } else {
+                                          selectedProductionIds
+                                              .add(productionId);
                                         }
-                                      : null,
+                                      });
+                                    } else {
+                                      // Navigate to detail page
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              ProductionDetailPage(
+                                            data: results[index],
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
                                 ),
                               );
                             },

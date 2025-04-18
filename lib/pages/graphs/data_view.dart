@@ -799,6 +799,11 @@ class _DataViewPageState extends State<DataViewPage> {
       }
     }
 
+// ✅ Add escluso_count as part of NC
+    final int esclusoCount =
+        (m308Data['escluso_count'] ?? 0) + (m309Data['escluso_count'] ?? 0);
+    ncCount += esclusoCount;
+
     final total = gCount + ncCount + koCount;
 
     final yield = total > 0
@@ -1457,6 +1462,10 @@ class _DataViewPageState extends State<DataViewPage> {
               } else if (rodIndex == 1) {
                 filters.add(
                     {'type': 'Esito', 'value': isM326 ? 'G Operatore' : 'G'});
+                !isM326
+                    ? filters.add({'type': 'Esito', 'value': 'Escluso'})
+                    : null;
+
                 filters.add({
                   'type': 'Tempo Ciclo',
                   'condition': 'Minore Di',
@@ -1524,7 +1533,8 @@ class _DataViewPageState extends State<DataViewPage> {
           }
 
           final goodCount = gCount.toDouble();
-          final nonControlledCount = ncCount.toDouble();
+          final nonControlledCount =
+              ncCount.toDouble() + (counts['escluso_count'] ?? 0).toDouble();
           final badCount = (counts['bad_count'] ?? 0).toDouble();
 
           return BarChartGroupData(

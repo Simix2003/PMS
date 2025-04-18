@@ -548,6 +548,7 @@ class _DataViewPageState extends State<DataViewPage> {
                             _selectedRange,
                             selectedStartTime,
                             selectedEndTime,
+                            selectedTurno,
                           ),
                           const SizedBox(height: 24),
                           ...['M308', 'M309', 'M326']
@@ -577,6 +578,7 @@ class _DataViewPageState extends State<DataViewPage> {
                                   selectedRange: _selectedRange,
                                   selectedStartTime: selectedStartTime,
                                   selectedEndTime: selectedEndTime,
+                                  turno: selectedTurno,
                                   thresholdSeconds: _thresholdSeconds,
                                 );
                               })
@@ -612,53 +614,90 @@ class _DataViewPageState extends State<DataViewPage> {
 
   Widget _buildStatBox(
       String label, int value, Color color, IconData iconData) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      height: 80,
-      child: Stack(
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(iconData, color: color, size: 24),
-                const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Center(
-            child: Text(
-              '$value',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: color,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 300;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(0.2), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+          height: isNarrow ? null : 80, // auto-height if stacked
+          child: isNarrow
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(iconData, color: color, size: 24),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '$value',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: color,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(iconData, color: color, size: 24),
+                        const SizedBox(width: 8),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Spacer(),
+                    Text(
+                      '$value',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
 
@@ -713,6 +752,7 @@ class _DataViewPageState extends State<DataViewPage> {
     DateTimeRange? selectedRange,
     TimeOfDay? selectedStartTime,
     TimeOfDay? selectedEndTime,
+    int selectedTurno,
   ) {
     final m308 = stations.firstWhere((e) => e.key == 'M308',
         orElse: () => MapEntry('M308', {}));
@@ -839,9 +879,20 @@ class _DataViewPageState extends State<DataViewPage> {
                     color: Colors.grey,
                   ),
                 ),
-              if (selectedStartTime != null && selectedEndTime != null)
+              if (selectedStartTime != null &&
+                  selectedEndTime != null &&
+                  selectedTurno == 0)
                 Text(
                   '${selectedStartTime.format(context)} → ${selectedEndTime.format(context)}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.blueGrey,
+                  ),
+                ),
+              if (selectedTurno != 0)
+                Text(
+                  'Turno $selectedTurno',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -877,7 +928,7 @@ class _DataViewPageState extends State<DataViewPage> {
                 children: [
                   Expanded(
                     child: _buildStatBox(
-                      'Non Controllati QG2',
+                      'Good Non Controllati QG2',
                       ncCount,
                       const Color(0xFFFF9500),
                       Icons.warning_amber_rounded,
@@ -913,7 +964,7 @@ class _DataViewPageState extends State<DataViewPage> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Non Controllati QG2: cicli inferiori a $_thresholdSeconds secondi',
+                      'Good Non Controllati QG2: cicli inferiori a $_thresholdSeconds secondi',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -1223,7 +1274,7 @@ class _DataViewPageState extends State<DataViewPage> {
                   children: [
                     _buildLegend("Good", Color(0xFF34C759)),
                     const SizedBox(width: 12),
-                    _buildLegend("Non Controllati QG2", Color(0xFFFF9500)),
+                    _buildLegend("Good Non Controllati QG2", Color(0xFFFF9500)),
                     const SizedBox(width: 12),
                     _buildLegend("No Good", Color(0xFFFF3B30)),
                   ],

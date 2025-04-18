@@ -10,6 +10,7 @@ class IssueSelectorWidget extends StatefulWidget {
   final String channelId;
   final Function(String fullPath) onIssueSelected;
   final void Function(List<Map<String, String>> pictures)? onPicturesChanged;
+  final bool canAdd;
   final bool isReworkMode; // defaults to false
   final List<String> initiallySelectedIssues; // used in rework
   final String objectId;
@@ -20,6 +21,7 @@ class IssueSelectorWidget extends StatefulWidget {
     required this.channelId,
     required this.onIssueSelected,
     this.onPicturesChanged,
+    this.canAdd = true,
     this.isReworkMode = false,
     this.initiallySelectedIssues = const [],
     required this.objectId,
@@ -190,8 +192,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     } else if (type == "Leaf") {
       final fullPath = "$apiPath.${normalizeName(name)}";
 
-      // ⛔ Prevent changes in ReWork mode
-      if (widget.isReworkMode) {
+      // ⛔ Prevent changes in ReWork mode or if canAdd is false
+      if (!widget.canAdd) {
         return;
       }
 
@@ -396,20 +398,22 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                 final bool isSelected = selectedLeaves.contains(fullPath);
 
                 return ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      if (isSelected) {
-                        selectedLeaves.remove(fullPath);
-                        if (activeLeafDefect == fullPath) {
-                          activeLeafDefect = null;
+                  onPressed: widget.canAdd
+                      ? () {
+                          setState(() {
+                            if (isSelected) {
+                              selectedLeaves.remove(fullPath);
+                              if (activeLeafDefect == fullPath) {
+                                activeLeafDefect = null;
+                              }
+                            } else {
+                              selectedLeaves.add(fullPath);
+                              activeLeafDefect = fullPath;
+                            }
+                          });
+                          widget.onIssueSelected(fullPath);
                         }
-                      } else {
-                        selectedLeaves.add(fullPath);
-                        activeLeafDefect = fullPath;
-                      }
-                    });
-                    widget.onIssueSelected(fullPath);
-                  },
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor:
                         isSelected ? Colors.deepOrange.withOpacity(0.2) : null,
@@ -451,44 +455,47 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(
-                child: Material(
-                  color: Colors.transparent,
-                  child: Focus(
-                    autofocus: false,
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.text,
-                      child: TextField(
-                        controller: altroController,
-                        decoration: InputDecoration(
-                          hintText: "Scrivi qui l'anomalia...",
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+              if (widget.canAdd)
+                Expanded(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Focus(
+                      autofocus: false,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.text,
+                        child: TextField(
+                          controller: altroController,
+                          decoration: InputDecoration(
+                            hintText: "Scrivi qui l'anomalia...",
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
                           ),
-                          filled: true,
-                          fillColor: Colors.white,
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
               const SizedBox(width: 12),
               ElevatedButton(
-                onPressed: () {
-                  final text = altroController.text.trim();
-                  final fullPath =
-                      "Dati.Esito.Esito_Scarto.Difetti.Altro: $text";
-                  if (text.isNotEmpty && !altroIssues.contains(text)) {
-                    setState(() {
-                      altroIssues.add(text);
-                      selectedLeaves.add(fullPath); // ✅ make sure it's tracked
-                      activeLeafDefect = fullPath; // ✅ Add this
-                      widget.onIssueSelected(fullPath);
-                      altroController.clear();
-                    });
-                  }
-                },
+                onPressed: widget.canAdd
+                    ? () {
+                        final text = altroController.text.trim();
+                        final fullPath =
+                            "Dati.Esito.Esito_Scarto.Difetti.Altro: $text";
+                        if (text.isNotEmpty && !altroIssues.contains(text)) {
+                          setState(() {
+                            altroIssues.add(text);
+                            selectedLeaves.add(fullPath);
+                            activeLeafDefect = fullPath;
+                            widget.onIssueSelected(fullPath);
+                            altroController.clear();
+                          });
+                        }
+                      }
+                    : null,
                 child: const Text("Aggiungi Difetto"),
               ),
             ],

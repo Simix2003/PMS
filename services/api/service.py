@@ -634,7 +634,7 @@ EXCEL_DEFECT_COLUMNS = {
 # --- Sheet names ---
 SHEET_NAMES = [
     "Metadata", "Risolutivo", "NG Generali", "NG Saldature", "NG Disall. Ribbon",
-    "NG Disall. Stringa", "NG Mancanza Ribbon", "I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "Graffio su Cella", "NG Altro"
+    "NG Disall. Stringa", "NG Mancanza Ribbon", "NG I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Graffio su Cella", "NG Altro"
 ]
 
 def clean_old_exports(max_age_hours: int = 2):

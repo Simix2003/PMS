@@ -1,9 +1,22 @@
+// ignore_for_file: avoid_web_libraries_in_flutter
+
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
-import '../utils/constants.dart';
+//import '../utils/constants.dart';
+import 'dart:html' as html;
 
 class WebSocketService {
-  static String baseUrl = 'ws://$ipAddress:$port';
+  static String get baseUrl {
+    final uri = html.window.location;
+    final host = uri.hostname;
+    final isSecure = uri.protocol == 'https:';
+
+    final wsProtocol = isSecure ? 'wss' : 'ws';
+    final effectivePort = (host == 'localhost') ? '8000' : uri.port;
+
+    return '$wsProtocol://$host:$effectivePort';
+  }
+
   WebSocketChannel? _channel;
   bool isConnected = false;
 

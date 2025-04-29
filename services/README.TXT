@@ -15,6 +15,7 @@ flutter build web --web-renderer html --release -t lib/main_stringatrici.dart -o
 
 flutter run -d chrome --web-renderer html -t lib/main_home.dart
 flutter run -d chrome --web-renderer html -t lib/main_data.dart
+flutter run -d chrome --web-renderer html -t lib/main_stringatrici.dart
 
 
 pyinstaller --onefile --add-binary="C:\Users\papar\Desktop\Prova_Comunicazione_PLC\Lib\site-packages\snap7\lib\snap7.dll;." service.py  
@@ -31,3 +32,14 @@ FLUSH PRIVILEGES;
 
 Per Resettare l'Auto Increment:
 ALTER TABLE your_table_name AUTO_INCREMENT = 1;
+
+Per HTTPS:
+Aprire Git Bash
+Scrivere : 
+$ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout key.pem -out cert.pem
+
+In modo da creare i due certificati necessari per HTTPS.
+
+i file saranno sotto : C:\Users\papar
+
+Bisogna spostarli sotto : C:\IX-Monitor\ssl

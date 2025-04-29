@@ -190,7 +190,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     } else if (type == "Leaf") {
       final fullPath = "$apiPath.${normalizeName(name)}";
 
-      // ⛔ Prevent changes in ReWork mode or if canAdd is false
+      // ⛔ Prevent changes if canAdd is false
       if (!widget.canAdd) {
         return;
       }
@@ -757,27 +757,54 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   Widget _buildGuidedHint() {
     String hint;
 
-    if (pathStack.isEmpty) {
-      hint = "Seleziona un gruppo di difetti per iniziare.";
-    } else if (pathStack.length == 1 && pathStack[0] == "Saldatura") {
-      hint = "Seleziona la Stringa interessata dal difetto di saldatura.";
-    } else if (pathStack.length == 2 && pathStack[0] == "Saldatura") {
-      hint = "Seleziona i Pin interessati dal difetto di saldatura.";
-    } else if (pathStack.length == 1 && pathStack[0] == "Disallineamento") {
-      hint = "Seleziona Interconnection Ribbon o Stringa disallineati";
-    } else if (pathStack.length == 1 && pathStack[0] == "Mancanza Ribbon") {
-      hint = "Seleziona Interconnection Ribbon mancante.";
-    } else if (pathStack.length == 1 && pathStack[0] == "Generali") {
-      hint = "Seleziona il tipo di difetto generale riscontrato.";
-    } else if (pathStack.length == 1 && pathStack[0] == "Macchie ECA") {
-      hint = "Seleziona le Celle macchiate.";
-    } else if (pathStack.length == 1 && pathStack[0] == "Celle Rotte") {
-      hint = "Seleziona le Celle rotte.";
-    } else if (pathStack.length == 1 &&
-        pathStack[0] == "Lunghezza String Ribbon") {
-      hint = "Seleziona la Stringa interessata dal difetto di lunghezza.";
+    if (widget.isReworkMode) {
+      if (pathStack.isEmpty) {
+        hint = "Visualizza i difetti segnalati per questo modulo.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Saldatura") {
+        hint = "Controlla la stringa segnalata per un difetto di saldatura.";
+      } else if (pathStack.length == 2 && pathStack[0] == "Saldatura") {
+        hint = "Controlla i Pin indicati nella stringa selezionata.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Disallineamento") {
+        hint =
+            "Verifica il disallineamento di Stringhe o Interconnection Ribbon.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Mancanza Ribbon") {
+        hint = "Verifica la mancanza dei Ribbon indicati.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Generali") {
+        hint = "Verifica la presenza di difetti generali sul modulo.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Macchie ECA") {
+        hint = "Controlla le celle per possibili macchie da ECA.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Celle Rotte") {
+        hint = "Ispeziona le celle segnalate come rotte.";
+      } else if (pathStack.length == 1 &&
+          pathStack[0] == "Lunghezza String Ribbon") {
+        hint = "Controlla la lunghezza delle stringhe indicate.";
+      } else {
+        hint =
+            "Controlla l'area segnalata toccando sull'immagine per i dettagli.";
+      }
     } else {
-      hint = "Seleziona l'area corretta toccando l'immagine.";
+      if (pathStack.isEmpty) {
+        hint = "Seleziona un gruppo di difetti per iniziare.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Saldatura") {
+        hint = "Seleziona la Stringa interessata dal difetto di saldatura.";
+      } else if (pathStack.length == 2 && pathStack[0] == "Saldatura") {
+        hint = "Seleziona i Pin interessati dal difetto di saldatura.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Disallineamento") {
+        hint = "Seleziona Interconnection Ribbon o Stringa disallineati.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Mancanza Ribbon") {
+        hint = "Seleziona Interconnection Ribbon mancante.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Generali") {
+        hint = "Seleziona il tipo di difetto generale riscontrato.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Macchie ECA") {
+        hint = "Seleziona le Celle macchiate.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Celle Rotte") {
+        hint = "Seleziona le Celle rotte.";
+      } else if (pathStack.length == 1 &&
+          pathStack[0] == "Lunghezza String Ribbon") {
+        hint = "Seleziona la Stringa interessata dal difetto di lunghezza.";
+      } else {
+        hint = "Seleziona l'area corretta toccando l'immagine.";
+      }
     }
 
     return Padding(

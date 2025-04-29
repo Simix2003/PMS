@@ -4,6 +4,7 @@ import datetime
 from datetime import datetime, timedelta
 import json
 import logging
+from math import e
 import os
 import time
 from fastapi import Body, FastAPI, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, Request, BackgroundTasks, File
@@ -11,6 +12,7 @@ import base64
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import false, true
 from controllers.plc import PLCConnection
 import uvicorn
 from typing import AsyncGenerator, Optional, Set
@@ -20,7 +22,7 @@ import pymysql
 import pymysql.cursors
 import re
 from fastapi.staticfiles import StaticFiles
-from typing import Optional, Union, Dict, List
+from typing import Optional, Union, Dict, List, Any
 from fastapi.responses import FileResponse
 import pandas as pd
 import os
@@ -31,112 +33,219 @@ from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 from collections import defaultdict
 
-debug = False
+debug = True
+debugModulo = "3SBHBGHC25407300"
 # ---------------- CONFIG & GLOBALS ----------------
-CHANNELS = {
-    "Linea1": {
-        "M308": {
-            "trigger": {"db": 19606, "byte": 0, "bit": 4},
-            "id_modulo": {"db": 19606, "byte": 2, "length": 20},
-            "id_utente": {"db": 19606, "byte": 24, "length": 20},
-            "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
-            "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
-            "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
-            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
-            "stringatrice": {"db": 19606, "byte": 46, "length": 5},
-            "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
-        },
-        "M309": {
-            "trigger": {"db": 19606, "byte": 48, "bit": 4},
-            "id_modulo": {"db": 19606, "byte": 50, "length": 20},
-            "id_utente": {"db": 19606, "byte": 72, "length": 20},
-            "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
-            "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
-            "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
-            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
-            "stringatrice": {"db": 19606, "byte": 94, "length": 5},
-            "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
-        },
-        "M326": {
-                "trigger": {"db": 19606, "byte": 96, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 98, "length": 20},
-                "id_utente": {"db": 19606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
-                "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
-                "stringatrice": {"db": 19606, "byte": 142, "length": 5},
+if not debug :
+    CHANNELS = {
+        "Linea1": {
+            "M308": {
+                "trigger": {"db": 19606, "byte": 0, "bit": 4},
+                "id_modulo": {"db": 19606, "byte": 2, "length": 20},
+                "id_utente": {"db": 19606, "byte": 24, "length": 20},
+                "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
+                "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
+                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
+                "stringatrice": {"db": 19606, "byte": 46, "length": 5},
+                "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
             },
-    },
-    "Linea2": {
-        "M308": {
-            "trigger": {"db": 19606, "byte": 0, "bit": 4},
-            "id_modulo": {"db": 19606, "byte": 2, "length": 20},
-            "id_utente": {"db": 19606, "byte": 24, "length": 20},
-            "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
-            "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
-            "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
-            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
-            "stringatrice": {"db": 19606, "byte": 46, "length": 5},
-            "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
-        },
-        "M309": {
-            "trigger": {"db": 19606, "byte": 48, "bit": 4},
-            "id_modulo": {"db": 19606, "byte": 50, "length": 20},
-            "id_utente": {"db": 19606, "byte": 72, "length": 20},
-            "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
-            "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
-            "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
-            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
-            "stringatrice": {"db": 19606, "byte": 94, "length": 5},
-            "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
-        },
-        "M326": {
-                "trigger": {"db": 19606, "byte": 96, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 98, "length": 20},
-                "id_utente": {"db": 19606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
-                "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
-                "stringatrice": {"db": 19606, "byte": 142, "length": 5},
+            "M309": {
+                "trigger": {"db": 19606, "byte": 48, "bit": 4},
+                "id_modulo": {"db": 19606, "byte": 50, "length": 20},
+                "id_utente": {"db": 19606, "byte": 72, "length": 20},
+                "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
+                "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
+                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
+                "stringatrice": {"db": 19606, "byte": 94, "length": 5},
+                "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
             },
-    },
-    "Linea3": {
-        "M308": {
-            "trigger": {"db": 19606, "byte": 0, "bit": 4},
-            "id_modulo": {"db": 19606, "byte": 2, "length": 20},
-            "id_utente": {"db": 19606, "byte": 24, "length": 20},
-            "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
-            "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
-            "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
-            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
-            "stringatrice": {"db": 19606, "byte": 46, "length": 5},
-            "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
+            "M326": {
+                    "trigger": {"db": 19606, "byte": 96, "bit": 4},
+                    "id_modulo": {"db": 19606, "byte": 98, "length": 20},
+                    "id_utente": {"db": 19606, "byte": 120, "length": 20},
+                    "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
+                    "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
+                    "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
+                    "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
+                    "stringatrice": {"db": 19606, "byte": 142, "length": 5},
+                },
         },
-        "M309": {
-            "trigger": {"db": 19606, "byte": 48, "bit": 4},
-            "id_modulo": {"db": 19606, "byte": 50, "length": 20},
-            "id_utente": {"db": 19606, "byte": 72, "length": 20},
-            "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
-            "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
-            "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
-            "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
-            "stringatrice": {"db": 19606, "byte": 94, "length": 5},
-            "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
-        },
-        "M326": {
-                "trigger": {"db": 19606, "byte": 96, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 98, "length": 20},
-                "id_utente": {"db": 19606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
-                "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
-                "stringatrice": {"db": 19606, "byte": 142, "length": 5},
+        "Linea2": {
+            "M308": {
+                "trigger": {"db": 19606, "byte": 0, "bit": 4},
+                "id_modulo": {"db": 19606, "byte": 2, "length": 20},
+                "id_utente": {"db": 19606, "byte": 24, "length": 20},
+                "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
+                "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
+                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
+                "stringatrice": {"db": 19606, "byte": 46, "length": 5},
+                "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
             },
-    },
-}
+            "M309": {
+                "trigger": {"db": 19606, "byte": 48, "bit": 4},
+                "id_modulo": {"db": 19606, "byte": 50, "length": 20},
+                "id_utente": {"db": 19606, "byte": 72, "length": 20},
+                "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
+                "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
+                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
+                "stringatrice": {"db": 19606, "byte": 94, "length": 5},
+                "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
+            },
+            "M326": {
+                    "trigger": {"db": 19606, "byte": 96, "bit": 4},
+                    "id_modulo": {"db": 19606, "byte": 98, "length": 20},
+                    "id_utente": {"db": 19606, "byte": 120, "length": 20},
+                    "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
+                    "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
+                    "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
+                    "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
+                    "stringatrice": {"db": 19606, "byte": 142, "length": 5},
+                },
+        },
+        "Linea3": {
+            "M308": {
+                "trigger": {"db": 19606, "byte": 0, "bit": 4},
+                "id_modulo": {"db": 19606, "byte": 2, "length": 20},
+                "id_utente": {"db": 19606, "byte": 24, "length": 20},
+                "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
+                "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
+                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
+                "stringatrice": {"db": 19606, "byte": 46, "length": 5},
+                "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
+            },
+            "M309": {
+                "trigger": {"db": 19606, "byte": 48, "bit": 4},
+                "id_modulo": {"db": 19606, "byte": 50, "length": 20},
+                "id_utente": {"db": 19606, "byte": 72, "length": 20},
+                "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
+                "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
+                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
+                "stringatrice": {"db": 19606, "byte": 94, "length": 5},
+                "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
+            },
+            "M326": {
+                    "trigger": {"db": 19606, "byte": 96, "bit": 4},
+                    "id_modulo": {"db": 19606, "byte": 98, "length": 20},
+                    "id_utente": {"db": 19606, "byte": 120, "length": 20},
+                    "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
+                    "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
+                    "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
+                    "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
+                    "stringatrice": {"db": 19606, "byte": 142, "length": 5},
+                },
+        },
+    }
+else:
+    CHANNELS = {
+        "Linea1": {
+            "M308": {
+                "trigger": {"db": 9606, "byte": 0, "bit": 4},
+                "id_modulo": {"db": 9606, "byte": 2, "length": 20},
+                "id_utente": {"db": 9606, "byte": 24, "length": 20},
+                "fine_buona": {"db": 9606, "byte": 0, "bit": 6},
+                "fine_scarto": {"db": 9606, "byte": 0, "bit": 7},
+                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 0},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 3},
+                "stringatrice": {"db": 9606, "byte": 46, "length": 5},
+                "stazione_esclusa": {"db": 9606, "byte": 1, "bit": 3},
+            },
+            "M309": {
+                "trigger": {"db": 9606, "byte": 48, "bit": 4},
+                "id_modulo": {"db": 9606, "byte": 50, "length": 20},
+                "id_utente": {"db": 9606, "byte": 72, "length": 20},
+                "fine_buona": {"db": 9606, "byte": 48, "bit": 6},
+                "fine_scarto": {"db": 9606, "byte": 48, "bit": 7},
+                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 1},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 4},
+                "stringatrice": {"db": 9606, "byte": 94, "length": 5},
+                "stazione_esclusa": {"db": 9606, "byte": 49, "bit": 3},
+            },
+            "M326": {
+                    "trigger": {"db": 9606, "byte": 96, "bit": 4},
+                    "id_modulo": {"db": 9606, "byte": 98, "length": 20},
+                    "id_utente": {"db": 9606, "byte": 120, "length": 20},
+                    "fine_buona": {"db": 9606, "byte": 96, "bit": 5},
+                    "fine_scarto": {"db": 9606, "byte": 96, "bit": 6},
+                    "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 2},
+                    "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 5},
+                    "stringatrice": {"db": 9606, "byte": 142, "length": 5},
+                },
+        },
+        "Linea2": {
+            "M308": {
+                "trigger": {"db": 9606, "byte": 0, "bit": 4},
+                "id_modulo": {"db": 9606, "byte": 2, "length": 20},
+                "id_utente": {"db": 9606, "byte": 24, "length": 20},
+                "fine_buona": {"db": 9606, "byte": 0, "bit": 6},
+                "fine_scarto": {"db": 9606, "byte": 0, "bit": 7},
+                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 0},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 3},
+                "stringatrice": {"db": 9606, "byte": 46, "length": 5},
+                "stazione_esclusa": {"db": 9606, "byte": 1, "bit": 3},
+            },
+            "M309": {
+                "trigger": {"db": 9606, "byte": 48, "bit": 4},
+                "id_modulo": {"db": 9606, "byte": 50, "length": 20},
+                "id_utente": {"db": 9606, "byte": 72, "length": 20},
+                "fine_buona": {"db": 9606, "byte": 48, "bit": 6},
+                "fine_scarto": {"db": 9606, "byte": 48, "bit": 7},
+                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 1},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 4},
+                "stringatrice": {"db": 9606, "byte": 94, "length": 5},
+                "stazione_esclusa": {"db": 9606, "byte": 49, "bit": 3},
+            },
+            "M326": {
+                    "trigger": {"db": 9606, "byte": 96, "bit": 4},
+                    "id_modulo": {"db": 9606, "byte": 98, "length": 20},
+                    "id_utente": {"db": 9606, "byte": 120, "length": 20},
+                    "fine_buona": {"db": 9606, "byte": 96, "bit": 5},
+                    "fine_scarto": {"db": 9606, "byte": 96, "bit": 6},
+                    "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 2},
+                    "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 5},
+                    "stringatrice": {"db": 9606, "byte": 142, "length": 5},
+                },
+        },
+        "Linea3": {
+            "M308": {
+                "trigger": {"db": 9606, "byte": 0, "bit": 4},
+                "id_modulo": {"db": 9606, "byte": 2, "length": 20},
+                "id_utente": {"db": 9606, "byte": 24, "length": 20},
+                "fine_buona": {"db": 9606, "byte": 0, "bit": 6},
+                "fine_scarto": {"db": 9606, "byte": 0, "bit": 7},
+                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 0},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 3},
+                "stringatrice": {"db": 9606, "byte": 46, "length": 5},
+                "stazione_esclusa": {"db": 9606, "byte": 1, "bit": 3},
+            },
+            "M309": {
+                "trigger": {"db": 9606, "byte": 48, "bit": 4},
+                "id_modulo": {"db": 9606, "byte": 50, "length": 20},
+                "id_utente": {"db": 9606, "byte": 72, "length": 20},
+                "fine_buona": {"db": 9606, "byte": 48, "bit": 6},
+                "fine_scarto": {"db": 9606, "byte": 48, "bit": 7},
+                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 1},
+                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 4},
+                "stringatrice": {"db": 9606, "byte": 94, "length": 5},
+                "stazione_esclusa": {"db": 9606, "byte": 49, "bit": 3},
+            },
+            "M326": {
+                    "trigger": {"db": 9606, "byte": 96, "bit": 4},
+                    "id_modulo": {"db": 9606, "byte": 98, "length": 20},
+                    "id_utente": {"db": 9606, "byte": 120, "length": 20},
+                    "fine_buona": {"db": 9606, "byte": 96, "bit": 5},
+                    "fine_scarto": {"db": 9606, "byte": 96, "bit": 6},
+                    "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 2},
+                    "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 5},
+                    "stringatrice": {"db": 9606, "byte": 142, "length": 5},
+                },
+        },
+    }
 
 ISSUE_TREE = {
     "Dati": {
@@ -250,15 +359,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     get_current_settings()
 
-    for line, config in line_configs.items():
-        plc_ip = config["PLC"]["IP"]
-        plc_slot = config["PLC"]["SLOT"]
+    #for line, config in line_configs.items():
+    #    plc_ip = config["PLC"]["IP"]
+    #    plc_slot = config["PLC"]["SLOT"]
 
-        for station in config["stations"]:
-            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
-            plc_connections[f"{line}.{station}"] = plc_conn
-            asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
-            print(f"🚀 Background task created for {line}.{station}")
+    #    for station in config["stations"]:
+    #        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+    #        plc_connections[f"{line}.{station}"] = plc_conn
+    #        asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
+    #        print(f"🚀 Background task created for {line}.{station}")
 
     yield
 
@@ -300,7 +409,7 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
 
         ###############################################################################################################################
         if debug:
-            object_id = "3SBHBGHC25407300"
+            object_id = debugModulo
         else:
             object_id = await asyncio.to_thread(
                 plc_connection.read_string,
@@ -488,7 +597,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
 
         ###############################################################################################################################
         if debug:
-            object_id = '3SBHBGHC25407300'
+            object_id = debugModulo
         else:
             object_id = await asyncio.to_thread(plc_connection.read_string, id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"])    
         ###############################################################################################################################
@@ -571,7 +680,7 @@ async def read_data(
 
         ###############################################################################################################################
         if debug:
-            data["Id_Modulo"] = '3SBHBGHC25407300'
+            data["Id_Modulo"] = debugModulo
         else:
             data["Id_Modulo"] = await asyncio.to_thread(
                 plc_connection.read_string,
@@ -3160,12 +3269,12 @@ async def get_overlay_config(
         print(f"➡️ Checking config: image = '{image_name}', path = '{config_path}'")
 
         if config_path.lower() == path.lower():
-            image_url = f"http://192.168.0.10:8000/images/{line_name}/{station}/{image_name}"
+            image_url = f"http://192.168.1.114:8000/images/{line_name}/{station}/{image_name}"
             if station == "M326":
                 if object_id:
-                    image_url = f"http://192.168.0.10:8000/images/{line_name}/M308/{image_name}"
+                    image_url = f"http://192.168.1.114:8000/images/{line_name}/M308/{image_name}"
                     if comes_from == 'M309':
-                        image_url = f"http://192.168.0.10:8000/images/{line_name}/M309/{image_name}"
+                        image_url = f"http://192.168.1.114:8000/images/{line_name}/M309/{image_name}"
 
             return {
                 "image_url": image_url,
@@ -3821,6 +3930,217 @@ async def search_results(request: Request):
     except Exception as e:
         logging.error(f"Search API Error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/api/graph_data")
+async def get_graph_data(request: Request):
+    payload = await request.json()
+    line = payload["line"]
+    station = payload["station"]
+    start = datetime.fromisoformat(payload["start"])
+    end = datetime.fromisoformat(payload["end"])
+    metrics = payload.get("metrics", [])
+    group_by = payload.get("groupBy", "hourly")
+    extra_filter = payload.get("extra_filter")
+
+    # Print incoming payload
+    print("\n--- API /graph_data called ---")
+    print(f"Line: {line}, Station: {station}")
+    print(f"Start: {start}, End: {end}")
+    print(f"Metrics requested: {metrics}")
+    print(f"Group by: {group_by}")
+    print(f"Extra filter: {extra_filter}")
+
+    date_format = {
+        "daily": "%Y-%m-%d",
+        "weekly": "%Y-%m-%d",
+    }.get(group_by, "%Y-%m-%d %H:00:00")
+
+    assert mysql_connection is not None
+    result: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+
+    # ───────── ESITO / YIELD / TEMPO CICLO ─────────────────
+    if "Esito" in metrics or "Yield" in metrics or "CycleTime" in metrics:
+        with mysql_connection.cursor() as cur:
+            print("\nRunning ESITO / CYCLE query...")
+            cur.execute("""
+                SELECT
+                DATE_FORMAT(p.end_time, %s) AS bucket,
+                p.esito,
+                COUNT(*) AS count,
+                AVG(TIMESTAMPDIFF(SECOND, p.start_time, p.end_time)) AS avg_cycle_time
+                FROM productions p
+                JOIN stations s ON p.station_id = s.id
+                JOIN production_lines pl ON s.line_id = pl.id
+                WHERE pl.display_name = %s
+                AND s.name = %s
+                AND p.end_time BETWEEN %s AND %s
+                GROUP BY bucket, p.esito
+                ORDER BY bucket
+            """, (date_format, line, station, start, end))
+
+            rows = cur.fetchall()
+            print(f"Rows fetched for ESITO / CYCLE: {len(rows)}")
+            for r in rows:
+                print(r)
+
+        agg = defaultdict(lambda: {"G": 0, "NG": 0, "Escluso": 0, "In Produzione": 0, "G Operatore": 0, "total": 0, "avg_cycle_time": 0})
+        for r in rows:
+            b = r["bucket"]
+            e = r["esito"]
+            c = r["count"]
+            avg_ct = r["avg_cycle_time"] or 0
+
+            if e == 1:
+                agg[b]["G"] += c
+            elif e == 6:
+                agg[b]["NG"] += c
+            elif e == 0:
+                agg[b]["Escluso"] += c
+            elif e == 2:
+                agg[b]["In Produzione"] += c
+            elif e == 8:
+                agg[b]["G Operatore"] += c
+            agg[b]["total"] += c
+            agg[b]["avg_cycle_time"] = avg_ct
+
+        for b, v in agg.items():
+            dt = datetime.strptime(b, date_format)
+            ts = dt.isoformat()
+
+            # Handle Esito
+            if "Esito" in metrics and extra_filter:
+                value = v.get(extra_filter, 0)
+                result[extra_filter].append({"timestamp": ts, "value": value})
+
+            # Handle Yield
+            if "Yield" in metrics:
+                tot = v["G"] + v["NG"]
+                pct = (v["G"] / tot) * 100 if tot > 0 else 0
+                result["Yield"].append({"timestamp": ts, "value": pct})
+
+            # Handle Cycle Time
+            if "CycleTime" in metrics:
+                result["CycleTime"].append({"timestamp": ts, "value": v["avg_cycle_time"]})
+
+        print("\nAggregated ESITO / CYCLE Results:")
+        for k, v in result.items():
+            print(f"{k}: {v}")
+
+    # ─────────────── DIFETTO ───────────────────────
+    if "Difetto" in metrics and extra_filter:
+        parts = extra_filter.split(" > ")
+        category = parts[1] if len(parts) > 1 else None
+
+        where_clauses = [
+            "pl.display_name = %s",
+            "s.name = %s",
+            "p.end_time BETWEEN %s AND %s",
+            "d.category = %s"
+        ]
+        params: List[Any] = [date_format, line, station, start, end, category]
+
+        if category == "Generali" and len(parts) > 2:
+            where_clauses.append("od.defect_type = %s")
+            params.append(parts[2])
+        elif category == "Saldatura":
+            if len(parts) > 2:
+                m = re.search(r"\[(\d+)\]", parts[2])
+                if m:
+                    where_clauses.append("od.stringa = %s")
+                    params.append(int(m.group(1)))
+            if len(parts) > 3:
+                lato = parts[3].replace("Lato ", "").strip()
+                where_clauses.append("od.ribbon_lato = %s")
+                params.append(lato)
+            if len(parts) > 4:
+                m = re.search(r"\[(\d+)\]", parts[4])
+                if m:
+                    where_clauses.append("od.s_ribbon = %s")
+                    params.append(int(m.group(1)))
+        elif category == "Disallineamento":
+            if len(parts) > 2 and parts[2] == "Stringa" and len(parts) > 3:
+                m = re.search(r"\[(\d+)\]", parts[3])
+                if m:
+                    where_clauses.append("od.stringa = %s")
+                    params.append(int(m.group(1)))
+            elif len(parts) > 2 and parts[2] == "Ribbon":
+                if len(parts) > 3:
+                    lato = parts[3].replace("Lato ", "").strip()
+                    where_clauses.append("od.ribbon_lato = %s")
+                    params.append(lato)
+                if len(parts) > 4:
+                    m = re.search(r"\[(\d+)\]", parts[4])
+                    if m:
+                        where_clauses.append("od.i_ribbon = %s")
+                        params.append(int(m.group(1)))
+        elif category == "Mancanza Ribbon":
+            if len(parts) > 2:
+                lato = parts[2].replace("Lato ", "").strip()
+                where_clauses.append("od.ribbon_lato = %s")
+                params.append(lato)
+            if len(parts) > 3:
+                m = re.search(r"\[(\d+)\]", parts[3])
+                if m:
+                    where_clauses.append("od.i_ribbon = %s")
+                    params.append(int(m.group(1)))
+        elif category == "I Ribbon Leadwire":
+            if len(parts) > 2:
+                lato = parts[2].replace("Lato ", "").strip()
+                where_clauses.append("od.ribbon_lato = %s")
+                params.append(lato)
+            if len(parts) > 3:
+                m = re.search(r"\[(\d+)\]", parts[3])
+                if m:
+                    where_clauses.append("od.i_ribbon = %s")
+                    params.append(int(m.group(1)))
+        elif category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella") and len(parts) > 2:
+            m = re.search(r"\[(\d+)\]", parts[2])
+            if m:
+                where_clauses.append("od.stringa = %s")
+                params.append(int(m.group(1)))
+        elif category == "Altro" and len(parts) > 2:
+            where_clauses.append("od.extra_data LIKE %s")
+            params.append(f"%{parts[2]}%")
+
+        where_sql = " AND ".join(where_clauses)
+        query = f"""
+          SELECT
+            DATE_FORMAT(p.end_time, %s) AS bucket,
+            COUNT(*) AS count
+          FROM productions p
+          JOIN stations s ON p.station_id = s.id
+          JOIN production_lines pl ON s.line_id = pl.id
+          JOIN object_defects od ON p.id = od.production_id
+          JOIN defects d ON od.defect_id = d.id
+          WHERE {where_sql}
+          GROUP BY bucket
+          ORDER BY bucket
+        """
+
+        print("\nRunning DIFETTO query...")
+        print(f"QUERY: {query}")
+        print(f"PARAMS: {params}")
+
+        with mysql_connection.cursor() as cur:
+            cur.execute(query, tuple(params))
+            print("\nRunning query...")
+            print(f"QUERY: {query}")
+            print(f"PARAMS: {params}")
+            defect_rows = cur.fetchall()
+            print(f"Rows fetched for DIFETTO: {len(defect_rows)}")
+            for r in defect_rows:
+                print(r)
+
+            for row in defect_rows:
+                dt = datetime.strptime(row["bucket"], date_format)
+                result[extra_filter].append({
+                    "timestamp": dt.isoformat(),
+                    "value": row["count"]
+                })
+
+    print("\n--- Final Result returned to client ---")
+    print(result)
+    return result
 
 @app.post("/api/export_objects")
 def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):

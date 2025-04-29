@@ -1,14 +1,25 @@
 // lib/shared/services/api_service.dart
 // ignore_for_file: non_constant_identifier_names
+// ignore_for_file: avoid_web_libraries_in_flutter
 
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '../utils/constants.dart';
+import 'dart:html' as html;
 
 class ApiService {
-  static var baseUrl = "http://$ipAddress:$port";
+  static String get baseUrl {
+    final uri = html.window.location;
+    final host = uri.hostname;
+    final isSecure = uri.protocol == 'https:';
+
+    final httpProtocol = isSecure ? 'https' : 'http';
+
+    final effectivePort = (host == 'localhost') ? '8000' : uri.port;
+
+    return '$httpProtocol://$host:$effectivePort';
+  }
 
   static Future<String> fetchPLCStatus(
       String selectedLine, String selectedChannel) async {
@@ -376,6 +387,42 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, List<dynamic>>> fetchGraphData({
+    required String line,
+    required String station,
+    required String start,
+    required String end,
+    required List<String> metrics,
+    required String groupBy,
+    String? extraFilter,
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/graph_data');
+
+    final response = await http.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        "line": line,
+        "station": station,
+        "start": start,
+        "end": end,
+        "metrics": metrics,
+        "groupBy": groupBy,
+        if (extraFilter != null) 'extra_filter': extraFilter,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data.map((key, value) => MapEntry(
+            key,
+            List<dynamic>.from(value),
+          ));
+    } else {
+      throw Exception("Errore nel caricamento del grafico");
+    }
+  }
+
   static Future<List<String>> fetchInitialIssuesForObject(
       String idModulo) async {
     try {
@@ -429,7 +476,7 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getUnacknowledgedWarnings(
       String line) async {
-    final url = Uri.http('$ipAddress:$port', '/api/warnings/$line');
+    final url = Uri.parse('$baseUrl/api/warnings/$line');
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
@@ -441,8 +488,7 @@ class ApiService {
   }
 
   static Future<void> acknowledgeWarning(int warningId) async {
-    final url =
-        Uri.http('$ipAddress:$port', '/api/warnings/acknowledge/$warningId');
+    final url = Uri.parse('$baseUrl/api/warnings/acknowledge/$warningId');
     final response = await http.post(url);
 
     if (response.statusCode != 200) {

@@ -61,7 +61,7 @@ class _DashboardDataState extends State<DashboardData> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.query_stats),
-            label: 'Analisi Dati',
+            label: 'Ricerca Dati',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.auto_graph_rounded),

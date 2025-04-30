@@ -401,7 +401,7 @@ class _DataViewPageState extends State<DataViewPage> {
           },
         ),
         title: const Text(
-          'Analisi Dati',
+          'Dati',
           style: TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 20,

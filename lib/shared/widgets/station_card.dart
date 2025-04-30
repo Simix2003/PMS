@@ -69,6 +69,12 @@ class StationCard extends StatelessWidget {
     }
   }
 
+  int _safeInt(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
   String _formatTime(String dateTime) {
     try {
       final time = DateTime.parse(dateTime);
@@ -225,7 +231,7 @@ class StationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lastEsito = stationData['last_esito'];
+    final lastEsito = _safeInt(stationData['last_esito']);
     final statusColor = _getStatusColor(lastEsito);
     final statusLabel = _getStatusLabel(lastEsito);
 
@@ -235,11 +241,11 @@ class StationCard extends StatelessWidget {
 
     final rawCycleTime = stationData["avg_cycle_time"] ?? "00:00:00";
     final avgCycleTime = formatCycleTimeToMinutes(rawCycleTime);
-    final koCount = (stationData['bad_count'] ?? 0);
+    final koCount = _safeInt(stationData['bad_count']);
 
 // ✅ Get cycle times and escluso count
     final allCycles = (stationData['cycle_times'] as List?)?.cast<num>() ?? [];
-    final int esclusoCount = stationData['escluso_count'] ?? 0;
+    final int esclusoCount = _safeInt(stationData['escluso_count']);
 
     int gCount = 0;
     int ncCount = 0;
@@ -262,8 +268,14 @@ class StationCard extends StatelessWidget {
         : "0.0";
 
     // Fill missing categories with 0
+    num _safeNum(dynamic value) {
+      if (value is num) return value;
+      if (value is String) return num.tryParse(value) ?? 0;
+      return 0;
+    }
+
     final filledDefects = {
-      for (var key in allDefectCategories) key: (defects[key] ?? 0) as num
+      for (var key in allDefectCategories) key: _safeNum(defects[key])
     };
 
     final chartMaxY =
@@ -369,7 +381,7 @@ class StationCard extends StatelessWidget {
                       Expanded(
                         child: _buildStatBox(
                           'Totale Prodotti',
-                          total as int,
+                          total,
                           const Color(0xFF007AFF),
                           Icons.precision_manufacturing_rounded,
                         ),

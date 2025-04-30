@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, must_be_immutable
 
 import 'dart:ui';
 
@@ -68,22 +68,27 @@ class _GraphPageState extends State<GraphPage> {
   bool _loading = false;
   final List<SeriesData> _seriesList = [];
   late final TransformationController _tController;
-  String _granularity = 'Hourly';
+  String _granularity = 'Daily';
 
   // ─── static options ───
   final List<String> _granularityOptions = const ['Hourly', 'Daily', 'Weekly'];
+  final Map<String, String> _granularityLabels = {
+    'Hourly': 'Oraria',
+    'Daily': 'Giornaliera',
+    'Weekly': 'Settimanale',
+  };
+
+  bool _showShiftLines = true;
+  bool _showDayLines = true;
+  bool _showDayBackground = true;
+
   final List<String> _lineOptions = const ['Linea A', 'Linea B', 'Linea C'];
   final Map<String, List<String>> _stationOptions = const {
     'Linea A': ['M308', 'M309', 'M326'],
     'Linea B': ['M308', 'M309', 'M326'],
     'Linea C': ['M308', 'M309', 'M326'],
   };
-  final List<String> _metricOptions = const [
-    'Esito',
-    'Tempo Ciclo',
-    'Yield',
-    'Difetto'
-  ];
+  final List<String> _metricOptions = const ['Esito', 'Yield', 'Difetto'];
   final List<String> esitoOptions = [
     'G',
     'NG',
@@ -116,8 +121,15 @@ class _GraphPageState extends State<GraphPage> {
     super.dispose();
   }
 
-  // ───────────────────────────────────────── series helpers ────────────────
   Future<void> _addSeries() async {
+    // Do not proceed if essential fields are empty
+    if (_selectedLine.isEmpty ||
+        _selectedStation.isEmpty ||
+        _selectedMetric.isEmpty) {
+      _snack('Compila almeno linea, stazione e metrica');
+      return;
+    }
+
     setState(() => _loading = true);
 
     try {
@@ -173,8 +185,6 @@ class _GraphPageState extends State<GraphPage> {
       groupBy: _granularity.toLowerCase(),
       extraFilter: extraFilter,
     );
-
-    print('Fetched raw data for $metric with filter $extraFilter: $raw');
 
     final key =
         (extraFilter != null && extraFilter.isNotEmpty) ? extraFilter : metric;
@@ -318,7 +328,7 @@ class _GraphPageState extends State<GraphPage> {
           children: [
             _buildStyledDropdown(
               hint: 'Gruppo Difetto',
-              value: selectedDifettoGroup,
+              value: _selectedValue.isNotEmpty ? _selectedValue : null,
               items: [
                 'Generali',
                 'Saldatura',
@@ -332,9 +342,7 @@ class _GraphPageState extends State<GraphPage> {
                 'Altro',
               ],
               onChanged: (val) {
-                setState(() {
-                  selectedDifettoGroup = val;
-                });
+                setState(() => _selectedValue = val ?? '');
               },
             ),
           ],
@@ -517,24 +525,115 @@ class _GraphPageState extends State<GraphPage> {
         ]),
       );
 
-  // ─────────────────────────────────────────────── build ────────────────
+  void _showChartOptionsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Impostazioni Grafico',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Divider(color: Colors.grey.shade300),
+                    const Text(
+                      'Visualizzazione Oraria',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile.adaptive(
+                      title: const Text('Linee Turni (6:00 / 14:00 / 22:00)'),
+                      value: _showShiftLines,
+                      onChanged: (val) {
+                        setState(() => _showShiftLines = val); // parent
+                        setStateDialog(() {}); // local dialog
+                      },
+                      activeColor: const Color(0xFF007AFF),
+                    ),
+                    SwitchListTile.adaptive(
+                      title: const Text('Sfondo Giorni Alterni'),
+                      value: _showDayBackground,
+                      onChanged: (val) {
+                        setState(() => _showDayBackground = val);
+                        setStateDialog(() {});
+                      },
+                      activeColor: const Color(0xFF007AFF),
+                    ),
+                    const SizedBox(height: 8),
+                    Divider(color: Colors.grey.shade300),
+                    const Text(
+                      'Visualizzazione Giornaliera',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile.adaptive(
+                      title: const Text('Linee Cambio Giorno'),
+                      value: _showDayLines,
+                      onChanged: (val) {
+                        setState(() => _showDayLines = val);
+                        setStateDialog(() {});
+                      },
+                      activeColor: const Color(0xFF007AFF),
+                    ),
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF007AFF),
+                          textStyle:
+                              const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        child: const Text('Chiudi'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Graph Page'), centerTitle: true),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // ── date / granularity card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: _cardDecoration(),
-            child: _FiltersBar(
+      appBar: AppBar(
+        title: const Text('Grafici'),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.remove_red_eye),
+          tooltip: 'Opzioni Grafico',
+          onPressed: _showChartOptionsDialog,
+        ),
+        flexibleSpace: Padding(
+          padding: const EdgeInsets.only(top: 8, left: 8, right: 8),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: _CompactFiltersBar(
               range: _selectedRange,
               startTime: _startTime,
               endTime: _endTime,
               granularity: _granularity,
               granOptions: _granularityOptions,
+              granularityLabels: _granularityLabels,
               onPickRange: _pickRange,
               onPickStart: () async {
                 final t = await showTimePicker(
@@ -547,150 +646,390 @@ class _GraphPageState extends State<GraphPage> {
                 if (t != null) setState(() => _endTime = t);
               },
               onGranChanged: (g) => setState(() => _granularity = g),
+              onRefreshRequested: _refreshAllSeries,
             ),
           ),
-
-          const SizedBox(height: 16),
-          _seriesRowCard(),
-
-          if (_seriesList.isNotEmpty) ...[
-            _sectionTitle('Dati Attivi'),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: _seriesList
-                  .map((s) => InputChip(
-                        avatar:
-                            CircleAvatar(radius: 10, backgroundColor: s.color),
-                        label: Text(s.name, overflow: TextOverflow.ellipsis),
-                        onPressed: () async {
-                          final c = await _pickColor(s.color);
-                          if (c != null) setState(() => s.color = c);
-                        },
-                        onDeleted: () => setState(() => _seriesList.remove(s)),
-                        deleteIcon: const Icon(Icons.close),
-                        deleteIconColor: Colors.red,
-                        backgroundColor: Colors.blue.withOpacity(.1),
-                      ))
-                  .toList(),
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            _seriesRowCard(),
+            if (_seriesList.isNotEmpty) ...[
+              _sectionTitle('Linee Attive'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: _seriesList
+                    .map((s) => InputChip(
+                          avatar: CircleAvatar(
+                              radius: 10, backgroundColor: s.color),
+                          label: Text(s.name, overflow: TextOverflow.ellipsis),
+                          onPressed: () async {
+                            final c = await _pickColor(s.color);
+                            if (c != null) setState(() => s.color = c);
+                          },
+                          onDeleted: () =>
+                              setState(() => _seriesList.remove(s)),
+                          deleteIcon: const Icon(Icons.close),
+                          deleteIconColor: Colors.red,
+                          backgroundColor: Colors.blue.withOpacity(.1),
+                        ))
+                    .toList(),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : GraphChartWidget(
+                      seriesList: _seriesList,
+                      granularity: _granularity,
+                      panEnabled: true,
+                      scaleEnabled: true,
+                      controller: _tController,
+                      showShiftLines: _showShiftLines,
+                      showDayLines: _showDayLines,
+                      showDayBackground: _showDayBackground,
+                    ),
             ),
           ],
-
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: _loading ? null : _refreshAllSeries,
-            child: Text(_loading ? 'Loading…' : 'Visualizza'),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : GraphChartWidget(
-                    seriesList: _seriesList,
-                    granularity: _granularity,
-                    panEnabled: true,
-                    scaleEnabled: true,
-                    controller: _tController,
-                  ),
-          ),
-        ]),
+        ),
       ),
     );
   }
 
   // ─────────────────────────────────────── date picker helpers ───────────
   Future<void> _pickRange() async {
-    List<DateTime?> tmp = [_selectedRange.start, _selectedRange.end];
-    final picked = await showDialog<DateTimeRange>(
-      context: context,
-      builder: (_) => Dialog(
-        child: CalendarDatePicker2WithActionButtons(
-          value: tmp,
-          config: CalendarDatePicker2WithActionButtonsConfig(
-            calendarType: CalendarDatePicker2Type.range,
-            firstDayOfWeek: 1,
+    final result = await _showCustomCalendarPicker(
+      context,
+      DateTime(2022), // first available date
+      DateTime.now().add(const Duration(days: 365)), // last available date
+    );
+
+    final DateTimeRange? pickedRange = result?.$2;
+
+    if (pickedRange != null) {
+      setState(() => _selectedRange = pickedRange);
+    }
+  }
+
+  Future<(DateTime?, DateTimeRange?)?> _showCustomCalendarPicker(
+      BuildContext context, DateTime firstDate, DateTime lastDate) async {
+    final Color backgroundColor = Colors.white.withOpacity(0.9);
+    final Color primaryColor = const Color(0xFF007AFF);
+    final Color textColor = Colors.black87;
+
+    List<DateTime?> selectedDates = [];
+
+    final config = CalendarDatePicker2WithActionButtonsConfig(
+      weekdayLabels: const [
+        'Dom',
+        'Lun',
+        'Mar',
+        'Mer',
+        'Gio',
+        'Ven',
+        'Sab',
+      ],
+      firstDayOfWeek: 1, // 1 = Monday
+      calendarType: CalendarDatePicker2Type.range,
+      selectedDayHighlightColor: primaryColor,
+      selectedRangeHighlightColor: primaryColor.withOpacity(0.15),
+      dayTextStyle: TextStyle(
+        color: textColor,
+        fontSize: 16,
+        fontWeight: FontWeight.normal,
+      ),
+      disabledDayTextStyle: TextStyle(
+        color: textColor.withOpacity(0.4),
+        fontSize: 16,
+        fontWeight: FontWeight.normal,
+      ),
+      weekdayLabelTextStyle: TextStyle(
+        color: textColor.withOpacity(0.7),
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+      controlsTextStyle: TextStyle(
+        color: textColor,
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+      ),
+      yearTextStyle: TextStyle(
+        color: textColor,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+      ),
+      todayTextStyle: TextStyle(
+        color: primaryColor,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+      ),
+      dayBorderRadius: BorderRadius.circular(10),
+      selectableDayPredicate: (day) => true,
+      controlsHeight: 60,
+      centerAlignModePicker: true,
+      customModePickerIcon: const SizedBox(),
+      cancelButtonTextStyle: const TextStyle(
+        color: Colors.red,
+        fontWeight: FontWeight.w600,
+        fontSize: 16,
+      ),
+      okButtonTextStyle: const TextStyle(
+        color: Color(0xFF007AFF),
+        fontWeight: FontWeight.w600,
+        fontSize: 16,
+      ),
+      cancelButton: Text(
+        'Annulla',
+        style: TextStyle(
+          color: const Color(0xFFFF3B30),
+          fontWeight: FontWeight.w600,
+          fontSize: 16,
+        ),
+      ),
+      okButton: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        decoration: BoxDecoration(
+          color: primaryColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Text(
+          'Conferma',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
           ),
-          onValueChanged: (v) => tmp = v,
-          onOkTapped: () {
-            if (tmp.length == 2 && tmp[0] != null && tmp[1] != null) {
-              Navigator.pop(
-                  context, DateTimeRange(start: tmp[0]!, end: tmp[1]!));
-            } else {
-              Navigator.pop(context);
-            }
-          },
-          onCancelTapped: () => Navigator.pop(context),
         ),
       ),
     );
-    if (picked != null) setState(() => _selectedRange = picked);
+
+    return showDialog<(DateTime?, DateTimeRange?)>(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          backgroundColor: Colors.transparent,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: backgroundColor,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.2),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 15,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                width: MediaQuery.of(context).size.width * 0.85,
+                height: MediaQuery.of(context).size.height * 0.7,
+                child: CalendarDatePicker2WithActionButtons(
+                  config: config,
+                  value: selectedDates,
+                  onValueChanged: (dates) {
+                    selectedDates = dates;
+                  },
+                  onCancelTapped: () {
+                    Navigator.pop(context, (null, null));
+                  },
+                  onOkTapped: () {
+                    if (selectedDates.length == 1 && selectedDates[0] != null) {
+                      Navigator.pop(context, (selectedDates[0], null));
+                    } else if (selectedDates.length == 2 &&
+                        selectedDates[0] != null &&
+                        selectedDates[1] != null) {
+                      final range = DateTimeRange(
+                        start: selectedDates[0]!,
+                        end: selectedDates[1]!,
+                      );
+                      Navigator.pop(context, (null, range));
+                    } else {
+                      Navigator.pop(context, (null, null));
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
-// ────────────────────────────────────────────── FiltersBar ────────────────
-class _FiltersBar extends StatelessWidget {
-  const _FiltersBar({
-    required this.range,
-    required this.startTime,
-    required this.endTime,
-    required this.granularity,
-    required this.granOptions,
-    required this.onPickRange,
-    required this.onPickStart,
-    required this.onPickEnd,
-    required this.onGranChanged,
-  });
+class _CompactFiltersBar extends StatelessWidget {
   final DateTimeRange range;
   final TimeOfDay startTime;
   final TimeOfDay endTime;
   final String granularity;
   final List<String> granOptions;
-  final VoidCallback onPickRange;
-  final VoidCallback onPickStart;
-  final VoidCallback onPickEnd;
-  final ValueChanged<String> onGranChanged;
+  final Map<String, String> granularityLabels;
+  final Future<void> Function() onPickRange;
+  final Future<void> Function() onPickStart;
+  final Future<void> Function() onPickEnd;
+  final Function(String) onGranChanged;
+  final VoidCallback onRefreshRequested;
+
+  const _CompactFiltersBar({
+    required this.range,
+    required this.startTime,
+    required this.endTime,
+    required this.granularity,
+    required this.granOptions,
+    required this.granularityLabels,
+    required this.onPickRange,
+    required this.onPickStart,
+    required this.onPickEnd,
+    required this.onGranChanged,
+    required this.onRefreshRequested,
+  });
+
+  String _formatDate(DateTime d) {
+    final months = [
+      'Gen',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mag',
+      'Giu',
+      'Lug',
+      'Ago',
+      'Set',
+      'Ott',
+      'Nov',
+      'Dic'
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  Widget _buildStyledButton({
+    required VoidCallback onTap,
+    required IconData icon,
+    required String text,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF007AFF).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF007AFF).withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: const Color(0xFF007AFF), size: 20),
+            const SizedBox(width: 8),
+            Text(
+              text,
+              style: const TextStyle(
+                color: Color(0xFF007AFF),
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    Widget chip(Widget child) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF007AFF).withOpacity(.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: child,
-        );
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: [
-        chip(TextButton(
-            onPressed: onPickRange,
-            child: Text(
-                '${DateFormat('dd MMM yyyy').format(range.start)} ${startTime.format(context)} → ${DateFormat('dd MMM yyyy').format(range.end)} ${endTime.format(context)}'))),
-        const SizedBox(width: 8),
-        chip(TextButton(
-            onPressed: onPickStart,
-            child: Text('Start: ${startTime.format(context)}'))),
-        const SizedBox(width: 8),
-        chip(TextButton(
-            onPressed: onPickEnd,
-            child: Text('End: ${endTime.format(context)}'))),
-        const SizedBox(width: 8),
-        chip(DropdownButton<String>(
-          value: granularity,
-          underline: const SizedBox(),
-          items: granOptions
-              .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-              .toList(),
-          onChanged: (v) => onGranChanged(v!),
-        )),
-      ]),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _buildStyledButton(
+          onTap: () async {
+            await onPickRange();
+            onRefreshRequested();
+          },
+          icon: Icons.date_range_rounded,
+          text: '${_formatDate(range.start)} → ${_formatDate(range.end)}',
+        ),
+        _buildStyledButton(
+          onTap: () async {
+            await onPickStart();
+            onRefreshRequested();
+          },
+          icon: Icons.access_time_rounded,
+          text: 'Inizio: ${startTime.format(context)}',
+        ),
+        _buildStyledButton(
+          onTap: () async {
+            await onPickEnd();
+            onRefreshRequested();
+          },
+          icon: Icons.access_time_rounded,
+          text: 'Fine: ${endTime.format(context)}',
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF007AFF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: DropdownButton<String>(
+                value: granularity,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF007AFF),
+                ),
+                underline: const SizedBox(),
+                borderRadius: BorderRadius.circular(16),
+                items: granOptions.map((g) {
+                  return DropdownMenuItem(
+                    value: g,
+                    child: Text(
+                      granularityLabels[g] ?? g,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF007AFF),
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (g) {
+                  if (g != null) {
+                    onGranChanged(g);
+                    onRefreshRequested();
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
 
-// ───────────────────────────────────────────── Chart widget ────────────────
-class GraphChartWidget extends StatelessWidget {
+class GraphChartWidget extends StatefulWidget {
   const GraphChartWidget({
     super.key,
     required this.seriesList,
@@ -698,83 +1037,198 @@ class GraphChartWidget extends StatelessWidget {
     required this.panEnabled,
     required this.scaleEnabled,
     required this.controller,
+    this.showShiftLines = true,
+    this.showDayLines = true,
+    this.showDayBackground = true,
   });
+
   final List<SeriesData> seriesList;
   final String granularity;
   final bool panEnabled;
   final bool scaleEnabled;
   final TransformationController controller;
 
-  List<VerticalLine> _buildShiftLines(List<DateTime> allTimes) {
-    List<VerticalLine> lines = [];
+  final bool showShiftLines; // <── NEW
+  final bool showDayLines; // <── NEW
+  final bool showDayBackground; // <── NEW
 
-    for (int i = 0; i < allTimes.length; i++) {
-      final time = allTimes[i];
+  @override
+  State<GraphChartWidget> createState() => _GraphChartWidgetState();
+}
 
-      // Only apply if granularity is Hourly or Daily
-      if (granularity == 'Hourly' || granularity == 'Daily') {
-        final hour = time.hour;
+class _GraphChartWidgetState extends State<GraphChartWidget> {
+  double _labelInterval = 6;
+  late VoidCallback _zoomListener;
 
-        if (hour == 6 || hour == 14 || hour == 22) {
-          lines.add(
-            VerticalLine(
-              x: i.toDouble(),
-              color: Colors.blue.withOpacity(0.6),
-              strokeWidth: 2,
-              dashArray: [4, 4],
-            ),
-          );
-        }
+  @override
+  void initState() {
+    super.initState();
+    _zoomListener = () {
+      final scale = widget.controller.value.getMaxScaleOnAxis();
+      double newInterval;
+      if (widget.granularity == 'Hourly') {
+        newInterval = scale > 6
+            ? 1
+            : scale > 3
+                ? 3
+                : 12;
+      } else if (widget.granularity == 'Daily') {
+        newInterval = scale > 6
+            ? 1
+            : scale > 3
+                ? 1
+                : 2;
+      } else {
+        newInterval = scale > 6 ? 1 : 2;
       }
+      if (_labelInterval != newInterval && mounted) {
+        setState(() => _labelInterval = newInterval.toDouble());
+      }
+    };
+    widget.controller.addListener(_zoomListener);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_zoomListener);
+    super.dispose();
+  }
+
+  List<VerticalLine> _buildShiftLines(List<DateTime> allTimes) {
+    return [
+      for (int i = 1; i < allTimes.length; i++) ...[
+        // ─────── Hourly Shift Change ───────
+        if (widget.granularity == 'Hourly' &&
+            widget.showShiftLines &&
+            [6, 14, 22].contains(allTimes[i].hour))
+          VerticalLine(
+            x: i.toDouble(),
+            color: Colors.blue.withOpacity(0.6),
+            strokeWidth: 2,
+            dashArray: [4, 4],
+            label: VerticalLineLabel(
+              show: true,
+              alignment: Alignment.topRight,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+              ),
+              labelResolver: (_) {
+                final hour = allTimes[i].hour;
+                if (hour == 6) return '1';
+                if (hour == 14) return '2';
+                if (hour == 22) return '3';
+                return '';
+              },
+            ),
+          ),
+
+        // ─────── Day Change Lines ───────
+        if ((widget.granularity == 'Daily' || widget.granularity == 'Weekly') &&
+            widget.showDayLines &&
+            allTimes[i].day != allTimes[i - 1].day)
+          VerticalLine(
+            x: i.toDouble(),
+            color: Colors.grey.shade700.withOpacity(0.6),
+            strokeWidth: 1.5,
+            dashArray: [4, 4],
+          ),
+      ]
+    ];
+  }
+
+  /// Generates “every other day” shading in Hourly mode.
+  List<VerticalRangeAnnotation> _buildDayShading(List<DateTime> allTimes) {
+    if (widget.granularity != 'Hourly' || !widget.showDayBackground) return [];
+
+    // Group indices by calendar day
+    final Map<DateTime, List<int>> dayToIndices = {};
+    for (var i = 0; i < allTimes.length; i++) {
+      final d = DateTime(allTimes[i].year, allTimes[i].month, allTimes[i].day);
+      dayToIndices.putIfAbsent(d, () => []).add(i);
     }
 
-    return lines;
+    var shade = false;
+    final List<VerticalRangeAnnotation> regions = [];
+    for (final day in dayToIndices.keys.toList()..sort()) {
+      final idxs = dayToIndices[day]!;
+      final start = idxs.first.toDouble();
+      final end = idxs.last.toDouble() + 1;
+      if (shade) {
+        regions.add(VerticalRangeAnnotation(
+          x1: start,
+          x2: end,
+          color: Colors.grey.withOpacity(0.1),
+        ));
+      }
+      shade = !shade;
+    }
+    return regions;
   }
 
   @override
   Widget build(BuildContext context) {
+    final seriesList = widget.seriesList;
     if (seriesList.isEmpty) return const Center(child: Text('Nessun dato'));
 
+    // 1) Collect all times & values
     final allTimes = seriesList
         .expand((s) => s.points.map((p) => p.time))
         .toSet()
         .toList()
       ..sort();
+    final allValues = seriesList.expand((s) => s.points.map((p) => p.value));
 
-    List<LineChartBarData> bars = [];
-    for (final s in seriesList) {
-      bars.add(LineChartBarData(
-        spots: allTimes.mapIndexed((i, t) {
-          final p = s.points.firstWhere(
-            (e) =>
-                e.time.difference(t).inMinutes.abs() <
-                5, // allow small difference
-            orElse: () => GraphPoint(time: t, value: 0),
-          );
-          return FlSpot(i.toDouble(), p.value);
-        }).toList(),
+    // 2) Compute maxY + 5% and round up to nearest 10
+    final maxValue =
+        allValues.isNotEmpty ? allValues.reduce((a, b) => a > b ? a : b) : 0;
+    final adjusted = maxValue + (maxValue * 0.05);
+    final roundedMaxY = (adjusted / 10).ceil() * 10;
+
+    // 3) Build each series' spots
+    final bars = seriesList.map((s) {
+      final spots = <FlSpot>[];
+      for (var i = 0; i < allTimes.length; i++) {
+        final t = allTimes[i];
+        final pt = s.points.firstWhere(
+            (e) => e.time.difference(t).inMinutes.abs() < 5,
+            orElse: () => GraphPoint(time: t, value: 0));
+        spots.add(FlSpot(i.toDouble(), pt.value));
+      }
+      return LineChartBarData(
+        spots: spots,
         color: s.color,
-        isCurved: false,
+        isCurved: true,
+        preventCurveOverShooting: true,
+        preventCurveOvershootingThreshold: 10.0,
         barWidth: 2,
         dotData: FlDotData(show: false),
         belowBarData: BarAreaData(
-            show: true,
-            gradient: LinearGradient(
-                colors: [s.color.withOpacity(.3), s.color.withOpacity(0)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter)),
-      ));
-    }
+          show: true,
+          gradient: LinearGradient(
+            colors: [s.color.withOpacity(.3), s.color.withOpacity(0)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+      );
+    }).toList();
 
+    // 4) Optional Yield line
     if (seriesList.any((s) => s.metric == 'Yield')) {
       bars.add(LineChartBarData(
         spots: [FlSpot(0, 100), FlSpot(allTimes.length.toDouble() - 1, 100)],
-        color: Colors.lime,
+        color: Colors.green,
         dashArray: [6, 4],
         barWidth: 1,
         dotData: FlDotData(show: false),
       ));
     }
+
+    // 5) Prepare annotations
+    final dayShading = _buildDayShading(allTimes);
+    final shiftLines = _buildShiftLines(allTimes);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -783,43 +1237,82 @@ class GraphChartWidget extends StatelessWidget {
           scaleAxis: FlScaleAxis.horizontal,
           minScale: 1,
           maxScale: 25,
-          panEnabled: panEnabled,
-          scaleEnabled: scaleEnabled,
-          transformationController: controller,
+          panEnabled: widget.panEnabled,
+          scaleEnabled: widget.scaleEnabled,
+          transformationController: widget.controller,
         ),
         LineChartData(
+          maxY: roundedMaxY.toDouble(),
           minX: 0,
           maxX: allTimes.length.toDouble() - 1,
-          gridData: FlGridData(show: true),
+          gridData: FlGridData(show: true, drawVerticalLine: false),
+          rangeAnnotations: RangeAnnotations(
+            verticalRangeAnnotations: dayShading,
+          ),
           extraLinesData: ExtraLinesData(
-            verticalLines: _buildShiftLines(allTimes),
+            verticalLines: shiftLines,
           ),
           titlesData: FlTitlesData(
+            // BOTTOM TITLES (hours / dates)
             bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 38,
-                    interval: 1,
-                    getTitlesWidget: (v, meta) {
-                      final idx = v.toInt();
-                      if (idx < 0 || idx >= allTimes.length) {
-                        return const SizedBox();
-                      }
-                      final dt = allTimes[idx];
-                      final txt = granularity == 'Hourly'
-                          ? DateFormat('HH:mm').format(dt)
-                          : DateFormat('dd/MM').format(dt);
-                      return SideTitleWidget(
-                          meta: meta,
-                          child: Transform.rotate(
-                              angle: -45 * 3.1416 / 180,
-                              child: Text(txt,
-                                  style: const TextStyle(fontSize: 10))));
-                    })),
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 38,
+                interval: _labelInterval,
+                getTitlesWidget: (v, meta) {
+                  final idx = v.toInt();
+                  if (idx < 0 || idx >= allTimes.length) {
+                    return const SizedBox();
+                  }
+                  final dt = allTimes[idx];
+                  final txt = widget.granularity == 'Hourly'
+                      ? DateFormat('HH:mm').format(dt)
+                      : DateFormat('dd/MM').format(dt);
+                  return SideTitleWidget(
+                    meta: meta,
+                    space: 6,
+                    child: Transform.rotate(
+                      angle: -0.7854, // -45°
+                      child: Text(txt, style: const TextStyle(fontSize: 10)),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            topTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: widget.granularity == 'Hourly',
+                reservedSize: 24,
+                interval: 1,
+                getTitlesWidget: (v, meta) {
+                  final idx = v.toInt();
+                  if (idx < 0 || idx >= allTimes.length) {
+                    return const SizedBox();
+                  }
+                  final dt = allTimes[idx];
+                  if (dt.hour == 0) {
+                    return SideTitleWidget(
+                      meta: meta,
+                      space: 6,
+                      child: Text(
+                        '${dt.day}/${dt.month}',
+                        style: const TextStyle(
+                          fontSize: 12, // ← increase this (was 10)
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black87, // optional for better contrast
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox();
+                },
+              ),
+            ),
+
             leftTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: true, reservedSize: 52)),
-            topTitles:
-                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              sideTitles: SideTitles(showTitles: true, reservedSize: 52),
+            ),
             rightTitles:
                 const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
@@ -829,13 +1322,5 @@ class GraphChartWidget extends StatelessWidget {
         duration: Duration.zero,
       ),
     );
-  }
-}
-
-// ────────────────────────────────────────────── ext helpers ────────────────
-extension _MapIndexed<E> on Iterable<E> {
-  Iterable<T> mapIndexed<T>(T Function(int i, E e) f) {
-    var i = 0;
-    return map((e) => f(i++, e));
   }
 }

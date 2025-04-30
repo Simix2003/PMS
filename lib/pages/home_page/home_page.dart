@@ -1,7 +1,7 @@
-// ignore_for_file: deprecated_member_use, use_build_context_synchronously, avoid_print
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously, avoid_print, avoid_web_libraries_in_flutter
 
 import 'dart:async';
-
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/dialogs.dart';
@@ -66,6 +66,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _listenToVisibilityChange();
     _startup();
   }
 
@@ -385,6 +386,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
   }
 
+  void _listenToVisibilityChange() {
+    html.document.onVisibilityChange.listen((event) {
+      if (!html.document.hidden!) {
+        print('[🔁] Tab resumed — reconnecting WebSocket...');
+        _onChannelChange(selectedChannel);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -392,6 +402,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
+        leading: IconButton(
+          tooltip: "Aggiorna",
+          icon: const Icon(Icons.refresh, color: Colors.black87),
+          onPressed: () {
+            _onChannelChange(selectedChannel);
+          },
+        ),
         title: Row(
           children: [
             const Text(

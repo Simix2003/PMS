@@ -3931,6 +3931,31 @@ async def search_results(request: Request):
         logging.error(f"Search API Error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+def generate_time_buckets(start: datetime, end: datetime, group_by: str) -> List[str]:
+    buckets = []
+    current = start.replace(minute=0, second=0, microsecond=0)
+
+    if group_by == "hourly":
+        delta = timedelta(hours=1)
+        fmt = "%Y-%m-%d %H:00:00"
+    elif group_by == "daily":
+        current = current.replace(hour=0)
+        delta = timedelta(days=1)
+        fmt = "%Y-%m-%d"
+    elif group_by == "weekly":
+        current = current - timedelta(days=current.weekday())
+        current = current.replace(hour=0)
+        delta = timedelta(weeks=1)
+        fmt = "%Y-%m-%d"
+    else:
+        raise ValueError("Invalid group_by")
+
+    while current <= end:
+        buckets.append(current.strftime(fmt))
+        current += delta
+
+    return buckets
+
 @app.post("/api/graph_data")
 async def get_graph_data(request: Request):
     payload = await request.json()
@@ -3944,11 +3969,6 @@ async def get_graph_data(request: Request):
 
     # Print incoming payload
     print("\n--- API /graph_data called ---")
-    print(f"Line: {line}, Station: {station}")
-    print(f"Start: {start}, End: {end}")
-    print(f"Metrics requested: {metrics}")
-    print(f"Group by: {group_by}")
-    print(f"Extra filter: {extra_filter}")
 
     date_format = {
         "daily": "%Y-%m-%d",
@@ -4008,9 +4028,13 @@ async def get_graph_data(request: Request):
             ts = dt.isoformat()
 
             # Handle Esito
-            if "Esito" in metrics and extra_filter:
-                value = v.get(extra_filter, 0)
-                result[extra_filter].append({"timestamp": ts, "value": value})
+            if "Esito" in metrics:
+                if extra_filter:
+                    value = v.get(extra_filter, 0)
+                    result[extra_filter].append({"timestamp": ts, "value": value})
+                else:
+                    # Return total moduli (regardless of esito)
+                    result["Esito"].append({"timestamp": ts, "value": v["total"]})
 
             # Handle Yield
             if "Yield" in metrics:
@@ -4021,125 +4045,75 @@ async def get_graph_data(request: Request):
             # Handle Cycle Time
             if "CycleTime" in metrics:
                 result["CycleTime"].append({"timestamp": ts, "value": v["avg_cycle_time"]})
+        
+        # Fill missing timestamps with zero
+        expected_buckets = generate_time_buckets(start, end, group_by)
 
-        print("\nAggregated ESITO / CYCLE Results:")
-        for k, v in result.items():
-            print(f"{k}: {v}")
+        # Determine keys to pad
+        keys_to_pad = []
+        if "Esito" in metrics and extra_filter:
+            keys_to_pad.append(extra_filter)
+        if "Yield" in metrics:
+            keys_to_pad.append("Yield")
+        if "CycleTime" in metrics:
+            keys_to_pad.append("CycleTime")
+
+        for key in keys_to_pad:
+            existing = {item["timestamp"] for item in result[key]}
+            for bucket in expected_buckets:
+                dt = datetime.strptime(bucket, date_format)
+                ts = dt.isoformat()
+                if ts not in existing:
+                    result[key].append({"timestamp": ts, "value": 0})
+            result[key].sort(key=lambda x: x["timestamp"])
 
     # ─────────────── DIFETTO ───────────────────────
     if "Difetto" in metrics and extra_filter:
-        parts = extra_filter.split(" > ")
-        category = parts[1] if len(parts) > 1 else None
+        category = extra_filter.strip()
+        print(f"[🔍] Selected defect category: {category}")
 
-        where_clauses = [
-            "pl.display_name = %s",
-            "s.name = %s",
-            "p.end_time BETWEEN %s AND %s",
-            "d.category = %s"
-        ]
-        params: List[Any] = [date_format, line, station, start, end, category]
-
-        if category == "Generali" and len(parts) > 2:
-            where_clauses.append("od.defect_type = %s")
-            params.append(parts[2])
-        elif category == "Saldatura":
-            if len(parts) > 2:
-                m = re.search(r"\[(\d+)\]", parts[2])
-                if m:
-                    where_clauses.append("od.stringa = %s")
-                    params.append(int(m.group(1)))
-            if len(parts) > 3:
-                lato = parts[3].replace("Lato ", "").strip()
-                where_clauses.append("od.ribbon_lato = %s")
-                params.append(lato)
-            if len(parts) > 4:
-                m = re.search(r"\[(\d+)\]", parts[4])
-                if m:
-                    where_clauses.append("od.s_ribbon = %s")
-                    params.append(int(m.group(1)))
-        elif category == "Disallineamento":
-            if len(parts) > 2 and parts[2] == "Stringa" and len(parts) > 3:
-                m = re.search(r"\[(\d+)\]", parts[3])
-                if m:
-                    where_clauses.append("od.stringa = %s")
-                    params.append(int(m.group(1)))
-            elif len(parts) > 2 and parts[2] == "Ribbon":
-                if len(parts) > 3:
-                    lato = parts[3].replace("Lato ", "").strip()
-                    where_clauses.append("od.ribbon_lato = %s")
-                    params.append(lato)
-                if len(parts) > 4:
-                    m = re.search(r"\[(\d+)\]", parts[4])
-                    if m:
-                        where_clauses.append("od.i_ribbon = %s")
-                        params.append(int(m.group(1)))
-        elif category == "Mancanza Ribbon":
-            if len(parts) > 2:
-                lato = parts[2].replace("Lato ", "").strip()
-                where_clauses.append("od.ribbon_lato = %s")
-                params.append(lato)
-            if len(parts) > 3:
-                m = re.search(r"\[(\d+)\]", parts[3])
-                if m:
-                    where_clauses.append("od.i_ribbon = %s")
-                    params.append(int(m.group(1)))
-        elif category == "I Ribbon Leadwire":
-            if len(parts) > 2:
-                lato = parts[2].replace("Lato ", "").strip()
-                where_clauses.append("od.ribbon_lato = %s")
-                params.append(lato)
-            if len(parts) > 3:
-                m = re.search(r"\[(\d+)\]", parts[3])
-                if m:
-                    where_clauses.append("od.i_ribbon = %s")
-                    params.append(int(m.group(1)))
-        elif category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella") and len(parts) > 2:
-            m = re.search(r"\[(\d+)\]", parts[2])
-            if m:
-                where_clauses.append("od.stringa = %s")
-                params.append(int(m.group(1)))
-        elif category == "Altro" and len(parts) > 2:
-            where_clauses.append("od.extra_data LIKE %s")
-            params.append(f"%{parts[2]}%")
-
-        where_sql = " AND ".join(where_clauses)
         query = f"""
-          SELECT
+            SELECT
             DATE_FORMAT(p.end_time, %s) AS bucket,
             COUNT(*) AS count
-          FROM productions p
-          JOIN stations s ON p.station_id = s.id
-          JOIN production_lines pl ON s.line_id = pl.id
-          JOIN object_defects od ON p.id = od.production_id
-          JOIN defects d ON od.defect_id = d.id
-          WHERE {where_sql}
-          GROUP BY bucket
-          ORDER BY bucket
+            FROM productions p
+            JOIN stations s ON p.station_id = s.id
+            JOIN production_lines pl ON s.line_id = pl.id
+            JOIN object_defects od ON p.id = od.production_id
+            JOIN defects d ON od.defect_id = d.id
+            WHERE
+            pl.display_name = %s AND
+            s.name = %s AND
+            p.end_time BETWEEN %s AND %s AND
+            d.category = %s
+            GROUP BY bucket
+            ORDER BY bucket
         """
-
-        print("\nRunning DIFETTO query...")
-        print(f"QUERY: {query}")
-        print(f"PARAMS: {params}")
+        params = [date_format, line, station, start, end, category]
 
         with mysql_connection.cursor() as cur:
             cur.execute(query, tuple(params))
-            print("\nRunning query...")
-            print(f"QUERY: {query}")
-            print(f"PARAMS: {params}")
             defect_rows = cur.fetchall()
-            print(f"Rows fetched for DIFETTO: {len(defect_rows)}")
-            for r in defect_rows:
-                print(r)
 
-            for row in defect_rows:
-                dt = datetime.strptime(row["bucket"], date_format)
-                result[extra_filter].append({
-                    "timestamp": dt.isoformat(),
-                    "value": row["count"]
-                })
+        if not defect_rows:
+            print(f"[ℹ️] No defect data found for category '{category}'.")
 
-    print("\n--- Final Result returned to client ---")
-    print(result)
+        for row in defect_rows:
+            dt = datetime.strptime(row["bucket"], date_format)
+            result[category].append({
+                "timestamp": dt.isoformat(),
+                "value": row["count"]
+            })
+
+        # Fill missing buckets
+        expected_buckets = generate_time_buckets(start, end, group_by)
+        existing = {item["timestamp"] for item in result[category]}
+        for bucket in expected_buckets:
+            ts = datetime.strptime(bucket, date_format).isoformat()
+            if ts not in existing:
+                result[category].append({"timestamp": ts, "value": 0})
+        result[category].sort(key=lambda x: x["timestamp"])
+
     return result
 
 @app.post("/api/export_objects")

@@ -302,7 +302,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final objectId = _objectIdController.text.trim();
     if (objectId.isEmpty) return;
 
-    final url = Uri.parse("http://192.168.0.10:8000/api/simulate_objectId");
+    final url = Uri.parse("http://192.168.0.10:8001/api/simulate_objectId");
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},

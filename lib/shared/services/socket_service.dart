@@ -12,7 +12,7 @@ class WebSocketService {
     final isSecure = uri.protocol == 'https:';
 
     final wsProtocol = isSecure ? 'wss' : 'ws';
-    final effectivePort = (host == 'localhost') ? '8000' : uri.port;
+    final effectivePort = (host == 'localhost') ? '8001' : uri.port;
 
     return '$wsProtocol://$host:$effectivePort';
   }

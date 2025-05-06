@@ -22,7 +22,7 @@ class _AIReportPageState extends State<AIReportPage> {
   Future<void> fetchAIReport() async {
     setState(() => isLoading = true);
     final response =
-        await http.get(Uri.parse("http://localhost:8000/api/ai_report"));
+        await http.get(Uri.parse("http://localhost:8001/api/ai_report"));
 
     if (response.statusCode == 200) {
       setState(() {

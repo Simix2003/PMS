@@ -3266,12 +3266,12 @@ async def get_overlay_config(
         print(f"➡️ Checking config: image = '{image_name}', path = '{config_path}'")
 
         if config_path.lower() == path.lower():
-            image_url = f"https://192.168.0.10:8000/images/{line_name}/{station}/{image_name}"
+            image_url = f"https://192.168.0.10:8001/images/{line_name}/{station}/{image_name}"
             if station == "M326":
                 if object_id:
-                    image_url = f"https://192.168.0.10:8000/images/{line_name}/M308/{image_name}"
+                    image_url = f"https://192.168.0.10:8001/images/{line_name}/M308/{image_name}"
                     if comes_from == 'M309':
-                        image_url = f"https://192.168.0.10:8000/images/{line_name}/M309/{image_name}"
+                        image_url = f"https://192.168.0.10:8001/images/{line_name}/M309/{image_name}"
 
             return {
                 "image_url": image_url,
@@ -4339,4 +4339,4 @@ def get_current_settings():
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
-   uvicorn.run(app, host="0.0.0.0", port=8000)
+   uvicorn.run(app, host="0.0.0.0", port=8001)

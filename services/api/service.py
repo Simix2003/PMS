@@ -8,11 +8,9 @@ from math import e
 import os
 import time
 from fastapi import Body, FastAPI, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, Request, BackgroundTasks, File
-import base64
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import false, true
 from controllers.plc import PLCConnection
 import uvicorn
 from typing import AsyncGenerator, Optional, Set
@@ -33,7 +31,7 @@ from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 from collections import defaultdict
 
-debug = True
+debug = False
 debugModulo = "3SBHBGHC25407300"
 # ---------------- CONFIG & GLOBALS ----------------
 if not debug :
@@ -359,15 +357,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     get_current_settings()
 
-    #for line, config in line_configs.items():
-    #    plc_ip = config["PLC"]["IP"]
-    #    plc_slot = config["PLC"]["SLOT"]
+    for line, config in line_configs.items():
+        plc_ip = config["PLC"]["IP"]
+        plc_slot = config["PLC"]["SLOT"]
 
-    #    for station in config["stations"]:
-    #        plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
-    #        plc_connections[f"{line}.{station}"] = plc_conn
-    #        asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
-    #        print(f"🚀 Background task created for {line}.{station}")
+        for station in config["stations"]:
+            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+            plc_connections[f"{line}.{station}"] = plc_conn
+            asyncio.create_task(background_task(plc_conn, f"{line}.{station}"))
+            print(f"🚀 Background task created for {line}.{station}")
 
     yield
 
@@ -740,7 +738,6 @@ EXCEL_DEFECT_COLUMNS = {
     "NG Graffio su Cella": "Graffio su Cella",
 }
 
-# --- Sheet names ---
 SHEET_NAMES = [
     "Metadata", "Risolutivo", "NG Generali", "NG Saldature", "NG Disall. Ribbon",
     "NG Disall. Stringa", "NG Mancanza Ribbon", "NG I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Graffio su Cella", "NG Altro"
@@ -3269,12 +3266,12 @@ async def get_overlay_config(
         print(f"➡️ Checking config: image = '{image_name}', path = '{config_path}'")
 
         if config_path.lower() == path.lower():
-            image_url = f"http://192.168.1.114:8000/images/{line_name}/{station}/{image_name}"
+            image_url = f"https://192.168.0.10:8000/images/{line_name}/{station}/{image_name}"
             if station == "M326":
                 if object_id:
-                    image_url = f"http://192.168.1.114:8000/images/{line_name}/M308/{image_name}"
+                    image_url = f"https://192.168.0.10:8000/images/{line_name}/M308/{image_name}"
                     if comes_from == 'M309':
-                        image_url = f"http://192.168.1.114:8000/images/{line_name}/M309/{image_name}"
+                        image_url = f"https://192.168.0.10:8000/images/{line_name}/M309/{image_name}"
 
             return {
                 "image_url": image_url,
@@ -3632,7 +3629,6 @@ def acknowledge_warning(warning_id: int):
         mysql_connection.commit()
 
     return {"message": "Warning acknowledged"}
-
 
 # ---------------- SEARCH ----------------
 # Mapping from client order field names to DB columns.

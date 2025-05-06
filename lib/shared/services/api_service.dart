@@ -16,7 +16,7 @@ class ApiService {
 
     final httpProtocol = isSecure ? 'https' : 'http';
 
-    final effectivePort = (host == 'localhost') ? '8000' : uri.port;
+    final effectivePort = (host == 'localhost') ? '8001' : uri.port;
 
     return '$httpProtocol://$host:$effectivePort';
   }

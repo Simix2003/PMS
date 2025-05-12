@@ -1726,7 +1726,7 @@ class _FindPageState extends State<FindPage> {
                                       // 1) Partially show the previous (history) card in the background
                                       if (history.isNotEmpty)
                                         Positioned(
-                                          top: 50,
+                                          top: 15,
                                           left: 8,
                                           right: 8,
                                           child: Opacity(

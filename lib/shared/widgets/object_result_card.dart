@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:ix_monitor/shared/utils/helpers.dart';
 
 class ObjectResultCard extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -19,23 +20,6 @@ class ObjectResultCard extends StatelessWidget {
     this.onTap,
   });
 
-  Color _getStatusColor(int? esito) {
-    if (esito == 1) return const Color(0xFF34C759); // OK
-    if (esito == 2) return Colors.grey; // In Progress
-    if (esito == 4) return const Color.fromARGB(255, 199, 189, 52); // Escluso
-    if (esito == 5) return const Color(0xFF34C759); // G Operatore
-    if (esito == 6) return const Color(0xFFFF3B30); // KO
-    return Colors.grey; // N/A
-  }
-
-  String _getStatusLabel(int? esito) {
-    if (esito == 1) return 'G';
-    if (esito == 2) return 'In Produzione';
-    if (esito == 4) return 'Escluso';
-    if (esito == 5) return 'G Operatore';
-    if (esito == 6) return 'NG';
-    return 'N/A';
-  }
 
   String _formatTime(dynamic dateTime) {
     if (dateTime == null) return 'Non disponibile';
@@ -97,8 +81,8 @@ class ObjectResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final esito = data['esito'] as int?;
-    final statusColor = _getStatusColor(esito);
-    final statusLabel = _getStatusLabel(esito);
+    final statusColor = getStatusColor(esito);
+    final statusLabel = getStatusLabel(esito);
 
     return GestureDetector(
       onTap: onTap,
@@ -269,13 +253,24 @@ class ObjectResultCard extends StatelessWidget {
                               color: Colors.white.withOpacity(0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Text(
-                              '$productionIdsCount eventi',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                                fontSize: 12,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.folder,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '$productionIdsCount eventi',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
                             ),
                           )
                         : const SizedBox.shrink(),

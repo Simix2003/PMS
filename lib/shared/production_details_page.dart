@@ -1,5 +1,9 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import 'utils/helpers.dart';
 
 class ProductionDetailPage extends StatelessWidget {
   final Map<String, dynamic> data;
@@ -24,35 +28,10 @@ class ProductionDetailPage extends StatelessWidget {
     return value.toString();
   }
 
-  Color _getStatusColor(int? esito) {
-    if (esito == 1 || esito == 5) return Colors.green;
-    if (esito == 2) return Colors.grey;
-    if (esito == 4) return Colors.amber;
-    if (esito == 6) return Colors.red;
-    return Colors.blueGrey;
-  }
-
-  String _getStatusLabel(int? esito) {
-    switch (esito) {
-      case 1:
-        return 'G';
-      case 2:
-        return 'In Produzione';
-      case 4:
-        return 'Escluso';
-      case 5:
-        return 'G Operatore';
-      case 6:
-        return 'NG';
-      default:
-        return 'N/A';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final esito = data['esito'] as int?;
-    final statusColor = _getStatusColor(esito);
+    final statusColor = getStatusColor(esito);
 
     return Scaffold(
       appBar: AppBar(
@@ -82,7 +61,7 @@ class ProductionDetailPage extends StatelessWidget {
                         style: TextStyle(color: Colors.white70, fontSize: 14),
                       ),
                       Text(
-                        _getStatusLabel(esito),
+                        getStatusLabel(esito),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,

@@ -1,8 +1,10 @@
 // ignore_for_file: camel_case_types
 
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:simple_web_camera/simple_web_camera.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class TakePicturePage extends StatefulWidget {
   const TakePicturePage({super.key});
@@ -40,6 +42,20 @@ class _TakePicturePageState extends State<TakePicturePage>
   void dispose() {
     _animationController.dispose();
     super.dispose();
+  }
+
+  Future<String> compressBase64Image(String base64) async {
+    Uint8List decoded = base64Decode(base64);
+
+    final compressed = await FlutterImageCompress.compressWithList(
+      decoded,
+      minWidth: 800, // reduce resolution if needed
+      minHeight: 600,
+      quality: 50, // adjust from 0 (max compression) to 100 (no compression)
+      format: CompressFormat.jpeg,
+    );
+
+    return base64Encode(compressed);
   }
 
   void openCamera() async {
@@ -187,8 +203,9 @@ class _TakePicturePageState extends State<TakePicturePage>
                 icon: Icons.check,
                 label: "Conferma",
                 color: const Color(0xFF4CAF50),
-                onPressed: () {
-                  Navigator.pop(context, result);
+                onPressed: () async {
+                  final compressed = await compressBase64Image(result);
+                  Navigator.pop(context, compressed);
                 },
               ),
               const SizedBox(width: 24),

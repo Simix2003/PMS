@@ -19,7 +19,8 @@ class _SettingsPageState extends State<SettingsPage> {
     "Macchie ECA",
     "Lunghezza String-Ribbon",
     "Celle Rotte",
-    "No Good da Bussing"
+    "No Good da Bussing",
+    "Bad Soldering"
   ];
   final Map<String, int> _thresholds = {};
   final Map<String, int> _moduliWindow = {};
@@ -464,7 +465,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
 
             // Yield Calculation Section
-            _buildSectionHeader('Calcolo Yield', CupertinoIcons.chart_bar),
+            /*_buildSectionHeader('Calcolo Yield', CupertinoIcons.chart_bar),
             _buildCard(
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -528,7 +529,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                 ),
               ),
-            ),
+            ),*/
             const SizedBox(height: 32),
           ],
         ),

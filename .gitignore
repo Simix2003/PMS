@@ -47,3 +47,8 @@ app.*.map.json
 # In .gitignore
 services/api/build/
 services/api/dist/
+/service/build/
+/service/dist/
+*.exe
+*.pkg
+

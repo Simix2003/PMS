@@ -1,0 +1,149 @@
+import base64
+from datetime import datetime
+from doctest import debug
+import logging
+from fastapi import APIRouter, Body, HTTPException
+from fastapi.responses import JSONResponse
+from pymysql.cursors import DictCursor
+
+import sys
+import os
+from service.connections.mysql import save_warning_on_mysql
+from service.routes.broadcast import broadcast_stringatrice_warning
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from service.state import global_state
+
+router = APIRouter()
+
+@router.get("/api/warnings/{line_name}")
+def get_unacknowledged_warnings(line_name: str):
+    assert global_state.mysql_connection is not None
+
+    with global_state.mysql_connection.cursor(DictCursor) as cursor:
+        cursor.execute("""
+            SELECT * FROM stringatrice_warnings
+            WHERE line_name = %s AND acknowledged = 0
+            ORDER BY timestamp DESC
+        """, (line_name,))
+        rows = cursor.fetchall()
+
+        for row in rows:
+            row["suppress_on_source"] = bool(int(row.get("suppress_on_source", 0)))
+            if row.get("photo") is not None:
+                row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
+
+        return rows
+
+@router.post("/api/warnings/acknowledge/{warning_id}")
+def acknowledge_warning(warning_id: int):
+    assert global_state.mysql_connection is not None
+
+    with global_state.mysql_connection.cursor() as cursor:
+        cursor.execute("""
+            UPDATE stringatrice_warnings
+            SET acknowledged = 1,
+                suppress_on_source = TRUE
+            WHERE id = %s
+        """, (warning_id,))
+        global_state.mysql_connection.commit()
+
+    return {"message": "Warning acknowledged"}
+
+@router.post("/api/suppress_warning")
+async def suppress_warning(payload: dict):
+    assert global_state.mysql_connection is not None
+    try:
+        line = payload.get("line_name")
+        timestamp_raw = payload.get("timestamp")
+
+        if not line or not timestamp_raw:
+            raise HTTPException(status_code=400, detail="Missing parameters")
+
+        # ✅ Now safe to parse
+        timestamp = datetime.fromisoformat(timestamp_raw).strftime('%Y-%m-%d %H:%M:%S')
+
+        if not line or not timestamp:
+            raise HTTPException(status_code=400, detail="Missing parameters")
+
+        with global_state.mysql_connection.cursor() as cursor:
+            cursor.execute("""
+                UPDATE stringatrice_warnings
+                SET suppress_on_source = TRUE
+                WHERE line_name = %s AND timestamp = %s
+            """, (line, timestamp))
+
+            global_state.mysql_connection.commit()
+
+        return {"status": "ok", "updated": True}
+    except Exception as e:
+        logging.error(f"❌ Failed to suppress warning: {e}")
+        raise HTTPException(status_code=500, detail="Server error")
+
+
+@router.post("/api/warnings/suppress_with_photo")
+async def suppress_with_photo(data: dict = Body(...)):
+    assert global_state.mysql_connection is not None
+
+    line_name = data["line_name"]
+
+    timestamp_raw = data["timestamp"]
+    timestamp = datetime.fromisoformat(timestamp_raw).strftime('%Y-%m-%d %H:%M:%S')
+
+    image_base64 = data.get("photo")
+
+    if not image_base64:
+        print("⚠️ No image provided in request")
+    else:
+        print(f"📸 Received base64 image length: {len(image_base64)}")
+
+    image_blob = base64.b64decode(image_base64) if image_base64 else None
+
+    with global_state.mysql_connection.cursor() as cursor:
+        cursor.execute("""
+            UPDATE stringatrice_warnings
+            SET suppress_on_source = 1,
+                photo = %s
+            WHERE line_name = %s AND timestamp = %s
+        """, (image_blob, line_name, timestamp))
+        global_state.mysql_connection.commit()
+
+    return {"status": "ok"}
+
+if debug:
+    @router.post("/api/debug_warning")
+    async def debug_warning(payload: dict):
+        """
+        Trigger a fake warning broadcast manually from Postman
+        """
+        line = payload.get("line_name", "No Line")
+        station_name = payload.get("station_name", "No Station")
+        station_display = payload.get("station_display", "No Display")
+        defect = payload.get("defect", "No Defect")
+        wtype = payload.get("type", "No Type")
+        value = payload.get("value", 0)
+        limit = payload.get("limit", 0)
+        source_station = payload.get("source_station", "No Source")
+
+        warning_payload = {
+            "timestamp": datetime.now().isoformat(),
+            "station_name": station_name,
+            "station_display": station_display,
+            "line_name": line,
+            "defect": defect,
+            "type": wtype,
+            "value": value,
+            "limit": limit,
+            "source_station": source_station,
+        }
+
+        station = {
+            "line_name": line,
+            "name": station_name,
+            "display_name": station_display,
+        }
+
+        await broadcast_stringatrice_warning(line, warning_payload)
+        save_warning_on_mysql(warning_payload, global_state.mysql_connection, station, defect, source_station)
+
+        return {"status": "sent", "payload": warning_payload}

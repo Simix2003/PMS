@@ -7,6 +7,7 @@ class ObjectResultCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final bool isSelectable;
   final bool isSelected;
+  final int productionIdsCount;
   final void Function()? onTap;
 
   const ObjectResultCard({
@@ -14,6 +15,7 @@ class ObjectResultCard extends StatelessWidget {
     required this.data,
     this.isSelectable = false,
     this.isSelected = false,
+    this.productionIdsCount = 1,
     this.onTap,
   });
 
@@ -127,8 +129,9 @@ class ObjectResultCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title Row
+                // Title Row with badge under Esito
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
@@ -140,23 +143,29 @@ class ObjectResultCard extends StatelessWidget {
                         letterSpacing: -0.5,
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        statusLabel,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            statusLabel,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 16),
 
                 // Info rows (unchanged)
@@ -195,7 +204,7 @@ class ObjectResultCard extends StatelessWidget {
                     );
                   },
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
 
                 if (data['defect_categories'] != null &&
                     (data['defect_categories'] as String).trim().isNotEmpty)
@@ -247,6 +256,31 @@ class ObjectResultCard extends StatelessWidget {
                       );
                     },
                   ),
+                // Always visible bottom-right counter
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4, right: 4),
+                    child: productionIdsCount > 1
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '$productionIdsCount eventi',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ),
               ],
             ),
           ),

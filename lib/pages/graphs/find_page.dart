@@ -4,7 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:html' as html;
-import '../../shared/production_details_page.dart';
+import '../object_details/objectDetails_page.dart';
+import '../object_details/productionDetails_page.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
@@ -39,8 +40,7 @@ class _FindPageState extends State<FindPage> {
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _numericController = TextEditingController();
   bool isSelecting = false;
-  final Set<int> selectedProductionIds = {};
-  // Main selection for 'Difetto'
+  final Set<String> selectedObjectIds = {}; // Main selection for 'Difetto'
   String? selectedDifettoGroup;
   bool isExporting = false;
 
@@ -258,7 +258,6 @@ class _FindPageState extends State<FindPage> {
 
   String? selectedOrderBy = 'Data';
   String? selectedLimit = '1000';
-  String? selectedOrderDirection = 'Decrescente';
 
   final List<String> orderOptions = [
     'Data',
@@ -272,6 +271,7 @@ class _FindPageState extends State<FindPage> {
 
   final List<String> limitOptions = ['100', '500', '1000', '5000', '10000'];
   final orderDirections = ['Crescente', 'Decrescente']; // A-Z / Z-A
+  String? selectedOrderDirection = 'Decrescente';
 
   final List<Map<String, dynamic>> results = [];
 
@@ -1367,8 +1367,8 @@ class _FindPageState extends State<FindPage> {
                   TextButton(
                     onPressed: () {
                       setState(() {
-                        selectedProductionIds
-                            .addAll(results.map((r) => r['production_id']));
+                        selectedObjectIds.addAll(
+                            results.map((g) => g['object_id'].toString()));
                       });
                     },
                     child: const Text(
@@ -1382,7 +1382,8 @@ class _FindPageState extends State<FindPage> {
                   TextButton(
                     onPressed: () {
                       setState(() {
-                        selectedProductionIds.clear();
+                        // Deseleziona Tutti
+                        selectedObjectIds.clear();
                       });
                     },
                     child: const Text(
@@ -1396,16 +1397,15 @@ class _FindPageState extends State<FindPage> {
                 ],
                 TextButton.icon(
                   onPressed: () {
-                    if (isSelecting && selectedProductionIds.isNotEmpty) {
+                    if (isSelecting && selectedObjectIds.isNotEmpty) {
                       showDialog(
                         context: context,
                         builder: (context) {
                           return ExportConfirmationDialog(
-                            selectedCount: selectedProductionIds.length,
+                            selectedCount: selectedObjectIds.length,
                             activeFilters: activeFilters,
                             onConfirm: () async {
-                              final selectedIds =
-                                  selectedProductionIds.toList();
+                              final selectedIds = selectedObjectIds.toList();
 
                               setState(
                                 () => isExporting = true,
@@ -1413,7 +1413,8 @@ class _FindPageState extends State<FindPage> {
 
                               final downloadUrl = await ApiService
                                   .exportSelectedObjectsAndGetDownloadUrl(
-                                productionIds: selectedIds,
+                                objectIds:
+                                    selectedIds, // <‑‑ rename param in ApiService too
                                 filters: activeFilters,
                               );
 
@@ -1449,7 +1450,7 @@ class _FindPageState extends State<FindPage> {
                       // ✅ Entering selection mode: clear previous selections
                       setState(() {
                         isSelecting = true;
-                        selectedProductionIds.clear();
+                        selectedObjectIds.clear();
                       });
                     }
                   },
@@ -1600,7 +1601,7 @@ class _FindPageState extends State<FindPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${results.length} Eventi Visualizzati',
+                                    '${results.length} Moduli Visualizzati',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                       fontSize: 20,
@@ -1609,7 +1610,7 @@ class _FindPageState extends State<FindPage> {
                                   ),
                                   if (isSelecting)
                                     Text(
-                                      '${selectedProductionIds.length} Eventi Selezionati',
+                                      '${selectedObjectIds.length} Moduli Selezionati',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.w500,
                                         fontSize: 16,
@@ -1654,7 +1655,7 @@ class _FindPageState extends State<FindPage> {
 
                   _buildSectionTitle("Dati"),
 
-                  // 🧩 Cards Scrollable Area
+                  // 🧩 Cards Scrollable Area (grouped by object_id)
                   Expanded(
                     child: results.isEmpty
                         ? Center(
@@ -1669,40 +1670,84 @@ class _FindPageState extends State<FindPage> {
                         : ListView.builder(
                             itemCount: results.length,
                             itemBuilder: (context, index) {
+                              final group = results[index];
+                              final latest =
+                                  group['latest_event'] as Map<String, dynamic>;
+                              final history = group['history'] as List<dynamic>;
+                              final count = group['event_count'] as int;
+                              final objectId = group['object_id'] as String;
+                              final isSelected =
+                                  selectedObjectIds.contains(objectId);
+
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 16),
-                                child: ObjectResultCard(
-                                  data: results[index],
-                                  isSelectable: isSelecting,
-                                  isSelected: selectedProductionIds.contains(
-                                      results[index]['production_id']),
+                                child: GestureDetector(
                                   onTap: () {
-                                    final int productionId =
-                                        results[index]['production_id'];
                                     if (isSelecting) {
                                       setState(() {
-                                        if (selectedProductionIds
-                                            .contains(productionId)) {
-                                          selectedProductionIds
-                                              .remove(productionId);
+                                        if (isSelected) {
+                                          selectedObjectIds.remove(objectId);
                                         } else {
-                                          selectedProductionIds
-                                              .add(productionId);
+                                          selectedObjectIds.add(objectId);
                                         }
                                       });
                                     } else {
-                                      // Navigate to detail page
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              ProductionDetailPage(
-                                            data: results[index],
+                                      final history = (group['history'] as List)
+                                          .cast<Map<String, dynamic>>();
+                                      final latest = group['latest_event']
+                                          as Map<String, dynamic>;
+                                      final allEvents = [latest, ...history];
+
+                                      if (allEvents.length == 1) {
+                                        // just one → show the existing detail page
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                ProductionDetailPage(
+                                                    data: latest),
                                           ),
-                                        ),
-                                      );
+                                        );
+                                      } else {
+                                        // multiple → push a new “multi” detail screen
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ObjectdetailsPage(
+                                                events: allEvents),
+                                          ),
+                                        );
+                                      }
                                     }
                                   },
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      // 1) Partially show the previous (history) card in the background
+                                      if (history.isNotEmpty)
+                                        Positioned(
+                                          top: 50,
+                                          left: 8,
+                                          right: 8,
+                                          child: Opacity(
+                                            opacity: 0.5,
+                                            child: ObjectResultCard(
+                                              data: history.first,
+                                              isSelectable: false,
+                                              isSelected: false,
+                                            ),
+                                          ),
+                                        ),
+
+                                      // 2) The “latest” card on top
+                                      ObjectResultCard(
+                                        data: latest,
+                                        isSelectable: isSelecting,
+                                        isSelected: isSelected,
+                                        productionIdsCount: count,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               );
                             },

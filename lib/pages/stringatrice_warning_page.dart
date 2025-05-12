@@ -1,4 +1,7 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import '../shared/services/api_service.dart';
@@ -87,9 +90,46 @@ class _WarningsPageState extends State<WarningsPage> {
   }
 
   String _getTypeInItalian(String type) {
-    return type == 'threshold'
-        ? 'Superamento NG nel Range di Moduli'
-        : 'NG consecutivi';
+    return type == 'threshold' ? 'NG, Range di Moduli' : 'NG, Consecutivi';
+  }
+
+  void _showImageDialog(BuildContext context, String base64Image) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(20),
+        backgroundColor: Colors.black,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              alignment: Alignment.topRight,
+              children: [
+                InteractiveViewer(
+                  child: Image.memory(
+                    base64Decode(base64Image),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Text(
+                "Foto inviata dal Quality Gate",
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
   }
 
   String _formatTimestamp(String isoString) {
@@ -302,16 +342,11 @@ class _WarningsPageState extends State<WarningsPage> {
                             // Additional information
                             _infoRow(
                               Icons.perm_identity,
-                              "Codice: ${warning['station_name']}",
+                              "Stazione del Quality Gate: ${warning['source_station']}",
                             ),
                             _infoRow(
                               Icons.access_time,
                               "Data e ora: ${_formatTimestamp(warning['timestamp'])}",
-                            ),
-
-                            _infoRow(
-                              Icons.show_chart,
-                              "Valore: ${warning['value']} (limite: ${warning['limit']})",
                             ),
                             _infoRow(
                               Icons.settings,
@@ -319,6 +354,28 @@ class _WarningsPageState extends State<WarningsPage> {
                             ),
 
                             const SizedBox(height: 24),
+
+                            if (warning['photo'] != null &&
+                                warning['photo'].isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Center(
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    _showImageDialog(context, warning['photo']);
+                                  },
+                                  icon: const Icon(Icons.image_rounded),
+                                  label: const Text("Visualizza Immagine"),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blueAccent,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
 
                             // Acknowledge button
                             SizedBox(

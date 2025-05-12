@@ -336,15 +336,16 @@ class ApiService {
   }
 
   static Future<String?> exportSelectedObjectsAndGetDownloadUrl({
-    required List<int> productionIds,
+    required List<String> objectIds,
     required List<Map<String, String>> filters,
   }) async {
     final url = Uri.parse('$baseUrl/api/export_objects');
+
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        "production_ids": productionIds,
+        "object_ids": objectIds,
         "filters": filters,
       }),
     );
@@ -381,6 +382,8 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
+
+      // Each item contains object_id, latest_event, history, and event_count
       return List<Map<String, dynamic>>.from(data["results"] ?? []);
     } else {
       throw Exception("Errore durante la ricerca");
@@ -493,6 +496,44 @@ class ApiService {
 
     if (response.statusCode != 200) {
       throw Exception('Errore durante l\'acknowledge del warning');
+    }
+  }
+
+  static Future<bool> suppressWarning(String line, String timestamp) async {
+    final url = Uri.parse('$baseUrl/api/suppress_warning');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'line_name': line,
+        'timestamp': timestamp,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      debugPrint("❌ Failed to suppress warning: ${response.body}");
+      return false;
+    }
+  }
+
+  static Future<bool> suppressWarningWithPhoto(
+      String lineName, String timestamp, String base64Image) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/warnings/suppress_with_photo'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'line_name': lineName,
+          'timestamp': timestamp,
+          'photo': base64Image,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint("❌ Error suppressing warning with photo: $e");
+      return false;
     }
   }
 }

@@ -2,12 +2,14 @@
 
 import 'dart:async';
 import 'dart:html' as html;
+import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:flutter/material.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
 import '../../shared/services/api_service.dart';
 import '../issue_selector.dart';
+import '../picture_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -27,6 +29,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool hasBeenEvaluated = false;
   final Set<String> _issues = {};
   final WebSocketService webSocketService = WebSocketService();
+  final WebSocketService warningswebSocketService = WebSocketService();
+  List<Map<String, dynamic>> warnings = [];
+  final Set<String> shownWarningTimestamps = {};
+  final List<Map<String, dynamic>> _warningDialogQueue = [];
+  bool _isDialogShowing = false;
 
   bool cicloIniziato = false;
   bool pezzoOK = false;
@@ -166,6 +173,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         print("WebSocket closed");
       },
     );
+    _loadWarningsAndSubscribe();
   }
 
   void _retryWebSocket() {
@@ -230,6 +238,227 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Errore durante l'invio dei difetti")),
       );
+    }
+  }
+
+  Future<void> showWarningDialog(
+    Map<String, dynamic> packet, {
+    required BuildContext dialogContext,
+    void Function(String base64Image)? onPictureTaken,
+    void Function(String timestamp)? onIgnoreWarning,
+  }) async {
+    if (!mounted) return;
+
+    final line = packet['line_name'] ?? '-';
+    final station = packet['station_display'] ?? '-';
+    final defect = packet['defect'] ?? '-';
+    final type = packet['type'] ?? '-';
+    final typeView =
+        type == "threshold" ? "NG in Range di Moduli" : "NG Consecutivi";
+    final value = packet['value']?.toString() ?? '-';
+    final limit = packet['limit']?.toString() ?? '-';
+    final timestamp = packet['timestamp'];
+
+    AwesomeDialog(
+      context: dialogContext,
+      dialogType: DialogType.warning,
+      width: 750,
+      animType: AnimType.bottomSlide,
+      customHeader: const Icon(
+        Icons.warning_rounded,
+        color: Colors.amber,
+        size: 70,
+      ),
+      titleTextStyle: const TextStyle(
+        fontSize: 26,
+        fontWeight: FontWeight.bold,
+        color: Colors.black87,
+      ),
+      descTextStyle: const TextStyle(
+        fontSize: 18,
+        color: Colors.black87,
+      ),
+      title: '⚠️ Avviso inviato alla Stringatrice',
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(height: 10),
+          const Text(
+            "È stato inviato un avviso alla stringatrice per il seguente motivo:",
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 8),
+          _buildCenteredInfo("Stazione", station),
+          _buildCenteredInfo("Difetto", defect),
+          _buildCenteredInfo("Tipo", typeView),
+          _buildCenteredInfo("Valore", "$value / $limit", alert: true),
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 12),
+          const Text(
+            "Vuoi allegare anche una foto per aiutare l'operatore della stringatrice a identificare meglio il problema?",
+            style: TextStyle(fontSize: 22),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+      btnOkText: '📸 Scatta una foto e invia',
+      btnOkColor: Colors.orange,
+      btnOkOnPress: () async {
+        final res = await Navigator.push(
+          dialogContext,
+          MaterialPageRoute(
+            builder: (dialogContext) => const TakePicturePage(),
+          ),
+        );
+
+        if (res != null && res is String) {
+          final success = await ApiService.suppressWarningWithPhoto(
+            line,
+            timestamp,
+            res,
+          );
+
+          if (success && mounted) {
+            setState(() {
+              warnings.removeWhere((w) => w['timestamp'] == timestamp);
+            });
+
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(
+                    content: Text("📸 Foto inviata e avviso aggiornato"),
+                  ),
+                );
+              }
+            });
+          }
+        }
+      },
+      btnCancelText: '🚫 Ignora questo avviso',
+      btnCancelColor: Colors.redAccent,
+      btnCancelOnPress: () async {
+        final success = await ApiService.suppressWarning(line, timestamp);
+        if (success && mounted) {
+          setState(() {
+            warnings.removeWhere((w) => w['timestamp'] == timestamp);
+          });
+
+          ScaffoldMessenger.of(dialogContext).showSnackBar(
+            const SnackBar(
+              content: Text("👁️‍🗨️ Avviso ignorato per questa stazione"),
+            ),
+          );
+        }
+      },
+    ).show();
+  }
+
+  Widget _buildCenteredInfo(String label, String value, {bool alert = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: "$label: ",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: alert ? Colors.redAccent : Colors.black87,
+                fontSize: 18,
+              ),
+            ),
+            TextSpan(
+              text: value,
+              style: TextStyle(
+                fontWeight: FontWeight.w100,
+                fontSize: 18,
+                color: alert ? Colors.redAccent : Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+
+  void _processNextWarningDialog() async {
+    if (!mounted || _isDialogShowing || _warningDialogQueue.isEmpty) return;
+
+    _isDialogShowing = true;
+    final nextPacket = _warningDialogQueue.removeAt(0);
+
+    // Use a fresh context by delaying execution to the next event loop
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      await showWarningDialog(nextPacket, dialogContext: context);
+      _isDialogShowing = false;
+      _processNextWarningDialog();
+    });
+  }
+
+  Future<void> _loadWarningsAndSubscribe() async {
+    try {
+      final existingWarnings =
+          await ApiService.getUnacknowledgedWarnings(selectedLine);
+
+      final relevantWarnings = existingWarnings
+          .where((w) =>
+              w['source_station'] == selectedChannel &&
+              (w['suppress_on_source'] == null ||
+                  w['suppress_on_source'] == false))
+          .toList();
+
+      setState(() {
+        warnings = relevantWarnings;
+      });
+
+      for (var warning in relevantWarnings) {
+        final timestamp = warning['timestamp'];
+        if (!shownWarningTimestamps.contains(timestamp)) {
+          shownWarningTimestamps.add(timestamp);
+          _warningDialogQueue.add(warning);
+        }
+      }
+
+      _processNextWarningDialog();
+
+      print('connecting to stringatrice warnings');
+      warningswebSocketService.connectToStringatriceWarnings(
+        line: selectedLine,
+        onMessage: (packet) async {
+          if (packet['source_station'] == selectedChannel) {
+            setState(() {
+              warnings.insert(0, packet);
+            });
+
+            final timestamp = packet['timestamp'];
+            if (!shownWarningTimestamps.contains(timestamp)) {
+              shownWarningTimestamps.add(timestamp);
+              _warningDialogQueue.add(packet);
+              _processNextWarningDialog();
+            }
+          } else {
+            debugPrint(
+              "⚠️ Ignored warning for station ${packet['source_station']} (this tablet is for $selectedChannel)",
+            );
+          }
+        },
+        onDone: () => debugPrint("⚠️ Warning socket closed"),
+        onError: (e) => debugPrint("❌ Warning socket error: $e"),
+      );
+    } catch (e) {
+      debugPrint("❌ Error loading warnings: $e");
     }
   }
 

@@ -4,13 +4,13 @@ TO START THE VIRTUAL ENVIRONMENT OF Python 3.11.2 use:
 
 flutter build web --web-renderer html
 
-# Build for port 8080 (HomePage only)
+# Build for port 8050 (HomePage only)
 flutter build web --web-renderer html --release -t lib/main_home.dart -o build/web_home
 
-# Build for port 8081 (DataView + OverlayEditor)
+# Build for port 8051 (DataView + OverlayEditor)
 flutter build web --web-renderer html --release -t lib/main_data.dart -o build/web_data
 
-# Build for port 8082 (Stringatrici)
+# Build for port 8052 (Stringatrici)
 flutter build web --web-renderer html --release -t lib/main_stringatrici.dart -o build/web_stringatrici
 
 flutter run -d chrome --web-renderer html -t lib/main_home.dart

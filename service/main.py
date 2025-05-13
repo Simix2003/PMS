@@ -62,7 +62,7 @@ def start_plc_background_tasks():
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
-        get_mysql_connection()
+        conn = get_mysql_connection()  # ✅ This ensures the global connection is initialized and valid
         logger.info("🟢 MySQL connected.")
 
         get_refreshed_settings()
@@ -72,14 +72,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         yield
 
     finally:
-        if global_state.mysql_connection:
-            try:
-                global_state.mysql_connection.close()
-                logger.info("🔴 MySQL disconnected.")
-            except Exception as e:
-                logger.warning(f"MySQL disconnection failed: {e}")
-        else:
-            logger.info("ℹ️ No MySQL connection to close.")
+        try:
+            conn = get_mysql_connection()  # ✅ This will return the live connection or reconnect if needed
+            conn.close()
+            logger.info("🔴 MySQL disconnected.")
+        except Exception as e:
+            logger.warning(f"MySQL disconnection failed: {e}")
+
 
 # ---------------- APP INIT ----------------
 app = FastAPI(lifespan=lifespan)

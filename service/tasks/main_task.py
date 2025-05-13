@@ -6,7 +6,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import insert_initial_production_data, update_production_final
+from service.connections.mysql import get_mysql_connection, insert_initial_production_data, update_production_final
 from service.connections.temp_data import remove_temp_issues
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
@@ -80,7 +80,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     production_id = incomplete_productions.get(full_station_id)
                     if production_id:
                         # Update the initial production record with final data.
-                        await update_production_final(production_id, result, channel_id, global_state.mysql_connection, fine_buona, fine_scarto)
+                        conn = get_mysql_connection()
+                        await update_production_final(production_id, result, channel_id, conn, fine_buona, fine_scarto)
                         incomplete_productions.pop(full_station_id)
                     else:
                         logging.warning(f"⚠️ No initial production record found for {full_station_id}; skipping update.")
@@ -152,7 +153,8 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
 
 
         esito = 4 if esclusione_attiva else 2
-        prod_id = await insert_initial_production_data(initial_data, channel_id, global_state.mysql_connection, esito)
+        conn = get_mysql_connection()
+        prod_id = await insert_initial_production_data(initial_data, channel_id, conn, esito)
         if prod_id:
             incomplete_productions[full_id] = prod_id
 

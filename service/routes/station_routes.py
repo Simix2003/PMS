@@ -13,14 +13,15 @@ from service.helpers.helpers import get_channel_config
 from service.state.global_state import plc_connections
 from service.routes.broadcast import broadcast
 from service.config.config import debug
+from service.connections.mysql import get_mysql_connection
 
 router = APIRouter()
 
 @router.get("/api/station_for_object")
 async def get_station_for_object(id_modulo: str):
     try:
-        assert global_state.mysql_connection is not None
-        with global_state.mysql_connection.cursor() as cursor:
+        conn = get_mysql_connection()
+        with conn.cursor() as cursor:
             cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
             obj = cursor.fetchone()
             if not obj:

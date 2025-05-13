@@ -13,6 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.state import global_state
 from service.helpers.helpers import generate_time_buckets
 from service.config.config import CHANNELS
+from service.connections.mysql import get_mysql_connection
 
 router = APIRouter()
 
@@ -34,12 +35,12 @@ async def get_graph_data(request: Request):
         "weekly": "%Y-%m-%d",
     }.get(group_by, "%Y-%m-%d %H:00:00")
 
-    assert global_state.mysql_connection is not None
+    conn = get_mysql_connection
     result: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
     # ESITO / YIELD / CYCLE TIME
     if "Esito" in metrics or "Yield" in metrics or "CycleTime" in metrics:
-        with global_state.mysql_connection.cursor() as cur:
+        with conn.cursor() as cur:
             print("\nRunning ESITO / CYCLE query...")
             cur.execute("""
                 SELECT
@@ -140,7 +141,7 @@ async def get_graph_data(request: Request):
         """
         params = [date_format, line, station, start, end, category]
 
-        with global_state.mysql_connection.cursor() as cur:
+        with conn.cursor() as cur:
             cur.execute(query, tuple(params))
             defect_rows = cur.fetchall()
 
@@ -172,8 +173,8 @@ async def productions_summary(
     end_time: Optional[str] = Query(default=None),
 ):
     try:
-        assert global_state.mysql_connection is not None
-        with global_state.mysql_connection.cursor() as cursor:
+        conn = get_mysql_connection()
+        with conn.cursor() as cursor:
             params = []
             where_clause = "WHERE 1=1"
 

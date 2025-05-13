@@ -71,21 +71,39 @@ Il database contiene le seguenti tabelle:
 """""
 
 
-
 def get_mysql_connection():
-    if global_state.mysql_connection is None:
-        global_state.mysql_connection = pymysql.connect(
+    """
+    Always return a valid, live MySQL connection stored in global_state.
+
+    • Creates the connection on first call
+    • Reconnects if the existing one is dead (e.g. MySQL timeout)
+    """
+    try:
+        conn = global_state.mysql_connection
+
+        # First use or explicitly closed
+        if conn is None or not conn.open:
+            raise RuntimeError("No active MySQL connection")
+
+        # Reconnect if socket was dropped (e.g. idle too long)
+        conn.ping(reconnect=True)
+        return conn
+
+    except Exception as e:
+        logging.warning(f"MySQL connection lost or not available. Reconnecting… ({e})")
+        conn = pymysql.connect(
             host="localhost",
             user="root",
             password="Master36!",
             database="ix_monitor",
             port=3306,
             cursorclass=DictCursor,
-            autocommit=False
+            autocommit=False,
+            charset="utf8mb4"
         )
-        logging.info("📡 MySQL connection initialized.")
-    return global_state.mysql_connection
-
+        global_state.mysql_connection = conn
+        logging.info("✅ MySQL reconnected")
+        return conn
 
 async def insert_initial_production_data(data, station_name, connection, esito):
     """

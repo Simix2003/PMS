@@ -3,24 +3,23 @@ from datetime import datetime
 from doctest import debug
 import logging
 from fastapi import APIRouter, Body, HTTPException
-from fastapi.responses import JSONResponse
 from pymysql.cursors import DictCursor
 
 import sys
 import os
-from service.connections.mysql import save_warning_on_mysql
-from service.routes.broadcast import broadcast_stringatrice_warning
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.state import global_state
+from service.connections.mysql import get_mysql_connection, save_warning_on_mysql
+from service.routes.broadcast import broadcast_stringatrice_warning
 
 router = APIRouter()
 
 @router.get("/api/warnings/{line_name}")
 def get_unacknowledged_warnings(line_name: str):
-    assert global_state.mysql_connection is not None
+    conn = get_mysql_connection()
 
-    with global_state.mysql_connection.cursor(DictCursor) as cursor:
+    with conn.cursor(DictCursor) as cursor:
         cursor.execute("""
             SELECT * FROM stringatrice_warnings
             WHERE line_name = %s AND acknowledged = 0
@@ -37,22 +36,22 @@ def get_unacknowledged_warnings(line_name: str):
 
 @router.post("/api/warnings/acknowledge/{warning_id}")
 def acknowledge_warning(warning_id: int):
-    assert global_state.mysql_connection is not None
+    conn = get_mysql_connection()
 
-    with global_state.mysql_connection.cursor() as cursor:
+    with conn.cursor() as cursor:
         cursor.execute("""
             UPDATE stringatrice_warnings
             SET acknowledged = 1,
                 suppress_on_source = TRUE
             WHERE id = %s
         """, (warning_id,))
-        global_state.mysql_connection.commit()
+        conn.commit()
 
     return {"message": "Warning acknowledged"}
 
 @router.post("/api/suppress_warning")
 async def suppress_warning(payload: dict):
-    assert global_state.mysql_connection is not None
+    conn = get_mysql_connection()
     try:
         line = payload.get("line_name")
         timestamp_raw = payload.get("timestamp")
@@ -66,14 +65,14 @@ async def suppress_warning(payload: dict):
         if not line or not timestamp:
             raise HTTPException(status_code=400, detail="Missing parameters")
 
-        with global_state.mysql_connection.cursor() as cursor:
+        with conn.cursor() as cursor:
             cursor.execute("""
                 UPDATE stringatrice_warnings
                 SET suppress_on_source = TRUE
                 WHERE line_name = %s AND timestamp = %s
             """, (line, timestamp))
 
-            global_state.mysql_connection.commit()
+            conn.commit()
 
         return {"status": "ok", "updated": True}
     except Exception as e:
@@ -83,15 +82,13 @@ async def suppress_warning(payload: dict):
 
 @router.post("/api/warnings/suppress_with_photo")
 async def suppress_with_photo(data: dict = Body(...)):
-    assert global_state.mysql_connection is not None
+    conn = get_mysql_connection()
 
     line_name = data["line_name"]
-
     timestamp_raw = data["timestamp"]
     timestamp = datetime.fromisoformat(timestamp_raw).strftime('%Y-%m-%d %H:%M:%S')
 
     image_base64 = data.get("photo")
-
     if not image_base64:
         print("⚠️ No image provided in request")
     else:
@@ -99,14 +96,18 @@ async def suppress_with_photo(data: dict = Body(...)):
 
     image_blob = base64.b64decode(image_base64) if image_base64 else None
 
-    with global_state.mysql_connection.cursor() as cursor:
-        cursor.execute("""
-            UPDATE stringatrice_warnings
-            SET suppress_on_source = 1,
-                photo = %s
-            WHERE line_name = %s AND timestamp = %s
-        """, (image_blob, line_name, timestamp))
-        global_state.mysql_connection.commit()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE stringatrice_warnings
+                SET suppress_on_source = 1,
+                    photo = %s
+                WHERE line_name = %s AND timestamp = %s
+            """, (image_blob, line_name, timestamp))
+            conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
     return {"status": "ok"}
 
@@ -144,6 +145,7 @@ if debug:
         }
 
         await broadcast_stringatrice_warning(line, warning_payload)
-        save_warning_on_mysql(warning_payload, global_state.mysql_connection, station, defect, source_station)
+        conn = get_mysql_connection()
+        save_warning_on_mysql(warning_payload, conn, station, defect, source_station)
 
         return {"status": "sent", "payload": warning_payload}

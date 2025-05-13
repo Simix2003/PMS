@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.config.config import COLUMN_MAP
 from service.state import global_state
+from service.connections.mysql import get_mysql_connection
 
 router = APIRouter()
 
@@ -288,8 +289,8 @@ async def search_results(request: Request):
         """
         params.append(limit)
 
-        assert global_state.mysql_connection is not None
-        with global_state.mysql_connection.cursor() as cursor:
+        conn = get_mysql_connection
+        with conn.cursor() as cursor:
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
 

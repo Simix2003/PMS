@@ -10,12 +10,11 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.temp_data import load_temp_data, save_temp_data
-from service.connections.mysql import insert_defects, update_esito, check_stringatrice_warnings
+from service.connections.mysql import get_mysql_connection, insert_defects, update_esito, check_stringatrice_warnings
 from service.helpers.helpers import get_channel_config
 from service.state.global_state import plc_connections, incomplete_productions
 from service.config.settings import load_settings
 from service.config.config import ISSUE_TREE
-from service.state import global_state
 
 router = APIRouter()
 
@@ -55,21 +54,24 @@ async def set_issues(request: Request):
     production_id = incomplete_productions.get(full_id)
     if production_id:
         try:
-            assert global_state.mysql_connection is not None
-            cursor = global_state.mysql_connection.cursor()
+            conn = get_mysql_connection()
+            cursor = conn.cursor()
+
             result = {
                 "Id_Modulo": object_id,
                 "Compilato_Su_Ipad_Scarto_Presente": True,
                 "issues": issues
             }
+
             await insert_defects(result, production_id, channel_id, line_name, cursor=cursor)
-            await update_esito(6, production_id, cursor=cursor, connection=global_state.mysql_connection)
-            global_state.mysql_connection.commit()
+            await update_esito(6, production_id, cursor=cursor, connection=conn)
+            conn.commit()
             cursor.close()
-            await check_stringatrice_warnings(line_name, global_state.mysql_connection, get_current_settings())
+
+            await check_stringatrice_warnings(line_name, conn, get_current_settings())
+
         except Exception as e:
-            assert global_state.mysql_connection is not None
-            global_state.mysql_connection.rollback()
+            get_mysql_connection().rollback()  # ✅ Ensures it's valid even in error path
             logging.error(f"❌ Error inserting defects early for {full_id}: {e}")
 
     target = paths["esito_scarto_compilato"]
@@ -119,8 +121,8 @@ async def get_issue_tree(
 @router.get("/api/issues/for_object")
 async def get_issues_for_object(id_modulo: str):
     try:
-        assert global_state.mysql_connection is not None
-        with global_state.mysql_connection.cursor() as cursor:
+        conn = get_mysql_connection
+        with conn.cursor() as cursor:
             # 1. Trova l'object_id
             cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
             obj = cursor.fetchone()

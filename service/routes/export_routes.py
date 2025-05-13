@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.helpers.export import EXPORT_DIR, clean_old_exports, export_full_excel
 from service.config.settings import load_settings
-from service.state import global_state
+from service.connections.mysql import get_mysql_connection
 
 router = APIRouter()
 
@@ -22,7 +22,8 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
     if not object_ids:
         return {"status": "ok", "filename": None}
 
-    if not global_state.mysql_connection:
+    conn = get_mysql_connection()
+    if not conn:
         return JSONResponse(status_code=500,
                             content={"error": "MySQL connection not available"})
 
@@ -39,7 +40,7 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
         settings = load_settings()
         export_data["min_cycle_threshold"] = settings.get("min_cycle_threshold", 3.0)
 
-        with global_state.mysql_connection.cursor() as cursor:
+        with conn.cursor() as cursor:
             # ----- reference tables ------------------------------------------------
             cursor.execute("SELECT * FROM stations")
             export_data["stations"] = cursor.fetchall()

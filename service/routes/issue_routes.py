@@ -121,7 +121,7 @@ async def get_issue_tree(
 @router.get("/api/issues/for_object")
 async def get_issues_for_object(id_modulo: str):
     try:
-        conn = get_mysql_connection
+        conn = get_mysql_connection()
         with conn.cursor() as cursor:
             # 1. Trova l'object_id
             cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))

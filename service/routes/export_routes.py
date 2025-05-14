@@ -49,15 +49,32 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
             export_data["production_lines"] = cursor.fetchall()
 
             # ----------------------------------------------------------------------
-            # 1.  Fetch OBJECTS  (match either objects.id OR objects.id_modulo)
+            # 1.  Fetch OBJECTS
             # ----------------------------------------------------------------------
-            fmt = ",".join(["%s"] * len(object_ids))
+            modulo_ids = [oid for oid in object_ids if not str(oid).isdigit()]
+            int_ids = [int(oid) for oid in object_ids if str(oid).isdigit()]
+
+            clauses = []
+            params = []
+
+            if int_ids:
+                fmt = ",".join(["%s"] * len(int_ids))
+                clauses.append(f"id IN ({fmt})")
+                params.extend(int_ids)
+
+            if modulo_ids:
+                fmt = ",".join(["%s"] * len(modulo_ids))
+                clauses.append(f"id_modulo IN ({fmt})")
+                params.extend(modulo_ids)
+
+            where_clause = " OR ".join(clauses)
+
             cursor.execute(
                 f"""
                 SELECT * FROM objects
-                WHERE id IN ({fmt}) OR id_modulo IN ({fmt})
+                WHERE {where_clause}
                 """,
-                tuple(object_ids * 2),                        # pass list twice
+                tuple(params),
             )
             objects = cursor.fetchall()
             if not objects:

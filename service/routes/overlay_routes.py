@@ -23,13 +23,11 @@ async def get_overlay_config(
     config_file = f"C:/IX-Monitor/images/{line_name}/{station}/overlay_config.json"
     if station == "M326":
         if object_id:
-            comes_from = get_station_for_object(object_id)
+            comes_from = await get_station_for_object(object_id)
             config_file = f"C:/IX-Monitor/images/{line_name}/M308/overlay_config.json"
             if comes_from == 'M309':
                 config_file = f"C:/IX-Monitor/images/{line_name}/M309/overlay_config.json"
 
-    print(f"🔍 Requested overlay config for path: '{path}' (line: {line_name}, station: {station})")
-    print(f"📄 Looking for config file at: {config_file}")
 
     if not os.path.exists(config_file):
         print(f"❌ Config file not found.")

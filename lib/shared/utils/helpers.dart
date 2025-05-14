@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 Color getStatusColor(int? esito) {
@@ -23,4 +26,11 @@ String getStatusLabel(int? esito) {
     default:
       return 'N/A';
   }
+}
+
+Uint8List decodeImage(String data) {
+  if (data.startsWith('data:image')) {
+    return base64Decode(data.split(',').last);
+  }
+  return base64Decode(data);
 }

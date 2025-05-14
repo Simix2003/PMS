@@ -5,10 +5,11 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.config.config import debug, debugModulo
+from service.config.config import debug
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
 from service.state.global_state import subscriptions
+import service.state.global_state as global_state
 
 async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connection: PLCConnection, line_name: str):
     paths = get_channel_config(line_name, channel_id)
@@ -29,13 +30,14 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
     stringatrice = ""
     outcome = None
     issues_submitted = False
+    full_id = f"{line_name}.{channel_id}"
 
     if trigger_value:
         id_mod_conf = paths["id_modulo"]
 
         ###############################################################################################################################
         if debug:
-            object_id = debugModulo
+            object_id = global_state.debug_moduli.get(full_id)
         else:
             object_id = await asyncio.to_thread(
                 plc_connection.read_string,

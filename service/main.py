@@ -20,9 +20,9 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # Local imports
 from controllers.plc import PLCConnection
-from service.config.config import CHANNELS, IMAGES_DIR, STATIONS_CONFIG_PATH, load_station_configs
+from service.controllers.debug_plc import FakePLCConnection
+from service.config.config import CHANNELS, IMAGES_DIR, STATIONS_CONFIG_PATH, load_station_configs, debug
 from service.connections.mysql import get_mysql_connection
-from service.state import global_state
 from service.tasks.main_task import background_task, make_status_callback
 from service.state.global_state import plc_connections, stop_threads, passato_flags
 from service.routes.plc_routes import router as plc_router
@@ -33,7 +33,6 @@ from service.routes.export_routes import router as export_router
 from service.routes.settings_routes import router as settings_router, get_refreshed_settings
 from service.routes.graph_routes import router as graph_router
 from service.routes.station_routes import router as station_router
-from service.routes.images_routes import router as images_router
 from service.routes.search_routes import router as search_router
 from service.routes.websocket_routes import router as websocket_router
 
@@ -53,10 +52,16 @@ def start_plc_background_tasks():
         plc_slot = config["PLC"]["SLOT"]
         for station in config["stations"]:
             key = f"{line}.{station}"
-            plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+
+            if debug:
+                plc_conn = FakePLCConnection(station)
+            else:
+                plc_conn = PLCConnection(ip_address=plc_ip, slot=plc_slot, status_callback=make_status_callback(station))
+
             plc_connections[key] = plc_conn
             asyncio.create_task(background_task(plc_conn, key))
             logger.info(f"🚀 Background task created for {key}")
+
 
 # ---------------- APP LIFESPAN ----------------
 @asynccontextmanager
@@ -103,7 +108,6 @@ def register_routers(app: FastAPI):
     app.include_router(settings_router)
     app.include_router(graph_router)
     app.include_router(station_router)
-    app.include_router(images_router)
     app.include_router(search_router)
     app.include_router(websocket_router) 
 

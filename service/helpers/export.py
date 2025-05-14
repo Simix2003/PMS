@@ -40,7 +40,7 @@ def clean_old_exports(max_age_hours: int = 2):
                 os.remove(path)
 
 def export_full_excel(data: dict) -> str:
-    filename = f"ixmonitor_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"Esportazione_PMS_{datetime.now().strftime('%d-%m-%Y.%H-%M')}.xlsx"
     filepath = os.path.join(EXPORT_DIR, filename)
 
     wb = Workbook()

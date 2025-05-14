@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("🟢 MySQL connected.")
 
         get_refreshed_settings()
-        #start_plc_background_tasks()
+        start_plc_background_tasks()
 
         app.state.plc_connections = plc_connections
         yield

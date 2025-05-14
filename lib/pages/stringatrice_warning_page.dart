@@ -98,35 +98,61 @@ class _WarningsPageState extends State<WarningsPage> {
       context: context,
       builder: (_) => Dialog(
         insetPadding: const EdgeInsets.all(20),
-        backgroundColor: Colors.black,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              alignment: Alignment.topRight,
-              children: [
-                InteractiveViewer(
-                  child: Image.memory(
-                    base64Decode(base64Image),
-                    fit: BoxFit.contain,
+        backgroundColor: Colors.white,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SizedBox(
+              width: constraints.maxWidth * 0.9,
+              height: constraints.maxHeight * 0.8,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Stack(
+                      alignment: Alignment.topRight,
+                      children: [
+                        Center(
+                          child: InteractiveViewer(
+                            child: Image.memory(
+                              base64Decode(base64Image),
+                              fit: BoxFit.contain,
+                              width: double.infinity,
+                              height: double.infinity,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.black),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: Text(
-                "Foto inviata dal Quality Gate",
-                style: TextStyle(color: Colors.white, fontSize: 16),
+                  Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                        bottomLeft: Radius.circular(12),
+                        bottomRight: Radius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      "Foto inviata dal Quality Gate",
+                      style: TextStyle(color: Colors.white, fontSize: 24),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
               ),
-            ),
-            const SizedBox(height: 10),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -363,11 +389,21 @@ class _WarningsPageState extends State<WarningsPage> {
                                   onPressed: () {
                                     _showImageDialog(context, warning['photo']);
                                   },
-                                  icon: const Icon(Icons.image_rounded),
-                                  label: const Text("Visualizza Immagine"),
+                                  icon: const Icon(Icons.image_rounded,
+                                      size: 28), // ⬅️ Bigger icon
+                                  label: const Text(
+                                    "Visualizza Immagine",
+                                    style: TextStyle(
+                                        fontSize: 18), // ⬅️ Bigger text
+                                  ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.blueAccent,
                                     foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 24,
+                                        vertical: 16), // ⬅️ More space
+                                    minimumSize: const Size(200,
+                                        60), // ⬅️ Ensures button isn’t tiny
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -387,7 +423,7 @@ class _WarningsPageState extends State<WarningsPage> {
                                   size: 28,
                                 ),
                                 label: const Text(
-                                  "CONFERMA LETTURA",
+                                  "Conferma Lettura",
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,

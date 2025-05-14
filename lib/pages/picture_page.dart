@@ -1,4 +1,4 @@
-// ignore_for_file: camel_case_types
+// ignore_for_file: camel_case_types, use_build_context_synchronously
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -49,10 +49,11 @@ class _TakePicturePageState extends State<TakePicturePage>
 
     final compressed = await FlutterImageCompress.compressWithList(
       decoded,
-      minWidth: 800, // reduce resolution if needed
-      minHeight: 600,
-      quality: 50, // adjust from 0 (max compression) to 100 (no compression)
+      minWidth: 1280,
+      minHeight: 960,
+      quality: 70,
       format: CompressFormat.jpeg,
+      keepExif: false,
     );
 
     return base64Encode(compressed);
@@ -199,6 +200,14 @@ class _TakePicturePageState extends State<TakePicturePage>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              const SizedBox(width: 24),
+              _buildActionButton(
+                icon: Icons.refresh,
+                label: "Riscatta",
+                color: const Color(0xFFE94560),
+                onPressed: retakePicture,
+              ),
+              const SizedBox(width: 16),
               _buildActionButton(
                 icon: Icons.check,
                 label: "Conferma",
@@ -207,13 +216,6 @@ class _TakePicturePageState extends State<TakePicturePage>
                   final compressed = await compressBase64Image(result);
                   Navigator.pop(context, compressed);
                 },
-              ),
-              const SizedBox(width: 24),
-              _buildActionButton(
-                icon: Icons.refresh,
-                label: "Riscatta",
-                color: const Color(0xFFE94560),
-                onPressed: retakePicture,
               ),
             ],
           ),

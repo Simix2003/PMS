@@ -1,15 +1,18 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../shared/utils/helpers.dart';
 
 class PictureGalleryPage extends StatefulWidget {
   final List<Map<String, String>> images;
   final void Function(int index)? onDelete;
+  // we should add a bool to know that the images are preloaded :
+  final bool isPreloaded;
 
   const PictureGalleryPage({
-    Key? key,
+    super.key,
     required this.images,
     this.onDelete,
-  }) : super(key: key);
+    required this.isPreloaded,
+  });
 
   @override
   State<PictureGalleryPage> createState() => _PictureGalleryPageState();
@@ -60,11 +63,10 @@ class _PictureGalleryPageState extends State<PictureGalleryPage> {
                   child: Stack(
                     children: [
                       Positioned.fill(
-                        child: Image.memory(
-                          base64Decode(image['image']!),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
+                          child: Image.memory(
+                        decodeImage(image['image']!),
+                        fit: BoxFit.cover,
+                      )),
                       Positioned(
                         bottom: 8,
                         left: 8,
@@ -83,24 +85,25 @@ class _PictureGalleryPageState extends State<PictureGalleryPage> {
                           ),
                         ),
                       ),
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: GestureDetector(
-                          onTap: () => _deleteImage(index),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.all(4.0),
-                              child: Icon(Icons.close,
-                                  color: Colors.white, size: 20),
+                      if (!widget.isPreloaded)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: GestureDetector(
+                            onTap: () => _deleteImage(index),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Padding(
+                                padding: EdgeInsets.all(4.0),
+                                child: Icon(Icons.close,
+                                    color: Colors.white, size: 20),
+                              ),
                             ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 );

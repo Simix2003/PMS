@@ -213,7 +213,9 @@ class _TakePicturePageState extends State<TakePicturePage>
                 label: "Conferma",
                 color: const Color(0xFF4CAF50),
                 onPressed: () async {
+                  print('Clicked on "Conferma"');
                   final compressed = await compressBase64Image(result);
+                  print('Compressed image from Flutter');
                   Navigator.pop(context, compressed);
                 },
               ),

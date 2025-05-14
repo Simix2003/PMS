@@ -12,6 +12,7 @@ class IssueSelectorWidget extends StatefulWidget {
   final bool canAdd;
   final bool isReworkMode; // defaults to false
   final List<String> initiallySelectedIssues; // used in rework
+  final List<Map<String, String>> initiallyCreatedPictures; // used in rework
   final String objectId;
 
   const IssueSelectorWidget({
@@ -23,6 +24,7 @@ class IssueSelectorWidget extends StatefulWidget {
     this.canAdd = true,
     this.isReworkMode = false,
     this.initiallySelectedIssues = const [],
+    this.initiallyCreatedPictures = const [],
     required this.objectId,
   });
 
@@ -66,6 +68,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
     if (widget.isReworkMode) {
       selectedLeaves = widget.initiallySelectedIssues.toSet();
+      allPictures = widget.initiallyCreatedPictures;
 
       // Extract ALTRO issues from selectedLeaves
       for (final issue in widget.initiallySelectedIssues) {
@@ -285,53 +288,56 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
               const SizedBox(width: 24),
 
               // Scatta Foto
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TextButton.icon(
-                  onPressed: () async {
-                    var res = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const TakePicturePage(),
-                      ),
-                    );
-
-                    if (res != null &&
-                        res is String &&
-                        activeLeafDefect != null) {
-                      setState(() {
-                        allPictures.add({
-                          'defect': activeLeafDefect!,
-                          'image': res,
-                        });
-
-                        // 🔁 Notifica al parent
-                        widget.onPicturesChanged?.call(allPictures);
-                      });
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Foto aggiunta con successo!"),
+              if (!widget.isReworkMode || widget.isReworkMode && widget.canAdd)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      var res = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TakePicturePage(),
                         ),
                       );
-                    }
-                  },
-                  icon: const Icon(Icons.camera_alt, color: Colors.white),
-                  label: const Text(
-                    "Scatta Foto",
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+
+                      print('returned "res" from TakePicturePage: ${res}');
+
+                      if (res != null &&
+                          res is String &&
+                          activeLeafDefect != null) {
+                        setState(() {
+                          allPictures.add({
+                            'defect': activeLeafDefect!,
+                            'image': res,
+                          });
+
+                          // 🔁 Notifica al parent
+                          widget.onPicturesChanged?.call(allPictures);
+                        });
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Foto aggiunta con successo!"),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.camera_alt, color: Colors.white),
+                    label: const Text(
+                      "Scatta Foto",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ),
-              ),
 
               const SizedBox(width: 12),
 
@@ -355,6 +361,10 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                                 widget.onPicturesChanged?.call(allPictures);
                               });
                             },
+                            isPreloaded:
+                                widget.initiallyCreatedPictures.isNotEmpty
+                                    ? true
+                                    : false,
                           ),
                         ),
                       );

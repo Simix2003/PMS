@@ -127,8 +127,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
           if (selectedChannel == "M326" && newObjectId.isNotEmpty) {
             try {
-              final previouslySelected =
+              final result =
                   await ApiService.fetchInitialIssuesForObject(newObjectId);
+              final previouslySelected = result['issue_paths'] as List<String>;
+              final preloadedPictures =
+                  result['pictures'] as List<Map<String, String>>;
+
               if (previouslySelected.isEmpty) {
                 canAdd = true;
               } else {
@@ -136,6 +140,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               }
               setState(() {
                 _issues.addAll(previouslySelected);
+                _pictures = preloadedPictures;
               });
             } catch (e) {
               print("❌ Error fetching rework issues: $e");
@@ -214,16 +219,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final confirm = await showAddIssueConfirmationDialog(context);
     if (!confirm) return;
 
-    await ApiService.uploadImages(
-      objectId: objectId,
-      images: _pictures,
-    );
-
     final success = await ApiService.submitIssues(
       selectedLine: selectedLine,
       selectedChannel: selectedChannel,
       objectId: objectId,
-      issues: _issues.toList(),
+      issues: _issues.map((path) {
+        final matching = _pictures.firstWhere(
+          (img) => img["defect"] == path,
+          orElse: () => {"base64": ""},
+        );
+
+        return {
+          "path": path,
+          "image_base64": matching["image"],
+        };
+      }).toList(),
     );
 
     if (success) {
@@ -871,6 +881,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             canAdd: canAdd,
                             isReworkMode: selectedChannel == "M326",
                             initiallySelectedIssues: _issues.toList(),
+                            initiallyCreatedPictures: _pictures.toList(),
                             objectId: objectId,
                           )
                         ] else if (hasBeenEvaluated &&

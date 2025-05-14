@@ -10,10 +10,10 @@ from service.connections.mysql import get_mysql_connection, insert_initial_produ
 from service.connections.temp_data import remove_temp_issues
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
-from service.config.config import debug, debugModulo
+from service.config.config import debug
 from service.routes.broadcast import broadcast
 from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
-from service.state import global_state
+import service.state.global_state as global_state
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
     print(f"[{full_station_id}] Starting background task.")
@@ -37,11 +37,13 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 continue  # Skip this cycle if config not found
 
             trigger_conf = paths["trigger"]
-            trigger_value = await asyncio.to_thread(
-                plc_connection.read_bool,
-                trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
-            )
-
+            if debug:
+                trigger_value = global_state.debug_triggers.get(full_station_id, False)
+            else:
+                trigger_value = await asyncio.to_thread(
+                    plc_connection.read_bool,
+                    trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
+                )
 
             if trigger_value is None:
                 raise Exception("Trigger read returned None")
@@ -60,8 +62,12 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             # Now you're safe to use it:
             fb_conf = paths["fine_buona"]
             fs_conf = paths["fine_scarto"]
-            fine_buona = await asyncio.to_thread(plc_connection.read_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"])
-            fine_scarto = await asyncio.to_thread(plc_connection.read_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"])
+            if debug:
+                fine_buona = False
+                fine_scarto = global_state.debug_triggers_fisici.get(full_station_id, False)
+            else:
+                fine_buona = await asyncio.to_thread(plc_connection.read_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"])
+                fine_scarto = await asyncio.to_thread(plc_connection.read_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"])
 
 
             if fine_buona is None or fine_scarto is None:
@@ -121,7 +127,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
 
         ###############################################################################################################################
         if debug:
-            object_id = debugModulo
+            object_id = global_state.debug_moduli.get(full_id)
         else:
             object_id = await asyncio.to_thread(plc_connection.read_string, id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"])    
         ###############################################################################################################################
@@ -205,7 +211,7 @@ async def read_data(
 
         ###############################################################################################################################
         if debug:
-            data["Id_Modulo"] = debugModulo
+            data["Id_Modulo"] = global_state.debug_moduli.get(full_id)
         else:
             data["Id_Modulo"] = await asyncio.to_thread(
                 plc_connection.read_string,

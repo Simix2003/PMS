@@ -1,5 +1,6 @@
 # service/routes/issue_routes.py
 
+import base64
 from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import JSONResponse
 import asyncio
@@ -71,7 +72,7 @@ async def set_issues(request: Request):
             await check_stringatrice_warnings(line_name, conn, get_current_settings())
 
         except Exception as e:
-            get_mysql_connection().rollback()  # ✅ Ensures it's valid even in error path
+            get_mysql_connection().rollback()
             logging.error(f"❌ Error inserting defects early for {full_id}: {e}")
 
     target = paths["esito_scarto_compilato"]
@@ -149,57 +150,73 @@ async def get_issues_for_object(id_modulo: str):
             # 3. Estrai i difetti associati
             cursor.execute("""
                 SELECT d.category, od.defect_type, od.i_ribbon, od.stringa, 
-                       od.ribbon_lato, od.s_ribbon, od.extra_data
+                       od.ribbon_lato, od.s_ribbon, od.extra_data, od.photo
                 FROM object_defects od
                 JOIN defects d ON od.defect_id = d.id
                 WHERE od.production_id = %s
             """, (production_id,))
 
             defects = cursor.fetchall()
-            print(f'defects: {defects}')
             issue_paths = []
+            pictures = []
 
             for row in defects:
                 cat = row["category"]
+                base64_photo = None
+
+                # Fetch photo blob if available
+                if "photo" in row and row["photo"]:
+                    base64_photo = f"data:image/jpeg;base64,{base64.b64encode(row['photo']).decode()}"
 
                 if cat == "Generali":
                     if row["defect_type"]:
-                        issue_paths.append(f"Dati.Esito.Esito_Scarto.Difetti.Generali.{row['defect_type']}")
+                        path = f"Dati.Esito.Esito_Scarto.Difetti.Generali.{row['defect_type']}"
+                        issue_paths.append(path)
+                        if base64_photo:
+                            pictures.append({"defect": path, "image": base64_photo})
 
                 elif cat == "Altro":
                     if row["extra_data"]:
-                        issue_paths.append(f"Dati.Esito.Esito_Scarto.Difetti.Altro: {row['extra_data']}")
+                        path = f"Dati.Esito.Esito_Scarto.Difetti.Altro: {row['extra_data']}"
+                        issue_paths.append(path)
+                        # Normally Altro has no photo
 
                 elif cat == "Saldatura":
-                    issue_paths.append(
-                        f"Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[{row['stringa']}].Pin[{row['s_ribbon']}].{row['ribbon_lato']}"
-                    )
+                    path = f"Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[{row['stringa']}].Pin[{row['s_ribbon']}].{row['ribbon_lato']}"
+                    issue_paths.append(path)
+                    if base64_photo:
+                        pictures.append({"defect": path, "image": base64_photo})
 
                 elif cat == "Disallineamento":
                     if row["stringa"]:
-                        issue_paths.append(f"Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[{row['stringa']}]")
+                        path = f"Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[{row['stringa']}]"
                     elif row["i_ribbon"] and row["ribbon_lato"]:
-                        issue_paths.append(
-                            f"Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
-                        )
+                        path = f"Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
+                    else:
+                        continue
+                    issue_paths.append(path)
+                    if base64_photo:
+                        pictures.append({"defect": path, "image": base64_photo})
 
                 elif cat == "Mancanza Ribbon":
-                    issue_paths.append(
-                        f"Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
-                    )
+                    path = f"Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
+                    issue_paths.append(path)
+                    if base64_photo:
+                        pictures.append({"defect": path, "image": base64_photo})
 
                 elif cat == "I_Ribbon Leadwire":
-                    issue_paths.append(
-                        f"Dati.Esito.Esito_Scarto.Difetti.I_Ribbon Leadwire.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
-                    )
+                    path = f"Dati.Esito.Esito_Scarto.Difetti.I_Ribbon Leadwire.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
+                    issue_paths.append(path)
+                    if base64_photo:
+                        pictures.append({"defect": path, "image": base64_photo})
 
                 elif cat in ["Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella"]:
-                    issue_paths.append(
-                        f"Dati.Esito.Esito_Scarto.Difetti.{cat}.Stringa[{row['stringa']}]"
-                    )
-            
-            print('Issue Paths: %s' % issue_paths)
-            return issue_paths
+                    path = f"Dati.Esito.Esito_Scarto.Difetti.{cat}.Stringa[{row['stringa']}]"
+                    issue_paths.append(path)
+                    if base64_photo:
+                        pictures.append({"defect": path, "image": base64_photo})
+
+            return {"issue_paths": issue_paths, "pictures": pictures}
 
     except Exception as e:
         logging.error(f"❌ Errore nel recupero dei difetti per id_modulo={id_modulo}: {e}")

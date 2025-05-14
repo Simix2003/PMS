@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime
 import logging
 import pymysql
@@ -257,16 +258,27 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
     # 2. Load the issues from temporary storage using the proper line name.
     issues = get_latest_issues(line_name, channel_id)
     data["issues"] = issues  # Inject into data if needed later.
+    
+    # 3. Insert each defect
+    for issue in issues:
+        path = issue.get("path")
+        image_base64 = issue.get("image_base64")
 
-    # 3. For each issue path, parse and insert a row.
-    for path in issues:
-        category = detect_category(path)  # e.g. "Generali"
-        defect_id = cat_map.get(category, cat_map["Altro"])  # fallback if unknown
+        if not path:
+            continue  # skip invalid
+
+        category = detect_category(path)
+        defect_id = cat_map.get(category, cat_map["Altro"])
         parsed = parse_issue_path(path, category)
+
+        # Decode image if present
+        image_blob = base64.b64decode(image_base64) if image_base64 else None
+
         sql = """
             INSERT INTO object_defects (
-                production_id, defect_id, defect_type, stringa, s_ribbon, i_ribbon, ribbon_lato, extra_data
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                production_id, defect_id, defect_type, stringa,
+                s_ribbon, i_ribbon, ribbon_lato, extra_data, photo
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(sql, (
             production_id,
@@ -276,7 +288,8 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
             parsed["s_ribbon"],
             parsed["i_ribbon"],
             parsed["ribbon_lato"],
-            parsed['extra_data']
+            parsed["extra_data"],
+            image_blob
         ))
 
 async def update_esito(esito: int, production_id: int, cursor, connection):
@@ -302,11 +315,13 @@ def save_warning_on_mysql(
     mysql_conn,
     target_station: dict,
     defect_name: str,
-    source_station: str,
+    source_station: dict,
     suppress_on_source: bool = False,
     image_blob: bytes = None # type: ignore
 ):
     try:
+        source_station_name = source_station["display_name"] if isinstance(source_station, dict) else str(source_station)
+
         with mysql_conn.cursor() as cursor:
             cursor.execute("""
                 INSERT INTO stringatrice_warnings (
@@ -331,12 +346,12 @@ def save_warning_on_mysql(
                 warning_payload["value"],
                 warning_payload["limit"],
                 datetime.now(),
-                source_station,
+                source_station_name,
                 suppress_on_source,
                 image_blob
             ))
             mysql_conn.commit()
-            print(f"💾 Warning saved for {target_station['name']} (from {source_station})")
+            print(f"💾 Warning saved for {target_station['name']} (from {source_station_name})")
     except Exception as e:
         logging.error(f"❌ Failed to save warning to MySQL: {e}")
 

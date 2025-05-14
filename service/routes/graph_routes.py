@@ -35,7 +35,7 @@ async def get_graph_data(request: Request):
         "weekly": "%Y-%m-%d",
     }.get(group_by, "%Y-%m-%d %H:00:00")
 
-    conn = get_mysql_connection
+    conn = get_mysql_connection()
     result: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
     # ESITO / YIELD / CYCLE TIME

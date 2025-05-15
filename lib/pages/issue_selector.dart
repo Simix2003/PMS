@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/picture_gallery.dart';
 import 'package:ix_monitor/pages/picture_page.dart';
 import '../../shared/services/api_service.dart';
+import '../shared/services/info_service.dart';
 
 class IssueSelectorWidget extends StatefulWidget {
   final String selectedLine;
@@ -303,8 +304,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                         ),
                       );
 
-                      print('returned "res" from TakePicturePage: ${res}');
-
                       if (res != null &&
                           res is String &&
                           activeLeafDefect != null) {
@@ -361,10 +360,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                                 widget.onPicturesChanged?.call(allPictures);
                               });
                             },
-                            isPreloaded:
-                                widget.initiallyCreatedPictures.isNotEmpty
-                                    ? true
-                                    : false,
+                            isPreloaded: widget.isReworkMode ? true : false,
                           ),
                         ),
                       );
@@ -405,42 +401,66 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                 final fullPath = "$apiPath.$name";
                 final bool isSelected = selectedLeaves.contains(fullPath);
 
-                return ElevatedButton(
-                  onPressed: widget.canAdd
-                      ? () {
-                          setState(() {
-                            if (isSelected) {
-                              selectedLeaves.remove(fullPath);
-                              if (activeLeafDefect == fullPath) {
-                                activeLeafDefect = null;
-                              }
-                            } else {
-                              selectedLeaves.add(fullPath);
-                              activeLeafDefect = fullPath;
+                return Stack(
+                  alignment: Alignment.topRight,
+                  children: [
+                    ElevatedButton(
+                      onPressed: widget.canAdd
+                          ? () {
+                              setState(() {
+                                if (isSelected) {
+                                  selectedLeaves.remove(fullPath);
+                                  if (activeLeafDefect == fullPath) {
+                                    activeLeafDefect = null;
+                                  }
+                                } else {
+                                  selectedLeaves.add(fullPath);
+                                  activeLeafDefect = fullPath;
+                                }
+                              });
+                              widget.onIssueSelected(fullPath);
                             }
-                          });
-                          widget.onIssueSelected(fullPath);
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        isSelected ? Colors.deepOrange.withOpacity(0.2) : null,
-                    foregroundColor: Colors.black,
-                    side: isSelected
-                        ? const BorderSide(color: Colors.deepOrange, width: 2)
-                        : null,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isSelected
+                            ? Colors.deepOrange.withOpacity(0.2)
+                            : null,
+                        foregroundColor: Colors.black,
+                        side: isSelected
+                            ? const BorderSide(
+                                color: Colors.deepOrange, width: 2)
+                            : null,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 40, vertical: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: isSelected ? 3 : 1,
+                      ),
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w500),
+                      ),
                     ),
-                    elevation: isSelected ? 3 : 1,
-                  ),
-                  child: Text(
-                    name,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
+
+                    // ℹ️ Info icon for the leaf (e.g., "Bad Soldering")
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.info_outline,
+                          size: 20,
+                          color: Colors.blue,
+                        ),
+                        splashRadius: 20,
+                        tooltip: 'Info',
+                        onPressed: () =>
+                            _showDefectInfo(name), // pass leaf name
+                      ),
+                    ),
+                  ],
                 );
               }).toList(),
             ),
@@ -538,6 +558,38 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     );
   }
 
+  Future<void> _showDefectInfo(String key) async {
+    final info = await DefectInfoService.get(key);
+    if (info == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nessuna descrizione disponibile')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(key),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (info['image']!.isNotEmpty)
+              Image.asset(info['image']!, height: 160, fit: BoxFit.contain),
+            const SizedBox(height: 12),
+            Text(info['description']!),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Chiudi'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildGroupSelection() {
     return Padding(
       padding: const EdgeInsets.only(top: 60.0),
@@ -556,28 +608,51 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
               alignment: WrapAlignment.center,
               children: mainGroups.map((group) {
                 final bool selected = groupHasSelected(group);
-                return ElevatedButton(
-                  onPressed: () => _onGroupSelected(group),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: selected
-                        ? Colors.deepOrange.withOpacity(0.2)
-                        : null, // Default button color when not selected
-                    foregroundColor: Colors.black,
-                    side: selected
-                        ? const BorderSide(color: Colors.deepOrange, width: 2)
-                        : null,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 30, vertical: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                return Stack(
+                  alignment: Alignment.topRight,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => _onGroupSelected(group),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: selected
+                            ? Colors.deepOrange.withOpacity(0.2)
+                            : null,
+                        foregroundColor: Colors.black,
+                        side: selected
+                            ? const BorderSide(
+                                color: Colors.deepOrange, width: 2)
+                            : null,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 40, vertical: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: selected ? 3 : null,
+                      ),
+                      child: Text(
+                        group,
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w500),
+                      ),
                     ),
-                    elevation: selected ? 3 : null,
-                  ),
-                  child: Text(
-                    group,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w500),
-                  ),
+
+                    // ℹ️ Info button in the corner
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.info_outline,
+                          size: 20,
+                          color: Colors.blue,
+                        ),
+                        splashRadius: 20,
+                        tooltip: 'Info',
+                        onPressed: () =>
+                            _showDefectInfo(group), // You define this
+                      ),
+                    ),
+                  ],
                 );
               }).toList(),
             ),

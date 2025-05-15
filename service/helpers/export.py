@@ -306,7 +306,7 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
         "Poe Scaduto", "No Good da Bussing",
-        "Materiale Esterno su Celle", "Bad Soldering", "Passthroug", "Poe in Eccesso"
+        "Materiale Esterno su Celle", "Bad Soldering", "Passthrough", "Poe in Eccesso", "Test"
     ]
     ws.append(header)
 
@@ -361,8 +361,9 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         flag_bus = "NG" if "No Good da Bussing" in general_defects else ""
         flag_materiale = "NG" if "Materiale Esterno su Celle" in general_defects else ""
         flag_bad = "NG" if "Bad Soldering" in general_defects else ""
-        flag_passthrough = "NG" if "Passthroug" in general_defects else ""
+        flag_passthrough = "NG" if "Passthrough" in general_defects else ""
         flag_poe_in_eccesso = "NG" if "Poe in Eccesso" in general_defects else ""
+        flag_test = "NG" if "Test" in general_defects else ""
 
         row = [
             line_display_name,
@@ -378,14 +379,15 @@ def ng_generali_sheet(ws, data: dict) -> bool:
             flag_materiale,
             flag_bad,
             flag_passthrough,
-            flag_poe_in_eccesso
+            flag_poe_in_eccesso,
+            flag_test
         ]
         ws.append(row)
 
     if rows_written > 0:
         autofit_columns(ws, align_center_for={
             "Esito", "Poe Scaduto", "No Good da Bussing",
-            "Materiale Esterno su Celle", "Bad Soldering", "Passthroug", "Poe in Eccesso"
+            "Materiale Esterno su Celle", "Bad Soldering", "Passthrough", "Poe in Eccesso", "Test"
         })
         return True
     else:

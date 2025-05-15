@@ -91,7 +91,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _connectWebSocket() {
-    print("🔄 Connecting to WebSocket...");
     setState(() {
       connectionStatus = ConnectionStatus.connecting;
     });
@@ -103,8 +102,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         setState(() {
           connectionStatus = ConnectionStatus.online;
         });
-
-        print('🔔 Message on $selectedChannel: $decoded');
 
         if (decoded.containsKey('plc_status')) {
           setState(() {
@@ -443,7 +440,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
       _processNextWarningDialog();
 
-      print('connecting to stringatrice warnings');
       warningswebSocketService.connectToStringatriceWarnings(
         line: selectedLine,
         onMessage: (packet) async {

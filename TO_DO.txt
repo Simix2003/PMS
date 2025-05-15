@@ -1,6 +1,6 @@
 -	Autenticazione Operatore su tablet, tramite badge
 
--	Stato ‘info’ per ogni difetto, con le foto esemplificative di cosa si riferisce quel difetto
+OK	Stato ‘info’ per ogni difetto, con le foto esemplificative di cosa si riferisce quel difetto
 -	Aggiornare manuale, per la parte Capo Area, con la richiesta di valutare ogni nuova tipologia di difetto inserita dal conduttore a mano (campo libero), ed eventualmente riclassificarla nella voce corretta già presente, oppure richiedere ad admin l’inserimento di un nuovo tasto difetto
 OK	Unificare, per quanto applicabile, la nomenclatura del difetto a quanto già in essere nella visual inspection pre-framing (descrizione MES)
 

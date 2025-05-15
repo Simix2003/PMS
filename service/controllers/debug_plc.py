@@ -28,4 +28,4 @@ class FakePLCConnection(PLCConnection):
         print(f"✍️ (Fake) Write bool to DB{db}.{byte}.{bit} = {value}")
 
     def read_string(self, db, byte, length):
-        return global_state.debug_moduli.get(self.station_id, "FAKE_ID_MODULO")
+        return global_state.debug_moduli.get(self.station_id, "Fake String")

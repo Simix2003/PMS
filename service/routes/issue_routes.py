@@ -120,7 +120,7 @@ async def get_issue_tree(
     return {"items": items}
 
 @router.get("/api/issues/for_object")
-async def get_issues_for_object(id_modulo: str):
+async def get_issues_for_object(id_modulo: str, production_id: int = Query(None)):
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
@@ -129,23 +129,24 @@ async def get_issues_for_object(id_modulo: str):
             obj = cursor.fetchone()
             if not obj:
                 raise HTTPException(status_code=404, detail="Oggetto non trovato.")
-
             object_id = obj["id"]
             print('ObjectId: %s' % object_id)
 
-            # 2. Trova l'ultima production associata
-            cursor.execute("""
-                SELECT id FROM productions 
-                WHERE object_id = %s 
-                ORDER BY end_time DESC 
-                LIMIT 1
-            """, (object_id,))
-            prod = cursor.fetchone()
-            if not prod:
-                return []
-
-            production_id = prod["id"]
-            print('ProductionId: %s' % production_id)
+            # 2. Se non c'è un production_id, trova il più recente
+            if production_id is None:
+                cursor.execute("""
+                    SELECT id FROM productions 
+                    WHERE object_id = %s 
+                    ORDER BY end_time DESC 
+                    LIMIT 1
+                """, (object_id,))
+                prod = cursor.fetchone()
+                if not prod:
+                    return {"issue_paths": [], "pictures": []}
+                production_id = prod["id"]
+                print('Fetched latest ProductionId: %s' % production_id)
+            else:
+                print('Using provided ProductionId: %s' % production_id)
 
             # 3. Estrai i difetti associati
             cursor.execute("""
@@ -163,8 +164,6 @@ async def get_issues_for_object(id_modulo: str):
             for row in defects:
                 cat = row["category"]
                 base64_photo = None
-
-                # Fetch photo blob if available
                 if "photo" in row and row["photo"]:
                     base64_photo = f"data:image/jpeg;base64,{base64.b64encode(row['photo']).decode()}"
 
@@ -179,7 +178,6 @@ async def get_issues_for_object(id_modulo: str):
                     if row["extra_data"]:
                         path = f"Dati.Esito.Esito_Scarto.Difetti.Altro: {row['extra_data']}"
                         issue_paths.append(path)
-                        # Normally Altro has no photo
 
                 elif cat == "Saldatura":
                     path = f"Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[{row['stringa']}].Pin[{row['s_ribbon']}].{row['ribbon_lato']}"

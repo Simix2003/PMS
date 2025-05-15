@@ -106,7 +106,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         object_id: widget.objectId,
       );
 
-      // ⬇️ Use your overlay logic first, fallback to API-based image URL
       final fallbackUrl = await ApiService.buildOverlayImageUrl(
         line: widget.selectedLine,
         station: widget.channelId,
@@ -125,6 +124,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
       _updateActiveLeafDefectIfSelected();
     } catch (e) {
+      debugPrint("❌ Error in _fetchCurrentItems: $e");
+
       final fallbackUrl = await ApiService.buildOverlayImageUrl(
         line: widget.selectedLine,
         station: widget.channelId,
@@ -137,7 +138,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         currentRectangles = [];
         backgroundImageUrl = fallbackUrl;
       });
-      debugPrint("❌ Error in _fetchCurrentItems: $e");
     }
     setState(() => isLoading = false);
   }
@@ -164,7 +164,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
       }
     });
 
-    if (group != "Altro") {
+    if (group != "Altro" || (widget.isReworkMode && groupHasSelected(group))) {
       _fetchCurrentItems();
     }
   }
@@ -735,13 +735,17 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         double targetWidth, targetHeight;
 
         if (maxWidth / maxHeight > imageAspectRatio) {
-          // screen is wider than image aspect ratio
           targetHeight = maxHeight;
           targetWidth = targetHeight * imageAspectRatio;
         } else {
           targetWidth = maxWidth;
           targetHeight = targetWidth / imageAspectRatio;
         }
+
+        debugPrint("📐 Layout target size: ${targetWidth} x ${targetHeight}");
+        debugPrint("🧱 currentRectangles.length: ${currentRectangles.length}");
+        debugPrint("📸 imageSize: $imageSize");
+        debugPrint("🌐 backgroundImageUrl: $backgroundImageUrl");
 
         return Center(
           child: SizedBox(
@@ -750,8 +754,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
             child: Stack(
               children: [
                 ColorFiltered(
-                  colorFilter: ColorFilter.matrix(_desaturationMatrix(
-                      0.5)), // 0.0 = full color, 1.0 = grayscale
+                  colorFilter: ColorFilter.matrix(_desaturationMatrix(0.5)),
                   child: Image.network(
                     backgroundImageUrl,
                     key: _imageKey,
@@ -760,22 +763,35 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                     fit: BoxFit.contain,
                     loadingBuilder: (context, child, loadingProgress) {
                       if (loadingProgress == null) {
+                        debugPrint("✅ Image finished loading.");
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           final box = _imageKey.currentContext
                               ?.findRenderObject() as RenderBox?;
-                          if (box != null && imageSize != box.size) {
-                            setState(() {
-                              imageSize = box.size;
-                            });
+                          if (box != null) {
+                            debugPrint(
+                                "📏 Calculated imageSize from box: ${box.size}");
+                            if (imageSize != box.size) {
+                              setState(() {
+                                imageSize = box.size;
+                              });
+                            }
+                          } else {
+                            debugPrint("⚠️ RenderBox is null!");
                           }
                         });
+                      } else {
+                        debugPrint("⏳ Image still loading...");
                       }
                       return child;
                     },
+                    errorBuilder: (context, error, stackTrace) {
+                      debugPrint("❌ Image failed to load: $error");
+                      return const Center(
+                        child: Icon(Icons.error, size: 60, color: Colors.red),
+                      );
+                    },
                   ),
                 ),
-
-                // Rectangles overlay
                 if (imageSize != null)
                   ...currentRectangles
                       .where((rect) =>
@@ -791,6 +807,9 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                     final String type = rect['type'] ?? "Leaf";
                     final fullPath = "$apiPath.${normalizeName(name)}";
                     final isSelected = _isPathSelected(fullPath);
+
+                    debugPrint(
+                        "📦 Drawing rectangle for $fullPath at x:$x y:$y w:$width h:$height");
 
                     return Positioned(
                       left: x,
@@ -819,18 +838,15 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                                     ),
                                   ]
                                 : [],
-                            borderRadius:
-                                BorderRadius.circular(8), // same as buttons
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Center(
-                              child: const SizedBox
-                                  .shrink() // Hide text when selected
-
-                              ),
+                          child: const SizedBox.shrink(),
                         ),
                       ),
                     );
                   }),
+                if (imageSize == null)
+                  const Center(child: CircularProgressIndicator()),
               ],
             ),
           ),

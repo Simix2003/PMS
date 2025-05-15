@@ -742,11 +742,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
           targetHeight = targetWidth / imageAspectRatio;
         }
 
-        debugPrint("📐 Layout target size: ${targetWidth} x ${targetHeight}");
-        debugPrint("🧱 currentRectangles.length: ${currentRectangles.length}");
-        debugPrint("📸 imageSize: $imageSize");
-        debugPrint("🌐 backgroundImageUrl: $backgroundImageUrl");
-
         return Center(
           child: SizedBox(
             width: targetWidth,
@@ -763,13 +758,11 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                     fit: BoxFit.contain,
                     loadingBuilder: (context, child, loadingProgress) {
                       if (loadingProgress == null) {
-                        debugPrint("✅ Image finished loading.");
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           final box = _imageKey.currentContext
                               ?.findRenderObject() as RenderBox?;
                           if (box != null) {
-                            debugPrint(
-                                "📏 Calculated imageSize from box: ${box.size}");
+                          
                             if (imageSize != box.size) {
                               setState(() {
                                 imageSize = box.size;
@@ -808,8 +801,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                     final fullPath = "$apiPath.${normalizeName(name)}";
                     final isSelected = _isPathSelected(fullPath);
 
-                    debugPrint(
-                        "📦 Drawing rectangle for $fullPath at x:$x y:$y w:$width h:$height");
 
                     return Positioned(
                       left: x,

@@ -16,7 +16,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('Building MyApp');
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'PMS',

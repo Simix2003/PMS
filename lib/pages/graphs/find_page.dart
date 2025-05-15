@@ -108,8 +108,9 @@ class _FindPageState extends State<FindPage> {
     'No Good da Bussing',
     'Materiale Esterno su Celle',
     'Bad Soldering',
-    'Passthroug',
-    'Poe in Eccesso'
+    'Passthrough',
+    'Poe in Eccesso',
+    'Test'
   ];
 
   final List<String> saldaturaOptions_1 = [
@@ -1419,8 +1420,6 @@ class _FindPageState extends State<FindPage> {
                               );
 
                               if (downloadUrl != null) {
-                                print(
-                                    "📁 File pronto per il download: $downloadUrl");
                                 setState(
                                   () => isSelecting = false,
                                 );

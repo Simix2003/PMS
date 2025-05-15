@@ -477,6 +477,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                                 "type": "consecutive",
                                 "value": consecutive,
                                 "limit": consecutive_limit,
+                                "source_station": source_station['name']
                             }
                             await broadcast_stringatrice_warning(station["line_name"], warning_payload)
                             save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
@@ -497,6 +498,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                         "type": "threshold",
                         "value": count,
                         "limit": threshold,
+                        "source_station": source_station['name']
                     }
                     await broadcast_stringatrice_warning(station["line_name"], warning_payload)
                     save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)

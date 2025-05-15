@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection, save_warning_on_mysql
 from service.routes.broadcast import broadcast_stringatrice_warning
+from service.helpers.helpers import compress_base64_to_jpeg_blob
 
 router = APIRouter()
 
@@ -94,7 +95,7 @@ async def suppress_with_photo(data: dict = Body(...)):
     else:
         print(f"📸 Received base64 image length: {len(image_base64)}")
 
-    image_blob = base64.b64decode(image_base64) if image_base64 else None
+    image_blob = compress_base64_to_jpeg_blob(image_base64, quality=70) if image_base64 else None
 
     try:
         with conn.cursor() as cursor:

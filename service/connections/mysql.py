@@ -9,7 +9,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.temp_data import get_latest_issues
-from service.helpers.helpers import detect_category, parse_issue_path
+from service.helpers.helpers import detect_category, parse_issue_path, compress_base64_to_jpeg_blob
 from service.routes.broadcast import broadcast_stringatrice_warning
 from service.state import global_state
 
@@ -272,7 +272,7 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
         parsed = parse_issue_path(path, category)
 
         # Decode image if present
-        image_blob = base64.b64decode(image_base64) if image_base64 else None
+        image_blob = compress_base64_to_jpeg_blob(image_base64, quality=70) if image_base64 else None
 
         sql = """
             INSERT INTO object_defects (

@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta
 import re
 from typing import Dict, List, Optional, Union
+from PIL import Image
+import base64
+import io
 
 import os
 import sys
@@ -9,6 +12,20 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.config.config import CHANNELS
 
 
+def compress_base64_to_jpeg_blob(base64_str: str, quality: int = 70) -> bytes:
+    try:
+        raw = base64.b64decode(base64_str)
+        with Image.open(io.BytesIO(raw)) as img:
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+
+            out_io = io.BytesIO()
+            img.save(out_io, format="JPEG", quality=quality, optimize=True)
+            return out_io.getvalue()
+    except Exception as e:
+        print(f"⚠️ Compression failed: {e}")
+        return base64.b64decode(base64_str)  # fallback: uncompressed
+    
 def get_channel_config(line_name: str, channel_id: str):
     return CHANNELS.get(line_name, {}).get(channel_id)
 

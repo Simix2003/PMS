@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'pages/loading_Screen/stringatrice_loading_screen.dart';
+
+import 'pages/loading_Screen/loading_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +34,7 @@ class MyApp extends StatelessWidget {
         Locale('it', 'IT'), // 🇮🇹 Italian
       ],
       locale: const Locale('it', 'IT'), // 👈 Force Italian everywhere
-      home: StringatriceLoadingScreen(),
+      home: LoadingScreen(targetPage: 'Stringatrice'),
     );
   }
 }

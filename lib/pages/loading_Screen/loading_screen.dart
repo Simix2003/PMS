@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:ix_monitor/pages/auth/login_page.dart';
 import 'dart:ui';
 import 'dart:math' as math;
-import 'package:ix_monitor/pages/dashboard/dashboard_data.dart';
 
-class DataLoadingScreen extends StatefulWidget {
-  const DataLoadingScreen({super.key});
+import '../dashboard/dashboard_data.dart';
+import '../dashboard/dashboard_home.dart';
+import '../dashboard/dashboard_stringatrice.dart';
+
+class LoadingScreen extends StatefulWidget {
+  final String targetPage;
+
+  const LoadingScreen({super.key, required this.targetPage});
 
   @override
-  State<DataLoadingScreen> createState() => _DataLoadingScreenState();
+  State<LoadingScreen> createState() => _LoadingScreenState();
 }
 
-class _DataLoadingScreenState extends State<DataLoadingScreen>
+class _LoadingScreenState extends State<LoadingScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
@@ -96,9 +102,27 @@ class _DataLoadingScreenState extends State<DataLoadingScreen>
       setState(() {
         _loadingProgress = 1.0;
       });
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const DashboardData()),
-      );
+
+      /*Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+            builder: (_) => LoginPage(
+                  targetPage: widget.targetPage,
+                )),
+      );*/
+
+      if (widget.targetPage == 'Home') {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardHome()),
+        );
+      } else if (widget.targetPage == 'Data') {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardData()),
+        );
+      } else if (widget.targetPage == 'Stringatrice') {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardStringatrice()),
+        );
+      }
     }
   }
 
@@ -373,7 +397,7 @@ class _DataLoadingScreenState extends State<DataLoadingScreen>
                                             ),
                                             const SizedBox(width: 10),
                                             ShimmerTextGradient(
-                                              text: "DATA",
+                                              text: widget.targetPage,
                                               style: TextStyle(
                                                 fontSize: 15,
                                                 fontWeight: FontWeight.w600,

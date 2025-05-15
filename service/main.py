@@ -35,6 +35,7 @@ from service.routes.graph_routes import router as graph_router
 from service.routes.station_routes import router as station_router
 from service.routes.search_routes import router as search_router
 from service.routes.websocket_routes import router as websocket_router
+from service.routes.health_check_routes import router as health_check_router
 
 
 # ---------------- INIT GLOBAL FLAGS ----------------
@@ -109,7 +110,8 @@ def register_routers(app: FastAPI):
     app.include_router(graph_router)
     app.include_router(station_router)
     app.include_router(search_router)
-    app.include_router(websocket_router) 
+    app.include_router(websocket_router)
+    app.include_router(health_check_router) 
 
 register_routers(app)
 

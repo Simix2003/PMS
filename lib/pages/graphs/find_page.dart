@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:html' as html;
+import '../ai_helper_chat.dart';
 import '../object_details/objectDetails_page.dart';
 import '../object_details/productionDetails_page.dart';
 import '../../shared/services/api_service.dart';
@@ -1755,6 +1756,20 @@ class _FindPageState extends State<FindPage> {
                 ],
               ),
             ),
+      /*floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (_) => const AIHelperChat(),
+          );
+        },
+        backgroundColor: const Color(0xFF007AFF),
+        label: const Text(""),
+        icon: const Icon(
+          Icons.clean_hands_outlined,
+          color: Colors.white,
+        ),
+      ),*/
     );
   }
 }

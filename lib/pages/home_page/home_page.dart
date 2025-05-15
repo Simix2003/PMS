@@ -641,7 +641,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           tooltip: "Aggiorna",
           icon: const Icon(Icons.refresh, color: Colors.black87),
           onPressed: () {
-            _onChannelChange(selectedChannel);
+            _fetchPLCStatus();
+            _connectWebSocket(); // reconnect with new line(selectedChannel);
           },
         ),
         title: Row(

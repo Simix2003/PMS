@@ -2,10 +2,10 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+//import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'dart:html' as html;
-import '../ai_helper_chat.dart';
+//import '../ai_helper_chat.dart';
 import '../object_details/objectDetails_page.dart';
 import '../object_details/productionDetails_page.dart';
 import '../../shared/services/api_service.dart';
@@ -13,7 +13,7 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'dart:ui';
-import 'package:rive/rive.dart';
+//import 'package:rive/rive.dart';
 
 class FindPage extends StatefulWidget {
   final List<Map<String, String>>? initialFilters;
@@ -85,8 +85,8 @@ class _FindPageState extends State<FindPage> {
 
   final List<Map<String, String>> activeFilters = [];
 
-  Artboard? _riveArtboard;
-  SMIBool? _boolInput;
+  //Artboard? _riveArtboard;
+  //SMIBool? _boolInput;
 
   final List<String> filterOptions = [
     'Linea',
@@ -286,7 +286,7 @@ class _FindPageState extends State<FindPage> {
   void initState() {
     super.initState();
 
-    rootBundle.load('rive/logo_interaction.riv').then(
+    /*rootBundle.load('rive/logo_interaction.riv').then(
       (data) async {
         final file = RiveFile.import(data);
         final artboard = file.mainArtboard;
@@ -300,7 +300,7 @@ class _FindPageState extends State<FindPage> {
 
         setState(() => _riveArtboard = artboard);
       },
-    );
+    );*/
 
     if (widget.initialFilters != null) {
       for (final filter in widget.initialFilters!) {

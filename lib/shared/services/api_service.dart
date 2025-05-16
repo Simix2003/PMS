@@ -390,13 +390,12 @@ class ApiService {
     String? productionId,
   }) async {
     try {
-      final queryParams = {
+      final uri =
+          Uri.parse('$baseUrl/api/issues/for_object').replace(queryParameters: {
         'id_modulo': idModulo,
         if (productionId != null) 'production_id': productionId,
-      };
+      });
 
-      final uri = Uri.http(baseUrl.replaceFirst('http://', ''),
-          '/api/issues/for_object', queryParams);
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {

@@ -2,6 +2,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'dart:html' as html;
 import '../ai_helper_chat.dart';
@@ -12,6 +13,7 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'dart:ui';
+import 'package:rive/rive.dart';
 
 class FindPage extends StatefulWidget {
   final List<Map<String, String>>? initialFilters;
@@ -82,6 +84,9 @@ class _FindPageState extends State<FindPage> {
   String? selectedLunghezzaStringa;
 
   final List<Map<String, String>> activeFilters = [];
+
+  Artboard? _riveArtboard;
+  SMIBool? _boolInput;
 
   final List<String> filterOptions = [
     'Linea',
@@ -280,6 +285,22 @@ class _FindPageState extends State<FindPage> {
   @override
   void initState() {
     super.initState();
+
+    rootBundle.load('rive/logo_interaction.riv').then(
+      (data) async {
+        final file = RiveFile.import(data);
+        final artboard = file.mainArtboard;
+
+        final controller =
+            StateMachineController.fromArtboard(artboard, 'State Machine 1');
+        if (controller != null) {
+          artboard.addController(controller);
+          _boolInput = controller.findInput<bool>('hvr ic') as SMIBool?;
+        }
+
+        setState(() => _riveArtboard = artboard);
+      },
+    );
 
     if (widget.initialFilters != null) {
       for (final filter in widget.initialFilters!) {
@@ -1469,8 +1490,11 @@ class _FindPageState extends State<FindPage> {
               ]
             : null,
       ),
-      body: isExporting
-          ? Positioned.fill(
+      body: Stack(
+        children: [
+          // A) Main content or loading overlay
+          if (isExporting)
+            Positioned.fill(
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
                 child: Container(
@@ -1523,7 +1547,8 @@ class _FindPageState extends State<FindPage> {
                 ),
               ),
             )
-          : Padding(
+          else
+            Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1756,20 +1781,68 @@ class _FindPageState extends State<FindPage> {
                 ],
               ),
             ),
-      /*floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (_) => const AIHelperChat(),
-          );
-        },
-        backgroundColor: const Color(0xFF007AFF),
-        label: const Text(""),
-        icon: const Icon(
-          Icons.clean_hands_outlined,
-          color: Colors.white,
-        ),
-      ),*/
+          // B) Rive button in bottom-right
+          /*Positioned(
+            right: 20,
+            bottom: 20,
+            child: MouseRegion(
+              onEnter: (_) {
+                _boolInput?.value = true; // Enable 'hvr ic'
+              },
+              onExit: (_) {
+                _boolInput?.value = false; // Disable 'hvr ic'
+              },
+              child: GestureDetector(
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => AIHelperChat(
+                      onQueryGenerated: (sqlQuery) async {
+                        print('Query returned: $sqlQuery');
+                        try {
+                          print('Starting Query');
+                          final data =
+                              await ApiService.fetchDataFromQuery(sqlQuery);
+                          print('Query results length: ${data.length}');
+                          print('Query results: $data');
+
+                          setState(() {
+                            results.clear();
+                            results.addAll(
+                              data.map((row) => {
+                                    'object_id': row['id_modulo'],
+                                    'event_count': 1,
+                                    'latest_event': row,
+                                    'history': [],
+                                  }),
+                            );
+                          });
+                        } catch (e) {
+                          showDialog(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text("Errore"),
+                              content: Text(
+                                  "Errore nell'esecuzione della query AI:\n$e"),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  );
+                },
+                child: SizedBox(
+                  height: 100,
+                  width: 100,
+                  child: _riveArtboard != null
+                      ? Rive(artboard: _riveArtboard!)
+                      : const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),*/
+        ],
+      ),
     );
   }
 }

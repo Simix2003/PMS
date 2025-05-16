@@ -3,7 +3,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 
 class AIHelperChat extends StatefulWidget {
-  const AIHelperChat({super.key});
+  final void Function(String sqlQuery)? onQueryGenerated;
+
+  const AIHelperChat({super.key, this.onQueryGenerated});
 
   @override
   State<AIHelperChat> createState() => _AIHelperChatState();
@@ -30,10 +32,22 @@ class _AIHelperChatState extends State<AIHelperChat> {
     _scrollToBottom();
 
     try {
+      final history = messages
+          .where((m) => m.role != 'ai' || m.content != 'Sto elaborando...')
+          .take(6) // limit to last 6 entries (optional)
+          .map((m) => {
+                'role': m.role == 'ai' ? 'assistant' : 'user',
+                'content': m.content,
+              })
+          .toList();
+
       final response = await http.post(
         Uri.parse('http://localhost:8001/api/chat_query'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'message': text}),
+        body: jsonEncode({
+          'message': text,
+          'history': history,
+        }),
       );
 
       final data = jsonDecode(response.body);
@@ -41,11 +55,23 @@ class _AIHelperChatState extends State<AIHelperChat> {
           data['response']?.toString() ?? 'Errore nella risposta AI.';
 
       setState(() {
-        messages.removeLast(); // remove 'Sto elaborando...'
+        messages.removeLast(); // remove "Sto elaborando..."
         messages.add(_ChatMessage(role: 'ai', content: answer));
       });
 
       _scrollToBottom();
+
+      final regex = RegExp(r'```sql\s*([\s\S]*?)```');
+      final match = regex.firstMatch(answer);
+
+      if (match != null) {
+        final sqlQuery = match.group(1)?.trim();
+
+        if (sqlQuery != null && sqlQuery.toLowerCase().startsWith('select')) {
+          widget.onQueryGenerated?.call(sqlQuery); // ✅ Send clean query back
+          Navigator.of(context).pop(); // ✅ Close the dialog
+        }
+      }
     } catch (e) {
       setState(() {
         messages.removeLast();

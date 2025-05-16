@@ -507,4 +507,20 @@ class ApiService {
       return false;
     }
   }
+
+  static Future<List<Map<String, dynamic>>> fetchDataFromQuery(
+      String query) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/run_sql_query'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'query': query}),
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> raw = jsonDecode(response.body);
+      return raw.cast<Map<String, dynamic>>();
+    } else {
+      throw Exception('Errore nella query: ${response.body}');
+    }
+  }
 }

@@ -113,7 +113,7 @@ def register_routers(app: FastAPI):
     app.include_router(search_router)
     app.include_router(websocket_router)
     app.include_router(health_check_router)
-    app.include_router(ai_router) 
+    #app.include_router(ai_router) 
 
 register_routers(app)
 

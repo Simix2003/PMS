@@ -2,7 +2,7 @@ import os
 import configparser
 from pathlib import Path
 
-debug = False
+debug = True
 # ---------------- CONFIG & GLOBALS ----------------
 CHANNELS = {
     "Linea1": {

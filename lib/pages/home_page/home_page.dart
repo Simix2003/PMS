@@ -133,7 +133,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               if (previouslySelected.isEmpty) {
                 canAdd = true;
               } else {
-                canAdd = false;
+                canAdd =
+                    true; // Can always Add from M326, even if defects already selected
               }
               setState(() {
                 _issues.addAll(previouslySelected);

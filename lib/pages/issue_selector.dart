@@ -569,23 +569,53 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(key),
-        content: Column(
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (info['image']!.isNotEmpty)
-              Image.asset(info['image']!, height: 160, fit: BoxFit.contain),
-            const SizedBox(height: 12),
-            Text(info['description']!),
+            // Title
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(key, style: Theme.of(context).textTheme.titleLarge),
+            ),
+
+            // Scrollable + zoomable content
+            Flexible(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    children: [
+                      if (info['image']!.isNotEmpty)
+                        SizedBox(
+                          height: 400,
+                          child: InteractiveViewer(
+                            panEnabled: true,
+                            minScale: 1,
+                            maxScale: 4,
+                            child: Image.asset(info['image']!,
+                                fit: BoxFit.contain),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      Text(info['description']!, textAlign: TextAlign.justify),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Close button
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Chiudi'),
+              ),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Chiudi'),
-          ),
-        ],
       ),
     );
   }
@@ -762,7 +792,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                           final box = _imageKey.currentContext
                               ?.findRenderObject() as RenderBox?;
                           if (box != null) {
-                          
                             if (imageSize != box.size) {
                               setState(() {
                                 imageSize = box.size;
@@ -800,7 +829,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                     final String type = rect['type'] ?? "Leaf";
                     final fullPath = "$apiPath.${normalizeName(name)}";
                     final isSelected = _isPathSelected(fullPath);
-
 
                     return Positioned(
                       left: x,

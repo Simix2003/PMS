@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+  db:
+    build:
+      context: ../db
+      dockerfile: Dockerfile
+    container_name: pms-db
+    environment:
+      MYSQL_HOST: db
+      MYSQL_ROOT_PASSWORD: Master36!
+      MYSQL_DATABASE: ix_monitor
+      MYSQL_USER: pmsuser
+      MYSQL_PASSWORD: pmspassword
+      MYSQL_PORT: 3306
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../be
+      dockerfile: Dockerfile
+    container_name: pms-backend
+    env_file:
+      - ../be/service/.env
+    environment:
+      - IX_MONITOR_PATH=/app/ix-monitor
+      - IMAGES_PATH=/app/images
+      - IMAGES_SUBMITTED_PATH=/app/ix-monitor/images_submitted
+    depends_on:
+      - db
+    ports:
+      - "8001:8001"
+    volumes:
+      - app_data:/app
+    restart: unless-stopped
+
+  home:
+    build:
+      context: ../fe
+      dockerfile: Dockerfile
+      args:
+        TARGET: home
+        BASE_HREF: /home/ # Pass BASE_HREF as build argument
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  data:
+    build:
+      context: ../fe
+      dockerfile: Dockerfile
+      args:
+        TARGET: data
+        BASE_HREF: /data/ # Pass BASE_HREF as build argument
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  stringatrici:
+    build:
+      context: ../fe
+      dockerfile: Dockerfile
+      args:
+        TARGET: stringatrici
+        BASE_HREF: /stringatrici/ # Pass BASE_HREF as build argument
+    ports:
+      - "8082:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  app_data:

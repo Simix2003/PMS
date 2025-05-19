@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../shared/utils/helpers.dart';
+import 'big_picture_page.dart';
 
 class PictureGalleryPage extends StatefulWidget {
   final List<Map<String, String>> images;
@@ -54,61 +55,72 @@ class _PictureGalleryPageState extends State<PictureGalleryPage> {
               ),
               itemBuilder: (context, index) {
                 final image = galleryImages[index];
-                return Card(
-                  elevation: 3,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                          child: Image.memory(
-                        decodeImage(image['image']!),
-                        fit: BoxFit.cover,
-                      )),
-                      Positioned(
-                        bottom: 8,
-                        left: 8,
-                        child: Container(
-                          color: Colors.black.withOpacity(0.6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          child: Text(
-                            image['defect'] ?? '',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FullImagePage(
+                          image: image['image']!,
+                          defect: image['defect'] ?? '',
                         ),
                       ),
-                      if (!widget.isPreloaded)
+                    );
+                  },
+                  child: Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Image.memory(
+                            decodeImage(image['image']!),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
                         Positioned(
-                          top: 8,
-                          right: 8,
-                          child: GestureDetector(
-                            onTap: () => _deleteImage(index),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.6),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Padding(
-                                padding: EdgeInsets.all(4.0),
-                                child: Icon(Icons.close,
-                                    color: Colors.white, size: 20),
+                          bottom: 8,
+                          left: 8,
+                          child: Container(
+                            color: Colors.black.withOpacity(0.6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            child: Text(
+                              image['defect'] ?? '',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
                               ),
                             ),
                           ),
                         ),
-                    ],
+                        if (!widget.isPreloaded)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: GestureDetector(
+                              onTap: () => _deleteImage(index),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(4.0),
+                                  child: Icon(Icons.close,
+                                      color: Colors.white, size: 20),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 );
-              },
-            ),
+              }),
     );
   }
 }

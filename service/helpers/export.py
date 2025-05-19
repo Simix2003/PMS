@@ -306,7 +306,9 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
         "Poe Scaduto", "No Good da Bussing",
-        "Materiale Esterno su Celle", "Bad Soldering", "Passthrough", "Poe in Eccesso", "Test"
+        "Materiale Esterno su Celle", "Bad Soldering", "Passthrough al Bussing", 
+        "Poe in Eccesso", "Solo Poe", "Solo Vetro", "Matrice Incompleta", 
+        "Molteplici Bus Bar","Test"
     ]
     ws.append(header)
 
@@ -361,8 +363,12 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         flag_bus = "NG" if "No Good da Bussing" in general_defects else ""
         flag_materiale = "NG" if "Materiale Esterno su Celle" in general_defects else ""
         flag_bad = "NG" if "Bad Soldering" in general_defects else ""
-        flag_passthrough = "NG" if "Passthrough" in general_defects else ""
+        flag_passthrough = "NG" if "Passthrough al Bussing" in general_defects else ""
         flag_poe_in_eccesso = "NG" if "Poe in Eccesso" in general_defects else ""
+        flag_solo_poe = "NG" if "Solo Poe" in general_defects else ""
+        flag_solo_vetro = "NG" if "Solo Vetro" in general_defects else ""
+        flag_matrice_incompleta = "NG" if "Matrice Incompleta" in general_defects else ""
+        flag_molteplici_bus_bar = "NG" if "Molteplici Bus Bar" in general_defects else ""
         flag_test = "NG" if "Test" in general_defects else ""
 
         row = [
@@ -380,6 +386,10 @@ def ng_generali_sheet(ws, data: dict) -> bool:
             flag_bad,
             flag_passthrough,
             flag_poe_in_eccesso,
+            flag_solo_poe,
+            flag_solo_vetro,
+            flag_matrice_incompleta,
+            flag_molteplici_bus_bar,
             flag_test
         ]
         ws.append(row)
@@ -387,7 +397,7 @@ def ng_generali_sheet(ws, data: dict) -> bool:
     if rows_written > 0:
         autofit_columns(ws, align_center_for={
             "Esito", "Poe Scaduto", "No Good da Bussing",
-            "Materiale Esterno su Celle", "Bad Soldering", "Passthrough", "Poe in Eccesso", "Test"
+            "Materiale Esterno su Celle", "Bad Soldering", "Passthrough al Bussing", "Poe in Eccesso","Solo Poe", "Solo Vetro", "Matrice Incompleta", "Molteplici Bus Bar", "Test"
         })
         return True
     else:

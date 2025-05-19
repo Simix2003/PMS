@@ -2,7 +2,7 @@ import os
 import configparser
 from pathlib import Path
 
-debug = True
+debug = False
 # ---------------- CONFIG & GLOBALS ----------------
 CHANNELS = {
     "Linea1": {
@@ -119,8 +119,12 @@ ISSUE_TREE = {
                         "No Good da Bussing": {},
                         "Materiale Esterno su Celle": {},
                         "Bad Soldering": {},
-                        "Passthrough": {},
+                        "Passthrough al Bussing": {},
                         "Poe in Eccesso": {},
+                        "Solo Poe": {},
+                        "Solo Vetro": {},
+                        "Matrice Incompleta": {},
+                        "Molteplici Bus Bar"
                         "Test": {}
                     },
                     "Saldatura": {

@@ -1,0 +1,72 @@
+{
+    "messages": [
+      { "role": "system", "content": "Sei un assistente AI esperto in SQL per il database IX-Monitor, il sistema si chiama PMS (Production Monitoring System)." },
+      { "role": "user", "content": "Mi tiri fuori i moduli che contengono 'ABC' fatti tra il primo e il 5 maggio?" },
+      { "role": "assistant", "content": "```sql\nSELECT p.id AS production_id, o.id_modulo, p.esito, p.operator_id, p.cycle_time, p.start_time, p.end_time, s.name AS station_name, pl.display_name AS line_display_name, GROUP_CONCAT(DISTINCT d.category) AS defect_categories FROM ix_monitor.productions p JOIN ix_monitor.objects o ON o.id = p.object_id JOIN ix_monitor.stations s ON s.id = p.station_id LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id LEFT JOIN ix_monitor.production_lines pl ON pl.id = s.line_id WHERE o.id_modulo LIKE '%ABC%' AND p.end_time BETWEEN '2025-05-01' AND '2025-05-05' GROUP BY p.id ORDER BY p.end_time DESC LIMIT 1000;\n```" }
+    ]
+  }
+  {
+    "messages": [
+      { "role": "system", "content": "Sei un assistente AI esperto in SQL per il database IX-Monitor, il sistema si chiama PMS (Production Monitoring System)." },
+      { "role": "user", "content": "Vorrei vedere i moduli con ID che contiene 'ABC' dal 6 al 10 maggio." },
+      { "role": "assistant", "content": "```sql\nSELECT p.id AS production_id, o.id_modulo, p.esito, p.operator_id, p.cycle_time, p.start_time, p.end_time, s.name AS station_name, pl.display_name AS line_display_name, GROUP_CONCAT(DISTINCT d.category) AS defect_categories FROM ix_monitor.productions p JOIN ix_monitor.objects o ON o.id = p.object_id JOIN ix_monitor.stations s ON s.id = p.station_id LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id LEFT JOIN ix_monitor.production_lines pl ON pl.id = s.line_id WHERE o.id_modulo LIKE '%ABC%' AND p.end_time BETWEEN '2025-05-06' AND '2025-05-10' GROUP BY p.id ORDER BY p.end_time DESC LIMIT 1000;\n```" }
+    ]
+  }
+  {
+    "messages": [
+      { "role": "system", "content": "Sei un assistente AI esperto in SQL per il database IX-Monitor, il sistema si chiama PMS (Production Monitoring System)." },
+      { "role": "user", "content": "Fammi vedere i moduli con 'ABC' registrati tra l’11 e il 15 maggio." },
+      { "role": "assistant", "content": "```sql\nSELECT p.id AS production_id, o.id_modulo, p.esito, p.operator_id, p.cycle_time, p.start_time, p.end_time, s.name AS station_name, pl.display_name AS line_display_name, GROUP_CONCAT(DISTINCT d.category) AS defect_categories FROM ix_monitor.productions p JOIN ix_monitor.objects o ON o.id = p.object_id JOIN ix_monitor.stations s ON s.id = p.station_id LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id LEFT JOIN ix_monitor.production_lines pl ON pl.id = s.line_id WHERE o.id_modulo LIKE '%ABC%' AND p.end_time BETWEEN '2025-05-11' AND '2025-05-15' GROUP BY p.id ORDER BY p.end_time DESC LIMIT 1000;\n```" }
+    ]
+  }
+  {
+    "messages": [
+      { "role": "system", "content": "Sei un assistente AI esperto in SQL per il database IX-Monitor, il sistema si chiama PMS (Production Monitoring System)." },
+      { "role": "user", "content": "Hai i moduli che contengono 'ABC' tra giovedì 16 e lunedì 20 maggio?" },
+      { "role": "assistant", "content": "```sql\nSELECT p.id AS production_id, o.id_modulo, p.esito, p.operator_id, p.cycle_time, p.start_time, p.end_time, s.name AS station_name, pl.display_name AS line_display_name, GROUP_CONCAT(DISTINCT d.category) AS defect_categories FROM ix_monitor.productions p JOIN ix_monitor.objects o ON o.id = p.object_id JOIN ix_monitor.stations s ON s.id = p.station_id LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id LEFT JOIN ix_monitor.production_lines pl ON pl.id = s.line_id WHERE o.id_modulo LIKE '%ABC%' AND p.end_time BETWEEN '2025-05-16' AND '2025-05-20' GROUP BY p.id ORDER BY p.end_time DESC LIMIT 1000;\n```" }
+    ]
+  }
+  {
+    "messages": [
+      { "role": "system", "content": "Sei un assistente AI esperto in SQL per il database IX-Monitor, il sistema si chiama PMS (Production Monitoring System)." },
+      { "role": "user", "content": "Voglio tutti i moduli con 'ABC' prodotti tra il 21/05/2025 e il 25/05/2025." },
+      { "role": "assistant", "content": "```sql\nSELECT p.id AS production_id, o.id_modulo, p.esito, p.operator_id, p.cycle_time, p.start_time, p.end_time, s.name AS station_name, pl.display_name AS line_display_name, GROUP_CONCAT(DISTINCT d.category) AS defect_categories FROM ix_monitor.productions p JOIN ix_monitor.objects o ON o.id = p.object_id JOIN ix_monitor.stations s ON s.id = p.station_id LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id LEFT JOIN ix_monitor.production_lines pl ON pl.id = s.line_id WHERE o.id_modulo LIKE '%ABC%' AND p.end_time BETWEEN '2025-05-21' AND '2025-05-25' GROUP BY p.id ORDER BY p.end_time DESC LIMIT 1000;\n```" }
+    ]
+  }
+  {
+    "messages": [
+      { "role": "system", "content": "Sei un assistente AI esperto in SQL per il database IX-Monitor, il sistema si chiama PMS (Production Monitoring System)." },
+      { "role": "user", "content": "Mi trovi i moduli che hanno l’ID con scritto ABC tra l’1 e il 5 maggio 2025?" },
+      { "role": "assistant", "content": "```sql\nSELECT p.id AS production_id, o.id_modulo, p.esito, p.operator_id, p.cycle_time, p.start_time, p.end_time, s.name AS station_name, pl.display_name AS line_display_name, GROUP_CONCAT(DISTINCT d.category) AS defect_categories FROM ix_monitor.productions p JOIN ix_monitor.objects o ON o.id = p.object_id JOIN ix_monitor.stations s ON s.id = p.station_id LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id LEFT JOIN ix_monitor.production_lines pl ON pl.id = s.line_id WHERE o.id_modulo LIKE '%ABC%' AND p.end_time BETWEEN '2025-05-01' AND '2025-05-05' GROUP BY p.id ORDER BY p.end_time DESC LIMIT 1000;\n```"}
+    ]
+  }
+  {
+    "messages": [
+      { "role": "system", "content": "Sei un assistente AI esperto in SQL per il database IX-Monitor, il sistema si chiama PMS (Production Monitoring System)." },
+      { "role": "user", "content": "Dammi i moduli con ID che contiene ABC nella settimana dal 6 al 10 maggio" },
+      { "role": "assistant", "content": "```sql\nSELECT p.id AS production_id, o.id_modulo, p.esito, p.operator_id, p.cycle_time, p.start_time, p.end_time, s.name AS station_name, pl.display_name AS line_display_name, GROUP_CONCAT(DISTINCT d.category) AS defect_categories FROM ix_monitor.productions p JOIN ix_monitor.objects o ON o.id = p.object_id JOIN ix_monitor.stations s ON s.id = p.station_id LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id LEFT JOIN ix_monitor.production_lines pl ON pl.id = s.line_id WHERE o.id_modulo LIKE '%ABC%' AND p.end_time BETWEEN '2025-05-06' AND '2025-05-10' GROUP BY p.id ORDER BY p.end_time DESC LIMIT 1000;\n```" }
+    ]
+  }
+  {
+    "messages": [
+      { "role": "system", "content": "Sei un assistente AI esperto in SQL per il database IX-Monitor, il sistema si chiama PMS (Production Monitoring System)." },
+      { "role": "user", "content": "Voglio vedere i moduli con 'ABC' fatti tra domenica 11 e mercoledì 15 maggio" },
+      { "role": "assistant", "content": "```sql\nSELECT p.id AS production_id, o.id_modulo, p.esito, p.operator_id, p.cycle_time, p.start_time, p.end_time, s.name AS station_name, pl.display_name AS line_display_name, GROUP_CONCAT(DISTINCT d.category) AS defect_categories FROM ix_monitor.productions p JOIN ix_monitor.objects o ON o.id = p.object_id JOIN ix_monitor.stations s ON s.id = p.station_id LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id LEFT JOIN ix_monitor.production_lines pl ON pl.id = s.line_id WHERE o.id_modulo LIKE '%ABC%' AND p.end_time BETWEEN '2025-05-11' AND '2025-05-15' GROUP BY p.id ORDER BY p.end_time DESC LIMIT 1000;\n```" }
+    ]
+  }
+  {
+    "messages": [
+      { "role": "system", "content": "Sei un assistente AI esperto in SQL per il database IX-Monitor, il sistema si chiama PMS (Production Monitoring System)." },
+      { "role": "user", "content": "Filtra i moduli che contengono ABC dal 16 al 20 maggio incluso" },
+      { "role": "assistant", "content": "```sql\nSELECT p.id AS production_id, o.id_modulo, p.esito, p.operator_id, p.cycle_time, p.start_time, p.end_time, s.name AS station_name, pl.display_name AS line_display_name, GROUP_CONCAT(DISTINCT d.category) AS defect_categories FROM ix_monitor.productions p JOIN ix_monitor.objects o ON o.id = p.object_id JOIN ix_monitor.stations s ON s.id = p.station_id LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id LEFT JOIN ix_monitor.production_lines pl ON pl.id = s.line_id WHERE o.id_modulo LIKE '%ABC%' AND p.end_time BETWEEN '2025-05-16' AND '2025-05-20' GROUP BY p.id ORDER BY p.end_time DESC LIMIT 1000;\n```" }
+    ]
+  }
+  {
+    "messages": [
+      { "role": "system", "content": "Sei un assistente AI esperto in SQL per il database IX-Monitor, il sistema si chiama PMS (Production Monitoring System)." },
+      { "role": "user", "content": "Voglio i moduli con ID contenente 'ABC' tra il 21/05/2025 e il 25/05/2025" },
+      { "role": "assistant", "content": "```sql\nSELECT p.id AS production_id, o.id_modulo, p.esito, p.operator_id, p.cycle_time, p.start_time, p.end_time, s.name AS station_name, pl.display_name AS line_display_name, GROUP_CONCAT(DISTINCT d.category) AS defect_categories FROM ix_monitor.productions p JOIN ix_monitor.objects o ON o.id = p.object_id JOIN ix_monitor.stations s ON s.id = p.station_id LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id LEFT JOIN ix_monitor.production_lines pl ON pl.id = s.line_id WHERE o.id_modulo LIKE '%ABC%' AND p.end_time BETWEEN '2025-05-21' AND '2025-05-25' GROUP BY p.id ORDER BY p.end_time DESC LIMIT 1000;\n```" }
+    ]
+  }
+  
+  

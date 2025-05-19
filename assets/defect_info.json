@@ -1,71 +1,71 @@
 {
     "Generali": {
       "description": "Difetti generici riscontrati durante il controllo qualità. Possono includere anomalie non specifiche di una zona.",
-      "image": "images/generali.jpg"
+      "image": "assets/images/generali.jpg"
     },
     "Non Lavorato Poe Scaduto": {
       "description": "Il modulo non è stato lavorato perché il POE è scaduto.",
-      "image": "images/poe_scaduto.jpg"
+      "image": "assets/images/poe_scaduto.jpg"
     },
     "No Good da Bussing": {
       "description": "Problema rilevato durante il processo di Bussing. Controllare il contatto elettrico e le connessioni.",
-      "image": "images/no_good_bussing.jpg"
+      "image": "assets/images/no_good_bussing.jpg"
     },
     "Materiale Esterno su Celle": {
       "description": "Presenza di materiali estranei (come polvere, fibre o residui) sulla superficie delle celle.",
-      "image": "images/materiale_celle.jpg"
+      "image": "assets/images/materiale_celle.jpg"
     },
     "Bad Soldering": {
       "description": "Saldataura difettosa riscontrata in fase di ispezione. Potrebbe compromettere la conducibilità.",
-      "image": "images/bad_soldering.jpg"
+      "image": "assets/images/bad_soldering.jpg"
     },
     "Passthrough": {
       "description": "Modulo che ha attraversato le stazioni senza essere processato correttamente.",
-      "image": "images/passthrough.jpg"
+      "image": "assets/images/passthrough.jpg"
     },
     "Poe in Eccesso": {
       "description": "Eccesso di materiale POE applicato al modulo, può causare problemi di aderenza o di qualità.",
-      "image": "images/poe_eccesso.jpg"
+      "image": "assets/images/poe_eccesso.jpg"
     },
     "Test": {
         "description": "Test.",
-        "image": "images/test.jpg"
+        "image": "assets/images/test.jpg"
       },
     "Saldatura": {
       "description": "Difetti nei punti di saldatura tra ribbon e celle.",
-      "image": "images/saldatura.jpg"
+      "image": "assets/images/saldatura.jpg"
     },
     "Disallineamento": {
       "description": "Allineamento scorretto di Stringhe o Ribbon. Può causare inefficienze o errori visivi.",
-      "image": "images/disallineamento.jpg"
+      "image": "assets/images/disallineamento.jpg"
     },
     "Mancanza Ribbon": {
       "description": "Uno o più ribbon risultano mancanti nella zona specificata.",
-      "image": "images/mancanza_ribbon.jpg"
+      "image": "assets/images/mancanza_ribbon.jpg"
     },
     "I Ribbon Leadwire": {
       "description": "Problema riscontrato nei ribbon di collegamento ai leadwire (output elettrico del modulo).",
-      "image": "images/leadwire.jpg"
+      "image": "assets/images/leadwire.jpg"
     },
     "Macchie ECA": {
       "description": "Presenza di macchie causate da ECA sulle celle o nelle vicinanze.",
-      "image": "images/macchie_eca.jpg"
+      "image": "assets/images/macchie_eca.jpg"
     },
     "Celle Rotte": {
       "description": "Celle visibilmente danneggiate, crepate o rotte. Da scartare o verificare.",
-      "image": "images/cella_rotta.jpg"
+      "image": "assets/images/cella_rotta.jpg"
     },
     "Lunghezza String Ribbon": {
       "description": "Lunghezza non conforme dei ribbon collegati alla stringa.",
-      "image": "images/lunghezza_ribbon.jpg"
+      "image": "assets/images/lunghezza_ribbon.jpg"
     },
     "Graffio su Cella": {
       "description": "Graffi visibili sulla superficie di una o più celle.",
-      "image": "images/graffio_cella.jpg"
+      "image": "assets/images/graffio_cella.jpg"
     },
     "Altro": {
       "description": "Difetto non previsto tra quelli specifici. Può essere descritto manualmente dall’operatore.",
-      "image": "images/altro.jpg"
+      "image": "assets/images/altro.jpg"
     }
   }
   

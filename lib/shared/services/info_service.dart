@@ -6,7 +6,7 @@ class DefectInfoService {
 
   static Future<Map<String, dynamic>> load() async {
     if (_cache != null) return _cache!;
-    final raw = await rootBundle.loadString('defect_info.json');
+    final raw = await rootBundle.loadString('assets/defect_info.json');
     _cache = jsonDecode(raw) as Map<String, dynamic>;
     return _cache!;
   }

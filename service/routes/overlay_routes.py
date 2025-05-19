@@ -20,17 +20,22 @@ async def get_overlay_config(
     station: str = Query(...),
     object_id: str = Query(...)
 ):
+    # Default config file path
     config_file = f"C:/IX-Monitor/images/{line_name}/{station}/overlay_config.json"
-    if station == "M326":
-        if object_id:
-            comes_from = await get_station_for_object(object_id)
-            config_file = f"C:/IX-Monitor/images/{line_name}/M308/overlay_config.json"
-            if comes_from == 'M309':
-                config_file = f"C:/IX-Monitor/images/{line_name}/M309/overlay_config.json"
 
+    # Resolve origin station if we are in ReWork (M326)
+    comes_from = None
+    if station == "M326" and object_id:
+        station_info = await get_station_for_object(object_id)
+        comes_from = station_info["station"]
+        # Override config path based on origin
+        config_file = f"C:/IX-Monitor/images/{line_name}/M308/overlay_config.json"
+        if comes_from == 'M309':
+            config_file = f"C:/IX-Monitor/images/{line_name}/M309/overlay_config.json"
 
+    # Load the config file
     if not os.path.exists(config_file):
-        print(f"❌ Config file not found.")
+        print(f"❌ Config file not found: {config_file}")
         return JSONResponse(status_code=417, content={"error": f"Overlay config not found for {line_name}/{station}"})
 
     try:
@@ -41,17 +46,20 @@ async def get_overlay_config(
         print(f"❌ JSON decode error: {e}")
         all_configs = {}
 
+    # Look for the matching path
     for image_name, config in all_configs.items():
         config_path = config.get("path", "")
         print(f"➡️ Checking config: image = '{image_name}', path = '{config_path}'")
 
         if config_path.lower() == path.lower():
+            # Default image URL
             image_url = f"https://172.16.250.33:8050/images/{line_name}/{station}/{image_name}"
-            if station == "M326":
-                if object_id:
-                    image_url = f"https://172.16.250.33:8050/images/{line_name}/M308/{image_name}"
-                    if comes_from == 'M309':
-                        image_url = f"https://172.16.250.33:8050/images/{line_name}/M309/{image_name}"
+            
+            # Override image URL if station is M326 and object came from a specific QC
+            if station == "M326" and comes_from:
+                image_url = f"https://172.16.250.33:8050/images/{line_name}/M308/{image_name}"
+                if comes_from == 'M309':
+                    image_url = f"https://172.16.250.33:8050/images/{line_name}/M309/{image_name}"
 
             return {
                 "image_url": image_url,

@@ -2,7 +2,7 @@ import os
 import configparser
 from pathlib import Path
 
-debug = True
+debug = False
 # ---------------- CONFIG & GLOBALS ----------------
 CHANNELS = {
     "Linea1": {
@@ -123,7 +123,7 @@ ISSUE_TREE = {
                         "Solo Poe": {},
                         "Solo Vetro": {},
                         "Matrice Incompleta": {},
-                        "Molteplici Bus Bar"
+                        "Molteplici Bus Bar": {},
                         "Test": {}
                     },
                     "Saldatura": {

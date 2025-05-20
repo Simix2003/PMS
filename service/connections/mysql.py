@@ -294,9 +294,12 @@ def save_warning_on_mysql(
                 image_blob
             ))
             mysql_conn.commit()
-            print(f"💾 Warning saved for {target_station['name']} (from {source_station_name})")
+            inserted_id = cursor.lastrowid
+            print(f"💾 Warning saved for {target_station['name']} (from {source_station_name}) with ID {inserted_id}")
+            return inserted_id
     except Exception as e:
         logging.error(f"❌ Failed to save warning to MySQL: {e}")
+        return None
 
 async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
     try:
@@ -422,8 +425,18 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                                 "limit": consecutive_limit,
                                 "source_station": source_station['name']
                             }
-                            await broadcast_stringatrice_warning(station["line_name"], warning_payload)
-                            save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
+                            inserted_id = save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
+                            if inserted_id:
+                                with mysql_conn.cursor(DictCursor) as cursor:
+                                    cursor.execute("SELECT * FROM stringatrice_warnings WHERE id = %s", (inserted_id,))
+                                    row = cursor.fetchone()
+                                    if row:
+                                        row["suppress_on_source"] = bool(int(row.get("suppress_on_source", 0)))
+                                        if row.get("photo") is not None:
+                                            row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
+
+                                        await broadcast_stringatrice_warning(row["line_name"], row)
+
 
                             break  # ✅ Optional: stop loop after warning
                     else:
@@ -443,8 +456,17 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                         "limit": threshold,
                         "source_station": source_station['name']
                     }
-                    await broadcast_stringatrice_warning(station["line_name"], warning_payload)
-                    save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
+                    inserted_id = save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
+                    if inserted_id:
+                        with mysql_conn.cursor(DictCursor) as cursor:
+                            cursor.execute("SELECT * FROM stringatrice_warnings WHERE id = %s", (inserted_id,))
+                            row = cursor.fetchone()
+                            if row:
+                                row["suppress_on_source"] = bool(int(row.get("suppress_on_source", 0)))
+                                if row.get("photo") is not None:
+                                    row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
+
+                                await broadcast_stringatrice_warning(row["line_name"], row)
 
     except Exception as e:
         logging.error(f"❌ Error fetching last production origin: {e}")

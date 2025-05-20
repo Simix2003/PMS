@@ -116,7 +116,8 @@ if debug:
     @router.post("/api/debug_warning")
     async def debug_warning(payload: dict):
         """
-        Trigger a fake warning broadcast manually from Postman
+        Trigger a fake warning broadcast manually from Postman.
+        Also stores it in MySQL with proper ID.
         """
         line = payload.get("line_name", "No Line")
         station_name = payload.get("station_name", "No Station")
@@ -145,8 +146,37 @@ if debug:
             "display_name": station_display,
         }
 
-        await broadcast_stringatrice_warning(line, warning_payload)
         conn = get_mysql_connection()
-        save_warning_on_mysql(warning_payload, conn, station, defect, source_station)
 
-        return {"status": "sent", "payload": warning_payload}
+        # ✅ Save to MySQL first to generate an ID
+        inserted_id = save_warning_on_mysql(
+            warning_payload,
+            conn,
+            station,
+            defect,
+            {"display_name": source_station},  # ← simulate full source_station
+            suppress_on_source=False
+        )
+
+        # ✅ Fetch full row and broadcast it
+        if inserted_id:
+            with conn.cursor(DictCursor) as cursor:
+                cursor.execute("SELECT * FROM stringatrice_warnings WHERE id = %s", (inserted_id,))
+                row = cursor.fetchone()
+
+                if row:
+                    row["suppress_on_source"] = bool(int(row.get("suppress_on_source", 0)))
+                    if row.get("photo"):
+                        row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
+
+                    # ✅ Convert datetime to ISO string
+                    if isinstance(row.get("timestamp"), datetime):
+                        row["timestamp"] = row["timestamp"].isoformat()
+
+                    # 🧼 (Optional) remove None values if needed
+                    # row = {k: v for k, v in row.items() if v is not None}
+
+                    await broadcast_stringatrice_warning(line, row)
+                    return {"status": "sent", "payload": row}
+
+        return {"status": "error", "reason": "Could not insert warning"}

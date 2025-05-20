@@ -10,6 +10,7 @@ import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/station_card.dart';
+import '../pdf_manual_page.dart';
 import '../settings_page.dart';
 
 class DataViewPage extends StatefulWidget {
@@ -385,18 +386,37 @@ class _DataViewPageState extends State<DataViewPage> {
         backgroundColor: Colors.white,
         scrolledUnderElevation: 0,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.settings,
-            color: Colors.grey[800],
-          ),
-          tooltip: 'Impostazioni',
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SettingsPage()),
-            );
-          },
+        leadingWidth: 100, // ⬅️ Add space for both buttons
+        leading: Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 8,
+            ),
+            IconButton(
+              icon: Icon(Icons.settings, color: Colors.grey[800]),
+              tooltip: 'Impostazioni',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SettingsPage()),
+                );
+              },
+            ),
+            SizedBox(
+              width: 8,
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline, color: Colors.blue),
+              tooltip: 'Manuale',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ManualePage()),
+                );
+              },
+            ),
+          ],
         ),
         title: const Text(
           'Dati',

@@ -118,7 +118,6 @@ ISSUE_TREE = {
                         "Non Lavorato Poe Scaduto": {}, 
                         "No Good da Bussing": {},
                         "Materiale Esterno su Celle": {},
-                        "Bad Soldering": {},
                         "Passthrough al Bussing": {},
                         "Poe in Eccesso": {},
                         "Solo Poe": {},
@@ -160,6 +159,9 @@ ISSUE_TREE = {
                         f"Stringa[{i}]": None for i in range(1, 13)
                     },
                     "Celle Rotte": {
+                        f"Stringa[{i}]": None for i in range(1, 13)
+                    },
+                    "Bad Soldering": {
                         f"Stringa[{i}]": None for i in range(1, 13)
                     },
                      "Lunghezza String Ribbon": {

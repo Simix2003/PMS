@@ -100,7 +100,6 @@ class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
               });
             },
           ),
-          
         ],
       ),
       body: ListView(

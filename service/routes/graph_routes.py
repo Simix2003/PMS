@@ -324,7 +324,7 @@ async def productions_summary(
                     if station_code in stations:
                         stations[station_code].setdefault("defects", {})[category] = count
 
-            for category in ["Mancanza Ribbon", "I_Ribbon Leadwire", "Saldatura", "Disallineamento", "Generali", "Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella"]:
+            for category in ["Mancanza Ribbon", "I_Ribbon Leadwire", "Saldatura", "Disallineamento", "Generali", "Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella", "Bad Soldering"]:
                 fetch_defect_summary(category, category)
 
             for station, data in stations.items():

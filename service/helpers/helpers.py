@@ -126,6 +126,12 @@ def parse_issue_path(path: str, category: str):
         str_match = re.search(r"Stringa\[(\d+)\]", path)
         if str_match:
             res["stringa"] = int(str_match.group(1))
+    
+    elif category == "Bad Soldering":
+        # e.g. "Bad Soldering.Stringa[5]"
+        str_match = re.search(r"Stringa\[(\d+)\]", path)
+        if str_match:
+            res["stringa"] = int(str_match.group(1))
 
     elif category == "Celle Rotte":
         # e.g. "Celle Rotte.Stringa[6]"

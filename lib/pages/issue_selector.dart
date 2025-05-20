@@ -50,7 +50,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   String? activeLeafDefect;
 
   // Updated main groups to exactly match backend keys:
-  final List<String> mainGroups = [ //Should get from MySQL : defects table
+  final List<String> mainGroups = [
+    //Should get from MySQL : defects table
     "Saldatura",
     "Disallineamento",
     "Mancanza Ribbon",
@@ -60,6 +61,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     "I Ribbon Leadwire",
     "Lunghezza String Ribbon",
     "Graffio su Cella",
+    'Bad Soldering',
     "Altro",
   ];
 
@@ -895,6 +897,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         hint = "Controlla le celle per possibili macchie da ECA.";
       } else if (pathStack.length == 1 && pathStack[0] == "Celle Rotte") {
         hint = "Ispeziona le celle segnalate come rotte.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Bad Soldering") {
+        hint = "Ispeziona le celle dove è presente il bad soldering.";
       } else if (pathStack.length == 1 &&
           pathStack[0] == "Lunghezza String Ribbon") {
         hint = "Controlla la lunghezza delle stringhe indicate.";
@@ -919,6 +923,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         hint = "Seleziona le Celle macchiate.";
       } else if (pathStack.length == 1 && pathStack[0] == "Celle Rotte") {
         hint = "Seleziona le Celle rotte.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Bad Soldering") {
+        hint = "Seleziona le Celle dove è presente il bad soldering.";
       } else if (pathStack.length == 1 &&
           pathStack[0] == "Lunghezza String Ribbon") {
         hint = "Seleziona la Stringa interessata dal difetto di lunghezza.";

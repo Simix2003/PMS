@@ -208,7 +208,7 @@ async def get_issues_for_object(id_modulo: str, production_id: int = Query(None)
                     if base64_photo:
                         pictures.append({"defect": path, "image": base64_photo})
 
-                elif cat in ["Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella"]:
+                elif cat in ["Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella", "Bad Soldering"]:
                     path = f"Dati.Esito.Esito_Scarto.Difetti.{cat}.Stringa[{row['stringa']}]"
                     issue_paths.append(path)
                     if base64_photo:

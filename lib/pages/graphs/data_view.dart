@@ -357,6 +357,7 @@ class _DataViewPageState extends State<DataViewPage> {
     "Macchie ECA",
     "Celle Rotte",
     "Lunghezza\nString Ribbon",
+    "Bad Soldering",
     "Altro",
     "Generico",
   ];
@@ -370,6 +371,7 @@ class _DataViewPageState extends State<DataViewPage> {
     "Macchie ECA": Color(0xFFAF52DE), // iOS Purple
     "Celle Rotte": Color(0xFF5856D6), // iOS Indigo
     "Lunghezza String Ribbon": Color(0xFFA2845E), // iOS Brown
+    "Bad Soldering": Color.fromARGB(255, 2, 54, 109), // iOS Dark Blue
     "Altro": Color(0xFF8E8E93), // iOS Gray
     "Generico": Color(0xFFFF3B30), // iOS Red
   };

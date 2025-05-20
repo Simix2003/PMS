@@ -125,7 +125,6 @@ async def search_results(request: Request):
                 if defect_filter_or_clauses:
                     where_clauses.append("(" + " OR ".join(defect_filter_or_clauses) + ")")
                     params.extend(defect_filter_or_params)
-
             else:
                 group_clauses = []
                 group_params = []
@@ -161,8 +160,42 @@ async def search_results(request: Request):
                         if from_iso and to_iso:
                             from_dt = datetime.fromisoformat(from_iso)
                             to_dt = datetime.fromisoformat(to_iso)
-                            group_clauses.append("p.end_time BETWEEN %s AND %s")
-                            group_params.extend([from_dt, to_dt])
+
+                            turno_filters = grouped_filters.get("Turno")
+                            if turno_filters:
+                                turno = int(turno_filters[0]["value"])
+                                turno_times = {
+                                    1: ("06:00:00", "13:59:59"),
+                                    2: ("14:00:00", "21:59:59"),
+                                    3: ("22:00:00", "05:59:59"),
+                                }
+
+                                if turno == 3:
+                                    clauses = []
+                                    for i in range((to_dt - from_dt).days + 1):
+                                        shift_day = from_dt + timedelta(days=i)
+                                        next_day = shift_day + timedelta(days=1)
+                                        clauses.append("""
+                                            (DATE(p.end_time) = %s AND TIME(p.end_time) >= '22:00:00')
+                                            OR
+                                            (DATE(p.end_time) = %s AND TIME(p.end_time) <= '05:59:59')
+                                        """)
+                                        group_params.extend([
+                                            shift_day.strftime("%Y-%m-%d"),
+                                            next_day.strftime("%Y-%m-%d")
+                                        ])
+                                    group_clauses.append("(" + " OR ".join(clauses) + ")")
+                                else:
+                                    for i in range((to_dt - from_dt).days + 1):
+                                        day = (from_dt + timedelta(days=i)).strftime("%Y-%m-%d")
+                                        group_clauses.append(
+                                            "(DATE(p.end_time) = %s AND TIME(p.end_time) BETWEEN %s AND %s)"
+                                        )
+                                        group_params.extend([day, *turno_times[turno]])
+                            else:
+                                # No turno → normal datetime range
+                                group_clauses.append("p.end_time BETWEEN %s AND %s")
+                                group_params.extend([from_dt, to_dt])
                     elif filter_type == "Tempo Ciclo":
                         condition = f.get("condition")
                         seconds = f.get("seconds")
@@ -186,7 +219,6 @@ async def search_results(request: Request):
                 if group_clauses:
                     where_clauses.append("(" + " OR ".join(group_clauses) + ")")
                     params.extend(group_params)
-
 
         join_sql = " ".join(join_clauses)
         where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""

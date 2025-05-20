@@ -897,8 +897,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           Center(
                             child: Text(
                               selectedChannel == "M326"
-                                  ? 'ANDARE A PREMERE PULSANTE Good / No Good SU HMI'
-                                  : 'ANDARE A PREMERE PULSANTE Good FISICO',
+                                  ? 'Premere pulsante NO GOOD su HMI'
+                                  : 'Premere pulsante NO GOOD fisico',
                               style: const TextStyle(fontSize: 36),
                               textAlign: TextAlign.center,
                             ),

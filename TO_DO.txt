@@ -1,20 +1,12 @@
--	Autenticazione Operatore su tablet, tramite badge
+Aggiungere su MySQL ( defects )
+10: Bad Soldering
 
-OK	Stato ‘info’ per ogni difetto, con le foto esemplificative di cosa si riferisce quel difetto
--	Aggiornare manuale, per la parte Capo Area, con la richiesta di valutare ogni nuova tipologia di difetto inserita dal conduttore a mano (campo libero), ed eventualmente riclassificarla nella voce corretta già presente, oppure richiedere ad admin l’inserimento di un nuovo tasto difetto
-OK	Unificare, per quanto applicabile, la nomenclatura del difetto a quanto già in essere nella visual inspection pre-framing (descrizione MES)
+Aggiungere su MySQL ( stations_defects )
+1: 10
+2: 10
+3: 10
 
-OK Quando viene inviato un warning alla stringatrice, sarebbe utile richiedere anche una foto del difetto da parte dell’operatore del Quality Gate, per facilitare la comprensione e risoluzione del problema da parte della stringatrice. ( Mi è stato detto dagli operatori che dall’immagine di una Macchie ECA per esempio, sono in grado di capire cosa andare a toccare sulla stringatrice )
-OK   Come già richiesto anche da Federico Nicola, è importante inviare anche il difetto “Bad Soldering” come alert alle stringatrici.
+Aggiungere in overlay_config.json
+Copiare Celle Rotte in Bad Soldering
 
-
-Alter Warnings Database:
-
-ALTER TABLE stringatrice_warnings
-ADD COLUMN source_station VARCHAR(50),
-ADD COLUMN suppress_on_source BOOLEAN DEFAULT FALSE,
-ADD COLUMN photo LONGBLOB;
-
-Alter object_defects:
-ALTER TABLE object_defects
-ADD COLUMN photo LONGBLOB;
+Aggiungere in Cartelle M308 e M309 bad_soldering.jpg, copiata da Celle Rotte

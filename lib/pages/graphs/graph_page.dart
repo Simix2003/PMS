@@ -341,6 +341,7 @@ class _GraphPageState extends State<GraphPage> {
                 'I Ribbon Leadwire',
                 'Lunghezza String Ribbon',
                 'Graffio su Cella',
+                'Bad Soldering',
                 'Altro',
               ],
               onChanged: (val) {

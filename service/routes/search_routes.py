@@ -42,204 +42,151 @@ async def search_results(request: Request):
             grouped_filters[f.get("type")].append(f)
 
         for filter_type, group in grouped_filters.items():
-            group_clauses = []
-            group_params = []
+            if filter_type == "Difetto":
+                defect_filter_or_clauses = []
+                defect_filter_or_params = []
 
-            for f in group:
-                value = f.get("value")
+                for f in group:
+                    value = f.get("value")
+                    if not value:
+                        continue
 
-                if filter_type == "ID Modulo":
-                    group_clauses.append("o.id_modulo LIKE %s")
-                    group_params.append(f"%{value}%")
-
-                elif filter_type == "Esito":
-                    esito_map = {"G": 1, "In Produzione": 2, "Escluso": 4, "G Operatore": 5, "NG": 6}
-                    if value in esito_map:
-                        group_clauses.append("p.esito = %s")
-                        group_params.append(esito_map[value])
-
-                elif filter_type == "Operatore":
-                    group_clauses.append("p.operator_id LIKE %s")
-                    group_params.append(f"%{value}%")
-
-                elif filter_type == "Linea":
-                    group_clauses.append("pl.display_name = %s")
-                    group_params.append(value)
-
-                elif filter_type == "Stazione":
-                    group_clauses.append("s.name = %s")
-                    group_params.append(value)
-
-                elif filter_type == "Tempo Ciclo":
-                    condition = f.get("condition")  # e.g., "Minore Di", "Maggiore Di", etc.
-                    seconds = f.get("seconds")
-
-                    if seconds:
-                        try:
-                            seconds_float = float(seconds)
-                        except ValueError:
-                            continue  # skip if invalid number
-
-                        if condition == "Minore Di":
-                            group_clauses.append("p.cycle_time < %s")
-                        elif condition == "Maggiore Di":
-                            group_clauses.append("p.cycle_time > %s")
-                        elif condition == "Uguale A":
-                            group_clauses.append("p.cycle_time = %s")
-                        elif condition == "Minore o Uguale a":
-                            group_clauses.append("p.cycle_time <= %s")
-                        elif condition == "Maggiore o Uguale a":
-                            group_clauses.append("p.cycle_time >= %s")
-                        else:
-                            continue  # skip unknown condition
-
-                        group_params.append(seconds_float)
-
-                elif filter_type == "Turno":
-                    turno_times = {
-                        "1": ("06:00:00", "13:59:59"),
-                        "2": ("14:00:00", "21:59:59"),
-                        "3": ("22:00:00", "05:59:59"),
-                    }
-
-                    if value in turno_times:
-                        start_t, end_t = turno_times[value]
-                        date_filters = grouped_filters.get("Data", [])
-
-                        if date_filters:
-                            from_iso = date_filters[0].get("start")
-                            to_iso = date_filters[0].get("end")
-
-                            if from_iso and to_iso:
-                                from_dt = datetime.fromisoformat(from_iso).date()
-                                to_dt = datetime.fromisoformat(to_iso).date()
-
-                                date_clauses = []
-                                date_params = []
-
-                                current_day = from_dt
-                                while current_day <= to_dt:
-                                    if value == "3":
-                                        next_day = current_day + timedelta(days=1)
-                                        date_clauses.append("""
-                                            (
-                                                (DATE(p.end_time) = %s AND TIME(p.end_time) >= '22:00:00')
-                                                OR
-                                                (DATE(p.end_time) = %s AND TIME(p.end_time) <= '05:59:59')
-                                            )
-                                        """)
-                                        date_params.extend([current_day.strftime("%Y-%m-%d"), next_day.strftime("%Y-%m-%d")])
-                                    else:
-                                        date_clauses.append("""
-                                            (DATE(p.end_time) = %s AND TIME(p.end_time) BETWEEN %s AND %s)
-                                        """)
-                                        date_params.extend([
-                                            current_day.strftime("%Y-%m-%d"),
-                                            start_t,
-                                            end_t
-                                        ])
-                                    current_day += timedelta(days=1)
-
-                                if date_clauses:
-                                    group_clauses.append("(" + " OR ".join(date_clauses) + ")")
-                                    group_params.extend(date_params)
-                        else:
-                            # Fallback if no date filter
-                            if value == "3":
-                                group_clauses.append("(TIME(p.end_time) >= '22:00:00' OR TIME(p.end_time) <= '05:59:59')")
-                            else:
-                                group_clauses.append("TIME(p.end_time) BETWEEN %s AND %s")
-                                group_params.extend([start_t, end_t])
-
-                elif filter_type == "Data":
-                    from_iso = f.get("start")
-                    to_iso = f.get("end")
-                    if from_iso and to_iso:
-                        from_dt = datetime.fromisoformat(from_iso)
-                        to_dt = datetime.fromisoformat(to_iso)
-                        group_clauses.append("p.end_time BETWEEN %s AND %s")
-                        group_params.extend([from_dt, to_dt])
-
-                elif filter_type == "Stringatrice":
-                    stringatrice_map = {"1": "Str1", "2": "Str2", "3": "Str3", "4": "Str4", "5": "Str5"}
-                    if value in stringatrice_map:
-                        join_clauses.append("LEFT JOIN stations ls ON p.last_station_id = ls.id")
-                        group_clauses.append("ls.name = %s")
-                        group_params.append(stringatrice_map[value])
-
-                elif filter_type == "Difetto" and value:
                     parts = value.split(" > ")
                     defect_category = parts[0]
-                    group_clauses.append("d.category = %s")
-                    group_params.append(defect_category)
+                    clause_parts = ["d.category = %s"]
+                    clause_params = [defect_category]
 
                     if defect_category == "Generali" and len(parts) > 1:
-                        group_clauses.append("od.defect_type = %s")
-                        group_params.append(parts[1])
+                        clause_parts.append("od.defect_type = %s")
+                        clause_params.append(parts[1])
                     elif defect_category == "Saldatura":
                         if len(parts) > 1:
                             match = re.search(r'\[(\d+)\]', parts[1])
                             if match:
-                                group_clauses.append("od.stringa = %s")
-                                group_params.append(int(match.group(1)))
+                                clause_parts.append("od.stringa = %s")
+                                clause_params.append(int(match.group(1)))
                         if len(parts) > 2:
                             lato = parts[2].replace("Lato ", "").strip()
-                            group_clauses.append("od.ribbon_lato = %s")
-                            group_params.append(lato)
+                            clause_parts.append("od.ribbon_lato = %s")
+                            clause_params.append(lato)
                         if len(parts) > 3:
                             match = re.search(r'\[(\d+)\]', parts[3])
                             if match:
-                                group_clauses.append("od.s_ribbon = %s")
-                                group_params.append(int(match.group(1)))
+                                clause_parts.append("od.s_ribbon = %s")
+                                clause_params.append(int(match.group(1)))
                     elif defect_category == "Disallineamento":
                         if len(parts) > 1 and parts[1] == "Stringa" and len(parts) > 2:
                             match = re.search(r'\[(\d+)\]', parts[2])
                             if match:
-                                group_clauses.append("od.stringa = %s")
-                                group_params.append(int(match.group(1)))
+                                clause_parts.append("od.stringa = %s")
+                                clause_params.append(int(match.group(1)))
                         elif len(parts) > 1 and parts[1] == "Ribbon":
                             if len(parts) > 2:
                                 lato = parts[2].replace("Lato ", "").strip()
-                                group_clauses.append("od.ribbon_lato = %s")
-                                group_params.append(lato)
+                                clause_parts.append("od.ribbon_lato = %s")
+                                clause_params.append(lato)
                             if len(parts) > 3:
                                 match = re.search(r'\[(\d+)\]', parts[3])
                                 if match:
-                                    group_clauses.append("od.i_ribbon = %s")
-                                    group_params.append(int(match.group(1)))
+                                    clause_parts.append("od.i_ribbon = %s")
+                                    clause_params.append(int(match.group(1)))
                     elif defect_category == "Mancanza Ribbon":
                         if len(parts) > 1:
                             lato = parts[1].replace("Lato ", "").strip()
-                            group_clauses.append("od.ribbon_lato = %s")
-                            group_params.append(lato)
+                            clause_parts.append("od.ribbon_lato = %s")
+                            clause_params.append(lato)
                         if len(parts) > 2:
                             match = re.search(r'\[(\d+)\]', parts[2])
                             if match:
-                                group_clauses.append("od.i_ribbon = %s")
-                                group_params.append(int(match.group(1)))
+                                clause_parts.append("od.i_ribbon = %s")
+                                clause_params.append(int(match.group(1)))
                     elif defect_category == "I_Ribbon Leadwire":
                         if len(parts) > 1:
                             lato = parts[1].replace("Lato ", "").strip()
-                            group_clauses.append("od.ribbon_lato = %s")
-                            group_params.append(lato)
+                            clause_parts.append("od.ribbon_lato = %s")
+                            clause_params.append(lato)
                         if len(parts) > 2:
                             match = re.search(r'\[(\d+)\]', parts[2])
                             if match:
-                                group_clauses.append("od.i_ribbon = %s")
-                                group_params.append(int(match.group(1)))
-                    elif defect_category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella") and len(parts) > 1:
+                                clause_parts.append("od.i_ribbon = %s")
+                                clause_params.append(int(match.group(1)))
+                    elif defect_category in ("Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella", "Bad Soldering") and len(parts) > 1:
                         match = re.search(r'\[(\d+)\]', parts[1])
                         if match:
-                            group_clauses.append("od.stringa = %s")
-                            group_params.append(int(match.group(1)))
+                            clause_parts.append("od.stringa = %s")
+                            clause_params.append(int(match.group(1)))
                     elif defect_category == "Altro" and len(parts) > 1:
-                        group_clauses.append("od.extra_data LIKE %s")
-                        group_params.append(f"%{parts[1]}%")
+                        clause_parts.append("od.extra_data LIKE %s")
+                        clause_params.append(f"%{parts[1]}%")
 
-            if group_clauses:
-                clause = f"({' OR '.join(group_clauses)})" if len(group_clauses) > 1 else group_clauses[0]
-                where_clauses.append(clause)
-                params.extend(group_params)
+                    defect_filter_or_clauses.append("(" + " AND ".join(clause_parts) + ")")
+                    defect_filter_or_params.extend(clause_params)
+
+                if defect_filter_or_clauses:
+                    where_clauses.append("(" + " OR ".join(defect_filter_or_clauses) + ")")
+                    params.extend(defect_filter_or_params)
+
+            else:
+                group_clauses = []
+                group_params = []
+
+                for f in group:
+                    value = f.get("value")
+                    if filter_type == "ID Modulo":
+                        group_clauses.append("o.id_modulo LIKE %s")
+                        group_params.append(f"%{value}%")
+                    elif filter_type == "Esito":
+                        esito_map = {"G": 1, "In Produzione": 2, "Escluso": 4, "G Operatore": 5, "NG": 6}
+                        if value in esito_map:
+                            group_clauses.append("p.esito = %s")
+                            group_params.append(esito_map[value])
+                    elif filter_type == "Operatore":
+                        group_clauses.append("p.operator_id LIKE %s")
+                        group_params.append(f"%{value}%")
+                    elif filter_type == "Linea":
+                        group_clauses.append("pl.display_name = %s")
+                        group_params.append(value)
+                    elif filter_type == "Stazione":
+                        group_clauses.append("s.name = %s")
+                        group_params.append(value)
+                    elif filter_type == "Stringatrice":
+                        stringatrice_map = {"1": "Str1", "2": "Str2", "3": "Str3", "4": "Str4", "5": "Str5"}
+                        if value in stringatrice_map:
+                            join_clauses.append("LEFT JOIN stations ls ON p.last_station_id = ls.id")
+                            group_clauses.append("ls.name = %s")
+                            group_params.append(stringatrice_map[value])
+                    elif filter_type == "Data":
+                        from_iso = f.get("start")
+                        to_iso = f.get("end")
+                        if from_iso and to_iso:
+                            from_dt = datetime.fromisoformat(from_iso)
+                            to_dt = datetime.fromisoformat(to_iso)
+                            group_clauses.append("p.end_time BETWEEN %s AND %s")
+                            group_params.extend([from_dt, to_dt])
+                    elif filter_type == "Tempo Ciclo":
+                        condition = f.get("condition")
+                        seconds = f.get("seconds")
+                        if seconds:
+                            try:
+                                seconds_float = float(seconds)
+                                if condition == "Minore Di":
+                                    group_clauses.append("p.cycle_time < %s")
+                                elif condition == "Maggiore Di":
+                                    group_clauses.append("p.cycle_time > %s")
+                                elif condition == "Uguale A":
+                                    group_clauses.append("p.cycle_time = %s")
+                                elif condition == "Minore o Uguale a":
+                                    group_clauses.append("p.cycle_time <= %s")
+                                elif condition == "Maggiore o Uguale a":
+                                    group_clauses.append("p.cycle_time >= %s")
+                                group_params.append(seconds_float)
+                            except ValueError:
+                                continue
+
+                if group_clauses:
+                    where_clauses.append("(" + " OR ".join(group_clauses) + ")")
+                    params.extend(group_params)
+
 
         join_sql = " ".join(join_clauses)
         where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""

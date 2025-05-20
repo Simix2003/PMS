@@ -85,6 +85,7 @@ class _ProductionDetailPageState extends State<ProductionDetailPage> {
 
       case 'Macchie ECA':
       case 'Celle Rotte':
+      case 'Bad Soldering':
       case 'Lunghezza String Ribbon':
       case 'Graffio su Cella':
         final stringa = RegExp(r'Stringa\[(\d+)\]').firstMatch(path)?.group(1);

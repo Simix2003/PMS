@@ -80,6 +80,9 @@ class _FindPageState extends State<FindPage> {
 // === GRAFFIO SU CELLA ===
   String? selectedGraffioSuCellaStringa;
 
+// === BAD SOLDERING ===
+  String? selectedBadSolderingStringa;
+
 // === LUNGHEZZA STRING RIBBON ===
   String? selectedLunghezzaStringa;
 
@@ -113,7 +116,6 @@ class _FindPageState extends State<FindPage> {
     'Non Lavorato Poe Scaduto',
     'No Good da Bussing',
     'Materiale Esterno su Celle',
-    'Bad Soldering',
     'Passthrough al Bussing',
     'Poe in Eccesso',
     'Solo Poe',
@@ -124,6 +126,21 @@ class _FindPageState extends State<FindPage> {
   ];
 
   final List<String> saldaturaOptions_1 = [
+    'Stringa[1]',
+    'Stringa[2]',
+    'Stringa[3]',
+    'Stringa[4]',
+    'Stringa[5]',
+    'Stringa[6]',
+    'Stringa[7]',
+    'Stringa[8]',
+    'Stringa[9]',
+    'Stringa[10]',
+    'Stringa[11]',
+    'Stringa[12]',
+  ];
+
+  final List<String> badSolderingOptions = [
     'Stringa[1]',
     'Stringa[2]',
     'Stringa[3]',
@@ -434,6 +451,9 @@ class _FindPageState extends State<FindPage> {
         case 'Celle Rotte':
           compositeValue += ' > ${selectedCelleRotteStringa ?? ''}';
           break;
+        case 'Bad Soldering':
+          compositeValue += ' > ${selectedBadSolderingStringa ?? ''}';
+          break;
         case 'Lunghezza String Ribbon':
           compositeValue += ' > ${selectedLunghezzaStringa ?? ''}';
           break;
@@ -533,6 +553,7 @@ class _FindPageState extends State<FindPage> {
       selectedMancanzaRibbon = null;
       selectedMacchieECAStringa = null;
       selectedCelleRotteStringa = null;
+      selectedBadSolderingStringa = null;
       selectedLunghezzaStringa = null;
       selectedRange = null;
       pickedDate = null;
@@ -700,6 +721,7 @@ class _FindPageState extends State<FindPage> {
                 'I Ribbon Leadwire',
                 'Lunghezza String Ribbon',
                 'Graffio su Cella',
+                'Bad Soldering',
                 'Altro',
               ],
               onChanged: (val) {
@@ -718,6 +740,7 @@ class _FindPageState extends State<FindPage> {
                   selectedMancanzaRibbon = null;
                   selectedLeadwireRibbonSide = null;
                   selectedLeadwireRibbon = null;
+                  selectedBadSolderingStringa = null;
                   selectedMacchieECAStringa = null;
                   selectedCelleRotteStringa = null;
                   selectedLunghezzaStringa = null;
@@ -879,6 +902,16 @@ class _FindPageState extends State<FindPage> {
                 items: graffioSuCellaOptions,
                 onChanged: (val) =>
                     setState(() => selectedGraffioSuCellaStringa = val),
+              ),
+
+            // === BAD SOLDERING ===
+            if (selectedDifettoGroup == 'Bad Soldering')
+              _buildStyledDropdown(
+                hint: 'Stringa',
+                value: selectedBadSolderingStringa,
+                items: badSolderingOptions,
+                onChanged: (val) =>
+                    setState(() => selectedBadSolderingStringa = val),
               ),
           ],
         );

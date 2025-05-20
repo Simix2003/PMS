@@ -22,11 +22,12 @@ EXCEL_DEFECT_COLUMNS = {
     "NG Celle Rotte": "Celle Rotte",
     "NG Altro": "Altro",
     "NG Graffio su Cella": "Graffio su Cella",
+    "NG Bad Soldering": "Bad Soldering",
 }
 
 SHEET_NAMES = [
     "Metadata", "Risolutivo", "NG Generali", "NG Saldature", "NG Disall. Ribbon",
-    "NG Disall. Stringa", "NG Mancanza Ribbon", "NG I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Graffio su Cella", "NG Altro"
+    "NG Disall. Stringa", "NG Mancanza Ribbon", "NG I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Graffio su Cella", "NG Bad Soldering", "NG Altro"
 ]
 
 def clean_old_exports(max_age_hours: int = 2):
@@ -248,6 +249,8 @@ def risolutivo_sheet(ws, data: dict):
                 ng_labels.add("NG Lunghezza String Ribbon")
             elif cat == "Graffio su Cella":
                 ng_labels.add("NG Graffio su Cella")
+            elif cat == "Bad Soldering":
+                ng_labels.add("NG Bad Soldering")
             elif cat == "Altro":
                 ng_labels.add("NG Altro")
 
@@ -306,7 +309,7 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
         "Poe Scaduto", "No Good da Bussing",
-        "Materiale Esterno su Celle", "Bad Soldering", "Passthrough al Bussing", 
+        "Materiale Esterno su Celle", "Passthrough al Bussing", 
         "Poe in Eccesso", "Solo Poe", "Solo Vetro", "Matrice Incompleta", 
         "Molteplici Bus Bar","Test"
     ]
@@ -362,7 +365,6 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         flag_poe = "NG" if "Non Lavorato Poe Scaduto" in general_defects else ""
         flag_bus = "NG" if "No Good da Bussing" in general_defects else ""
         flag_materiale = "NG" if "Materiale Esterno su Celle" in general_defects else ""
-        flag_bad = "NG" if "Bad Soldering" in general_defects else ""
         flag_passthrough = "NG" if "Passthrough al Bussing" in general_defects else ""
         flag_poe_in_eccesso = "NG" if "Poe in Eccesso" in general_defects else ""
         flag_solo_poe = "NG" if "Solo Poe" in general_defects else ""
@@ -383,7 +385,6 @@ def ng_generali_sheet(ws, data: dict) -> bool:
             flag_poe,
             flag_bus,
             flag_materiale,
-            flag_bad,
             flag_passthrough,
             flag_poe_in_eccesso,
             flag_solo_poe,
@@ -397,7 +398,7 @@ def ng_generali_sheet(ws, data: dict) -> bool:
     if rows_written > 0:
         autofit_columns(ws, align_center_for={
             "Esito", "Poe Scaduto", "No Good da Bussing",
-            "Materiale Esterno su Celle", "Bad Soldering", "Passthrough al Bussing", "Poe in Eccesso","Solo Poe", "Solo Vetro", "Matrice Incompleta", "Molteplici Bus Bar", "Test"
+            "Materiale Esterno su Celle", "Passthrough al Bussing", "Poe in Eccesso","Solo Poe", "Solo Vetro", "Matrice Incompleta", "Molteplici Bus Bar", "Test"
         })
         return True
     else:
@@ -1078,6 +1079,109 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
     else:
         return False
 
+def ng_bad_soldering_sheet(ws, data: dict) -> bool:
+    """
+    Generate the 'NG Bad Soldering' sheet using pre-fetched data.
+    One row per production with at least one Bad Soldering defect.
+    """
+    rows_written = 0
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
+    min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
+
+    objects_by_id = {obj["id"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    lines_by_id = {line["id"]: line for line in production_lines}
+
+    header = [
+        "Linea", "Stazione", "Stringatrice", "ID Modulo",
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+    ] + [f"Stringa {i}" for i in range(1, 13)]
+    ws.append(header)
+
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
+        if not obj:
+            continue
+
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
+            continue
+
+        production_id = prod.get("id")
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
+        cycle_time_str = str(cycle_time_obj or "")
+
+        # ✅ Convert cycle time to seconds
+        cycle_seconds = None
+        if cycle_time_obj:
+            try:
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
+            except Exception:
+                pass
+
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
+
+        station = stations_by_id.get(prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+
+        line_name = "Unknown"
+        if station and station.get("line_id"):
+            line = lines_by_id.get(station["line_id"])
+            if line:
+                line_name = line.get("display_name", "Unknown")
+
+        last_station_name = "N/A"
+        last_station_id = prod.get("last_station_id")
+        if last_station_id:
+            last_station = stations_by_id.get(last_station_id)
+            if last_station:
+                last_station_name = last_station.get("display_name", "N/A")
+
+        prod_defects = [
+            d for d in object_defects
+            if d.get("production_id") == production_id and d.get("category") == "Bad Soldering"
+        ]
+        if not prod_defects:
+            continue
+
+        stringa_cols = [""] * 12
+        for defect in prod_defects:
+            stringa_num = defect.get("stringa")
+            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
+                stringa_cols[stringa_num - 1] = "NG"
+            elif isinstance(stringa_num, str) and stringa_num.isdigit():
+                index = int(stringa_num)
+                if 1 <= index <= 12:
+                    stringa_cols[index - 1] = "NG"
+
+        row = [
+            line_name,
+            station_name,
+            last_station_name,
+            id_modulo,
+            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
+            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
+            esito,
+            cycle_time_str
+        ] + stringa_cols
+
+        ws.append(row)
+        rows_written += 1
+
+    if rows_written > 0:
+        autofit_columns(ws, align_center_for=set(header))
+        return True
+    else:
+        return False
+
 def ng_celle_rotte_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Celle Rotte' sheet using pre-fetched data.
@@ -1507,6 +1611,7 @@ SHEET_FUNCTIONS = {
     "NG Celle Rotte": ng_celle_rotte_sheet,
     "NG Lunghezza String Ribbon": ng_lunghezza_string_ribbon_sheet,
     "NG Graffio su Cella": ng_graffio_su_cella_sheet,
+    "NG Bad Soldering": ng_bad_soldering_sheet,
     "NG Altro": ng_altro_sheet,
 }
 

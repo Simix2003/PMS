@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
+import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/station_card.dart';
@@ -41,13 +42,8 @@ class _DataViewPageState extends State<DataViewPage> {
   // Default is full day.
   int selectedTurno = 0;
 
+  // LINES //Should get from MySQL : production_lines
   String selectedLine = "Linea2";
-  final List<String> availableLines = ["Linea1", "Linea2", "Linea3"];
-  final Map<String, String> lineDisplayNames = {
-    'Linea1': 'Linea A',
-    'Linea2': 'Linea B',
-    'Linea3': 'Linea C',
-  };
 
   Map<String, dynamic>? _fetchedData;
   double _thresholdSeconds = 3;

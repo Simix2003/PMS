@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:html' as html;
 import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:flutter/material.dart';
+import '../../shared/models/globals.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
@@ -43,7 +44,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   String plcStatus = "CHECKING"; // or values like "CONNECTED", "DISCONNECTED"
 
-  // STATIONS
+  // STATIONS //Should get from MySQL : stations
   String selectedChannel = "M308"; // Default selection
   final List<String> availableChannels = ["M308", "M309", "M326"];
   final Map<String, String> stationDisplayNames = {
@@ -52,14 +53,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     'M326': 'M326 - RW1',
   };
 
-  // LINES
+  // LINES //Should get from MySQL : production_lines
   String selectedLine = "Linea2";
-  final List<String> availableLines = ["Linea1", "Linea2", "Linea3"];
-  final Map<String, String> lineDisplayNames = {
-    'Linea1': 'Linea A',
-    'Linea2': 'Linea B',
-    'Linea3': 'Linea C',
-  };
 
   List<Map<String, String>> _pictures = [];
 

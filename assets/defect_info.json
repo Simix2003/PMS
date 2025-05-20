@@ -19,7 +19,7 @@
       "description": "Saldataura difettosa riscontrata in fase di ispezione. Potrebbe compromettere la conducibilità.",
       "image": "assets/images/bad_soldering.jpg"
     },
-    "Passthrough": {
+    "Passthrough al Bussing": {
       "description": "Modulo che ha attraversato le stazioni senza essere processato correttamente.",
       "image": "assets/images/passthrough.jpg"
     },

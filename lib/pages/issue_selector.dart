@@ -50,7 +50,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
   String? activeLeafDefect;
 
   // Updated main groups to exactly match backend keys:
-  final List<String> mainGroups = [
+  final List<String> mainGroups = [ //Should get from MySQL : defects table
     "Saldatura",
     "Disallineamento",
     "Mancanza Ribbon",

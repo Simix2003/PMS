@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'dart:math' as math;
 
+import '../../shared/services/api_service.dart';
 import '../dashboard/dashboard_data.dart';
 import '../dashboard/dashboard_home.dart';
 import '../dashboard/dashboard_stringatrice.dart';
@@ -86,7 +87,10 @@ class _LoadingScreenState extends State<LoadingScreen>
     const duration = Duration(seconds: 2);
     final start = DateTime.now();
 
-    // Animate progress from 0 to 1 over 2 seconds
+    // Start line loading early
+    final lineLoadFuture = ApiService.fetchLinesAndInitializeGlobals();
+
+    // Animate progress
     while (DateTime.now().difference(start) < duration) {
       final elapsed = DateTime.now().difference(start).inMilliseconds;
       if (mounted) {
@@ -97,30 +101,30 @@ class _LoadingScreenState extends State<LoadingScreen>
       await Future.delayed(const Duration(milliseconds: 16)); // ~60 FPS
     }
 
+    // Ensure line data is ready before continuing
+    await lineLoadFuture;
+
     if (mounted) {
       setState(() {
         _loadingProgress = 1.0;
       });
 
-      /*Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-            builder: (_) => LoginPage(
-                  targetPage: widget.targetPage,
-                )),
-      );*/
-
-      if (widget.targetPage == 'Home') {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const DashboardHome()),
-        );
-      } else if (widget.targetPage == 'Data') {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const DashboardData()),
-        );
-      } else if (widget.targetPage == 'Stringatrice') {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const DashboardStringatrice()),
-        );
+      switch (widget.targetPage) {
+        case 'Home':
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardHome()),
+          );
+          break;
+        case 'Data':
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardData()),
+          );
+          break;
+        case 'Stringatrice':
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardStringatrice()),
+          );
+          break;
       }
     }
   }

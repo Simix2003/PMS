@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:rive/rive.dart';
+//import 'package:rive/rive.dart';
 import 'pages/loading_Screen/loading_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('it_IT'); // ensure locale data is ready
-  await RiveFile.initialize(); // <-- Required on Web
+  //await RiveFile.initialize(); // <-- Required on Web
 
   runApp(const MyApp());
 }

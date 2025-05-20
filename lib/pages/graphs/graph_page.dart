@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 
+import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
 
 // ───────────────────────────────────────────────── data models ───────────────
@@ -82,7 +83,8 @@ class _GraphPageState extends State<GraphPage> {
   bool _showDayLines = true;
   bool _showDayBackground = true;
 
-  final List<String> _lineOptions = const ['Linea A', 'Linea B', 'Linea C'];
+  // LINES //Should get from MySQL : production_lines
+  // STATIONS //Should get from MySQL : stations
   final Map<String, List<String>> _stationOptions = const {
     'Linea A': ['M308', 'M309', 'M326'],
     'Linea B': ['M308', 'M309', 'M326'],
@@ -361,7 +363,7 @@ class _GraphPageState extends State<GraphPage> {
         final lineDrop = _styledDropdown(
           hint: 'Linea',
           value: _selectedLine.isNotEmpty ? _selectedLine : null,
-          items: _lineOptions,
+          items: lineOptions,
           onChanged: (v) => setState(() {
             _selectedLine = v!;
             _selectedStation = '';

@@ -76,16 +76,33 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             if (fine_buona or fine_scarto) and not passato_flags[full_station_id]:
                 data_inizio = trigger_timestamps.get(full_station_id)
                 result = await read_data(plc_connection, line_name, channel_id,
-                                         richiesta_ok=fine_buona,
-                                         richiesta_ko=fine_scarto,
-                                         #richiesta_ok=False,
-                                         #richiesta_ko=True,
-                                         data_inizio=data_inizio)
+                                        richiesta_ok=fine_buona,
+                                        richiesta_ko=fine_scarto,
+                                        data_inizio=data_inizio)
+                
+                # 🔍 Read current Id_Modulo again directly from PLC
+                id_mod_conf = paths["id_modulo"]
+                current_id_modulo = global_state.debug_moduli.get(full_station_id) if debug else await asyncio.to_thread(
+                    plc_connection.read_string,
+                    id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
+                )
+
+                expected_id = global_state.expected_moduli.get(full_station_id)
+
+                # 📝 Se c'è una discrepanza tra gli ID Modulo, salvala su file
+                if expected_id and current_id_modulo and expected_id != current_id_modulo:
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    with open("plc_mismatches.txt", "a") as f:
+                        f.write(f"[{now}] {full_station_id}\n")
+                        f.write(f"  ⚠️ DISCREPANZA! Atteso: {expected_id}, Letto: {current_id_modulo}\n")
+                        f.write(f"  Inizio Ciclo: {data_inizio}, Fine Ciclo: {datetime.now()}\n")
+                        f.write(f"  fine_buona: {fine_buona}, fine_scarto: {fine_scarto}\n")
+                        f.write("-" * 60 + "\n")
+
                 if result:
                     passato_flags[full_station_id] = True
                     production_id = incomplete_productions.get(full_station_id)
                     if production_id:
-                        # Update the initial production record with final data.
                         conn = get_mysql_connection()
                         await update_production_final(production_id, result, channel_id, conn, fine_buona, fine_scarto)
                         incomplete_productions.pop(full_station_id)
@@ -163,6 +180,8 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         prod_id = await insert_initial_production_data(initial_data, channel_id, conn, esito)
         if prod_id:
             incomplete_productions[full_id] = prod_id
+
+        global_state.expected_moduli[full_id] = object_id
 
         # Write TRUE to pezzo_salvato_su_DB_con_inizio_ciclo.
         await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True)

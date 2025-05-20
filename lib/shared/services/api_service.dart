@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:html' as html;
 
+import '../models/globals.dart';
+
 class ApiService {
   static String get baseUrl {
     final uri = html.window.location;
@@ -520,6 +522,37 @@ class ApiService {
       return raw.cast<Map<String, dynamic>>();
     } else {
       throw Exception('Errore nella query: ${response.body}');
+    }
+  }
+
+  // At the bottom of ApiService or near related utility methods
+  static Future<void> fetchLinesAndInitializeGlobals() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/api/lines'));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+
+        availableLines.clear();
+        lineDisplayNames.clear();
+        lineOptions.clear();
+
+        for (final item in data) {
+          final name = item['name'];
+          final displayName = item['display_name'];
+
+          availableLines.add(name);
+          lineDisplayNames[name] = displayName;
+          lineOptions.add(displayName);
+        }
+
+        selectedLine = availableLines.isNotEmpty ? availableLines[0] : null;
+      } else {
+        throw Exception('❌ Failed to load lines from server');
+      }
+    } catch (e) {
+      debugPrint("❌ Error fetching lines: $e");
+      rethrow;
     }
   }
 }

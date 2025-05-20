@@ -251,8 +251,17 @@ async def productions_summary(
                     SUM(CASE WHEN p.esito = 5 THEN 1 ELSE 0 END) AS ok_op_count,
                     SUM(CASE WHEN p.esito = 6 THEN 1 ELSE 0 END) AS bad_count,
                     SEC_TO_TIME(AVG(TIME_TO_SEC(p.cycle_time))) AS avg_cycle_time
-                FROM productions p
+                FROM (
+                    SELECT *
+                    FROM productions p
+                    WHERE (p.station_id, p.object_id, p.end_time) IN (
+                        SELECT station_id, object_id, MAX(end_time)
+                        FROM productions
+                        GROUP BY station_id, object_id
+                    )
+                ) p
                 JOIN stations s ON p.station_id = s.id
+
                 LEFT JOIN production_lines pl ON s.line_id = pl.id
                 {where_clause}
                 GROUP BY s.name, s.display_name
@@ -274,7 +283,15 @@ async def productions_summary(
 
             query_time_cycles = f"""
                 SELECT s.name as station_code, TIME_TO_SEC(p.cycle_time) as cycle_seconds
-                FROM productions p
+                FROM (
+                    SELECT *
+                    FROM productions p
+                    WHERE (p.station_id, p.object_id, p.end_time) IN (
+                        SELECT station_id, object_id, MAX(end_time)
+                        FROM productions
+                        GROUP BY station_id, object_id
+                    )
+                ) p
                 JOIN stations s ON p.station_id = s.id
                 LEFT JOIN production_lines pl ON s.line_id = pl.id
                 {where_clause} AND (
@@ -337,7 +354,15 @@ async def productions_summary(
 
             query_last = f"""
                 SELECT s.name as station, o.id_modulo, p.esito, p.cycle_time, p.start_time, p.end_time
-                FROM productions p
+                FROM (
+                    SELECT *
+                    FROM productions p
+                    WHERE (p.station_id, p.object_id, p.end_time) IN (
+                        SELECT station_id, object_id, MAX(end_time)
+                        FROM productions
+                        GROUP BY station_id, object_id
+                    )
+                ) p
                 JOIN stations s ON p.station_id = s.id
                 JOIN objects o ON p.object_id = o.id
                 LEFT JOIN production_lines pl ON s.line_id = pl.id

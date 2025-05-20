@@ -20,8 +20,7 @@ flutter run -d chrome --web-renderer html -t lib/main_stringatrici.dart
 
 pyinstaller --onefile --add-binary="C:\Users\papar\Desktop\Prova_Comunicazione_PLC\Lib\site-packages\snap7\lib\snap7.dll;." service.py  
 
-cd services
-cd api
+cd service
 pyinstaller --clean service.spec
 
 Per installare MySQL se esce errore 13, bisogna andare sotto C/Users e nella cartella "Default" asegnare ad "EVERYONE" tutti i permessi per la cartella.

@@ -10,6 +10,7 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
 import '../../shared/services/api_service.dart';
 import '../issue_selector.dart';
+import '../pdf_manual_page.dart';
 import '../picture_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -655,6 +656,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             const SizedBox(width: 12),
             _buildStatusBadge("PC", _getPCColor()),
             _buildStatusBadge("PLC", _getPLCColor()),
+            IconButton(
+              tooltip: "Manuale",
+              icon: const Icon(Icons.info_outline, color: Colors.blue),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ManualePage(),
+                  ),
+                );
+              },
+            ),
             /*_buildStatusBadge(
               "Ciclo Iniziato",
               cicloIniziato ? Colors.blue : Colors.grey,

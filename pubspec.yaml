@@ -78,6 +78,7 @@ flutter:
     - assets/images/
     - assets/defect_info.json
     - assets/rive/logo_interaction.riv
+    - assets/pdf/
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

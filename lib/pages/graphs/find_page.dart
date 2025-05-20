@@ -13,6 +13,8 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'dart:ui';
+
+import '../pdf_manual_page.dart';
 //import 'package:rive/rive.dart';
 
 class FindPage extends StatefulWidget {
@@ -1408,6 +1410,16 @@ class _FindPageState extends State<FindPage> {
         backgroundColor: Colors.white,
         scrolledUnderElevation: 0,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.info_outline, color: Colors.blue),
+          tooltip: 'Manuale',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ManualePage()),
+            );
+          },
+        ),
         title: const Text(
           'Ricerca Dati',
           style: TextStyle(

@@ -17,7 +17,8 @@ class ManualePage extends StatelessWidget {
         viewType,
         (int viewId) {
           final iframe = html.IFrameElement()
-            ..src = 'assets/pdf/Manuale.pdf'
+            ..src =
+                '${html.window.location.origin}/assets/assets/pdf/Manuale.pdf'
             ..style.border = 'none'
             ..style.width = '100%'
             ..style.height = '100%';

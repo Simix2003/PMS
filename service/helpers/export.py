@@ -6,6 +6,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
+from openpyxl.styles import PatternFill
 import pandas as pd
 
 EXPORT_DIR = "./exports"
@@ -96,12 +97,14 @@ def metadata_sheet(ws, data: dict):
 
     current_time = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
     productions = data.get("productions", [])
+    id_moduli = data.get("id_moduli", [])
     filters = data.get("filters", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
     ws.append(["📝 METADATI ESPORTAZIONE"])
     ws.append([])
     ws.append(["Data e ora esportazione:", current_time])
+    ws.append(["Numero totale moduli esportati:", len(id_moduli)])
     ws.append(["Numero totale produzioni esportate:", len(productions)])
 
     # ➕ Breakdown by adjusted esito logic
@@ -184,6 +187,8 @@ def risolutivo_sheet(ws, data: dict):
     production_lines = data.get("production_lines", [])
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
+    fill_blue = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
+    fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
 
     objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
@@ -272,8 +277,19 @@ def risolutivo_sheet(ws, data: dict):
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo", "NG Causale"
     ])
 
+    # Track current modulo and fill toggle
+    current_modulo = None
+    current_fill = fill_white  # Start with white
+
     ws.append(df.columns.tolist())
-    for _, row in df.iterrows():
+    
+    for idx, row in df.iterrows():
+        id_modulo = row["ID Modulo"]
+        if id_modulo != current_modulo:
+            # Toggle fill color
+            current_fill = fill_blue if current_fill == fill_white else fill_white
+            current_modulo = id_modulo
+
         row_values = []
         for col in df.columns:
             val = row[col]
@@ -284,8 +300,12 @@ def risolutivo_sheet(ws, data: dict):
                     row_values.append(val)
             else:
                 row_values.append(val)
-        ws.append(row_values)
 
+        ws.append(row_values)
+        row_idx = ws.max_row
+        for col_idx, _ in enumerate(row_values, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            cell.fill = current_fill
     autofit_columns(ws, align_center_for={"Esito", "NG Causale"})
 
 def ng_generali_sheet(ws, data: dict) -> bool:

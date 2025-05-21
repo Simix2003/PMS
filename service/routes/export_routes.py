@@ -16,7 +16,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 @router.post("/api/export_objects")
 def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
-    object_ids: List[str] = data.get("object_ids", [])          # ① NEW
+    object_ids: List[str] = data.get("object_ids", [])
     filters: List[Dict] = data.get("filters", [])
 
     if not object_ids:
@@ -41,16 +41,14 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
         export_data["min_cycle_threshold"] = settings.get("min_cycle_threshold", 3.0)
 
         with conn.cursor() as cursor:
-            # ----- reference tables ------------------------------------------------
+            # ---- Reference tables ----
             cursor.execute("SELECT * FROM stations")
             export_data["stations"] = cursor.fetchall()
 
             cursor.execute("SELECT * FROM production_lines")
             export_data["production_lines"] = cursor.fetchall()
 
-            # ----------------------------------------------------------------------
-            # 1.  Fetch OBJECTS
-            # ----------------------------------------------------------------------
+            # ---- 1. OBJECTS ----
             modulo_ids = [oid for oid in object_ids if not str(oid).isdigit()]
             int_ids = [int(oid) for oid in object_ids if str(oid).isdigit()]
 
@@ -70,10 +68,7 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
             where_clause = " OR ".join(clauses)
 
             cursor.execute(
-                f"""
-                SELECT * FROM objects
-                WHERE {where_clause}
-                """,
+                f"SELECT * FROM objects WHERE {where_clause}",
                 tuple(params),
             )
             objects = cursor.fetchall()
@@ -82,13 +77,9 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
 
             export_data["objects"] = objects
             export_data["id_moduli"] = [o["id_modulo"] for o in objects]
-
-            # Collect internal integer IDs for the next step
             object_pk_ids = [o["id"] for o in objects]
 
-            # ----------------------------------------------------------------------
-            # 2.  Productions for those objects
-            # ----------------------------------------------------------------------
+            # ---- 2. PRODUCTIONS ----
             fmt = ",".join(["%s"] * len(object_pk_ids))
             cursor.execute(
                 f"SELECT * FROM productions WHERE object_id IN ({fmt})",
@@ -97,6 +88,7 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
             productions = cursor.fetchall()
             export_data["productions"] = productions
 
+            # ---- 3. DEFECTS ----
             production_pk_ids = [p["id"] for p in productions]
             if production_pk_ids:
                 fmt = ",".join(["%s"] * len(production_pk_ids))
@@ -113,14 +105,19 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
             else:
                 defects = []
 
+            # ---- 4. Apply defect filters if present ----
             for f in filters:
                 if f.get("type") == "Difetto":
-                    value = f.get("value", "").lower()
+                    raw_value = f.get("value", "").lower()
+
+                    value = raw_value.split(">")[0].strip()  # Prendi solo "Macchie ECA"
+
                     filtered = []
                     for d in defects:
-                        path = d.get("path")
-                        if path and value in path.lower():
+                        category = d.get("category", "").lower()
+                        if value in category:
                             filtered.append(d)
+
                     defects = filtered
 
             export_data["object_defects"] = defects
@@ -129,9 +126,7 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
         logging.error(f"❌ Error during export: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-    # --------------------------------------------------------------------------
-    #  Create Excel + schedule cleanup
-    # --------------------------------------------------------------------------
+    # ---- Final export ----
     filename = export_full_excel(export_data)
     background_tasks.add_task(clean_old_exports, max_age_hours=2)
 

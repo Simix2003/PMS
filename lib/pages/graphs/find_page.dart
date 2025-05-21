@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'dart:html' as html;
 //import '../ai_helper_chat.dart';
 import '../../shared/models/globals.dart';
+import '../object_details/mbjDetails_page.dart';
 import '../object_details/objectDetails_page.dart';
 import '../object_details/productionDetails_page.dart';
 import '../../shared/services/api_service.dart';
@@ -48,6 +49,7 @@ class _FindPageState extends State<FindPage> {
   final Set<String> selectedObjectIds = {}; // Main selection for 'Difetto'
   String? selectedDifettoGroup;
   bool isExporting = false;
+  bool searching = false;
 
   String? selectedCycleTimeCondition;
 
@@ -1375,6 +1377,7 @@ class _FindPageState extends State<FindPage> {
 
   void _onSearchPressed() async {
     setState(() => results.clear());
+    setState(() => searching = true);
 
     try {
       if (activeFilters.isEmpty) {
@@ -1391,6 +1394,7 @@ class _FindPageState extends State<FindPage> {
 
       setState(() {
         results.addAll(data);
+        searching = false;
 
         if (widget.onSearchCompleted != null) {
           widget.onSearchCompleted!();
@@ -1741,13 +1745,15 @@ class _FindPageState extends State<FindPage> {
                   Expanded(
                     child: results.isEmpty
                         ? Center(
-                            child: Text(
-                              'Nessun dato da mostrare',
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
+                            child: searching
+                                ? const CircularProgressIndicator()
+                                : Text(
+                                    'Nessun dato da mostrare',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
                           )
                         : ListView.builder(
                             itemCount: results.length,
@@ -1781,15 +1787,24 @@ class _FindPageState extends State<FindPage> {
                                       final allEvents = [latest, ...history];
 
                                       if (allEvents.length == 1) {
-                                        // just one → show the existing detail page
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                ProductionDetailPage(
-                                                    data: latest),
-                                          ),
-                                        );
+                                        if (latest['station_name'] == 'MBJ') {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  MBJDetailPage(data: latest),
+                                            ),
+                                          );
+                                        } else {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  ProductionDetailPage(
+                                                      data: latest),
+                                            ),
+                                          );
+                                        }
                                       } else {
                                         // multiple → push a new “multi” detail screen
                                         Navigator.push(

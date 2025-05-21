@@ -8,6 +8,7 @@ Color getStatusColor(int? esito) {
   if (esito == 2) return Colors.grey;
   if (esito == 4) return Colors.amber;
   if (esito == 6) return Colors.red;
+  if (esito == 10) return Colors.blue;
   return Colors.blueGrey;
 }
 
@@ -23,6 +24,8 @@ String getStatusLabel(int? esito) {
       return 'G Operatore';
     case 6:
       return 'NG';
+    case 10:
+      return 'MBJ';
     default:
       return 'N/A';
   }

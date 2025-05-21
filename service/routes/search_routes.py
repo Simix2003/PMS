@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.config.config import COLUMN_MAP
 from service.connections.mysql import get_mysql_connection
+from service.helpers.mbj_xml import get_mbj_events_for_modulo
 
 router = APIRouter()
 
@@ -283,6 +284,8 @@ async def search_results(request: Request):
             for object_id, events in grouped.items():
                 # Remove entries with no end_time
                 valid_events = [e for e in events if e["end_time"] is not None]
+                xml_events = get_mbj_events_for_modulo(object_id)
+                valid_events.extend(xml_events)
 
                 if not valid_events:
                     continue  # Skip group if all events are invalid

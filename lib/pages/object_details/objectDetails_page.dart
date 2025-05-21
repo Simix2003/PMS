@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../shared/widgets/object_result_card.dart';
+import 'mbjDetails_page.dart';
 import 'productionDetails_page.dart';
 
 class ObjectdetailsPage extends StatefulWidget {
@@ -136,12 +137,21 @@ class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
         isSelectable: false,
         productionIdsCount: 1,
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProductionDetailPage(data: event),
-            ),
-          );
+          if (event['station_name'] == 'MBJ') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MBJDetailPage(data: event),
+              ),
+            );
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProductionDetailPage(data: event),
+              ),
+            );
+          }
         },
       ),
     );

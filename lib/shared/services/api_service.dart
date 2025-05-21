@@ -56,6 +56,11 @@ class ApiService {
       body: jsonEncode(payload),
     );
 
+    if (response.statusCode != 200) {
+      debugPrint('submitIssues error: ${response.statusCode}');
+      debugPrint('Body: ${response.body}');
+    }
+
     return response.statusCode == 200;
   }
 
@@ -525,7 +530,6 @@ class ApiService {
     }
   }
 
-  // At the bottom of ApiService or near related utility methods
   static Future<void> fetchLinesAndInitializeGlobals() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/api/lines'));
@@ -553,6 +557,18 @@ class ApiService {
     } catch (e) {
       debugPrint("❌ Error fetching lines: $e");
       rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> fetchMBJDetails(String idModulo) async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/mbj_events/$idModulo'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      debugPrint('Failed to load MBJ details: ${response.statusCode}');
+      return null;
     }
   }
 }

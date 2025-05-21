@@ -220,12 +220,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       issues: _issues.map((path) {
         final matching = _pictures.firstWhere(
           (img) => img["defect"] == path,
-          orElse: () => {"base64": ""},
+          orElse: () => {"image": ""},
         );
 
         return {
           "path": path,
-          "image_base64": matching["image"],
+          "image_base64": matching["image"] ?? "",
         };
       }).toList(),
     );

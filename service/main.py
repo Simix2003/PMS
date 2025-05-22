@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         conn = get_mysql_connection()  # ✅ This ensures the global connection is initialized and valid
         logger.info("🟢 MySQL connected.")
-        preload_xml_index()
+        #preload_xml_index()
 
         get_refreshed_settings()
         start_plc_background_tasks()

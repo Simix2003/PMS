@@ -571,4 +571,21 @@ class ApiService {
       return null;
     }
   }
+
+  static Future<bool> preloadXmlIndex() async {
+    try {
+      final response =
+          await http.post(Uri.parse('$baseUrl/api/reload_xml_index'));
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        debugPrint('❌ Failed to preload XML index: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('❌ Exception while preloading XML: $e');
+      return false;
+    }
+  }
 }

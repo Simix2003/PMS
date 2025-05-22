@@ -16,6 +16,7 @@ import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'dart:ui';
 
 import '../pdf_manual_page.dart';
+import '../preloadXML_page.dart';
 //import 'package:rive/rive.dart';
 
 class FindPage extends StatefulWidget {
@@ -668,7 +669,7 @@ class _FindPageState extends State<FindPage> {
         return _buildStyledDropdown(
           hint: 'Stazione',
           value: filterValue.isNotEmpty ? filterValue : null,
-          items: ['M308', 'M309', 'M326'],
+          items: ['M308', 'M309', 'M326', 'MBJ'],
           onChanged: (val) => setState(() => filterValue = val ?? ''),
         );
 
@@ -1414,15 +1415,38 @@ class _FindPageState extends State<FindPage> {
         backgroundColor: Colors.white,
         scrolledUnderElevation: 0,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.info_outline, color: Colors.blue),
-          tooltip: 'Manuale',
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const ManualePage()),
-            );
-          },
+        leadingWidth:
+            140, // ✅ Adjust width based on how many buttons you include
+        leading: Row(
+          children: [
+            SizedBox(
+              width: 8,
+            ),
+            IconButton(
+              icon: const Icon(Icons.data_usage_sharp, color: Colors.green),
+              tooltip: 'Carica XML',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const PreloadXmlPage()),
+                );
+              },
+            ),
+            SizedBox(
+              width: 8,
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline, color: Colors.blue),
+              tooltip: 'Manuale',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ManualePage()),
+                );
+              },
+            ),
+          ],
         ),
         title: const Text(
           'Ricerca Dati',

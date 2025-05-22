@@ -4,10 +4,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 Color getStatusColor(int? esito) {
-  if (esito == 1 || esito == 5) return Colors.green;
+  if (esito == 1 || esito == 5) return const Color(0xFF34C759);
   if (esito == 2) return Colors.grey;
-  if (esito == 4) return Colors.amber;
-  if (esito == 6) return Colors.red;
+  if (esito == 4) return const Color(0xFF8E6E00); // Dark Mustard / Olive
+  if (esito == 6) return const Color(0xFFFF3B30);
+  if (esito == 7) return const Color(0xFFFF9500);
   if (esito == 10) return Colors.blue;
   return Colors.blueGrey;
 }
@@ -24,6 +25,8 @@ String getStatusLabel(int? esito) {
       return 'G Operatore';
     case 6:
       return 'NG';
+    case 7:
+      return 'NC';
     case 10:
       return 'MBJ';
     default:

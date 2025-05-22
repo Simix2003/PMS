@@ -8,8 +8,10 @@ import '../../shared/services/api_service.dart';
 
 class ProductionDetailPage extends StatefulWidget {
   final Map<String, dynamic> data;
+  final double minCycleTimeThreshold;
 
-  const ProductionDetailPage({super.key, required this.data});
+  const ProductionDetailPage(
+      {super.key, required this.data, required this.minCycleTimeThreshold});
 
   @override
   State<ProductionDetailPage> createState() => _ProductionDetailPageState();
@@ -116,7 +118,15 @@ class _ProductionDetailPageState extends State<ProductionDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final esito = widget.data['esito'] as int?;
+    int esito = widget.data['esito'] as int? ?? 0;
+    final cycleTime = widget.data['cycle_time'] as int?;
+
+    // If esito is G (1) and cycle time is below the threshold, change to NC (7)
+    if (esito == 1 &&
+        cycleTime != null &&
+        cycleTime < widget.minCycleTimeThreshold) {
+      esito = 7;
+    }
     final statusColor = getStatusColor(esito);
 
     return Scaffold(
@@ -168,6 +178,8 @@ class _ProductionDetailPageState extends State<ProductionDetailPage> {
               Icons.factory, 'Linea', widget.data['line_display_name']),
           _buildInfoTile(Icons.precision_manufacturing, 'Stazione',
               widget.data['station_name']),
+          _buildInfoTile(Icons.work_history_sharp, 'Stazione Precedente',
+              widget.data['last_station_display_name']),
           _buildInfoTile(Icons.person, 'Operatore', widget.data['operator_id']),
           _buildInfoTile(Icons.timer_outlined, 'Tempo ciclo',
               _formatCycleTime(widget.data['cycle_time'])),

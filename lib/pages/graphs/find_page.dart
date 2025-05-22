@@ -314,10 +314,13 @@ class _FindPageState extends State<FindPage> {
   String? selectedOrderDirection = 'Decrescente';
 
   final List<Map<String, dynamic>> results = [];
+  double _thresholdSeconds = 3;
 
   @override
   void initState() {
     super.initState();
+
+    _loadSettings();
 
     /*rootBundle.load('rive/logo_interaction.riv').then(
       (data) async {
@@ -413,6 +416,21 @@ class _FindPageState extends State<FindPage> {
 
     if (widget.autoSearch) {
       _onSearchPressed();
+    }
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final settings = await ApiService.getAllSettings();
+      setState(() {
+        _thresholdSeconds = (settings['min_cycle_threshold'] as num)
+            .toDouble(); // we should set a global variable maybe
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Errore nel caricamento delle impostazioni: $e')),
+      );
     }
   }
 
@@ -1825,7 +1843,9 @@ class _FindPageState extends State<FindPage> {
                                             MaterialPageRoute(
                                               builder: (_) =>
                                                   ProductionDetailPage(
-                                                      data: latest),
+                                                      data: latest,
+                                                      minCycleTimeThreshold:
+                                                          _thresholdSeconds),
                                             ),
                                           );
                                         }
@@ -1835,7 +1855,9 @@ class _FindPageState extends State<FindPage> {
                                           context,
                                           MaterialPageRoute(
                                             builder: (_) => ObjectdetailsPage(
-                                                events: allEvents),
+                                                events: allEvents,
+                                                minCycleTimeThreshold:
+                                                    _thresholdSeconds),
                                           ),
                                         );
                                       }
@@ -1856,6 +1878,8 @@ class _FindPageState extends State<FindPage> {
                                               data: history.first,
                                               isSelectable: false,
                                               isSelected: false,
+                                              minCycleTimeThreshold:
+                                                  _thresholdSeconds,
                                             ),
                                           ),
                                         ),
@@ -1866,6 +1890,8 @@ class _FindPageState extends State<FindPage> {
                                         isSelectable: isSelecting,
                                         isSelected: isSelected,
                                         productionIdsCount: count,
+                                        minCycleTimeThreshold:
+                                            _thresholdSeconds,
                                       ),
                                     ],
                                   ),

@@ -152,7 +152,7 @@ async def search_results(request: Request):
                     elif filter_type == "Stringatrice":
                         stringatrice_map = {"1": "Str1", "2": "Str2", "3": "Str3", "4": "Str4", "5": "Str5"}
                         if value in stringatrice_map:
-                            join_clauses.append("LEFT JOIN stations ls ON p.last_station_id = ls.id")
+                            #join_clauses.append("LEFT JOIN stations ls ON p.last_station_id = ls.id")
                             group_clauses.append("ls.name = %s")
                             group_params.append(stringatrice_map[value])
                     elif filter_type == "Data":
@@ -240,6 +240,7 @@ async def search_results(request: Request):
             p.end_time,
             s.name AS station_name,
             pl.display_name AS line_display_name,
+            ls.display_name AS last_station_display_name,
             GROUP_CONCAT(DISTINCT d.category) AS defect_categories
         """
 
@@ -259,6 +260,7 @@ async def search_results(request: Request):
         FROM productions p
         JOIN objects o ON p.object_id = o.id
         JOIN stations s ON p.station_id = s.id
+        LEFT JOIN stations ls ON p.last_station_id = ls.id
         {join_sql}
         LEFT JOIN production_lines pl ON s.line_id = pl.id
         {where_sql}

@@ -10,16 +10,17 @@ class ObjectResultCard extends StatelessWidget {
   final bool isSelected;
   final int productionIdsCount;
   final void Function()? onTap;
+  final double minCycleTimeThreshold;
 
   const ObjectResultCard({
     super.key,
     required this.data,
+    required this.minCycleTimeThreshold,
     this.isSelectable = false,
     this.isSelected = false,
     this.productionIdsCount = 1,
     this.onTap,
   });
-
 
   String _formatTime(dynamic dateTime) {
     if (dateTime == null) return 'Non disponibile';
@@ -80,7 +81,14 @@ class ObjectResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final esito = data['esito'] as int?;
+    int esito = data['esito'] as int? ?? 0;
+    final cycleTime = data['cycle_time'] as int?;
+
+    // If esito is G (1) and cycle time is below the threshold, change to NC (7)
+    if (esito == 1 && cycleTime != null && cycleTime < minCycleTimeThreshold) {
+      esito = 7;
+    }
+
     final statusColor = getStatusColor(esito);
     final statusLabel = getStatusLabel(esito);
 
@@ -164,8 +172,13 @@ class ObjectResultCard extends StatelessWidget {
                           data['line_display_name'] ?? '-', Colors.white),
                       _buildInfoRow(Icons.precision_manufacturing, 'Stazione:',
                           data['station_name'] ?? '-', Colors.white),
-                      _buildInfoRow(Icons.person, 'Operatore:',
-                          data['operator_id'] ?? '-', Colors.white),
+                      /*_buildInfoRow(Icons.person, 'Operatore:',
+                          data['operator_id'] ?? '-', Colors.white),*/
+                      _buildInfoRow(
+                          Icons.work_history_sharp,
+                          'Stazione Precedente:',
+                          data['last_station_display_name'] ?? '-',
+                          Colors.white),
                       _buildInfoRow(Icons.access_time, 'Tempo Ciclo:',
                           _formatCycleTime(data['cycle_time']), Colors.white),
                       _buildInfoRow(Icons.login, 'Ingresso:',

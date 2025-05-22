@@ -7,7 +7,9 @@ import 'productionDetails_page.dart';
 
 class ObjectdetailsPage extends StatefulWidget {
   final List<Map<String, dynamic>> events;
-  const ObjectdetailsPage({super.key, required this.events});
+  final double minCycleTimeThreshold;
+  const ObjectdetailsPage(
+      {super.key, required this.events, required this.minCycleTimeThreshold});
 
   @override
   _ObjectdetailsPageState createState() => _ObjectdetailsPageState();
@@ -136,6 +138,7 @@ class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
         data: event,
         isSelectable: false,
         productionIdsCount: 1,
+        minCycleTimeThreshold: widget.minCycleTimeThreshold,
         onTap: () {
           if (event['station_name'] == 'MBJ') {
             Navigator.push(
@@ -148,7 +151,9 @@ class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ProductionDetailPage(data: event),
+                builder: (_) => ProductionDetailPage(
+                    data: event,
+                    minCycleTimeThreshold: widget.minCycleTimeThreshold),
               ),
             );
           }

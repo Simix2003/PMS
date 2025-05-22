@@ -67,7 +67,8 @@ class _DataViewPageState extends State<DataViewPage> {
     try {
       final settings = await ApiService.getAllSettings();
       setState(() {
-        _thresholdSeconds = (settings['min_cycle_threshold'] as num).toDouble();
+        _thresholdSeconds = (settings['min_cycle_threshold'] as num)
+            .toDouble(); // we should set a global variable maybe
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

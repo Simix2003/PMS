@@ -23,6 +23,7 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
   bool showVerticalGaps = false;
   bool showGlassCell = false;
   bool showGlassRibbon = false;
+  bool showWarnings = false;
   bool showDetailedView = false;
 
   @override
@@ -69,28 +70,7 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Left: the interactive SolarPanel viewer with distances
-                      Expanded(
-                        child: DistancesSolarPanelWidget(
-                          glassWidth: glassWidth,
-                          glassHeight: glassHeight,
-                          interconnectionRibbon:
-                              mbjData['interconnection_ribbon'],
-                          interconnectionCell: mbjData['interconnection_cell'],
-                          horizontalCellGaps: mbjData['horizontal_cell_mm'],
-                          verticalCellGaps: mbjData['vertical_cell_mm'],
-                          glassCellMm: mbjData['glass_cell_mm'],
-                          showDimensions: true,
-                          showRibbons: showRibbons,
-                          showHorizontalGaps: showHorizontalGaps,
-                          showVerticalGaps: showVerticalGaps,
-                          showGlassCell: showGlassCell,
-                          showGlassRibbon: showGlassRibbon,
-                          cellDefects: parsedDefects,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      // Right: the checkbox panel with Apple-style glassmorphism
+                      // Left: the checkbox panel with Apple-style glassmorphism
                       SizedBox(
                         width: 250,
                         child: Container(
@@ -164,12 +144,40 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
                                         (v) => setState(
                                             () => showGlassRibbon = v!),
                                       ),
+                                      _buildCheckboxTile(
+                                        'Misure fuori Tolleranza',
+                                        showWarnings,
+                                        (v) =>
+                                            setState(() => showWarnings = v!),
+                                      ),
                                     ],
                                   ),
                                 ),
                               ),
                             ),
                           ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Right: the interactive SolarPanel viewer with distances
+                      Expanded(
+                        child: DistancesSolarPanelWidget(
+                          glassWidth: glassWidth,
+                          glassHeight: glassHeight,
+                          interconnectionRibbon:
+                              mbjData['interconnection_ribbon'],
+                          interconnectionCell: mbjData['interconnection_cell'],
+                          horizontalCellGaps: mbjData['horizontal_cell_mm'],
+                          verticalCellGaps: mbjData['vertical_cell_mm'],
+                          glassCellMm: mbjData['glass_cell_mm'],
+                          showDimensions: true,
+                          showRibbons: showRibbons,
+                          showHorizontalGaps: showHorizontalGaps,
+                          showVerticalGaps: showVerticalGaps,
+                          showGlassCell: showGlassCell,
+                          showGlassRibbon: showGlassRibbon,
+                          showWarnings: showWarnings,
+                          cellDefects: parsedDefects,
                         ),
                       ),
                     ],

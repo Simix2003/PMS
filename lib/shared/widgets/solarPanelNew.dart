@@ -1,4 +1,6 @@
 // lib/shared/widgets/solarPanelNew.dart
+// ignore_for_file: must_be_immutable, deprecated_member_use
+
 import 'package:flutter/material.dart';
 
 class DistancesSolarPanelWidget extends StatelessWidget {
@@ -15,9 +17,10 @@ class DistancesSolarPanelWidget extends StatelessWidget {
   final bool showVerticalGaps;
   final bool showGlassCell;
   final bool showGlassRibbon;
+  final bool showWarnings;
   final List<Map<String, dynamic>>? cellDefects;
 
-  const DistancesSolarPanelWidget({
+  DistancesSolarPanelWidget({
     super.key,
     this.glassWidth = 2166,
     this.glassHeight = 1297,
@@ -32,8 +35,25 @@ class DistancesSolarPanelWidget extends StatelessWidget {
     this.showVerticalGaps = false,
     this.showGlassCell = false,
     this.showGlassRibbon = false,
+    this.showWarnings = false,
     required this.cellDefects,
   });
+
+  Map<String, (double, double)> groupTolerances = {
+    'GlassRibbon': (12.0, 99.0), // > 12mm Glass to Ribbon
+
+    'RibbonCellSide': (1.9, 2.1), // 2 mm Side Ribbon to Cell
+    'RibbonCellMiddle': (2.9, 3.1), // 3 mm Middle Ribbon to Cell
+
+    'HorizontalGap': (0.6, 1.0), // Still don't know this Measure
+
+    'VerticalGap': (2.0, 2.2), // 2.1mm gaps between Stringhe
+
+    'GlassCellTopLeft': (13.60, 13.70), // 13.65 mm Top Glass to Cell
+    'GlassCellTopRight': (12.80, 12.90), // 12.85 mm Top Glass to Cell
+    'GlassCellBottomLeft': (12.80, 12.90), // 12.85 mm Bottom Glass to Cell
+    'GlassCellBottomRight': (13.60, 13.70), // 13.65 mm Bottom Glass to Cell
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +187,8 @@ class DistancesSolarPanelWidget extends StatelessWidget {
 
                   // Labels aligned to actual painter size
                   if (showDimensions)
-                    ..._buildOverlayLabels(realWidth, realHeight),
+                    ..._buildOverlayLabels(
+                        realWidth, realHeight, groupTolerances),
                 ],
               );
             },
@@ -177,78 +198,42 @@ class DistancesSolarPanelWidget extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildOverlayLabels(double width, double height) {
+  List<Widget> _buildOverlayLabels(
+    double width,
+    double height,
+    Map<String, (double, double)> groupTolerances,
+  ) {
     final labels = <Widget>[];
     final colW = width / 20;
     final rowH = height / 6;
 
-    final style = TextStyle(
+    final baseStyle = TextStyle(
       fontSize: 10,
       color: Colors.black,
-      // ignore: deprecated_member_use
       backgroundColor: Colors.white.withOpacity(0.8),
     );
+    final warnStyle = baseStyle.copyWith(color: Colors.red);
 
-    if (showGlassCell && glassCellMm != null) {
-      final top = List<double>.from(glassCellMm!['top'] ?? []);
-      final bot = List<double>.from(glassCellMm!['bottom'] ?? []);
-
-      // Use same values as painter
-      const colsPerSide = _StylisedPanelPainter.colsPerSide;
-      const ribbonWFrac = _StylisedPanelPainter.ribbonWFrac;
-      const sideRibbonMargin = _StylisedPanelPainter.sideRibbonMargin;
-      const ribbonToCellGap = _StylisedPanelPainter.ribbonToCellGap;
-      const hSpacingFrac = _StylisedPanelPainter.hSpacingFrac;
-      const cellWFrac = _StylisedPanelPainter.cellWFrac;
-
-      final rw = width * ribbonWFrac;
-      final em = width * sideRibbonMargin;
-      final rc = width * ribbonToCellGap;
-      final gh = width * hSpacingFrac;
-      final cw = width * cellWFrac;
-
-      final l0 = em + rw + rc;
-      final r0 = width - em - rw - rc;
-
-      for (int i = 0; i < top.length; i++) {
-        double x;
-        if (i < colsPerSide) {
-          // left side
-          x = l0 + i * (cw + gh);
-        } else {
-          // right side
-          final ci = i - colsPerSide;
-          x = r0 - (ci + 1) * (cw + gh) + gh;
-        }
-
-        labels.add(Positioned(
-          left: x + cw / 4, // Center text within cell
-          top: 2,
-          child: Text('${top[i].toStringAsFixed(1)}', style: style),
-        ));
-      }
-
-      for (int i = 0; i < bot.length; i++) {
-        double x;
-        if (i < colsPerSide) {
-          x = l0 + i * (cw + gh);
-        } else {
-          final ci = i - colsPerSide;
-          x = r0 - (ci + 1) * (cw + gh) + gh;
-        }
-
-        labels.add(Positioned(
-          left: x + cw / 4,
-          top: height - 14,
-          // text should also include ' mm' in the Text
-          child: Text('${bot[i].toStringAsFixed(1)}', style: style),
-        ));
-      }
+    bool isOutOfTol(double v, String group) {
+      final (min, max) =
+          groupTolerances[group] ?? (double.negativeInfinity, double.infinity);
+      return v < min || v > max;
     }
 
-    // 2) Glass ↔ Ribbon distances
-    if (showGlassRibbon && interconnectionRibbon != null) {
-      // top-of-block and bottom-of-block values for each side-ribbon block
+    bool shouldShow(double? v, bool groupFlag, String group) {
+      if (v == null) return false;
+      if (groupFlag) return true; // group explicitly ON
+      return showWarnings && isOutOfTol(v, group); // group OFF → only red
+    }
+
+    TextStyle styleFor(double v, String group) => isOutOfTol(v, group)
+        ? showWarnings
+            ? warnStyle
+            : baseStyle
+        : baseStyle;
+
+    // ───────────────────── 1) Glass ↔ Ribbon (side‑ribbons) ─────────────────────
+    if (interconnectionRibbon != null) {
       for (int block = 0; block < 3; block++) {
         final r0 = block * 2, r1 = r0 + 1;
         final d0 = interconnectionRibbon!['$r0'];
@@ -257,84 +242,106 @@ class DistancesSolarPanelWidget extends StatelessWidget {
 
         final y0 = rowH * r0 + 4;
         final y1 = rowH * (r1 + 1) - 16;
-        final lt = d0['left']['top']?.toStringAsFixed(1);
-        final lb = d1['left']['bottom']?.toStringAsFixed(1);
-        final rt = d0['right']['top']?.toStringAsFixed(1);
-        final rb = d1['right']['bottom']?.toStringAsFixed(1);
+        const grp = 'GlassRibbon';
+        final flag = showGlassRibbon;
 
-        if (lt != null) {
-          labels.add(
-              Positioned(left: 4, top: y0, child: Text('$lt', style: style)));
+        double? v(dynamic m, String side, String pos) =>
+            (m?[side]?[pos]) is num ? (m[side][pos] as num).toDouble() : null;
+
+        final lt = v(d0, 'left', 'top');
+        final lb = v(d1, 'left', 'bottom');
+        final rt = v(d0, 'right', 'top');
+        final rb = v(d1, 'right', 'bottom');
+
+        if (shouldShow(lt, flag, grp)) {
+          labels.add(Positioned(
+              left: 4,
+              top: y0,
+              child: Text(lt!.toStringAsFixed(1), style: styleFor(lt, grp))));
         }
-        if (lb != null) {
-          labels.add(
-              Positioned(left: 4, top: y1, child: Text('$lb', style: style)));
+        if (shouldShow(lb, flag, grp)) {
+          labels.add(Positioned(
+              left: 4,
+              top: y1,
+              child: Text(lb!.toStringAsFixed(1), style: styleFor(lb, grp))));
         }
-        if (rt != null) {
-          labels.add(
-              Positioned(right: 4, top: y0, child: Text('$rt', style: style)));
+        if (shouldShow(rt, flag, grp)) {
+          labels.add(Positioned(
+              right: 4,
+              top: y0,
+              child: Text(rt!.toStringAsFixed(1), style: styleFor(rt, grp))));
         }
-        if (rb != null) {
-          labels.add(
-              Positioned(right: 4, top: y1, child: Text('$rb', style: style)));
+        if (shouldShow(rb, flag, grp)) {
+          labels.add(Positioned(
+              right: 4,
+              top: y1,
+              child: Text(rb!.toStringAsFixed(1), style: styleFor(rb, grp))));
         }
       }
     }
 
-    if (showRibbons && interconnectionCell != null) {
+    // ───────────────────── 2) Ribbon ↔ Cell distances ───────────────────────────
+    if (interconnectionCell != null) {
       for (int row = 0; row < 6; row++) {
         final data = interconnectionCell!['$row'];
         if (data == null) continue;
+        final topY = rowH * row + 25;
+        final bottomY = rowH * (row + 1) - 30;
 
-        final topY = rowH * row + 25; // was +2, now +6 to move it downward
-        final bottomY =
-            rowH * (row + 1) - 30; // was -14, now -18 to move it upward
-
-        final rowKeys = ['y0', 'y9', 'y10', 'y19'];
-        for (final key in rowKeys) {
+        for (final key in ['y0', 'y9', 'y10', 'y19']) {
           final d = data[key];
           if (d == null) continue;
 
-          final topVal = d['top']?.toStringAsFixed(1);
-          final bottomVal = d['bottom']?.toStringAsFixed(1);
+          final topVal = (d['top'] as num?)?.toDouble();
+          final bottomVal = (d['bottom'] as num?)?.toDouble();
           if (topVal == null || bottomVal == null) continue;
+
+          // Side vs middle tolerance group
+          final grp = (key == 'y0' || key == 'y19')
+              ? 'RibbonCellSide'
+              : 'RibbonCellMiddle';
+          final flag = showRibbons;
 
           double x;
           switch (key) {
             case 'y0':
-              x = colW / 3; // Left ribbon
+              x = colW / 3;
               break;
             case 'y9':
-              x = colW * 10 - 25; // Just to the left of the middle ribbon
+              x = colW * 10 - 25;
               break;
             case 'y10':
-              x = colW * 10 + 10; // Just to the right of the middle ribbon
+              x = colW * 10 + 10;
               break;
             case 'y19':
-              x = width - colW; // Right ribbon
+              x = width - colW;
               break;
             default:
               continue;
           }
 
-          // Add top value
-          labels.add(Positioned(
-            left: x,
-            top: topY,
-            child: Text(topVal, style: style),
-          ));
-
-          // Add bottom value
-          labels.add(Positioned(
-            left: x,
-            top: bottomY,
-            child: Text(bottomVal, style: style),
-          ));
+          if (shouldShow(topVal, flag, grp)) {
+            labels.add(Positioned(
+                left: x,
+                top: topY,
+                child: Text(topVal.toStringAsFixed(1),
+                    style: styleFor(topVal, grp))));
+          }
+          if (shouldShow(bottomVal, flag, grp)) {
+            labels.add(Positioned(
+                left: x,
+                top: bottomY,
+                child: Text(bottomVal.toStringAsFixed(1),
+                    style: styleFor(bottomVal, grp))));
+          }
         }
       }
     }
 
-    if (showHorizontalGaps && horizontalCellGaps != null) {
+    // ───────────────────── 3) Horizontal cell gaps ─────────────────────────────
+    if (horizontalCellGaps != null) {
+      const grp = 'HorizontalGap';
+      final flag = showHorizontalGaps;
       const colsPerSide = _StylisedPanelPainter.colsPerSide;
       const ribbonWFrac = _StylisedPanelPainter.ribbonWFrac;
       const sideRibbonMargin = _StylisedPanelPainter.sideRibbonMargin;
@@ -347,40 +354,32 @@ class DistancesSolarPanelWidget extends StatelessWidget {
       final rc = width * ribbonToCellGap;
       final gh = width * hSpacingFrac;
       final cw = width * cellWFrac;
-
       final l0 = em + rw + rc;
       final r0 = width - em - rw - rc;
 
       horizontalCellGaps!.forEach((r, list) {
-        final row = int.tryParse(r);
-        if (row == null) return;
-        final y = rowH * row + rowH / 2;
-
+        final rowIdx = int.tryParse(r);
+        if (rowIdx == null) return;
+        final y = rowH * rowIdx + rowH / 2;
         for (int i = 1; i < list.length; i++) {
-          final v = list[i];
-          if (v == null) continue;
-
-          double xEdge, xGap;
-
-          if (i < colsPerSide) {
-            xEdge = l0 + i * (cw + gh);
-          } else {
-            final ri = i - colsPerSide;
-            xEdge = r0 - ri * (cw + gh);
-          }
-
-          xGap = xEdge - gh / 2;
-
+          final v = (list[i] as num?)?.toDouble();
+          if (v == null || !shouldShow(v, flag, grp)) continue;
+          final xEdge = (i < colsPerSide)
+              ? l0 + i * (cw + gh)
+              : r0 - (i - colsPerSide) * (cw + gh);
+          final xGap = xEdge - gh / 2;
           labels.add(Positioned(
-            left: xGap - 6,
-            top: y,
-            child: Text('${v.toStringAsFixed(1)}', style: style),
-          ));
+              left: xGap - 6,
+              top: y,
+              child: Text(v.toStringAsFixed(1), style: styleFor(v, grp))));
         }
       });
     }
 
-    if (showVerticalGaps && verticalCellGaps != null) {
+    // ───────────────────── 4) Vertical cell gaps ───────────────────────────────
+    if (verticalCellGaps != null) {
+      const grp = 'VerticalGap';
+      final flag = showVerticalGaps;
       const colsPerSide = _StylisedPanelPainter.colsPerSide;
       const ribbonWFrac = _StylisedPanelPainter.ribbonWFrac;
       const sideRibbonMargin = _StylisedPanelPainter.sideRibbonMargin;
@@ -393,38 +392,84 @@ class DistancesSolarPanelWidget extends StatelessWidget {
       final rc = width * ribbonToCellGap;
       final gh = width * hSpacingFrac;
       final cw = width * cellWFrac;
-
       final l0 = em + rw + rc;
       final r0 = width - em - rw - rc;
 
       verticalCellGaps!.forEach((c, list) {
-        final col = int.tryParse(c);
-        if (col == null) return;
-
-        double x;
-        if (col < colsPerSide) {
-          // left side
-          x = l0 + col * (cw + gh) + cw / 2;
-        } else {
-          // right side
-          final ci = col - colsPerSide;
-          x = r0 - (ci + 1) * (cw + gh) + gh + cw / 2;
-        }
-
+        final colIdx = int.tryParse(c);
+        if (colIdx == null) return;
+        final x = (colIdx < colsPerSide)
+            ? l0 + colIdx * (cw + gh) + cw / 2
+            : r0 - (colIdx - colsPerSide + 1) * (cw + gh) + gh + cw / 2;
         for (int r = 0; r < list.length; r++) {
-          final v = list[r];
-          if (v == null) continue;
-
-          //final y = rowH * (r + 1) - rowH / 4;
+          final v = (list[r] as num?)?.toDouble();
+          if (v == null || !shouldShow(v, flag, grp)) continue;
           final y = rowH * (r + 1) - rowH / 10;
-
           labels.add(Positioned(
-            left: x - 8, // shift text left to center over cell
-            top: y,
-            child: Text('${v.toStringAsFixed(1)}', style: style),
-          ));
+              left: x - 8,
+              top: y,
+              child: Text(v.toStringAsFixed(1), style: styleFor(v, grp))));
         }
       });
+    }
+
+    // ───────────────────── 5) Glass ↔ Cell distances (Top/Bottom each cell) ─────
+    if (glassCellMm != null) {
+      final topList = (glassCellMm!['top'] as List<dynamic>).cast<num?>();
+      final botList = (glassCellMm!['bottom'] as List<dynamic>).cast<num?>();
+      const colsPerSide = _StylisedPanelPainter.colsPerSide;
+      const ribbonWFrac = _StylisedPanelPainter.ribbonWFrac;
+      const sideRibbonMargin = _StylisedPanelPainter.sideRibbonMargin;
+      const ribbonToCellGap = _StylisedPanelPainter.ribbonToCellGap;
+      const hSpacingFrac = _StylisedPanelPainter.hSpacingFrac;
+      const cellWFrac = _StylisedPanelPainter.cellWFrac;
+
+      final rw = width * ribbonWFrac;
+      final em = width * sideRibbonMargin;
+      final rc = width * ribbonToCellGap;
+      final gh = width * hSpacingFrac;
+      final cw = width * cellWFrac;
+      final l0 = em + rw + rc;
+      final r0 = width - em - rw - rc;
+
+      for (int i = 0; i < topList.length; i++) {
+        final topVal = topList[i]?.toDouble();
+        if (topVal != null) {
+          final grp =
+              (i < colsPerSide) ? 'GlassCellTopLeft' : 'GlassCellTopRight';
+          final flag = showGlassCell;
+          if (shouldShow(topVal, flag, grp)) {
+            final x = (i < colsPerSide)
+                ? l0 + i * (cw + gh) + cw / 4
+                : r0 - (i - colsPerSide + 1) * (cw + gh) + gh + cw / 4;
+            labels.add(Positioned(
+                left: x,
+                top: 2,
+                child: Text(topVal.toStringAsFixed(1),
+                    style: styleFor(topVal, grp))));
+          }
+        }
+      }
+
+      for (int i = 0; i < botList.length; i++) {
+        final botVal = botList[i]?.toDouble();
+        if (botVal != null) {
+          final grp = (i < colsPerSide)
+              ? 'GlassCellBottomLeft'
+              : 'GlassCellBottomRight';
+          final flag = showGlassCell;
+          if (shouldShow(botVal, flag, grp)) {
+            final x = (i < colsPerSide)
+                ? l0 + i * (cw + gh) + cw / 4
+                : r0 - (i - colsPerSide + 1) * (cw + gh) + gh + cw / 4;
+            labels.add(Positioned(
+                left: x,
+                top: height - 14,
+                child: Text(botVal.toStringAsFixed(1),
+                    style: styleFor(botVal, grp))));
+          }
+        }
+      }
     }
 
     return labels;

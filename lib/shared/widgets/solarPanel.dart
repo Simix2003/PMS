@@ -23,7 +23,7 @@ class SolarPanelWidget extends StatelessWidget {
   });
 
   /// Debug scaling factor: multiplies *everything* (dimensions, distances, gaps)
-  static const double debugScale = 20.0;
+  static const double debugScale = 1.0;
 
   @override
   Widget build(BuildContext context) {

@@ -37,6 +37,7 @@ from service.routes.search_routes import router as search_router
 from service.routes.websocket_routes import router as websocket_router
 from service.routes.health_check_routes import router as health_check_router
 from service.routes.mbj_routes import router as mbj_router
+from service.routes.ml_routes import router as ml_router
 from service.helpers.mbj_xml import preload_xml_index
 #from service.AI.AI import router as ai_router
 
@@ -117,6 +118,7 @@ def register_routers(app: FastAPI):
     app.include_router(websocket_router)
     app.include_router(health_check_router)
     app.include_router(mbj_router)
+    app.include_router(ml_router)
     #app.include_router(ai_router) 
 
 register_routers(app)

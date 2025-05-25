@@ -1,6 +1,8 @@
 TO START THE VIRTUAL ENVIRONMENT OF Python 3.11.2 use:
-- cd services
-- venv\Scripts\activate
+PS D:\Imix\Lavori\2025\3SUN\IX-Monitor\ix_monitor>                     
+>> # Activate it
+>> & "service/venv/Scripts/Activate.ps1"
+
 
 flutter build web --web-renderer html
 

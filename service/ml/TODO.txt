@@ -1,0 +1,98 @@
+✅ Phase 1 – Fast Wins (Low Effort, High Impact)
+1. Shift-Based Anomaly Detection
+Goal: Detect if certain shifts (e.g. Friday Night) consistently lead to higher defect rates.
+
+Data Needed:
+
+productions.start_time → extract weekday & shift (morning/afternoon/night).
+
+productions.esito, stations.name
+
+Tools:
+
+pandas for time parsing and aggregation.
+
+scikit-learn for Isolation Forest or basic statistical tests (Z-score).
+
+Output: Table or chart of high-risk shift/station combinations.
+
+2. Station Performance Drift Alert
+Goal: Detect slow degradation in station performance.
+
+Data Needed:
+
+Daily aggregated productions.esito, grouped by station_id
+
+Tools:
+
+pandas + statsmodels (e.g., exponentially weighted moving average).
+
+Output: Drift chart with thresholds and flagged stations.
+
+3. Anomaly Detection on Station Performance
+Goal: Spot sudden spikes in cycle time or NG %.
+
+Data Needed:
+
+Aggregated productions.cycle_time, productions.esito, station_id
+
+ML Method:
+
+Isolation Forest or LOF on time series aggregates.
+
+Output: Alert for station-time combos with outlier behavior.
+
+✅ Phase 2 – Intermediate Models (With Labeling or Aggregation)
+4. Defect Pattern Detection
+Goal: Find recurring defect configurations (e.g., stringa 3 + lato F = high risk).
+
+Data Needed:
+
+object_defects.defect_type, stringa, ribbon_lato, i_ribbon, station_id
+
+ML Method:
+
+FP-Growth or Apriori (e.g., mlxtend.frequent_patterns)
+
+Output: List of frequent combinations (support/confidence rules)
+
+5. Defect Sequence Patterns
+Goal: Reveal predictive chains (e.g., defect A → later defect B).
+
+Data Needed:
+
+Group productions + object_defects by object_id and sort chronologically
+
+ML Method:
+
+Association Rule Mining with time-ordered sequences.
+
+Output: Rules like "if defect X appears at station 3, defect Y likely appears next at station 5".
+
+✅ Phase 3 – Predictive Models (More Advanced)
+6. Defect Prediction (Classification)
+Goal: Predict if an object will be NG before QC.
+
+Data Needed:
+
+Join previous station activity (productions.station_id per object), creator_station_id, operator_id, past defects
+
+ML Method:
+
+Random Forest or Decision Tree (with explainability via SHAP).
+
+Output: Probability of NG, key contributing factors.
+
+7. Yield and Cycle Time Prediction
+Goal: Forecast expected yield and average cycle time per shift or day.
+
+Data Needed:
+
+Aggregate productions data by date, station/line, shift.
+
+ML Method:
+
+Linear Regression, Ridge, or small MLP using scikit-learn or keras (CPU).
+
+Output: Predicted values + comparison chart vs actual.
+

@@ -165,6 +165,7 @@ class DistancesSolarPanelWidget extends StatelessWidget {
                         ),
                       );
                     }),
+                  // Labels aligned to actual painter size
                   Positioned(
                     bottom: 8,
                     left: 2,
@@ -184,8 +185,6 @@ class DistancesSolarPanelWidget extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  // Labels aligned to actual painter size
                   if (showDimensions)
                     ..._buildOverlayLabels(
                         realWidth, realHeight, groupTolerances),
@@ -490,7 +489,7 @@ class _StylisedPanelPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cPaint = Paint()..color = Colors.white;
     final sPaint = Paint()..color = Colors.blueGrey;
-    final mPaint = Paint()..color = Colors.green;
+    final mPaint = Paint()..color = Colors.blueGrey;
 
     final cw = size.width * cellWFrac;
     final ch = size.height * cellHFrac;

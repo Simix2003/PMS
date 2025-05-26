@@ -7,7 +7,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:ix_monitor/shared/utils/helpers.dart';
 
-class StationCard extends StatelessWidget {
+class StationCard extends StatefulWidget {
   final String station;
   final Map<String, dynamic> stationData;
   final DateTime? selectedDate;
@@ -28,6 +28,13 @@ class StationCard extends StatelessWidget {
     required this.turno,
     required this.thresholdSeconds,
   });
+
+  @override
+  State<StationCard> createState() => _StationCardState();
+}
+
+class _StationCardState extends State<StationCard> {
+  bool showAsPercentage = false;
 
   static const List<String> allDefectCategories = [
     "Generali",
@@ -232,27 +239,28 @@ class StationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lastEsito = _safeInt(stationData['last_esito']);
+    final lastEsito = _safeInt(widget.stationData['last_esito']);
     final statusColor = getStatusColor(lastEsito);
     final statusLabel = getStatusLabel(lastEsito);
 
-    final defectsRaw = stationData['defects'];
+    final defectsRaw = widget.stationData['defects'];
     final defects =
         defectsRaw is Map ? Map<String, dynamic>.from(defectsRaw) : {};
 
-    final rawCycleTime = stationData["avg_cycle_time"] ?? "00:00:00";
+    final rawCycleTime = widget.stationData["avg_cycle_time"] ?? "00:00:00";
     final avgCycleTime = formatCycleTimeToMinutes(rawCycleTime);
-    final koCount = _safeInt(stationData['bad_count']);
+    final koCount = _safeInt(widget.stationData['bad_count']);
 
 // ✅ Get cycle times and escluso count
-    final allCycles = (stationData['cycle_times'] as List?)?.cast<num>() ?? [];
-    final int esclusoCount = _safeInt(stationData['escluso_count']);
+    final allCycles =
+        (widget.stationData['cycle_times'] as List?)?.cast<num>() ?? [];
+    final int esclusoCount = _safeInt(widget.stationData['escluso_count']);
 
     int gCount = 0;
     int ncCount = 0;
 
     for (final cycle in allCycles) {
-      if (cycle >= thresholdSeconds) {
+      if (cycle >= widget.thresholdSeconds) {
         gCount++;
       } else {
         ncCount++;
@@ -279,8 +287,10 @@ class StationCard extends StatelessWidget {
       for (var key in allDefectCategories) key: _safeNum(defects[key])
     };
 
-    final chartMaxY =
-        filledDefects.values.map((e) => e.toDouble()).fold<double>(0, max) + 5;
+    final chartMaxY = showAsPercentage
+        ? 100.0
+        : filledDefects.values.map((e) => e.toDouble()).fold<double>(0, max) +
+            5;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
@@ -314,61 +324,48 @@ class StationCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        station,
+                        widget.station,
                         style: const TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.5,
                         ),
                       ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF007AFF).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: IconButton(
-                          onPressed: () {},
-                          icon: const Icon(Icons.arrow_forward_ios_rounded,
-                              size: 18),
-                          color: const Color(0xFF007AFF),
-                          tooltip: "Dettagli",
-                          padding: const EdgeInsets.all(12),
-                        ),
-                      ),
                     ],
                   ),
-                  if (selectedRange != null)
+                  if (widget.selectedRange != null)
                     Text(
-                      '${DateFormat("dd MMMM yyyy", "it_IT").format(selectedRange!.start)} → ${DateFormat("dd MMMM yyyy", "it_IT").format(selectedRange!.end)}',
+                      '${DateFormat("dd MMMM yyyy", "it_IT").format(widget.selectedRange!.start)} → ${DateFormat("dd MMMM yyyy", "it_IT").format(widget.selectedRange!.end)}',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
                         color: Colors.grey,
                       ),
                     )
-                  else if (selectedDate != null)
+                  else if (widget.selectedDate != null)
                     Text(
-                      DateFormat("dd MMMM yyyy", "it_IT").format(selectedDate!),
+                      DateFormat("dd MMMM yyyy", "it_IT")
+                          .format(widget.selectedDate!),
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
                         color: Colors.grey,
                       ),
                     ),
-                  if (selectedStartTime != null &&
-                      selectedEndTime != null &&
-                      turno == 0)
+                  if (widget.selectedStartTime != null &&
+                      widget.selectedEndTime != null &&
+                      widget.turno == 0)
                     Text(
-                      '${selectedStartTime?.format(context)} → ${selectedEndTime?.format(context)}',
+                      '${widget.selectedStartTime?.format(context)} → ${widget.selectedEndTime?.format(context)}',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                         color: Colors.blueGrey,
                       ),
                     ),
-                  if (turno != 0)
+                  if (widget.turno != 0)
                     Text(
-                      'Turno $turno',
+                      'Turno ${widget.turno}',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
@@ -401,7 +398,8 @@ class StationCard extends StatelessWidget {
                   const SizedBox(height: 16),
 
 // 🟠 Show 'Good Non Controllati' only when NOT M326
-                  if (station != 'M326 - ReWork' && station != 'M326') ...[
+                  if (widget.station != 'M326 - ReWork' &&
+                      widget.station != 'M326') ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -427,11 +425,12 @@ class StationCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    buildWarningBox(thresholdSeconds),
+                    buildWarningBox(widget.thresholdSeconds),
                   ],
 
 // 🔴 Show only 'No Good' when in M326
-                  if (station == 'M326 - ReWork' || station == 'M326') ...[
+                  if (widget.station == 'M326 - ReWork' ||
+                      widget.station == 'M326') ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -481,18 +480,42 @@ class StationCard extends StatelessWidget {
                   const SizedBox(height: 24),
 
                   // Defect chart with iOS styling
-                  if (total > 0 && station != 'M326 - ReWork' ||
-                      station != 'M326')
+                  if (total > 0 && widget.station != 'M326 - ReWork' ||
+                      widget.station != 'M326')
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Distribuzione Difetti',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.5,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Distribuzione Difetti',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  showAsPercentage = !showAsPercentage;
+                                });
+                              },
+                              icon: const Icon(
+                                Icons.swap_horiz,
+                                color: Colors.black,
+                              ),
+                              label: Text(
+                                showAsPercentage
+                                    ? 'Mostra come Numero'
+                                    : 'Mostra come Percentuale',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 16),
                         Container(
@@ -516,7 +539,9 @@ class StationCard extends StatelessWidget {
                                       const TextStyle(),
                                       children: [
                                         TextSpan(
-                                          text: rod.toY.toInt().toString(),
+                                          text: showAsPercentage
+                                              ? '${rod.toY.toStringAsFixed(1)}%'
+                                              : rod.toY.toInt().toString(),
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 12,
@@ -591,7 +616,14 @@ class StationCard extends StatelessWidget {
                                   .entries
                                   .map((entry) {
                                 final name = entry.value;
-                                final count = filledDefects[name]!.toDouble();
+                                final rawCount =
+                                    filledDefects[name]!.toDouble();
+
+                                final count = showAsPercentage
+                                    ? (koCount > 0
+                                        ? (rawCount / koCount * 100)
+                                        : 0.0)
+                                    : rawCount;
                                 final color = defectColors[name] ?? Colors.grey;
                                 return BarChartGroupData(
                                   x: entry.key,
@@ -677,14 +709,15 @@ class StationCard extends StatelessWidget {
   }
 
   Widget _buildLastModuleCard(statusColor, statusLabel) {
-    final lastObject = stationData['last_object'] ?? 'ID non disponibile';
+    final lastObject =
+        widget.stationData['last_object'] ?? 'ID non disponibile';
     final lastCycleTime =
-        stationData['last_cycle_time'] ?? 'Tempo non disponibile';
-    final lastInTime = stationData['last_in_time'] != null
-        ? _formatTime(stationData['last_in_time'])
+        widget.stationData['last_cycle_time'] ?? 'Tempo non disponibile';
+    final lastInTime = widget.stationData['last_in_time'] != null
+        ? _formatTime(widget.stationData['last_in_time'])
         : 'Ingresso non disponibile';
-    final lastOutTime = stationData['last_out_time'] != null
-        ? _formatTime(stationData['last_out_time'])
+    final lastOutTime = widget.stationData['last_out_time'] != null
+        ? _formatTime(widget.stationData['last_out_time'])
         : 'Uscita non disponibile';
 
     return Container(

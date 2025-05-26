@@ -48,6 +48,7 @@ class _DataViewPageState extends State<DataViewPage> {
 
   Map<String, dynamic>? _fetchedData;
   double _thresholdSeconds = 3;
+  bool showAsPercentage = false;
 
   @override
   void initState() {
@@ -850,8 +851,10 @@ class _DataViewPageState extends State<DataViewPage> {
       for (var key in allDefectCategories) key: (defects[key] ?? 0)
     };
 
-    final chartMaxY =
-        filledDefects.values.map((e) => e.toDouble()).fold<double>(0, max) + 5;
+    final chartMaxY = showAsPercentage
+        ? 100.0
+        : filledDefects.values.map((e) => e.toDouble()).fold<double>(0, max) +
+            5;
 
     final displayName = lineDisplayNames[selectedLine] ?? selectedLine;
 
@@ -1025,13 +1028,37 @@ class _DataViewPageState extends State<DataViewPage> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Distribuzione Difetti',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.5,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Distribuzione Difetti',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              showAsPercentage = !showAsPercentage;
+                            });
+                          },
+                          icon: const Icon(
+                            Icons.swap_horiz,
+                            color: Colors.black,
+                          ),
+                          label: Text(
+                            showAsPercentage
+                                ? 'Mostra come Numero'
+                                : 'Mostra come Percentuale',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     Container(
@@ -1055,7 +1082,9 @@ class _DataViewPageState extends State<DataViewPage> {
                                   const TextStyle(),
                                   children: [
                                     TextSpan(
-                                      text: rod.toY.toInt().toString(),
+                                      text: showAsPercentage
+                                          ? '${rod.toY.toStringAsFixed(1)}%'
+                                          : rod.toY.toInt().toString(),
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 12,
@@ -1128,7 +1157,14 @@ class _DataViewPageState extends State<DataViewPage> {
                           barGroups:
                               allDefectCategories.asMap().entries.map((entry) {
                             final name = entry.value;
-                            final count = filledDefects[name]!.toDouble();
+                            final rawCount = filledDefects[name]!.toDouble();
+
+                            final count = showAsPercentage
+                                ? (koCount > 0
+                                    ? (rawCount / koCount * 100)
+                                    : 0.0)
+                                : rawCount;
+
                             final color = defectColors[name] ?? Colors.grey;
                             return BarChartGroupData(
                               x: entry.key,

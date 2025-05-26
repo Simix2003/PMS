@@ -24,7 +24,7 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
   bool showGlassCell = false;
   bool showGlassRibbon = false;
   bool showWarnings = false;
-  bool showDetailedView = false;
+  bool showDetailedView = true;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +32,7 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dettagli MBJ'),
+        title: Text('Dettagli MBJ – $idModulo'),
         actions: [
           IconButton(
             icon: Icon(

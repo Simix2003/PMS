@@ -121,15 +121,19 @@ class DistancesSolarPanelWidget extends StatelessWidget {
                       final rc = realWidth * ribbonToCellGap;
 
                       final l0 = em + rw + rc;
-                      final r0 = realWidth - em - rw - rc;
+                      final r0 =
+                          realWidth - em - rw - rc - (cw + gh) * colsPerSide;
 
                       double left;
                       if (y < colsPerSide) {
+                        // Left side (0–9)
                         left = l0 + y * (cw + gh);
                       } else {
+                        // Right side (10–19)
                         final colIndex = y - colsPerSide;
-                        left = r0 - (colIndex + 1) * (cw + gh) + gh;
+                        left = r0 + colIndex * (cw + gh);
                       }
+
                       final top =
                           x * realHeight / 6 + (realHeight / 6 - ch) / 2;
 
@@ -354,23 +358,27 @@ class DistancesSolarPanelWidget extends StatelessWidget {
       final gh = width * hSpacingFrac;
       final cw = width * cellWFrac;
       final l0 = em + rw + rc;
-      final r0 = width - em - rw - rc;
+      final r0 = width - em - rw - rc - (cw + gh) * colsPerSide;
 
       horizontalCellGaps!.forEach((r, list) {
         final rowIdx = int.tryParse(r);
         if (rowIdx == null) return;
         final y = rowH * rowIdx + rowH / 2;
+
         for (int i = 1; i < list.length; i++) {
           final v = (list[i] as num?)?.toDouble();
           if (v == null || !shouldShow(v, flag, grp)) continue;
+
           final xEdge = (i < colsPerSide)
               ? l0 + i * (cw + gh)
-              : r0 - (i - colsPerSide) * (cw + gh);
+              : r0 + (i - colsPerSide) * (cw + gh);
+
           final xGap = xEdge - gh / 2;
           labels.add(Positioned(
-              left: xGap - 6,
-              top: y,
-              child: Text(v.toStringAsFixed(1), style: styleFor(v, grp))));
+            left: xGap - 6,
+            top: y,
+            child: Text(v.toStringAsFixed(1), style: styleFor(v, grp)),
+          ));
         }
       });
     }
@@ -392,14 +400,16 @@ class DistancesSolarPanelWidget extends StatelessWidget {
       final gh = width * hSpacingFrac;
       final cw = width * cellWFrac;
       final l0 = em + rw + rc;
-      final r0 = width - em - rw - rc;
+      final r0 = width - em - rw - rc - (cw + gh) * colsPerSide;
 
       verticalCellGaps!.forEach((c, list) {
         final colIdx = int.tryParse(c);
         if (colIdx == null) return;
+
         final x = (colIdx < colsPerSide)
             ? l0 + colIdx * (cw + gh) + cw / 2
-            : r0 - (colIdx - colsPerSide + 1) * (cw + gh) + gh + cw / 2;
+            : r0 + (colIdx - colsPerSide) * (cw + gh) + cw / 2;
+
         for (int r = 0; r < list.length; r++) {
           final v = (list[r] as num?)?.toDouble();
           if (v == null || !shouldShow(v, flag, grp)) continue;
@@ -429,7 +439,7 @@ class DistancesSolarPanelWidget extends StatelessWidget {
       final gh = width * hSpacingFrac;
       final cw = width * cellWFrac;
       final l0 = em + rw + rc;
-      final r0 = width - em - rw - rc;
+      final r0 = width - em - rw - rc - (cw + gh) * colsPerSide;
 
       for (int i = 0; i < topList.length; i++) {
         final topVal = topList[i]?.toDouble();
@@ -440,7 +450,7 @@ class DistancesSolarPanelWidget extends StatelessWidget {
           if (shouldShow(topVal, flag, grp)) {
             final x = (i < colsPerSide)
                 ? l0 + i * (cw + gh) + cw / 4
-                : r0 - (i - colsPerSide + 1) * (cw + gh) + gh + cw / 4;
+                : r0 + (i - colsPerSide) * (cw + gh) + cw / 4;
             labels.add(Positioned(
                 left: x,
                 top: 2,
@@ -460,7 +470,7 @@ class DistancesSolarPanelWidget extends StatelessWidget {
           if (shouldShow(botVal, flag, grp)) {
             final x = (i < colsPerSide)
                 ? l0 + i * (cw + gh) + cw / 4
-                : r0 - (i - colsPerSide + 1) * (cw + gh) + gh + cw / 4;
+                : r0 + (i - colsPerSide) * (cw + gh) + cw / 4;
             labels.add(Positioned(
                 left: x,
                 top: height - 14,
@@ -501,16 +511,32 @@ class _StylisedPanelPainter extends CustomPainter {
     final vb = size.height * verticalRibbonGap;
 
     final l0 = em + rw + rc;
-    final r0 = size.width - em - rw - rc;
+    //final r0 = size.width - em - rw - rc;
+    final r0 = size.width - em - rw - rc - (cw + gh) * colsPerSide;
 
     // cells
-    for (int row = 0; row < rows; row++) {
+    /*for (int row = 0; row < rows; row++) {
       final y = row * gv + (gv - ch) / 2;
       for (int c = 0; c < colsPerSide; c++) {
         final xL = l0 + c * (cw + gh);
         canvas.drawRect(Rect.fromLTWH(xL, y, cw, ch), cPaint);
         final xR = r0 - (c + 1) * (cw + gh) + gh;
         canvas.drawRect(Rect.fromLTWH(xR, y, cw, ch), cPaint);
+      }
+    }*/
+
+    for (int row = 0; row < rows; row++) {
+      final y = row * gv + (gv - ch) / 2;
+      for (int c = 0; c < colsPerSide; c++) {
+        // Left cells (y = 0–9)
+        final xL = l0 + c * (cw + gh);
+        canvas.drawRect(Rect.fromLTWH(xL, y, cw, ch), cPaint);
+        _drawCellLabel(canvas, Offset(xL, y), cw, ch, row, c);
+
+        // Right cells (y = 10–19)
+        final xR = r0 + c * (cw + gh);
+        canvas.drawRect(Rect.fromLTWH(xR, y, cw, ch), cPaint);
+        _drawCellLabel(canvas, Offset(xR, y), cw, ch, row, 10 + c);
       }
     }
 
@@ -539,4 +565,21 @@ class _StylisedPanelPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+void _drawCellLabel(
+    Canvas canvas, Offset offset, double w, double h, int row, int col) {
+  final textSpan = TextSpan(
+    text: "($row,$col)",
+    style: const TextStyle(
+      color: Colors.black,
+      fontSize: 10,
+    ),
+  );
+  final tp = TextPainter(
+    text: textSpan,
+    textDirection: TextDirection.ltr,
+  );
+  tp.layout();
+  tp.paint(canvas, offset + Offset(2, 2)); // Top-left of cell
 }

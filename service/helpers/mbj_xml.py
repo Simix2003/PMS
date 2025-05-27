@@ -78,6 +78,12 @@ def preload_xml_index(xml_folder: str = "C:/IX-Monitor/xml"):
 def get_mbj_events_for_modulo(modulo_id: str):
     return global_state.xml_index.get(modulo_id, [])
 
+def flip_right_half(data: list[float | None]) -> list[float | None]:
+    # Split into left (0–9) and right (10–19)
+    left = data[:10]
+    right = data[10:]
+    return left + list(reversed(right))
+
 def extract_InterconnectionGlassDistance(root):
     # Structure: row_index → {"left": [...], "right": [...]}
     distances_by_row = defaultdict(lambda: {"left": [], "right": []})
@@ -258,6 +264,9 @@ def extract_GlassCellDistance(root: ET.Element) -> dict:
 
     top_row    = [avg(raw_top[c])    for c in range(20)]
     bottom_row = [avg(raw_bottom[c]) for c in range(20)]
+
+    #top_row    = flip_right_half(top_row_raw)
+    #bottom_row = flip_right_half(bottom_row_raw)
 
     return {"glass_cell_mm": {"top": top_row, "bottom": bottom_row}}
 

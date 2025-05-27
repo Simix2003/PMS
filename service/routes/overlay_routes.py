@@ -8,6 +8,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.routes.station_routes import get_station_for_object
+from service.config.config import debug
 
 
 router = APIRouter()
@@ -41,7 +42,6 @@ async def get_overlay_config(
     try:
         with open(config_file, "r") as f:
             all_configs = json.load(f)
-            print(f"✅ Loaded overlay_config.json with keys: {list(all_configs.keys())}")
     except json.JSONDecodeError as e:
         print(f"❌ JSON decode error: {e}")
         all_configs = {}
@@ -49,17 +49,25 @@ async def get_overlay_config(
     # Look for the matching path
     for image_name, config in all_configs.items():
         config_path = config.get("path", "")
-        print(f"➡️ Checking config: image = '{image_name}', path = '{config_path}'")
 
         if config_path.lower() == path.lower():
             # Default image URL
-            image_url = f"https://172.16.250.33:8050/images/{line_name}/{station}/{image_name}"
+            if debug:
+                image_url = f"http://localhost:8001/images/{line_name}/{station}/{image_name}"
+            else:
+                image_url = f"https://172.16.250.33:8050/images/{line_name}/{station}/{image_name}"
             
             # Override image URL if station is M326 and object came from a specific QC
             if station == "M326" and comes_from:
-                image_url = f"https://172.16.250.33:8050/images/{line_name}/M308/{image_name}"
+                if debug:
+                    image_url = f"http://localhost:8001/images/{line_name}/M308/{image_name}"
+                else:
+                    image_url = f"https://172.16.250.33:8050/images/{line_name}/M308/{image_name}"
                 if comes_from == 'M309':
-                    image_url = f"https://172.16.250.33:8050/images/{line_name}/M309/{image_name}"
+                    if debug:
+                        image_url = f"http://localhost:8001/images/{line_name}/M309/{image_name}"
+                    else:
+                        image_url = f"https://172.16.250.33:8050/images/{line_name}/M309/{image_name}"
 
             return {
                 "image_url": image_url,

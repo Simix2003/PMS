@@ -2,6 +2,7 @@
 
 import 'dart:math';
 import 'dart:ui';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -38,6 +39,8 @@ class _DataViewPageState extends State<DataViewPage> {
       TimeOfDay(hour: 0, minute: 0); // Default: 00:00
   TimeOfDay? selectedEndTime =
       TimeOfDay(hour: 23, minute: 59); // Default: 23:59
+
+  String percentageBase = 'NG'; // or 'FULL'
 
   // Using 0 to represent "Full Day" and 1, 2, 3 for the three shifts.
   // Default is full day.
@@ -578,44 +581,74 @@ class _DataViewPageState extends State<DataViewPage> {
                             selectedTurno,
                           ),
                           const SizedBox(height: 24),
-                          ...['M308', 'M309', 'M326']
-                              .map((stationCode) {
-                                final entry = stations.firstWhere(
-                                  (e) => e.key == stationCode,
-                                  orElse: () => const MapEntry('', {}),
-                                );
+                          ...['M308', 'M309', 'M326'].map((stationCode) {
+                            final entry = stations.firstWhere(
+                              (e) => e.key == stationCode,
+                              orElse: () => const MapEntry('', {}),
+                            );
 
-                                if (entry.key.isEmpty) return const SizedBox();
+                            if (entry.key.isEmpty) return const SizedBox();
 
-                                final stationData = Map<String, dynamic>.from(
-                                    entry.value); // Clone to safely override
+                            final stationData = Map<String, dynamic>.from(
+                                entry.value); // Clone to safely override
 
-                                if (stationCode == 'M326') {
-                                  stationData['good_count'] =
-                                      stationData['ok_op_count'] ?? 0;
-                                }
+                            if (stationCode == 'M326') {
+                              stationData['good_count'] =
+                                  stationData['ok_op_count'] ?? 0;
+                            }
 
-                                final visualName =
-                                    stationData['display'] ?? entry.key;
+                            final visualName =
+                                stationData['display'] ?? entry.key;
 
-                                return StationCard(
-                                  station: visualName,
-                                  stationData: stationData,
-                                  selectedDate: _selectedDate,
-                                  selectedRange: _selectedRange,
-                                  selectedStartTime: selectedStartTime,
-                                  selectedEndTime: selectedEndTime,
-                                  turno: selectedTurno,
-                                  thresholdSeconds: _thresholdSeconds,
-                                );
-                              })
-                              .whereType<Widget>() // removes nulls
-                              .toList(),
+                            return StationCard(
+                              station: visualName,
+                              stationData: stationData,
+                              selectedDate: _selectedDate,
+                              selectedRange: _selectedRange,
+                              selectedStartTime: selectedStartTime,
+                              selectedEndTime: selectedEndTime,
+                              turno: selectedTurno,
+                              thresholdSeconds: _thresholdSeconds,
+                            );
+                          }).whereType<Widget>()
                         ],
                       ),
                     );
                   },
                 ),
+    );
+  }
+
+  Widget _buildPercentageBaseButton(String value, String label) {
+    final isSelected = percentageBase == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            percentageBase = value;
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF007AFF) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF007AFF) : Colors.grey,
+              width: 1,
+            ),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey[700],
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1033,36 +1066,57 @@ class _DataViewPageState extends State<DataViewPage> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Column(
                       children: [
-                        const Text(
-                          'Distribuzione Difetti',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.5,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Distribuzione Difetti',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  showAsPercentage = !showAsPercentage;
+                                });
+                              },
+                              icon: const Icon(
+                                Icons.swap_horiz,
+                                color: Colors.black,
+                              ),
+                              label: Text(
+                                showAsPercentage
+                                    ? 'Mostra come Numero'
+                                    : 'Mostra come Percentuale',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black),
+                              ),
+                            ),
+                          ],
                         ),
-                        TextButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              showAsPercentage = !showAsPercentage;
-                            });
-                          },
-                          icon: const Icon(
-                            Icons.swap_horiz,
-                            color: Colors.black,
+                        if (showAsPercentage)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              SizedBox(
+                                width: 190,
+                                child: Row(
+                                  children: [
+                                    _buildPercentageBaseButton('NG', 'Su NG'),
+                                    const SizedBox(width: 8),
+                                    _buildPercentageBaseButton(
+                                        'FULL', 'Su Totale'),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                          label: Text(
-                            showAsPercentage
-                                ? 'Mostra come Numero'
-                                : 'Mostra come Percentuale',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black),
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -1165,7 +1219,13 @@ class _DataViewPageState extends State<DataViewPage> {
                             final rawCount = filledDefects[name]!.toDouble();
 
                             final count = showAsPercentage
-                                ? (total > 0 ? (rawCount / total * 100) : 0.0)
+                                ? percentageBase == 'FULL'
+                                    ? (total > 0
+                                        ? (rawCount / total * 100)
+                                        : 0.0)
+                                    : (koCount > 0
+                                        ? (rawCount / koCount * 100)
+                                        : 0.0)
                                 : rawCount;
 
                             final color = defectColors[name] ?? Colors.grey;

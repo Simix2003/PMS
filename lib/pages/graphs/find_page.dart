@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import 'dart:html' as html;
 //import '../ai_helper_chat.dart';
 import '../../shared/models/globals.dart';
-import '../manualSelection_page.dart';
+import '../manuali/manualSelection_page.dart';
 import '../object_details/mbjDetails_page.dart';
 import '../object_details/objectDetails_page.dart';
 import '../object_details/productionDetails_page.dart';

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import 'pdf_manual_page.dart';
+import 'manuale_pms_page.dart';
+import 'manuale_qg2_page.dart';
+import 'manuale_rework_page.dart';
 
 class ManualSelectionPage extends StatelessWidget {
   const ManualSelectionPage({super.key});
 
-  void _openManual(BuildContext context, String fileName) {
+  void _openManual(BuildContext context, Widget manualPage) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => ManualePage(pdfFileName: fileName),
-      ),
+      MaterialPageRoute(builder: (_) => manualPage),
     );
   }
 
@@ -18,7 +18,7 @@ class ManualSelectionPage extends StatelessWidget {
     required String title,
     required String description,
     required IconData icon,
-    required String pdfFile,
+    required Widget page,
     required Color color,
   }) {
     return Card(
@@ -27,7 +27,7 @@ class ManualSelectionPage extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => _openManual(context, pdfFile),
+        onTap: () => _openManual(context, page),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Row(
@@ -42,21 +42,13 @@ class ManualSelectionPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade700,
-                      ),
-                    ),
+                    Text(description,
+                        style: TextStyle(
+                            fontSize: 14, color: Colors.grey.shade700)),
                   ],
                 ),
               ),
@@ -80,7 +72,7 @@ class ManualSelectionPage extends StatelessWidget {
             title: "Work Instruction QG2",
             description: "Guida operativa per il controllo qualità in QG2.",
             icon: Icons.menu_book_outlined,
-            pdfFile: 'WorkInstructionQG2.pdf',
+            page: const ManualeQG2Page(),
             color: Colors.blue,
           ),
           _buildManualCard(
@@ -88,7 +80,7 @@ class ManualSelectionPage extends StatelessWidget {
             title: "Work Instruction ReWork",
             description: "Procedura per la gestione dei pezzi KO nel ReWork.",
             icon: Icons.build_circle_outlined,
-            pdfFile: 'WorkInstructionReWork.pdf',
+            page: const ManualeReworkPage(),
             color: Colors.orange,
           ),
           _buildManualCard(
@@ -96,7 +88,7 @@ class ManualSelectionPage extends StatelessWidget {
             title: "Manuale PMS",
             description: "Manuale completo per l’utilizzo del sistema PMS.",
             icon: Icons.description_outlined,
-            pdfFile: 'Manuale.pdf',
+            page: const ManualePMSPage(),
             color: Colors.green,
           ),
         ],

@@ -11,7 +11,7 @@ import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/station_card.dart';
-import '../manualSelection_page.dart';
+import '../manuali/manualSelection_page.dart';
 import '../settings_page.dart';
 
 class DataViewPage extends StatefulWidget {

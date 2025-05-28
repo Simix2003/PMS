@@ -41,22 +41,27 @@ class _StationCardState extends State<StationCard> {
     "Saldatura",
     "Disallineamento",
     "Mancanza Ribbon",
+    "I Ribbon Leadwire",
     "Macchie ECA",
     "Celle Rotte",
-    "Lunghezza String Ribbon",
+    "Bad Soldering",
+    "Lunghezza\nString Ribbon",
+    "Graffio su Cella",
     "Altro",
     "Generico",
   ];
 
-  // iOS color palette - softer, more vibrant colors
   static const Map<String, Color> defectColors = {
     "Generali": Color(0xFF007AFF), // iOS Blue
     "Saldatura": Color(0xFFFF9500), // iOS Orange
     "Disallineamento": Color(0xFFFF3B30), // iOS Red
     "Mancanza Ribbon": Color(0xFFFF2D55), // iOS Pink
+    "I Ribbon Leadwire": Color(0xFF34C759), // iOS Green
     "Macchie ECA": Color(0xFFAF52DE), // iOS Purple
     "Celle Rotte": Color(0xFF5856D6), // iOS Indigo
+    "Bad Soldering": Color.fromARGB(255, 2, 54, 109), // iOS Dark Blue
     "Lunghezza String Ribbon": Color(0xFFA2845E), // iOS Brown
+    "Graffio su Cella": Color(0xFF5AC8FA), // iOS Light Blue
     "Altro": Color(0xFF8E8E93), // iOS Gray
     "Generico": Color(0xFFFF3B30), // iOS Red
   };
@@ -276,15 +281,20 @@ class _StationCardState extends State<StationCard> {
         ? ((gCount + ncCount) / total * 100).toStringAsFixed(1)
         : "0.0";
 
+    // ✅ If we are in M326, count NC as part of Good
+    final isRework =
+        widget.station == 'M326' || widget.station == 'M326 - ReWork';
+    final adjustedGCount = isRework ? gCount + ncCount : gCount;
+
     // Fill missing categories with 0
-    num _safeNum(dynamic value) {
+    num safeNum(dynamic value) {
       if (value is num) return value;
       if (value is String) return num.tryParse(value) ?? 0;
       return 0;
     }
 
     final filledDefects = {
-      for (var key in allDefectCategories) key: _safeNum(defects[key])
+      for (var key in allDefectCategories) key: safeNum(defects[key])
     };
 
     final chartMaxY = showAsPercentage
@@ -388,7 +398,7 @@ class _StationCardState extends State<StationCard> {
                       Expanded(
                         child: _buildStatBox(
                           'Good',
-                          gCount,
+                          adjustedGCount,
                           const Color(0xFF34C759),
                           Icons.check_circle_rounded,
                         ),
@@ -620,8 +630,8 @@ class _StationCardState extends State<StationCard> {
                                     filledDefects[name]!.toDouble();
 
                                 final count = showAsPercentage
-                                    ? (koCount > 0
-                                        ? (rawCount / koCount * 100)
+                                    ? (total > 0
+                                        ? (rawCount / total * 100)
                                         : 0.0)
                                     : rawCount;
                                 final color = defectColors[name] ?? Colors.grey;

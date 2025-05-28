@@ -10,7 +10,7 @@ import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/station_card.dart';
-import '../pdf_manual_page.dart';
+import '../manualSelection_page.dart';
 import '../settings_page.dart';
 
 class DataViewPage extends StatefulWidget {
@@ -357,24 +357,27 @@ class _DataViewPageState extends State<DataViewPage> {
     "Saldatura",
     "Disallineamento",
     "Mancanza Ribbon",
+    "I Ribbon Leadwire",
     "Macchie ECA",
     "Celle Rotte",
-    "Lunghezza\nString Ribbon",
     "Bad Soldering",
+    "Lunghezza\nString Ribbon",
+    "Graffio su Cella",
     "Altro",
     "Generico",
   ];
 
-  // iOS color palette - softer, more vibrant colors
   static const Map<String, Color> defectColors = {
     "Generali": Color(0xFF007AFF), // iOS Blue
     "Saldatura": Color(0xFFFF9500), // iOS Orange
     "Disallineamento": Color(0xFFFF3B30), // iOS Red
     "Mancanza Ribbon": Color(0xFFFF2D55), // iOS Pink
+    "I Ribbon Leadwire": Color(0xFF34C759), // iOS Green
     "Macchie ECA": Color(0xFFAF52DE), // iOS Purple
     "Celle Rotte": Color(0xFF5856D6), // iOS Indigo
-    "Lunghezza String Ribbon": Color(0xFFA2845E), // iOS Brown
     "Bad Soldering": Color.fromARGB(255, 2, 54, 109), // iOS Dark Blue
+    "Lunghezza String Ribbon": Color(0xFFA2845E), // iOS Brown
+    "Graffio su Cella": Color(0xFF5AC8FA), // iOS Light Blue
     "Altro": Color(0xFF8E8E93), // iOS Gray
     "Generico": Color(0xFFFF3B30), // iOS Red
   };
@@ -414,7 +417,9 @@ class _DataViewPageState extends State<DataViewPage> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ManualePage()),
+                  MaterialPageRoute(
+                    builder: (context) => const ManualSelectionPage(),
+                  ),
                 );
               },
             ),
@@ -1160,9 +1165,7 @@ class _DataViewPageState extends State<DataViewPage> {
                             final rawCount = filledDefects[name]!.toDouble();
 
                             final count = showAsPercentage
-                                ? (koCount > 0
-                                    ? (rawCount / koCount * 100)
-                                    : 0.0)
+                                ? (total > 0 ? (rawCount / total * 100) : 0.0)
                                 : rawCount;
 
                             final color = defectColors[name] ?? Colors.grey;

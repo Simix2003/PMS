@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'dart:html' as html;
 //import '../ai_helper_chat.dart';
 import '../../shared/models/globals.dart';
+import '../manualSelection_page.dart';
 import '../object_details/mbjDetails_page.dart';
 import '../object_details/objectDetails_page.dart';
 import '../object_details/productionDetails_page.dart';
@@ -14,8 +15,6 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'dart:ui';
-
-import '../pdf_manual_page.dart';
 import '../preloadXML_page.dart';
 //import 'package:rive/rive.dart';
 
@@ -46,6 +45,7 @@ class _FindPageState extends State<FindPage> {
   String? selectedRibbonSide;
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _numericController = TextEditingController();
+  final TextEditingController _eventiController = TextEditingController();
   bool isSelecting = false;
   final Set<String> selectedObjectIds = {}; // Main selection for 'Difetto'
   String? selectedDifettoGroup;
@@ -53,6 +53,8 @@ class _FindPageState extends State<FindPage> {
   bool searching = false;
 
   String? selectedCycleTimeCondition;
+
+  String? selectedEventiCondition;
 
 // === GENERALI ===
   String? selectedGenerali;
@@ -97,16 +99,17 @@ class _FindPageState extends State<FindPage> {
   //SMIBool? _boolInput;
 
   final List<String> filterOptions = [
-    'Linea',
-    'Stazione',
-    'Esito',
-    'Difetto',
-    'ID Modulo',
     'Data',
-    'Turno',
-    "Stringatrice",
+    'Difetto',
+    'Esito',
+    'Eventi',
+    'ID Modulo',
+    'Linea',
     'Operatore',
+    'Stazione',
+    'Stringatrice',
     'Tempo Ciclo',
+    'Turno',
   ];
 
   final List<String> esitoOptions = [
@@ -291,6 +294,8 @@ class _FindPageState extends State<FindPage> {
 
   String? selectedOrderBy = 'Data';
   String? selectedLimit = '1000';
+
+  Map<String, List<String>> moduloIdToProductionIds = {};
 
   final List<String> orderOptions = [
     'Data',
@@ -546,6 +551,18 @@ class _FindPageState extends State<FindPage> {
           'seconds': filterValue,
         });
       });
+    } else if (selectedFilterType == 'Eventi') {
+      if (selectedEventiCondition == null || filterValue.isEmpty) return;
+      compositeValue = '${selectedEventiCondition!} $filterValue eventi';
+
+      setState(() {
+        activeFilters.add({
+          'type': 'Eventi',
+          'value': compositeValue,
+          'condition': selectedEventiCondition!,
+          'eventi': filterValue,
+        });
+      });
     } else {
       if (filterValue.isEmpty) return;
 
@@ -583,8 +600,10 @@ class _FindPageState extends State<FindPage> {
       selectedStartTime = null;
       selectedEndTime = null;
       selectedCycleTimeCondition = null;
+      selectedEventiCondition = null;
       _textController.clear();
       _numericController.clear();
+      _eventiController.clear();
     });
   }
 
@@ -720,6 +739,33 @@ class _FindPageState extends State<FindPage> {
             _buildStyledTextField(
               controller: _numericController,
               hint: 'Secondi',
+              isNumeric: true,
+              onChanged: (val) => filterValue = val,
+            ),
+          ],
+        );
+
+      case 'Eventi':
+        return Row(
+          children: [
+            _buildStyledDropdown(
+              hint: 'Condizione',
+              value: selectedEventiCondition,
+              items: [
+                'Minore Di',
+                'Minore o Uguale a',
+                'Maggiore Di',
+                'Maggiore o Uguale a',
+                'Uguale A'
+              ],
+              onChanged: (val) => setState(() {
+                selectedEventiCondition = val;
+              }),
+            ),
+            const SizedBox(width: 8),
+            _buildStyledTextField(
+              controller: _eventiController,
+              hint: 'Eventi',
               isNumeric: true,
               onChanged: (val) => filterValue = val,
             ),
@@ -1283,7 +1329,9 @@ class _FindPageState extends State<FindPage> {
               filterValue = '';
               _textController.clear();
               selectedCycleTimeCondition = null;
+              selectedEventiCondition = null;
               _numericController.clear();
+              _eventiController.clear();
               selectedRibbonSide = null;
             });
           },
@@ -1415,6 +1463,22 @@ class _FindPageState extends State<FindPage> {
         results.addAll(data);
         searching = false;
 
+        print('results');
+        print(results);
+
+        for (final row in results) {
+          final objectId = row['object_id'];
+          final productionIds =
+              (row['production_ids'] as List).map((e) => e.toString()).toList();
+
+          if (objectId != null && productionIds.isNotEmpty) {
+            moduloIdToProductionIds[objectId] = productionIds;
+          }
+        }
+
+        print('moduloIdToProductionIds');
+        print(moduloIdToProductionIds);
+
         if (widget.onSearchCompleted != null) {
           widget.onSearchCompleted!();
         }
@@ -1460,7 +1524,9 @@ class _FindPageState extends State<FindPage> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ManualePage()),
+                  MaterialPageRoute(
+                    builder: (context) => const ManualSelectionPage(),
+                  ),
                 );
               },
             ),
@@ -1530,18 +1596,28 @@ class _FindPageState extends State<FindPage> {
                           return ExportConfirmationDialog(
                             selectedCount: selectedObjectIds.length,
                             activeFilters: activeFilters,
-                            onConfirm: () async {
+                            onConfirm: (bool exportFullHistory) async {
                               final selectedIds = selectedObjectIds.toList();
 
-                              setState(
-                                () => isExporting = true,
-                              );
+                              final allProductionIds = <String>[];
+
+                              for (final row in results) {
+                                final productionIds =
+                                    (row['production_ids'] as List)
+                                        .map((e) => e.toString())
+                                        .toList();
+
+                                allProductionIds.addAll(productionIds);
+                              }
+
+                              setState(() => isExporting = true);
 
                               final downloadUrl = await ApiService
                                   .exportSelectedObjectsAndGetDownloadUrl(
-                                objectIds:
-                                    selectedIds, // <‑‑ rename param in ApiService too
+                                productionIds: allProductionIds,
+                                moduloIds: selectedIds,
                                 filters: activeFilters,
+                                fullHistory: exportFullHistory,
                               );
 
                               if (downloadUrl != null) {

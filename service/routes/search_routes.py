@@ -216,6 +216,81 @@ async def search_results(request: Request):
                                 group_params.append(seconds_float)
                             except ValueError:
                                 continue
+                    elif filter_type == "Eventi":
+                        condition = f.get("condition")
+                        events = f.get("eventi")
+
+                        try:
+                            events_int = int(events)
+
+                            # 🔁 Reuse global filters inside the subquery
+                            subquery_clauses = [
+                                "p2.object_id = p.object_id",
+                                "p2.station_id = p.station_id"
+                            ]
+                            subquery_params = []
+
+                            for sub_filter_type, sub_group in grouped_filters.items():
+                                if sub_filter_type in {"Linea", "Esito", "Operatore", "Stazione", "Data", "Tempo Ciclo"}:
+                                    for sf in sub_group:
+                                        val = sf.get("value")
+                                        if sub_filter_type == "Linea":
+                                            subquery_clauses.append("EXISTS (SELECT 1 FROM stations s2 JOIN production_lines pl2 ON s2.line_id = pl2.id WHERE s2.id = p2.station_id AND pl2.display_name = %s)")
+                                            subquery_params.append(val)
+                                        elif sub_filter_type == "Stazione":
+                                            subquery_clauses.append("EXISTS (SELECT 1 FROM stations s2 WHERE s2.id = p2.station_id AND s2.name = %s)")
+                                            subquery_params.append(val)
+                                        elif sub_filter_type == "Esito":
+                                            esito_map = {"G": 1, "In Produzione": 2, "Escluso": 4, "G Operatore": 5, "NG": 6}
+                                            if val in esito_map:
+                                                subquery_clauses.append("p2.esito = %s")
+                                                subquery_params.append(esito_map[val])
+                                        elif sub_filter_type == "Operatore":
+                                            subquery_clauses.append("p2.operator_id LIKE %s")
+                                            subquery_params.append(f"%{val}%")
+                                        elif sub_filter_type == "Tempo Ciclo":
+                                            seconds = sf.get("seconds")
+                                            condition = sf.get("condition")
+                                            if seconds:
+                                                op = {
+                                                    "Minore Di": "<",
+                                                    "Maggiore Di": ">",
+                                                    "Uguale A": "=",
+                                                    "Minore o Uguale a": "<=",
+                                                    "Maggiore o Uguale a": ">="
+                                                }.get(condition)
+                                                if op:
+                                                    subquery_clauses.append(f"p2.cycle_time {op} %s")
+                                                    subquery_params.append(float(seconds))
+                                        elif sub_filter_type == "Data":
+                                            from_iso = sf.get("start")
+                                            to_iso = sf.get("end")
+                                            if from_iso and to_iso:
+                                                from_dt = datetime.fromisoformat(from_iso)
+                                                to_dt = datetime.fromisoformat(to_iso)
+                                                subquery_clauses.append("p2.end_time BETWEEN %s AND %s")
+                                                subquery_params.extend([from_dt, to_dt])
+
+                            subquery_sql = " AND ".join(subquery_clauses)
+
+                            operator_sql = {
+                                "Minore Di": "<",
+                                "Maggiore Di": ">",
+                                "Uguale A": "=",
+                                "Minore o Uguale a": "<=",
+                                "Maggiore o Uguale a": ">=",
+                            }.get(condition)
+
+                            if operator_sql:
+                                group_clauses.append(f"""(
+                                    SELECT COUNT(*) FROM productions p2 
+                                    WHERE {subquery_sql}
+                                ) {operator_sql} %s""")
+                                group_params.extend(subquery_params)
+                                group_params.append(events_int)
+
+                        except ValueError:
+                            continue
 
                 if group_clauses:
                     where_clauses.append("(" + " OR ".join(group_clauses) + ")")
@@ -301,6 +376,7 @@ async def search_results(request: Request):
                     "latest_event": latest,
                     "history": history,
                     "event_count": len(valid_events),
+                    "production_ids": [e["production_id"] for e in valid_events if "production_id" in e]
                 })
         return {"results": results}
 

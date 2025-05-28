@@ -1,5 +1,6 @@
 {
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.autoImportCompletions": true,
-    "cmake.ignoreCMakeListsMissing": true
+    "cmake.ignoreCMakeListsMissing": true,
+    "dart.flutterSdkPath": "C:\\Flutter\\flutter"
 }

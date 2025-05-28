@@ -66,6 +66,8 @@ class _StationCardState extends State<StationCard> {
     "Generico": Color(0xFFFF3B30), // iOS Red
   };
 
+  String percentageBase = 'NG'; // or 'FULL'
+
   String formatCycleTimeToMinutes(String rawTime) {
     try {
       final timeWithoutMicros = rawTime.split('.')[0];
@@ -239,6 +241,39 @@ class _StationCardState extends State<StationCard> {
                 ),
         );
       },
+    );
+  }
+
+  Widget _buildPercentageBaseButton(String value, String label) {
+    final isSelected = percentageBase == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            percentageBase = value;
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF007AFF) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF007AFF) : Colors.grey,
+              width: 1,
+            ),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey[700],
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -495,36 +530,58 @@ class _StationCardState extends State<StationCard> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Column(
                           children: [
-                            const Text(
-                              'Distribuzione Difetti',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: -0.5,
-                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Distribuzione Difetti',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      showAsPercentage = !showAsPercentage;
+                                    });
+                                  },
+                                  icon: const Icon(
+                                    Icons.swap_horiz,
+                                    color: Colors.black,
+                                  ),
+                                  label: Text(
+                                    showAsPercentage
+                                        ? 'Mostra come Numero'
+                                        : 'Mostra come Percentuale',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.black),
+                                  ),
+                                ),
+                              ],
                             ),
-                            TextButton.icon(
-                              onPressed: () {
-                                setState(() {
-                                  showAsPercentage = !showAsPercentage;
-                                });
-                              },
-                              icon: const Icon(
-                                Icons.swap_horiz,
-                                color: Colors.black,
+                            if (showAsPercentage)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  SizedBox(
+                                    width: 190,
+                                    child: Row(
+                                      children: [
+                                        _buildPercentageBaseButton(
+                                            'NG', 'Su NG'),
+                                        const SizedBox(width: 8),
+                                        _buildPercentageBaseButton(
+                                            'FULL', 'Su Totale'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
-                              label: Text(
-                                showAsPercentage
-                                    ? 'Mostra come Numero'
-                                    : 'Mostra come Percentuale',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black),
-                              ),
-                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -630,10 +687,15 @@ class _StationCardState extends State<StationCard> {
                                     filledDefects[name]!.toDouble();
 
                                 final count = showAsPercentage
-                                    ? (total > 0
-                                        ? (rawCount / total * 100)
-                                        : 0.0)
+                                    ? percentageBase == 'FULL'
+                                        ? (total > 0
+                                            ? (rawCount / total * 100)
+                                            : 0.0)
+                                        : (koCount > 0
+                                            ? (rawCount / koCount * 100)
+                                            : 0.0)
                                     : rawCount;
+
                                 final color = defectColors[name] ?? Colors.grey;
                                 return BarChartGroupData(
                                   x: entry.key,

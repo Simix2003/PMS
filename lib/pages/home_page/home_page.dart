@@ -10,7 +10,7 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
 import '../../shared/services/api_service.dart';
 import '../issue_selector.dart';
-import '../pdf_manual_page.dart';
+import '../manualSelection_page.dart';
 import '../picture_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -42,6 +42,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool pezzoKO = false;
 
   bool canAdd = true;
+  bool canSubmit = false;
 
   String plcStatus = "CHECKING"; // or values like "CONNECTED", "DISCONNECTED"
 
@@ -65,6 +66,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       GlobalKey<IssueSelectorWidgetState>();
 
   final TextEditingController _objectIdController = TextEditingController();
+  Set<String> _previouslySelectedIssues = {};
 
   @override
   void initState() {
@@ -126,12 +128,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               final preloadedPictures =
                   result['pictures'] as List<Map<String, String>>;
 
-              if (previouslySelected.isEmpty) {
-                canAdd = true;
-              } else {
-                canAdd =
-                    true; // Can always Add from M326, even if defects already selected
-              }
+              _previouslySelectedIssues = previouslySelected.toSet();
+
+              setState(() {
+                _issues.addAll(previouslySelected);
+                _pictures = preloadedPictures;
+
+                // Only allow submission if current issues differ from previous ones
+                canSubmit = selectedChannel == "M326" &&
+                        !_issues.containsAll(_previouslySelectedIssues) ||
+                    !_previouslySelectedIssues.containsAll(_issues);
+              });
+
               setState(() {
                 _issues.addAll(previouslySelected);
                 _pictures = preloadedPictures;
@@ -663,7 +671,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ManualePage(),
+                    builder: (context) => const ManualSelectionPage(),
                   ),
                 );
               },
@@ -877,6 +885,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 } else {
                                   _issues.add(issuePath);
                                 }
+
+                                canSubmit = selectedChannel == "M326" &&
+                                        (!_issues.containsAll(
+                                                _previouslySelectedIssues) ||
+                                            !_previouslySelectedIssues
+                                                .containsAll(_issues)) ||
+                                    selectedChannel != "M326";
                               });
                             },
                             onPicturesChanged: (pics) {
@@ -897,7 +912,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           Center(
                             child: Text(
                               selectedChannel == "M326"
-                                  ? 'Premere pulsante NO GOOD su HMI'
+                                  ? 'Premere pulsante GOOD / NO GOOD su HMI'
                                   : 'Premere pulsante NO GOOD fisico',
                               style: const TextStyle(fontSize: 36),
                               textAlign: TextAlign.center,
@@ -913,7 +928,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               if (hasBeenEvaluated &&
                       !isObjectOK &&
                       selectedChannel != "M326" ||
-                  canAdd)
+                  canSubmit)
                 Padding(
                   padding: const EdgeInsets.only(top: 16),
                   child: Row(

@@ -302,8 +302,10 @@ class ApiService {
   }
 
   static Future<String?> exportSelectedObjectsAndGetDownloadUrl({
-    required List<String> objectIds,
+    required List<String> productionIds, // <-- true production row IDs
+    required List<String> moduloIds, // <-- id_modulo strings (for full history)
     required List<Map<String, String>> filters,
+    required bool fullHistory,
   }) async {
     final url = Uri.parse('$baseUrl/api/export_objects');
 
@@ -311,8 +313,10 @@ class ApiService {
       url,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        "object_ids": objectIds,
+        "modulo_ids": moduloIds,
+        "production_ids": productionIds,
         "filters": filters,
+        "fullHistory": fullHistory, // 👈 Include it in the request body
       }),
     );
 
@@ -322,8 +326,9 @@ class ApiService {
       if (filename != null) {
         return "$baseUrl/api/download_export/$filename";
       }
+    } else {
+      print("❌ Export failed: ${response.statusCode} - ${response.body}");
     }
-
     return null;
   }
 

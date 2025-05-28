@@ -127,7 +127,7 @@ void showObjectIssuesDialog({
 class ExportConfirmationDialog extends StatelessWidget {
   final int selectedCount;
   final List<Map<String, String>> activeFilters;
-  final VoidCallback onConfirm;
+  final void Function(bool exportFullHistory) onConfirm; // 👈 Accepts bool
 
   const ExportConfirmationDialog({
     super.key,
@@ -138,43 +138,73 @@ class ExportConfirmationDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    bool exportFullHistory = false; // ✅ Move here
+
     return AlertDialog(
       title: const Text('Conferma Esportazione'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Hai selezionato $selectedCount elementi da esportare.',
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 16),
-          if (activeFilters.isNotEmpty) ...[
-            const Text(
-              'Filtri Attivi:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            ...activeFilters.map((f) => Text("• ${f['type']}: ${f['value']}")),
-          ],
-        ],
+      content: StatefulBuilder(
+        builder: (context, setState) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Hai selezionato $selectedCount elementi da esportare.',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 16),
+              if (activeFilters.isNotEmpty) ...[
+                const Text(
+                  'Filtri Attivi:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                ...activeFilters
+                    .map((f) => Text("• ${f['type']}: ${f['value']}")),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Checkbox(
+                    value: exportFullHistory,
+                    onChanged: (val) {
+                      setState(() {
+                        exportFullHistory = val ?? false;
+                      });
+                    },
+                  ),
+                  const Expanded(
+                    child: Text(
+                      "Esporta l’intera storia del modulo (tutti i passaggi nelle stazioni)",
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Annulla'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onConfirm(exportFullHistory); // ✅ Now correct value!
+                    },
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF007AFF),
+                        foregroundColor: Colors.white),
+                    child: const Text('Conferma'),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Annulla'),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context);
-            onConfirm();
-          },
-          style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF007AFF),
-              foregroundColor: Colors.white),
-          child: const Text('Conferma'),
-        ),
-      ],
     );
   }
 }

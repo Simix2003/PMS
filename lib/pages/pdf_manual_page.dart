@@ -6,7 +6,9 @@ import 'dart:html' as html;
 import 'dart:ui_web' as ui_web;
 
 class ManualePage extends StatelessWidget {
-  const ManualePage({super.key});
+  final String pdfFileName;
+
+  const ManualePage({super.key, required this.pdfFileName});
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +20,7 @@ class ManualePage extends StatelessWidget {
         (int viewId) {
           final iframe = html.IFrameElement()
             ..src =
-                '${html.window.location.origin}/assets/assets/pdf/Manuale.pdf'
+                '${html.window.location.origin}/assets/assets/pdf/$pdfFileName'
             ..style.border = 'none'
             ..style.width = '100%'
             ..style.height = '100%';
@@ -28,7 +30,7 @@ class ManualePage extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Manuale')),
+      appBar: AppBar(title: Text(pdfFileName)),
       body: kIsWeb
           ? const SizedBox.expand(
               child: HtmlElementView(viewType: viewType),

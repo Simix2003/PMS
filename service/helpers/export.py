@@ -8,6 +8,7 @@ from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import PatternFill
 import pandas as pd
+from collections import defaultdict
 
 EXPORT_DIR = "./exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
@@ -194,6 +195,17 @@ def risolutivo_sheet(ws, data: dict):
     stations_by_id = {station["id"]: station for station in stations}
     production_lines_by_id = {line["id"]: line for line in production_lines}
 
+    # (modulo_id, station_id) → count
+    modulo_station_counts = defaultdict(int)
+    for prod in productions:
+        obj = objects_by_id.get(prod.get("object_id"))
+        if not obj:
+            continue
+        id_modulo = obj.get("id_modulo")
+        station_id = prod.get("station_id")
+        if id_modulo and station_id:
+            modulo_station_counts[(id_modulo, station_id)] += 1
+
     rows = []
     for prod in productions:
         object_id = prod.get("object_id")
@@ -210,6 +222,7 @@ def risolutivo_sheet(ws, data: dict):
         end_time = prod.get("end_time")
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
+        modulo_event_count = modulo_station_counts.get((id_modulo, prod.get("station_id")), 0)
 
         # ✅ Convert cycle time to seconds
         cycle_seconds = None
@@ -268,13 +281,14 @@ def risolutivo_sheet(ws, data: dict):
             "Data Uscita": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str,
-            "NG Causale": ";".join(sorted(ng_labels)) if ng_labels else ""
+            "NG Causale": ";".join(sorted(ng_labels)) if ng_labels else "",
+            "Numero Eventi": modulo_event_count
         }
         rows.append(row)
 
     df = pd.DataFrame(rows, columns=[
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo", "NG Causale"
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo", "NG Causale", "Numero Eventi"
     ])
 
     # Track current modulo and fill toggle
@@ -306,7 +320,7 @@ def risolutivo_sheet(ws, data: dict):
         for col_idx, _ in enumerate(row_values, start=1):
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.fill = current_fill
-    autofit_columns(ws, align_center_for={"Esito", "NG Causale"})
+    autofit_columns(ws, align_center_for={"Esito", "Numer Eventi"})
 
 def ng_generali_sheet(ws, data: dict) -> bool:
     """

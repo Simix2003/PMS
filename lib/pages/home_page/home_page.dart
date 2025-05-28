@@ -10,7 +10,7 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
 import '../../shared/services/api_service.dart';
 import '../issue_selector.dart';
-import '../manualSelection_page.dart';
+import '../manuali/manualSelection_page.dart';
 import '../picture_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -47,9 +47,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String plcStatus = "CHECKING"; // or values like "CONNECTED", "DISCONNECTED"
 
   // STATIONS //Should get from MySQL : stations
-  String selectedChannel = "M308"; // Default selection
-  final List<String> availableChannels = ["M308", "M309", "M326"];
+  String selectedChannel = ""; // Force user to pick a channel
+  final List<String> availableChannels = ["", "M308", "M309", "M326"];
   final Map<String, String> stationDisplayNames = {
+    '': '🔧 Selezionare Stazione',
     'M308': 'M308 - QG2 di M306',
     'M309': 'M309 - QG2 di M307',
     'M326': 'M326 - RW1',
@@ -76,6 +77,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _startup() async {
+    if (selectedChannel.isEmpty) return; // Prevent running on invalid selection
     _connectWebSocket();
     _fetchPLCStatus();
   }
@@ -89,6 +91,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _connectWebSocket() {
+    if (selectedChannel.isEmpty) return; // Prevent running on invalid selection
     setState(() {
       connectionStatus = ConnectionStatus.connecting;
     });
@@ -198,17 +201,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void _onChannelChange(String? newChannel) {
     if (newChannel != null && newChannel != selectedChannel) {
       setState(() {
-        _fetchPLCStatus();
-        // Reset UI data when switching station
-        selectedChannel = newChannel;
+        selectedChannel = newChannel; // ✅ First update the state
         objectId = "";
         stringatrice = "";
         isObjectOK = false;
         hasBeenEvaluated = false;
         _issues.clear();
         issuesSubmitted = false;
-        _connectWebSocket();
       });
+
+      // ✅ Then call logic that depends on selectedChannel
+      _fetchPLCStatus();
+      _connectWebSocket();
     }
   }
 

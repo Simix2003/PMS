@@ -5,14 +5,12 @@ import 'package:flutter/material.dart';
 import 'dart:html' as html;
 import 'dart:ui_web' as ui_web;
 
-class ManualePage extends StatelessWidget {
-  final String pdfFileName;
-
-  const ManualePage({super.key, required this.pdfFileName});
+class ManualeQG2Page extends StatelessWidget {
+  const ManualeQG2Page({super.key});
 
   @override
   Widget build(BuildContext context) {
-    const viewType = 'pdf-viewer-html';
+    const viewType = 'pdf-qg2';
 
     if (kIsWeb) {
       ui_web.platformViewRegistry.registerViewFactory(
@@ -20,7 +18,7 @@ class ManualePage extends StatelessWidget {
         (int viewId) {
           final iframe = html.IFrameElement()
             ..src =
-                '${html.window.location.origin}/assets/assets/pdf/$pdfFileName'
+                '${html.window.location.origin}/assets/assets/pdf/WorkInstructionQG2.pdf'
             ..style.border = 'none'
             ..style.width = '100%'
             ..style.height = '100%';
@@ -30,11 +28,9 @@ class ManualePage extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(pdfFileName)),
+      appBar: AppBar(title: const Text("Work Instruction QG2")),
       body: kIsWeb
-          ? const SizedBox.expand(
-              child: HtmlElementView(viewType: viewType),
-            )
+          ? const SizedBox.expand(child: HtmlElementView(viewType: viewType))
           : const Center(
               child: Text("La visualizzazione è solo supportata sul Web")),
     );

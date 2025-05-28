@@ -1463,9 +1463,6 @@ class _FindPageState extends State<FindPage> {
         results.addAll(data);
         searching = false;
 
-        print('results');
-        print(results);
-
         for (final row in results) {
           final objectId = row['object_id'];
           final productionIds =
@@ -1475,9 +1472,6 @@ class _FindPageState extends State<FindPage> {
             moduloIdToProductionIds[objectId] = productionIds;
           }
         }
-
-        print('moduloIdToProductionIds');
-        print(moduloIdToProductionIds);
 
         if (widget.onSearchCompleted != null) {
           widget.onSearchCompleted!();

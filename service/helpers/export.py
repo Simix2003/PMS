@@ -28,7 +28,7 @@ EXCEL_DEFECT_COLUMNS = {
 }
 
 SHEET_NAMES = [
-    "Metadata", "Risolutivo", "NG Generali", "NG Saldature", "NG Disall. Ribbon",
+    "Metadata", "Risolutivo", "Eventi","NG Generali", "NG Saldature", "NG Disall. Ribbon",
     "NG Disall. Stringa", "NG Mancanza Ribbon", "NG I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Graffio su Cella", "NG Bad Soldering", "NG Altro"
 ]
 
@@ -181,35 +181,82 @@ def metadata_sheet(ws, data: dict):
         col_letter = get_column_letter(col_idx)
         ws.column_dimensions[col_letter].width = max_len + 4
 
-def risolutivo_sheet(ws, data: dict):
+from collections import defaultdict
+from typing import Dict, Any, List
+
+import pandas as pd
+from openpyxl.styles import PatternFill
+from openpyxl.worksheet.worksheet import Worksheet
+
+# ---------------------------------------------------------------------------
+# Helper utilities -----------------------------------------------------------
+# ---------------------------------------------------------------------------
+
+FILL_BLUE = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
+FILL_WHITE = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+
+# Excel helpers --------------------------------------------------------------
+
+def _append_dataframe(
+    ws: Worksheet,
+    df: pd.DataFrame,
+    zebra_key: str = "ID Modulo",
+):
+    """Write *df* to *ws* with a blue/white zebra pattern keyed on *zebra_key*."""
+    current_key = None
+    current_fill = FILL_WHITE
+
+    # Header first
+    ws.append(df.columns.tolist())
+
+    for _, row in df.iterrows():
+        key_value = row[zebra_key]
+        if key_value != current_key:
+            current_fill = FILL_BLUE if current_fill == FILL_WHITE else FILL_WHITE
+            current_key = key_value
+
+        row_values: List[Any] = []
+        for col in df.columns:
+            val = row[col]
+            if col in {"Data Ingresso", "Data Uscita"} and val:
+                try:
+                    row_values.append(val.strftime("%Y-%m-%d %H:%M:%S"))
+                except Exception:
+                    row_values.append(val)
+            else:
+                row_values.append(val)
+
+        ws.append(row_values)
+        row_idx = ws.max_row
+        for col_idx in range(1, len(row_values) + 1):
+            ws.cell(row=row_idx, column=col_idx).fill = current_fill
+
+
+# ---------------------------------------------------------------------------
+# Sheet generators -----------------------------------------------------------
+# ---------------------------------------------------------------------------
+
+def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
+    """Create the historical/traceability *Risolutivo* sheet.
+
+    **Note:** Starting May‑2025 this sheet no longer includes the *Numero Eventi*
+    column – that information is now available in the companion *Eventi* sheet.
+    """
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
     production_lines = data.get("production_lines", [])
     object_defects = data.get("object_defects", [])
-    min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
-    fill_blue = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
-    fill_white = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+    min_cycle_threshold: float = data.get("min_cycle_threshold", 3.0)
 
-    objects_by_id = {obj["id"]: obj for obj in objects}
-    stations_by_id = {station["id"]: station for station in stations}
-    production_lines_by_id = {line["id"]: line for line in production_lines}
+    objects_by_id = {o["id"]: o for o in objects}
+    stations_by_id = {s["id"]: s for s in stations}
+    lines_by_id = {l["id"]: l for l in production_lines}
 
-    # (modulo_id, station_id) → count
-    modulo_station_counts = defaultdict(int)
+    rows: List[Dict[str, Any]] = []
+
     for prod in productions:
         obj = objects_by_id.get(prod.get("object_id"))
-        if not obj:
-            continue
-        id_modulo = obj.get("id_modulo")
-        station_id = prod.get("station_id")
-        if id_modulo and station_id:
-            modulo_station_counts[(id_modulo, station_id)] += 1
-
-    rows = []
-    for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
         if not obj:
             continue
 
@@ -222,26 +269,34 @@ def risolutivo_sheet(ws, data: dict):
         end_time = prod.get("end_time")
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
-        modulo_event_count = modulo_station_counts.get((id_modulo, prod.get("station_id")), 0)
 
-        # ✅ Convert cycle time to seconds
+        # --- cycle time to seconds ----------------------------------------
         cycle_seconds = None
         if cycle_time_obj:
             try:
                 h, m, s = map(float, str(cycle_time_obj).split(":"))
                 cycle_seconds = h * 3600 + m * 60 + s
-            except Exception:
+            except Exception:  # noqa: BLE001
                 pass
 
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_display_name = production_lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown") if station else "Unknown"
+        line_display_name = (
+            lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown")
+            if station
+            else "Unknown"
+        )
 
         last_station_id = prod.get("last_station_id")
-        last_station_name = stations_by_id.get(last_station_id, {}).get("display_name", "N/A") if last_station_id else "N/A"
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("display_name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
 
+        # build NG labels ---------------------------------------------------
         prod_defects = [d for d in object_defects if d.get("production_id") == production_id]
         ng_labels = set()
         for d in prod_defects:
@@ -253,16 +308,13 @@ def risolutivo_sheet(ws, data: dict):
                     ng_labels.add("NG Disall. Ribbon")
             elif cat == "Generali":
                 defect_type = d.get("defect_type")
-                if defect_type:
-                    ng_labels.add(f"NG {defect_type}")
-                else:
-                    ng_labels.add("NG Generali")
+                ng_labels.add(f"NG {defect_type}" if defect_type else "NG Generali")
             elif cat == "Saldatura":
                 ng_labels.add("NG Saldatura")
             elif cat == "Mancanza Ribbon":
                 ng_labels.add("NG Mancanza I_Ribbon")
             elif cat == "I_Ribbon Leadwire":
-                ng_labels.add("NG I_Ribbon Leadwire")                
+                ng_labels.add("NG I_Ribbon Leadwire")
             elif cat == "Macchie ECA":
                 ng_labels.add("NG Macchie ECA")
             elif cat == "Celle Rotte":
@@ -276,54 +328,109 @@ def risolutivo_sheet(ws, data: dict):
             elif cat == "Altro":
                 ng_labels.add("NG Altro")
 
+        rows.append(
+            {
+                "Linea": line_display_name,
+                "Stazione": station_name,
+                "Stringatrice": last_station_name,
+                "ID Modulo": id_modulo,
+                "Data Ingresso": start_time,
+                "Data Uscita": end_time,
+                "Esito": esito,
+                "Tempo Ciclo": cycle_time_str,
+                "NG Causale": ";".join(sorted(ng_labels)) if ng_labels else "",
+            }
+        )
+
+    df = pd.DataFrame(
+        rows,
+        columns=[
+            "Linea",
+            "Stazione",
+            "Stringatrice",
+            "ID Modulo",
+            "Data Ingresso",
+            "Data Uscita",
+            "Esito",
+            "Tempo Ciclo",
+            "NG Causale",
+        ],
+    )
+
+    _append_dataframe(ws, df)
+
+    autofit_columns(ws, align_center_for={"Esito", "NG Causale"})
+
+def eventi_sheet(ws, data: dict):
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+
+    objects_by_id = {obj["id"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    production_lines_by_id = {line["id"]: line for line in production_lines}
+
+    # Count how many times each modulo passes through each station
+    modulo_station_counts = defaultdict(int)
+    for prod in productions:
+        obj = objects_by_id.get(prod.get("object_id"))
+        if not obj:
+            continue
+        id_modulo = obj.get("id_modulo")
+        station_id = prod.get("station_id")
+        if id_modulo and station_id:
+            modulo_station_counts[(id_modulo, station_id)] += 1
+
+    # Keep track of which (modulo, station) pairs we've already written
+    seen_pairs = set()
+    rows = []
+
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
+        if not obj:
+            continue
+
+        id_modulo = obj.get("id_modulo")
+        station_id = prod.get("station_id")
+        if not id_modulo or not station_id:
+            continue
+
+        pair = (id_modulo, station_id)
+        if pair in seen_pairs:
+            continue  # Skip duplicates
+
+        seen_pairs.add(pair)
+
+        modulo_event_count = modulo_station_counts.get(pair, 0)
+
+        station = stations_by_id.get(station_id)
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+        line_display_name = production_lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown") if station else "Unknown"
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = stations_by_id.get(last_station_id, {}).get("display_name", "N/A") if last_station_id else "N/A"
+
         row = {
             "Linea": line_display_name,
             "Stazione": station_name,
             "Stringatrice": last_station_name,
             "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
-            "Esito": esito,
-            "Tempo Ciclo": cycle_time_str,
-            "NG Causale": ";".join(sorted(ng_labels)) if ng_labels else "",
             "Numero Eventi": modulo_event_count
         }
         rows.append(row)
 
     df = pd.DataFrame(rows, columns=[
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo", "NG Causale", "Numero Eventi"
+        "Linea", "Stazione", "Stringatrice", "ID Modulo", "Numero Eventi"
     ])
-
-    # Track current modulo and fill toggle
-    current_modulo = None
-    current_fill = fill_white  # Start with white
 
     ws.append(df.columns.tolist())
     
     for idx, row in df.iterrows():
-        id_modulo = row["ID Modulo"]
-        if id_modulo != current_modulo:
-            # Toggle fill color
-            current_fill = fill_blue if current_fill == fill_white else fill_white
-            current_modulo = id_modulo
-
-        row_values = []
-        for col in df.columns:
-            val = row[col]
-            if col in ["Data Ingresso", "Data Uscita"] and val:
-                try:
-                    row_values.append(val.strftime('%Y-%m-%d %H:%M:%S'))
-                except Exception:
-                    row_values.append(val)
-            else:
-                row_values.append(val)
-
+        row_values = [row[col] for col in df.columns]
         ws.append(row_values)
-        row_idx = ws.max_row
-        for col_idx, _ in enumerate(row_values, start=1):
-            cell = ws.cell(row=row_idx, column=col_idx)
-            cell.fill = current_fill
+
     autofit_columns(ws, align_center_for={"Esito", "Numero Eventi"})
 
 def ng_generali_sheet(ws, data: dict) -> bool:
@@ -1639,6 +1746,7 @@ def ng_altro_sheet(ws, data: dict) -> bool:
 SHEET_FUNCTIONS = {
     "Metadata": metadata_sheet,
     "Risolutivo": risolutivo_sheet,
+    "Eventi": eventi_sheet,
     "NG Generali": ng_generali_sheet,
     "NG Saldature": ng_saldature_sheet,
     "NG Disall. Ribbon": ng_disall_ribbon_sheet,

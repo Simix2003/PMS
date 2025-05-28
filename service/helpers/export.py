@@ -252,7 +252,11 @@ def risolutivo_sheet(ws, data: dict):
                 elif d.get("i_ribbon") is not None:
                     ng_labels.add("NG Disall. Ribbon")
             elif cat == "Generali":
-                ng_labels.add("NG Generali")
+                defect_type = d.get("defect_type")
+                if defect_type:
+                    ng_labels.add(f"NG {defect_type}")
+                else:
+                    ng_labels.add("NG Generali")
             elif cat == "Saldatura":
                 ng_labels.add("NG Saldatura")
             elif cat == "Mancanza Ribbon":
@@ -320,7 +324,7 @@ def risolutivo_sheet(ws, data: dict):
         for col_idx, _ in enumerate(row_values, start=1):
             cell = ws.cell(row=row_idx, column=col_idx)
             cell.fill = current_fill
-    autofit_columns(ws, align_center_for={"Esito", "Numer Eventi"})
+    autofit_columns(ws, align_center_for={"Esito", "Numero Eventi"})
 
 def ng_generali_sheet(ws, data: dict) -> bool:
     """

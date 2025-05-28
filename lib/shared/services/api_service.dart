@@ -340,11 +340,29 @@ class ApiService {
   }) async {
     final uri = Uri.parse('$baseUrl/api/search');
 
+    // 🧼 Clean up 'Difetto' filter values
+    final cleanedFilters = filters.map((f) {
+      if (f['type'] == 'Difetto' && f['value'] != null) {
+        final raw = f['value']!;
+        final cleanedParts = raw
+            .split('>')
+            .map((p) => p.trim())
+            .where((p) => p.isNotEmpty)
+            .toList();
+
+        return {
+          'type': f['type']!,
+          'value': cleanedParts.join(' > '),
+        };
+      }
+      return f;
+    }).toList();
+
     final response = await http.post(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        "filters": filters,
+        "filters": cleanedFilters,
         "order_by": orderBy,
         "order_direction": orderDirection,
         "limit": limit,
@@ -353,8 +371,6 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-
-      // Each item contains object_id, latest_event, history, and event_count
       return List<Map<String, dynamic>>.from(data["results"] ?? []);
     } else {
       throw Exception("Errore durante la ricerca");

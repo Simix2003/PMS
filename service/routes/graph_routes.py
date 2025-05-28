@@ -125,7 +125,7 @@ async def get_graph_data(request: Request):
         query = f"""
             SELECT
             DATE_FORMAT(p.end_time, %s) AS bucket,
-            COUNT(*) AS count
+            COUNT(DISTINCT p.object_id) AS count
             FROM productions p
             JOIN stations s ON p.station_id = s.id
             JOIN production_lines pl ON s.line_id = pl.id

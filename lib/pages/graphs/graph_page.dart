@@ -6,7 +6,6 @@ import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-
 import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
 
@@ -72,11 +71,11 @@ class _GraphPageState extends State<GraphPage> {
   String _granularity = 'Daily';
 
   // ─── static options ───
-  final List<String> _granularityOptions = const ['Hourly', 'Daily', 'Weekly'];
+  final List<String> _granularityOptions = const ['Hourly', 'Daily', 'Shifts'];
   final Map<String, String> _granularityLabels = {
     'Hourly': 'Oraria',
     'Daily': 'Giornaliera',
-    'Weekly': 'Settimanale',
+    'Shifts': 'Turni',
   };
 
   bool _showShiftLines = true;
@@ -1080,7 +1079,14 @@ class _GraphChartWidgetState extends State<GraphChartWidget> {
             ? 1
             : scale > 3
                 ? 1
-                : 2;
+                : 1;
+      }
+      if (widget.granularity == 'Shifts') {
+        newInterval = scale > 6
+            ? 1
+            : scale > 3
+                ? 3
+                : 12;
       } else {
         newInterval = scale > 6 ? 1 : 2;
       }
@@ -1098,12 +1104,20 @@ class _GraphChartWidgetState extends State<GraphChartWidget> {
   }
 
   List<VerticalLine> _buildShiftLines(List<DateTime> allTimes) {
-    return [
-      for (int i = 1; i < allTimes.length; i++) ...[
-        // ─────── Hourly Shift Change ───────
-        if (widget.granularity == 'Hourly' &&
-            widget.showShiftLines &&
-            [6, 14, 22].contains(allTimes[i].hour))
+    final List<VerticalLine> lines = [];
+
+    for (int i = 1; i < allTimes.length; i++) {
+      final baseTime = allTimes[i];
+
+      // ─────── Real Shift Change Times for Hourly View ───────
+      if ((widget.granularity == 'Hourly' &&
+              [6, 14, 22].contains(baseTime.hour)) ||
+          (widget.granularity == 'Shifts' &&
+              [6, 14, 22].contains(baseTime.hour))) {
+        if (!widget.showShiftLines) {
+          continue; // optionally skip if toggle is off
+        }
+        lines.add(
           VerticalLine(
             x: i.toDouble(),
             color: Colors.blue.withOpacity(0.6),
@@ -1118,7 +1132,7 @@ class _GraphChartWidgetState extends State<GraphChartWidget> {
                 color: Colors.blue,
               ),
               labelResolver: (_) {
-                final hour = allTimes[i].hour;
+                final hour = baseTime.hour;
                 if (hour == 6) return '1';
                 if (hour == 14) return '2';
                 if (hour == 22) return '3';
@@ -1126,24 +1140,33 @@ class _GraphChartWidgetState extends State<GraphChartWidget> {
               },
             ),
           ),
+        );
+      }
 
-        // ─────── Day Change Lines ───────
-        if ((widget.granularity == 'Daily' || widget.granularity == 'Weekly') &&
-            widget.showDayLines &&
-            allTimes[i].day != allTimes[i - 1].day)
+      // ─────── Day Change Lines ───────
+      if ((widget.granularity == 'Daily' || widget.granularity == 'Shifts') &&
+          widget.showDayLines &&
+          baseTime.day != allTimes[i - 1].day) {
+        lines.add(
           VerticalLine(
             x: i.toDouble(),
             color: Colors.grey.shade700.withOpacity(0.6),
             strokeWidth: 1.5,
             dashArray: [4, 4],
           ),
-      ]
-    ];
+        );
+      }
+    }
+
+    return lines;
   }
 
-  /// Generates “every other day” shading in Hourly mode.
+  /// Generates alternating day shading in Hourly and Daily views.
   List<VerticalRangeAnnotation> _buildDayShading(List<DateTime> allTimes) {
-    if (widget.granularity != 'Hourly' || !widget.showDayBackground) return [];
+    if (!widget.showDayBackground ||
+        !(widget.granularity == 'Hourly' || widget.granularity == 'Daily')) {
+      return [];
+    }
 
     // Group indices by calendar day
     final Map<DateTime, List<int>> dayToIndices = {};
@@ -1152,12 +1175,15 @@ class _GraphChartWidgetState extends State<GraphChartWidget> {
       dayToIndices.putIfAbsent(d, () => []).add(i);
     }
 
-    var shade = false;
+    bool shade = false;
     final List<VerticalRangeAnnotation> regions = [];
     for (final day in dayToIndices.keys.toList()..sort()) {
       final idxs = dayToIndices[day]!;
       final start = idxs.first.toDouble();
-      final end = idxs.last.toDouble() + 1;
+      final end = widget.granularity == 'Daily'
+          ? start + 1.0 // Each day is one whole unit in Daily mode
+          : idxs.last.toDouble() + 1.0;
+
       if (shade) {
         regions.add(VerticalRangeAnnotation(
           x1: start,
@@ -1167,6 +1193,7 @@ class _GraphChartWidgetState extends State<GraphChartWidget> {
       }
       shade = !shade;
     }
+
     return regions;
   }
 
@@ -1261,21 +1288,33 @@ class _GraphChartWidgetState extends State<GraphChartWidget> {
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 38,
-                interval: _labelInterval,
+                interval: widget.granularity == 'Shifts' ? 1 : _labelInterval,
                 getTitlesWidget: (v, meta) {
                   final idx = v.toInt();
                   if (idx < 0 || idx >= allTimes.length) {
                     return const SizedBox();
                   }
+
                   final dt = allTimes[idx];
-                  final txt = widget.granularity == 'Hourly'
-                      ? DateFormat('HH:mm').format(dt)
-                      : DateFormat('dd/MM').format(dt);
+                  int inferShiftNumber(int hour) {
+                    if (hour >= 6 && hour < 14) return 1;
+                    if (hour >= 14 && hour < 22) return 2;
+                    return 3;
+                  }
+
+                  final txt = switch (widget.granularity) {
+                    'Hourly' => DateFormat('HH:mm').format(dt),
+                    'Daily' => DateFormat('dd/MM').format(dt),
+                    'Shifts' =>
+                      'T${inferShiftNumber(dt.hour)}\n${DateFormat('dd/MM').format(dt)}',
+                    _ => DateFormat('dd/MM').format(dt),
+                  };
+
                   return SideTitleWidget(
                     meta: meta,
                     space: 6,
                     child: Transform.rotate(
-                      angle: -0.7854, // -45°
+                      angle: -0.7854,
                       child: Text(txt, style: const TextStyle(fontSize: 10)),
                     ),
                   );

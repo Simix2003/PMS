@@ -175,20 +175,36 @@ def generate_time_buckets(start: datetime, end: datetime, group_by: str) -> List
     if group_by == "hourly":
         delta = timedelta(hours=1)
         fmt = "%Y-%m-%d %H:00:00"
+        while current <= end:
+            buckets.append(current.strftime(fmt))
+            current += delta
+
     elif group_by == "daily":
         current = current.replace(hour=0)
         delta = timedelta(days=1)
         fmt = "%Y-%m-%d"
+        while current <= end:
+            buckets.append(current.strftime(fmt))
+            current += delta
+
     elif group_by == "weekly":
         current = current - timedelta(days=current.weekday())
         current = current.replace(hour=0)
         delta = timedelta(weeks=1)
         fmt = "%Y-%m-%d"
+        while current <= end:
+            buckets.append(current.strftime(fmt))
+            current += delta
+
+    elif group_by == "shifts":
+        current = datetime(start.year, start.month, start.day)
+        while current <= end:
+            date_str = current.strftime("%Y-%m-%d")
+            for shift in ["T1", "T2", "T3"]:
+                buckets.append(f"{date_str} {shift}")
+            current += timedelta(days=1)
+
     else:
         raise ValueError("Invalid group_by")
-
-    while current <= end:
-        buckets.append(current.strftime(fmt))
-        current += delta
 
     return buckets

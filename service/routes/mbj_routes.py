@@ -1,45 +1,47 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+import glob
+from datetime import datetime, timedelta
+from xml.etree import ElementTree as ET
+from fastapi.responses import JSONResponse
 
 import os
 import sys
+from service.config.config import XML_FOLDER_PATH
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.helpers.mbj_xml import extract_CellDefects, extract_GlassCellDistance, extract_InterconnectionCellDistance, extract_InterconnectionGlassDistance, extract_RelativeCellPosition, preload_xml_index
+from service.helpers.mbj_xml import extract_CellDefects, extract_GlassCellDistance, extract_InterconnectionCellDistance, extract_InterconnectionGlassDistance, extract_RelativeCellPosition
 
 router = APIRouter()
 
 @router.get("/api/mbj_events/{modulo_id}")
 def get_mbj_details(modulo_id: str):
-    import glob
-    import os
-    from datetime import datetime, timedelta
-    from xml.etree import ElementTree as ET
-    from fastapi.responses import JSONResponse
-
-    xml_folder = "C:/IX-Monitor/xml"
-    pattern = os.path.join(xml_folder, f"{modulo_id}_*.xml")
+    pattern = os.path.join(XML_FOLDER_PATH, f"{modulo_id}_*.xml")
     matching_files = glob.glob(pattern)
+
+    if not matching_files:
+        # Try fallback: match contains id_modulo anywhere
+        pattern_fallback = os.path.join(XML_FOLDER_PATH, f"*{modulo_id}*.xml")
+        matching_files = glob.glob(pattern_fallback)
 
     if not matching_files:
         return JSONResponse(status_code=404, content={"detail": "No XML file found for this modulo"})
 
-    # Pick the latest file by filename timestamp
-    latest_file = sorted(matching_files)[-1]
+    # Sort by modified time or filename for latest
+    latest_file = max(matching_files, key=os.path.getmtime)
 
     try:
         tree = ET.parse(latest_file)
         root = tree.getroot()
 
-        # Extract inspection time
+        # Extract InspectionTime
         inspection_time_str = root.findtext("InspectionTime")
         if not inspection_time_str:
             return JSONResponse(status_code=422, content={"detail": "Missing InspectionTime in XML"})
 
         inspection_time = datetime.fromisoformat(inspection_time_str.split("+")[0])
-        inspection_end_time = inspection_time + timedelta(minutes=1)
+        inspection_end_time = inspection_time + timedelta(seconds=60)
 
-        # Extract FinalJudgement and convert to esito
         final_judgement_str = root.findtext(".//FinalJudgement")
         raw_esito = int(final_judgement_str) if final_judgement_str and final_judgement_str.isdigit() else 10
         esito = 1 if raw_esito == 0 else 6 if raw_esito == 4 else 10
@@ -64,8 +66,8 @@ def get_mbj_details(modulo_id: str):
             "defect_categories": "",
             "extra_data": "",
             "file_path": latest_file,
-            "glass_width": 2166, #2166,
-            "glass_height": 1297, #1297,
+            "glass_width": 2166,
+            "glass_height": 1297,
             **ribbon_data,
             **cell_data,
             **cell_gap_data,
@@ -73,11 +75,5 @@ def get_mbj_details(modulo_id: str):
             **cell_defects,
         }
 
-
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Failed to parse XML: {e}"})
-
-@router.post("/api/reload_xml_index")
-def reload_xml_index():
-    preload_xml_index("C:/IX-Monitor/xml")
-    return {"status": "ok"}

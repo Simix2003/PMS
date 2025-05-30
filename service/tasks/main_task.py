@@ -62,6 +62,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             # Now you're safe to use it:
             fb_conf = paths["fine_buona"]
             fs_conf = paths["fine_scarto"]
+            pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
             if debug:
                 fine_buona = False
                 fine_scarto = global_state.debug_triggers_fisici.get(full_station_id, False)
@@ -105,6 +106,9 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     if production_id:
                         conn = get_mysql_connection()
                         await update_production_final(production_id, result, channel_id, conn, fine_buona, fine_scarto)
+                        ##############await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False)
+                        ##############await asyncio.to_thread(plc_connection.write_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"], False)
+                        ##############await asyncio.to_thread(plc_connection.write_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"], False)
                         incomplete_productions.pop(full_station_id)
                     else:
                         logging.warning(f"⚠️ No initial production record found for {full_station_id}; skipping update.")

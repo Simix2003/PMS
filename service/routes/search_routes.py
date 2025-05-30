@@ -12,7 +12,6 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.config.config import COLUMN_MAP
 from service.connections.mysql import get_mysql_connection
-from service.helpers.mbj_xml import get_mbj_events_for_modulo
 
 router = APIRouter()
 
@@ -357,31 +356,29 @@ async def search_results(request: Request):
             for row in rows:
                 grouped[row["id_modulo"]].append(row)
 
-            # Sort each group by end_time, then build final response
             results = []
-            # Sort each group by end_time, ignoring None values
+
             for object_id, events in grouped.items():
-                # Remove entries with no end_time
-                valid_events = [e for e in events if e["end_time"] is not None]
-                xml_events = get_mbj_events_for_modulo(object_id)
-                valid_events.extend(xml_events)
+                if not events:
+                    continue
 
-                if not valid_events:
-                    continue  # Skip group if all events are invalid
+                # Sort: treat None end_time as very recent (i.e., highest priority)
+                events.sort(
+                    key=lambda x: x["end_time"] if x["end_time"] is not None else datetime.max,
+                    reverse=True
+                )
 
-                valid_events.sort(key=lambda x: x["end_time"], reverse=True)
-                latest = valid_events[0]
-                history = valid_events[1:]
+                latest = events[0]
+                history = events[1:]
 
                 results.append({
                     "object_id": object_id,
                     "latest_event": latest,
                     "history": history,
-                    "event_count": len(valid_events),
-                    "production_ids": [e["production_id"] for e in valid_events if "production_id" in e]
+                    "event_count": len(events),
+                    "production_ids": [e["production_id"] for e in events if "production_id" in e]
                 })
-        return {"results": results}
-
+            return {"results": results}
 
     except Exception as e:
         logging.error(f"Search API Error: {e}")

@@ -108,6 +108,8 @@ async def insert_initial_production_data(data, station_name, connection, esito):
 
             # Retrieve last_station_id from stringatrice if available.
             last_station_id = None
+
+            # Priority 1: From stringatrice flags
             str_flags = data.get("Lavorazione_Eseguita_Su_Stringatrice", [])
             if any(str_flags):
                 stringatrice_index = str_flags.index(True) + 1
@@ -119,6 +121,10 @@ async def insert_initial_production_data(data, station_name, connection, esito):
                 str_row = cursor.fetchone()
                 if str_row:
                     last_station_id = str_row["id"]
+
+            # Priority 2: From Last_Station (only if no stringatrice found)
+            if not last_station_id and data.get("Last_Station"):
+                last_station_id = data['Last_Station']
 
             # Insert into productions table with esito = 2 (in progress) and no end_time.
             sql_productions = """
@@ -475,3 +481,20 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
 
     except Exception as e:
         logging.error(f"❌ Error fetching last production origin: {e}")
+
+def get_last_station_id_from_productions(id_modulo, connection):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT p.station_id
+                FROM productions p
+                JOIN objects o ON p.object_id = o.id
+                WHERE o.id_modulo = %s AND p.end_time IS NOT NULL
+                ORDER BY p.end_time DESC
+                LIMIT 1
+            """, (id_modulo,))
+            row = cursor.fetchone()
+            return row["station_id"] if row else None
+    except Exception as e:
+        logging.error(f"❌ Failed to retrieve last station for {id_modulo}: {e}")
+        return None

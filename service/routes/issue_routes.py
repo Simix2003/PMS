@@ -53,6 +53,9 @@ async def set_issues(request: Request):
         return JSONResponse(status_code=404, content={"error": "esito_scarto_compilato not found in mapping"})
 
     production_id = incomplete_productions.get(full_id)
+    conn = None
+    cursor = None
+
     if production_id:
         try:
             conn = get_mysql_connection()
@@ -71,9 +74,20 @@ async def set_issues(request: Request):
 
             await check_stringatrice_warnings(line_name, conn, get_current_settings())
 
+        except ValueError as e:
+            if conn:
+                conn.rollback()
+            if cursor:
+                cursor.close()
+            return JSONResponse(status_code=400, content={"error": str(e)})
+
         except Exception as e:
-            get_mysql_connection().rollback()
-            logging.error(f"❌ Error inserting defects early for {full_id}: {e}")
+            if conn:
+                conn.rollback()
+            if cursor:
+                cursor.close()
+            logging.error(f"❌ Unexpected error inserting defects for {full_id}: {e}")
+            return JSONResponse(status_code=500, content={"error": "Errore interno del server"})
 
     target = paths["esito_scarto_compilato"]
     await asyncio.to_thread(plc_connection.write_bool, target["db"], target["byte"], target["bit"], True)

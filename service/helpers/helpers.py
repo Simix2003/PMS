@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.config.config import CHANNELS
 
 
-def compress_base64_to_jpeg_blob(base64_str: str, quality: int = 70) -> bytes:
+def compress_base64_to_jpeg_blob(base64_str: str, quality: int = 70) -> Optional[bytes]:
     try:
         raw = base64.b64decode(base64_str)
         with Image.open(io.BytesIO(raw)) as img:
@@ -24,7 +24,7 @@ def compress_base64_to_jpeg_blob(base64_str: str, quality: int = 70) -> bytes:
             return out_io.getvalue()
     except Exception as e:
         print(f"⚠️ Compression failed: {e}")
-        return base64.b64decode(base64_str)  # fallback: uncompressed
+        return None
     
 def get_channel_config(line_name: str, channel_id: str):
     return CHANNELS.get(line_name, {}).get(channel_id)

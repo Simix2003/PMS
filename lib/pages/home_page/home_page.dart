@@ -225,34 +225,96 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final confirm = await showAddIssueConfirmationDialog(context);
     if (!confirm) return;
 
-    final success = await ApiService.submitIssues(
-      selectedLine: selectedLine,
-      selectedChannel: selectedChannel,
-      objectId: objectId,
-      issues: _issues.map((path) {
-        final matching = _pictures.firstWhere(
-          (img) => img["defect"] == path,
-          orElse: () => {"image": ""},
-        );
+    try {
+      final success = await ApiService.submitIssues(
+        selectedLine: selectedLine,
+        selectedChannel: selectedChannel,
+        objectId: objectId,
+        issues: _issues.map((path) {
+          final matching = _pictures.firstWhere(
+            (img) => img["defect"] == path,
+            orElse: () => {"image": ""},
+          );
 
-        return {
-          "path": path,
-          "image_base64": matching["image"] ?? "",
-        };
-      }).toList(),
-    );
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Difetti inviati con successo")),
+          return {
+            "path": path,
+            "image_base64": matching["image"] ?? "",
+          };
+        }).toList(),
       );
-      setState(() {
-        _issues.clear();
-        issuesSubmitted = true;
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Errore durante l'invio dei difetti")),
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Difetti inviati con successo")),
+        );
+        setState(() {
+          _issues.clear();
+          issuesSubmitted = true;
+        });
+      }
+    } catch (e) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.error_outline, color: Colors.red),
+              SizedBox(width: 8),
+              Text("Errore"),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "C'è stato un problema durante l'invio dei difetti.",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: const [
+                  Icon(Icons.camera_alt_outlined, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "La foto allegata potrebbe essere danneggiata.\nPer favore, scattala di nuovo.",
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton.icon(
+              icon: const Icon(Icons.replay, color: Colors.blue),
+              label: const Text("Ripeti foto"),
+              onPressed: () {
+                final regex = RegExp(r'Invalid image for defect path: (.+)$');
+                final match = regex.firstMatch(e.toString());
+
+                if (match != null) {
+                  final brokenDefect = match.group(1)?.trim();
+                  if (brokenDefect != null) {
+                    _pictures
+                        .removeWhere((img) => img["defect"] == brokenDefect);
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Foto rimossa per: $brokenDefect"),
+                      ),
+                    );
+                  }
+                }
+
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        ),
       );
     }
   }

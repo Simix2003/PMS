@@ -140,7 +140,7 @@ class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
         productionIdsCount: 1,
         minCycleTimeThreshold: widget.minCycleTimeThreshold,
         onTap: () {
-          if (event['station_name'] == 'MBJ') {
+          if (event['station_name'].contains('ELL')) {
             Navigator.push(
               context,
               MaterialPageRoute(

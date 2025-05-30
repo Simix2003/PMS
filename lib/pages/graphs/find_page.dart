@@ -706,7 +706,7 @@ class _FindPageState extends State<FindPage> {
         return _buildStyledDropdown(
           hint: 'Stazione',
           value: filterValue.isNotEmpty ? filterValue : null,
-          items: ['M308', 'M309', 'M326', 'MBJ'],
+          items: ['M308', 'M309', 'M326', 'ELL01'],
           onChanged: (val) => setState(() => filterValue = val ?? ''),
         );
 
@@ -1899,7 +1899,8 @@ class _FindPageState extends State<FindPage> {
                                       final allEvents = [latest, ...history];
 
                                       if (allEvents.length == 1) {
-                                        if (latest['station_name'] == 'MBJ') {
+                                        if (latest['station_name']
+                                            .contains('ELL')) {
                                           Navigator.push(
                                             context,
                                             MaterialPageRoute(

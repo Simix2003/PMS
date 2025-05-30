@@ -23,7 +23,7 @@ from controllers.plc import PLCConnection
 from service.controllers.debug_plc import FakePLCConnection
 from service.config.config import CHANNELS, IMAGES_DIR, STATIONS_CONFIG_PATH, load_station_configs, debug
 from service.connections.mysql import get_mysql_connection
-#from service.connections.xml_watcher import watch_folder_for_new_xml
+from service.connections.xml_watcher import watch_folder_for_new_xml
 from service.tasks.main_task import background_task, make_status_callback
 from service.state.global_state import plc_connections, stop_threads, passato_flags
 from service.routes.plc_routes import router as plc_router
@@ -79,8 +79,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         get_refreshed_settings()
         start_plc_background_tasks()
 
-        ## 🔄 Start watching for XMLs
-        #asyncio.create_task(watch_folder_for_new_xml())
+        # 🔄 Start watching for XMLs
+        asyncio.create_task(watch_folder_for_new_xml())
 
         app.state.plc_connections = plc_connections
         yield

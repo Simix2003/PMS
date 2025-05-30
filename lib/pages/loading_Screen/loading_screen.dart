@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ix_monitor/pages/dashboard/dashboard_visual.dart';
 import 'dart:ui';
 import 'dart:math' as math;
 
@@ -123,6 +124,11 @@ class _LoadingScreenState extends State<LoadingScreen>
         case 'Stringatrice':
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const DashboardStringatrice()),
+          );
+          break;
+        case 'Visual':
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardVisual()),
           );
           break;
       }

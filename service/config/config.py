@@ -2,7 +2,7 @@ import os
 import configparser
 from pathlib import Path
 
-debug = False
+debug = True
 # ---------------- CONFIG & GLOBALS ----------------
 CHANNELS = {
     "Linea1": {
@@ -176,13 +176,39 @@ ISSUE_TREE = {
     }
 }
 
-TEMP_STORAGE_PATH = os.path.join("C:/IX-Monitor", "temp_data.json")
-SETTINGS_PATH = os.path.join("C:/IX-Monitor", "settings.json")
+BASE_DIR = Path("C:/IX-Monitor")
+
+ML_MODEL_PATH = os.path.join(BASE_DIR, "models", "fine-tuned-defects_V2")
+KNOWN_DEFECTS = [
+    "Non Lavorato Poe Scaduto", 
+    "No Good da Bussing",
+    "Materiale Esterno su Celle",
+    "Passthrough al Bussing",
+    "Poe in Eccesso",
+    "Solo Poe",
+    "Solo Vetro",
+    "Matrice Incompleta",
+    "Molteplici Bus Bar",
+    "Test",
+    "Saldatura",
+    "Disallineamento Ribbon",
+    "Disallineamento Stringa",
+    "Mancanza Ribbon",
+    "I Ribbon Leadwire",
+    "Macchie ECA",
+    "Celle Rotte",
+    "Bad Soldering",
+    "Lunghezza String Ribbon",
+    "Graffio su Cella",
+]
+
+TEMP_STORAGE_PATH = os.path.join(BASE_DIR, "temp_data.json")
+SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 # In-memory cache
 REFRESHED_SETTINGS = {}
 SESSION_TIMEOUT = 600  # 600 seconds = 10 minutes
 
-BASE_DIR = Path("C:/IX-Monitor")
+XML_FOLDER_PATH = r"D:\Imix\Lavori\2025\3SUN\MBJ\xml"
 IMAGES_DIR = BASE_DIR / "images"
 STATIONS_CONFIG_PATH = BASE_DIR / "stations.ini"
 

@@ -609,4 +609,28 @@ class ApiService {
       return false;
     }
   }
+
+  static Future<Map<String, dynamic>?> checkDefectSimilarity(
+      String userInput) async {
+    final url = Uri.parse('$baseUrl/api/ml/check_defect_similarity');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'input_text': userInput}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        debugPrint(
+            '❌ Failed to check defect similarity: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('❌ Exception during checkDefectSimilarity: $e');
+      return null;
+    }
+  }
 }

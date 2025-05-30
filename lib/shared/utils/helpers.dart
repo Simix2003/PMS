@@ -40,3 +40,16 @@ Uint8List decodeImage(String data) {
   }
   return base64Decode(data);
 }
+
+// Helper methods for confidence indicator
+Color getConfidenceColor(double confidence) {
+  if (confidence >= 0.8) return Colors.green;
+  if (confidence >= 0.6) return Colors.orange;
+  return Colors.red;
+}
+
+IconData getConfidenceIcon(double confidence) {
+  if (confidence >= 0.8) return Icons.check_circle_outline;
+  if (confidence >= 0.6) return Icons.info_outline;
+  return Icons.warning_amber_outlined;
+}

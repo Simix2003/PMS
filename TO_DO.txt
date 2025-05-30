@@ -1,12 +1,2 @@
-Aggiungere su MySQL ( defects )
-10: Bad Soldering
+Aggiungere folder "models" con il modello di IA sotto C
 
-Aggiungere su MySQL ( stations_defects )
-1: 10
-2: 10
-3: 10
-
-Aggiungere in overlay_config.json
-Copiare Celle Rotte in Bad Soldering
-
-Aggiungere in Cartelle M308 e M309 bad_soldering.jpg, copiata da Celle Rotte

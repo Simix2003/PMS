@@ -4,6 +4,7 @@ import 'package:ix_monitor/pages/picture_gallery.dart';
 import 'package:ix_monitor/pages/picture_page.dart';
 import '../../shared/services/api_service.dart';
 import '../shared/services/info_service.dart';
+import '../shared/utils/helpers.dart';
 
 class IssueSelectorWidget extends StatefulWidget {
   final String selectedLine;
@@ -511,13 +512,366 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
               const SizedBox(width: 12),
               ElevatedButton(
                 onPressed: widget.canAdd
-                    ? () {
+                    ? () async {
                         final text = altroController.text.trim();
-                        final fullPath =
-                            "Dati.Esito.Esito_Scarto.Difetti.Altro: $text";
+
+                        String chosenText = text;
+
                         if (text.isNotEmpty && !altroIssues.contains(text)) {
+                          // Send to backend for similarity check
+                          final result =
+                              await ApiService.checkDefectSimilarity(text);
+
+                          if (result != null &&
+                              result['suggested_defect'] != null) {
+                            final suggestion = result['suggested_defect']!;
+                            final confidence = result['confidence'];
+
+                            final useSuggestion = await showDialog<bool>(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (context) {
+                                return Dialog(
+                                  backgroundColor: Colors.transparent,
+                                  child: Container(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 400),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Color(0xFFF8FAFC),
+                                          Color(0xFFE2E8F0),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: Colors.blue.withOpacity(0.2),
+                                        width: 1.5,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.blue.withOpacity(0.1),
+                                          blurRadius: 20,
+                                          spreadRadius: 2,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                        BoxShadow(
+                                          color: Colors.white.withOpacity(0.8),
+                                          blurRadius: 10,
+                                          spreadRadius: -2,
+                                          offset: const Offset(0, -2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(24.0),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // AI Icon with glow effect
+                                          Container(
+                                            width: 56,
+                                            height: 56,
+                                            decoration: BoxDecoration(
+                                              gradient: const LinearGradient(
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                                colors: [
+                                                  Color(0xFF667EEA),
+                                                  Color(0xFF764BA2),
+                                                ],
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: const Color(0xFF667EEA)
+                                                      .withOpacity(0.4),
+                                                  blurRadius: 12,
+                                                  spreadRadius: 2,
+                                                ),
+                                              ],
+                                            ),
+                                            child: const Icon(
+                                              Icons.psychology_outlined,
+                                              color: Colors.white,
+                                              size: 28,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+
+                                          // Title with gradient text effect
+                                          ShaderMask(
+                                            shaderCallback: (bounds) =>
+                                                const LinearGradient(
+                                              colors: [
+                                                Color(0xFF667EEA),
+                                                Color(0xFF764BA2)
+                                              ],
+                                            ).createShader(bounds),
+                                            child: const Text(
+                                              "Suggerimento IA",
+                                              style: TextStyle(
+                                                fontSize: 22,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 20),
+
+                                          // Original text container
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade50,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                  color: Colors.grey.shade200),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  "Il tuo testo:",
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey.shade600,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  "\"$text\"",
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    fontStyle: FontStyle.italic,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+
+                                          // AI suggestion container with glow
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                                colors: [
+                                                  Colors.blue.shade50,
+                                                  Colors.indigo.shade50,
+                                                ],
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: Colors.blue
+                                                    .withOpacity(0.3),
+                                                width: 1.5,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.blue
+                                                      .withOpacity(0.1),
+                                                  blurRadius: 8,
+                                                  spreadRadius: 1,
+                                                ),
+                                              ],
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.auto_awesome,
+                                                      size: 16,
+                                                      color:
+                                                          Colors.blue.shade600,
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      "Suggerimento IA:",
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        color: Colors
+                                                            .blue.shade700,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  "\"$suggestion\"",
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: Colors.grey.shade800,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 12),
+
+                                          // Confidence indicator
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  getConfidenceColor(confidence)
+                                                      .withOpacity(0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: getConfidenceColor(
+                                                        confidence)
+                                                    .withOpacity(0.3),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  getConfidenceIcon(confidence),
+                                                  size: 14,
+                                                  color: getConfidenceColor(
+                                                      confidence),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  "Confidenza: ${(confidence * 100).toStringAsFixed(0)}%",
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: getConfidenceColor(
+                                                        confidence),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 24),
+
+                                          // Action buttons
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                          context, false),
+                                                  style: TextButton.styleFrom(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        vertical: 12),
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              10),
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    "Mantieni il mio",
+                                                    style: TextStyle(
+                                                      color:
+                                                          Colors.grey.shade700,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    gradient:
+                                                        const LinearGradient(
+                                                      colors: [
+                                                        Color(0xFF667EEA),
+                                                        Color(0xFF764BA2)
+                                                      ],
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            10),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: const Color(
+                                                                0xFF667EEA)
+                                                            .withOpacity(0.3),
+                                                        blurRadius: 8,
+                                                        offset:
+                                                            const Offset(0, 4),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  child: ElevatedButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, true),
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                      backgroundColor:
+                                                          Colors.transparent,
+                                                      shadowColor:
+                                                          Colors.transparent,
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          vertical: 12),
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(10),
+                                                      ),
+                                                    ),
+                                                    child: const Text(
+                                                      "Usa suggerimento",
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+
+                            if (useSuggestion == true) {
+                              chosenText = suggestion;
+                            }
+                          }
+                          final fullPath =
+                              "Dati.Esito.Esito_Scarto.Difetti.Altro: $chosenText";
+
                           setState(() {
-                            altroIssues.add(text);
+                            altroIssues.add(chosenText);
                             selectedLeaves.add(fullPath);
                             activeLeafDefect = fullPath;
                             widget.onIssueSelected(fullPath);

@@ -316,9 +316,8 @@ class _StationCardState extends State<StationCard> {
         ? ((gCount + ncCount) / total * 100).toStringAsFixed(1)
         : "0.0";
 
-    // ✅ If we are in M326, count NC as part of Good
-    final isRework =
-        widget.station == 'M326' || widget.station == 'M326 - ReWork';
+    // ✅ If we are in ReWork, count NC as part of Good
+    final isRework = widget.station == 'RMI01';
     final adjustedGCount = isRework ? gCount + ncCount : gCount;
 
     // Fill missing categories with 0
@@ -442,9 +441,8 @@ class _StationCardState extends State<StationCard> {
                   ),
                   const SizedBox(height: 16),
 
-// 🟠 Show 'Good Non Controllati' only when NOT M326
-                  if (widget.station != 'M326 - ReWork' &&
-                      widget.station != 'M326') ...[
+// 🟠 Show 'Good Non Controllati' only when NOT ReWork
+                  if (widget.station != 'RMI01') ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -473,9 +471,8 @@ class _StationCardState extends State<StationCard> {
                     buildWarningBox(widget.thresholdSeconds),
                   ],
 
-// 🔴 Show only 'No Good' when in M326
-                  if (widget.station == 'M326 - ReWork' ||
-                      widget.station == 'M326') ...[
+// 🔴 Show only 'No Good' when in ReWork1
+                  if (widget.station == 'RMI01') ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -525,8 +522,7 @@ class _StationCardState extends State<StationCard> {
                   const SizedBox(height: 24),
 
                   // Defect chart with iOS styling
-                  if (total > 0 && widget.station != 'M326 - ReWork' ||
-                      widget.station != 'M326')
+                  if (total > 0 && widget.station != 'RMI01')
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

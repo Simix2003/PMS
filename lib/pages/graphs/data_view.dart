@@ -581,7 +581,8 @@ class _DataViewPageState extends State<DataViewPage> {
                             selectedTurno,
                           ),
                           const SizedBox(height: 24),
-                          ...['M308', 'M309', 'M326'].map((stationCode) {
+                          // we should pass it as a parameter
+                          ...['MIN01', 'MIN02', 'RMI01'].map((stationCode) {
                             final entry = stations.firstWhere(
                               (e) => e.key == stationCode,
                               orElse: () => const MapEntry('', {}),
@@ -592,7 +593,8 @@ class _DataViewPageState extends State<DataViewPage> {
                             final stationData = Map<String, dynamic>.from(
                                 entry.value); // Clone to safely override
 
-                            if (stationCode == 'M326') {
+                            // We should use station.type to determine the type of station example : station.type == 'rework'
+                            if (stationCode == 'RMI01') {
                               stationData['good_count'] =
                                   stationData['ok_op_count'] ?? 0;
                             }
@@ -814,10 +816,10 @@ class _DataViewPageState extends State<DataViewPage> {
     TimeOfDay? selectedEndTime,
     int selectedTurno,
   ) {
-    final m308 = stations.firstWhere((e) => e.key == 'M308',
-        orElse: () => MapEntry('M308', {}));
-    final m309 = stations.firstWhere((e) => e.key == 'M309',
-        orElse: () => MapEntry('M309', {}));
+    final m308 = stations.firstWhere((e) => e.key == 'MIN01',
+        orElse: () => MapEntry('MIN01', {}));
+    final m309 = stations.firstWhere((e) => e.key == 'MIN02',
+        orElse: () => MapEntry('MIN02', {}));
 
     final m308Data = m308.value as Map<String, dynamic>? ?? {};
     final m309Data = m309.value as Map<String, dynamic>? ?? {};
@@ -841,7 +843,7 @@ class _DataViewPageState extends State<DataViewPage> {
 
     final koCount = (m308Data['bad_count'] ?? 0) + (m309Data['bad_count'] ?? 0);
 
-// ✅ Combine cycle times from both M308 and M309
+// ✅ Combine cycle times from both MIN01 and MIN02
     final m308Cycles = (m308Data['cycle_times'] as List?)?.cast<num>() ?? [];
     final m309Cycles = (m309Data['cycle_times'] as List?)?.cast<num>() ?? [];
     final allCycles = [...m308Cycles, ...m309Cycles];
@@ -921,7 +923,7 @@ class _DataViewPageState extends State<DataViewPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$displayName,  QG2 ( M308 + M309 )',
+                '$displayName,  QG2 ( MIN01 + MIN02 )',
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.w700,
@@ -1278,7 +1280,7 @@ class _DataViewPageState extends State<DataViewPage> {
 
   Widget _buildHeaderCard(
       double maxY, List<MapEntry<String, dynamic>> stations) {
-    const stationOrder = ['M308', 'M309', 'M326'];
+    const stationOrder = ['MIN01', 'MIN02', 'RMI01'];
 
     // Apply the order to the passed-in stations
     final orderedStations = stationOrder
@@ -1562,7 +1564,7 @@ class _DataViewPageState extends State<DataViewPage> {
               final stationEntry = stations[groupIndex];
               final stationName = stationEntry.key;
 
-              final isM326 = stationName == 'M326';
+              final isRework = stationName == 'RMI01';
 
               final filters = <Map<String, String>>[
                 {'type': 'Stazione', 'value': stationName},
@@ -1571,7 +1573,7 @@ class _DataViewPageState extends State<DataViewPage> {
               // Apply Esito + Tempo Ciclo logic
               if (rodIndex == 0) {
                 filters.add(
-                    {'type': 'Esito', 'value': isM326 ? 'G Operatore' : 'G'});
+                    {'type': 'Esito', 'value': isRework ? 'G Operatore' : 'G'});
                 filters.add({
                   'type': 'Tempo Ciclo',
                   'condition': 'Maggiore o Uguale a',
@@ -1579,8 +1581,8 @@ class _DataViewPageState extends State<DataViewPage> {
                 });
               } else if (rodIndex == 1) {
                 filters.add(
-                    {'type': 'Esito', 'value': isM326 ? 'G Operatore' : 'G'});
-                !isM326
+                    {'type': 'Esito', 'value': isRework ? 'G Operatore' : 'G'});
+                !isRework
                     ? filters.add({'type': 'Esito', 'value': 'Escluso'})
                     : null;
 

@@ -3,6 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:ix_monitor/pages/settings_page.dart';
 import 'dart:html' as html;
 //import '../ai_helper_chat.dart';
 import '../../shared/models/globals.dart';
@@ -15,7 +16,6 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'dart:ui';
-import '../preloadXML_page.dart';
 //import 'package:rive/rive.dart';
 
 class FindPage extends StatefulWidget {
@@ -706,7 +706,7 @@ class _FindPageState extends State<FindPage> {
         return _buildStyledDropdown(
           hint: 'Stazione',
           value: filterValue.isNotEmpty ? filterValue : null,
-          items: ['M308', 'M309', 'M326', 'ELL01'],
+          items: ['MIN01', 'MIN02', 'RMI01', 'ELL01'],
           onChanged: (val) => setState(() => filterValue = val ?? ''),
         );
 
@@ -1499,13 +1499,12 @@ class _FindPageState extends State<FindPage> {
               width: 8,
             ),
             IconButton(
-              icon: const Icon(Icons.data_usage_sharp, color: Colors.green),
-              tooltip: 'Carica XML',
+              icon: Icon(Icons.settings, color: Colors.grey[800]),
+              tooltip: 'Impostazioni',
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      builder: (context) => const PreloadXmlPage()),
+                  MaterialPageRoute(builder: (context) => const SettingsPage()),
                 );
               },
             ),

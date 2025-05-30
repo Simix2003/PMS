@@ -402,7 +402,7 @@ async def productions_summary(
                 JOIN stations s ON p.station_id = s.id
                 LEFT JOIN production_lines pl ON s.line_id = pl.id
                 {where_clause} AND (
-                    p.esito = 1 OR (s.name = 'M326' AND p.esito = 5)
+                    p.esito = 1 OR (s.name = 'RMI01' AND p.esito = 5)
                 )
             """
             cursor.execute(query_time_cycles, tuple(params))

@@ -6,7 +6,7 @@ debug = True
 # ---------------- CONFIG & GLOBALS ----------------
 CHANNELS = {
     "Linea1": {
-        "M308": {
+        "MIN01": {
             "trigger": {"db": 19606, "byte": 0, "bit": 4},
             "id_modulo": {"db": 19606, "byte": 2, "length": 20},
             "id_utente": {"db": 19606, "byte": 24, "length": 20},
@@ -17,7 +17,7 @@ CHANNELS = {
             "stringatrice": {"db": 19606, "byte": 46, "length": 5},
             "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
         },
-        "M309": {
+        "MIN02": {
             "trigger": {"db": 19606, "byte": 48, "bit": 4},
             "id_modulo": {"db": 19606, "byte": 50, "length": 20},
             "id_utente": {"db": 19606, "byte": 72, "length": 20},
@@ -28,7 +28,7 @@ CHANNELS = {
             "stringatrice": {"db": 19606, "byte": 94, "length": 5},
             "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
         },
-        "M326": {
+        "RMI01": {
                 "trigger": {"db": 19606, "byte": 96, "bit": 4},
                 "id_modulo": {"db": 19606, "byte": 98, "length": 20},
                 "id_utente": {"db": 19606, "byte": 120, "length": 20},
@@ -40,7 +40,7 @@ CHANNELS = {
             },
     },
     "Linea2": {
-        "M308": {
+        "MIN01": {
             "trigger": {"db": 19606, "byte": 0, "bit": 4},
             "id_modulo": {"db": 19606, "byte": 2, "length": 20},
             "id_utente": {"db": 19606, "byte": 24, "length": 20},
@@ -51,7 +51,7 @@ CHANNELS = {
             "stringatrice": {"db": 19606, "byte": 46, "length": 5},
             "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
         },
-        "M309": {
+        "MIN02": {
             "trigger": {"db": 19606, "byte": 48, "bit": 4},
             "id_modulo": {"db": 19606, "byte": 50, "length": 20},
             "id_utente": {"db": 19606, "byte": 72, "length": 20},
@@ -62,7 +62,7 @@ CHANNELS = {
             "stringatrice": {"db": 19606, "byte": 94, "length": 5},
             "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
         },
-        "M326": {
+        "RMI01": {
                 "trigger": {"db": 19606, "byte": 96, "bit": 4},
                 "id_modulo": {"db": 19606, "byte": 98, "length": 20},
                 "id_utente": {"db": 19606, "byte": 120, "length": 20},
@@ -74,7 +74,7 @@ CHANNELS = {
             },
     },
     "Linea3": {
-        "M308": {
+        "MIN01": {
             "trigger": {"db": 19606, "byte": 0, "bit": 4},
             "id_modulo": {"db": 19606, "byte": 2, "length": 20},
             "id_utente": {"db": 19606, "byte": 24, "length": 20},
@@ -85,7 +85,7 @@ CHANNELS = {
             "stringatrice": {"db": 19606, "byte": 46, "length": 5},
             "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
         },
-        "M309": {
+        "MIN02": {
             "trigger": {"db": 19606, "byte": 48, "bit": 4},
             "id_modulo": {"db": 19606, "byte": 50, "length": 20},
             "id_utente": {"db": 19606, "byte": 72, "length": 20},
@@ -96,7 +96,7 @@ CHANNELS = {
             "stringatrice": {"db": 19606, "byte": 94, "length": 5},
             "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
         },
-        "M326": {
+        "RMI01": {
                 "trigger": {"db": 19606, "byte": 96, "bit": 4},
                 "id_modulo": {"db": 19606, "byte": 98, "length": 20},
                 "id_utente": {"db": 19606, "byte": 120, "length": 20},
@@ -246,7 +246,9 @@ def load_station_configs(file_path):
             line_configs[current_line]["PC"]["IP"] = config.get(section, "IP")
             line_configs[current_line]["PC"]["PORT"] = config.getint(section, "PORT")
 
-        elif section.startswith("M") and current_line:
-            line_configs[current_line]["stations"].append(section)
+        elif section.upper() == "STATIONS" and current_line:
+            stations_str = config.get(section, "names")
+            stations = [s.strip() for s in stations_str.split(",")]
+            line_configs[current_line]["stations"].extend(stations)
 
     return line_configs

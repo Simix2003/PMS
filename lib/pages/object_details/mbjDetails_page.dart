@@ -32,7 +32,7 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Dettagli MBJ – $idModulo'),
+        title: Text('Dettagli ELL – $idModulo'),
         actions: [
           IconButton(
             icon: Icon(

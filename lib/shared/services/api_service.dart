@@ -285,7 +285,7 @@ class ApiService {
     String effectiveStation = station;
 
     // 🛠 If we are in rework, use the original QC station instead
-    if (station == "M326") {
+    if (station == "RMI01") {
       final oldStation = await fetchStationForObject(object_id);
       if (oldStation != null) {
         effectiveStation = oldStation;

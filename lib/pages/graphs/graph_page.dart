@@ -85,9 +85,9 @@ class _GraphPageState extends State<GraphPage> {
   // LINES //Should get from MySQL : production_lines
   // STATIONS //Should get from MySQL : stations
   final Map<String, List<String>> _stationOptions = const {
-    'Linea A': ['M308', 'M309', 'M326'],
-    'Linea B': ['M308', 'M309', 'M326'],
-    'Linea C': ['M308', 'M309', 'M326'],
+    'Linea A': ['MIN01', 'MIN02', 'RMI01', 'ELL01'],
+    'Linea B': ['MIN01', 'MIN02', 'RMI01', 'ELL01'],
+    'Linea C': ['MIN01', 'MIN02', 'RMI01', 'ELL01'],
   };
   final List<String> _metricOptions = const ['Esito', 'Yield', 'Difetto'];
   final List<String> esitoOptions = [

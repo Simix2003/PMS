@@ -168,12 +168,12 @@ async def update_production_final(production_id, data, station_name, connection,
 
             current_esito = row["esito"]
             final_esito = 6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1
-            if station_name == "M326":
+            if station_name == "RMI01":
                 final_esito = 5 if fine_buona else 6
             end_time = data.get("DataFine")
 
             # Step 2: Conditional update
-            if current_esito == 2 or station_name == "M326":
+            if current_esito == 2 or station_name == "RMI01":
 
                 sql_update = """
                     UPDATE productions 

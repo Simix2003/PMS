@@ -24,15 +24,15 @@ async def get_overlay_config(
     # Default config file path
     config_file = f"C:/IX-Monitor/images/{line_name}/{station}/overlay_config.json"
 
-    # Resolve origin station if we are in ReWork (M326)
+    # Resolve origin station if we are in ReWork (RMI01)
     comes_from = None
-    if station == "M326" and object_id:
+    if station == "RMI01" and object_id:
         station_info = await get_station_for_object(object_id)
         comes_from = station_info["station"]
         # Override config path based on origin
-        config_file = f"C:/IX-Monitor/images/{line_name}/M308/overlay_config.json"
-        if comes_from == 'M309':
-            config_file = f"C:/IX-Monitor/images/{line_name}/M309/overlay_config.json"
+        config_file = f"C:/IX-Monitor/images/{line_name}/MIN01/overlay_config.json"
+        if comes_from == 'MIN02':
+            config_file = f"C:/IX-Monitor/images/{line_name}/MIN02/overlay_config.json"
 
     # Load the config file
     if not os.path.exists(config_file):
@@ -57,17 +57,17 @@ async def get_overlay_config(
             else:
                 image_url = f"https://172.16.250.33:8050/images/{line_name}/{station}/{image_name}"
             
-            # Override image URL if station is M326 and object came from a specific QC
-            if station == "M326" and comes_from:
+            # Override image URL if station is RMI01 and object came from a specific QC
+            if station == "RMI01" and comes_from:
                 if debug:
-                    image_url = f"http://localhost:8001/images/{line_name}/M308/{image_name}"
+                    image_url = f"http://localhost:8001/images/{line_name}/MIN01/{image_name}"
                 else:
-                    image_url = f"https://172.16.250.33:8050/images/{line_name}/M308/{image_name}"
-                if comes_from == 'M309':
+                    image_url = f"https://172.16.250.33:8050/images/{line_name}/MIN01/{image_name}"
+                if comes_from == 'MIN02':
                     if debug:
-                        image_url = f"http://localhost:8001/images/{line_name}/M309/{image_name}"
+                        image_url = f"http://localhost:8001/images/{line_name}/MIN02/{image_name}"
                     else:
-                        image_url = f"https://172.16.250.33:8050/images/{line_name}/M309/{image_name}"
+                        image_url = f"https://172.16.250.33:8050/images/{line_name}/MIN02/{image_name}"
 
             return {
                 "image_url": image_url,

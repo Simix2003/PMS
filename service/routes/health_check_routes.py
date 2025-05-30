@@ -31,8 +31,8 @@ def check_plc_connections() -> Dict[str, Dict[str, str]]:
     """
     Reads from global_state.plc_connections and returns:
     {
-        "LineaA": { "M308": "CONNECTED", "M309": "DISCONNECTED" },
-        "LineaB": { "M308": "CONNECTED", ... }
+        "LineaA": { "MIN01": "CONNECTED", "MIN02": "DISCONNECTED" },
+        "LineaB": { "MIN01": "CONNECTED", ... }
     }
     """
     statuses: Dict[str, Dict[str, str]] = {}

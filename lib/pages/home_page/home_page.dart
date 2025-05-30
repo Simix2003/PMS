@@ -48,12 +48,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // STATIONS //Should get from MySQL : stations
   String selectedChannel = ""; // Force user to pick a channel
-  final List<String> availableChannels = ["", "M308", "M309", "M326"];
+  final List<String> availableChannels = ["", "MIN01", "MIN02", "RMI01"];
   final Map<String, String> stationDisplayNames = {
     '': '🔧 Selezionare Stazione',
-    'M308': 'M308 - QG2 di M306',
-    'M309': 'M309 - QG2 di M307',
-    'M326': 'M326 - RW1',
+    'MIN01': 'M308 - QG2 di M306',
+    'MIN02': 'M309 - QG2 di M307',
+    'RMI01': 'M326 - ReWork1',
   };
 
   // LINES //Should get from MySQL : production_lines
@@ -123,7 +123,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             _pictures.clear();
           });
 
-          if (selectedChannel == "M326" && newObjectId.isNotEmpty) {
+          if (selectedChannel == "RMI01" && newObjectId.isNotEmpty) {
             try {
               final result =
                   await ApiService.fetchInitialIssuesForObject(newObjectId);
@@ -138,7 +138,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 _pictures = preloadedPictures;
 
                 // Only allow submission if current issues differ from previous ones
-                canSubmit = selectedChannel == "M326" &&
+                canSubmit = selectedChannel == "RMI01" &&
                         !_issues.containsAll(_previouslySelectedIssues) ||
                     !_previouslySelectedIssues.containsAll(_issues);
               });
@@ -911,7 +911,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 issuesSubmitted = false;
                               });
                             },
-                            reWork: selectedChannel == "M326",
+                            reWork: selectedChannel == "RMI01",
                           ),
                           const SizedBox(height: 24),
                         ] else ...[
@@ -952,12 +952,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                   _issues.add(issuePath);
                                 }
 
-                                canSubmit = selectedChannel == "M326" &&
+                                canSubmit = selectedChannel == "RMI01" &&
                                         (!_issues.containsAll(
                                                 _previouslySelectedIssues) ||
                                             !_previouslySelectedIssues
                                                 .containsAll(_issues)) ||
-                                    selectedChannel != "M326";
+                                    selectedChannel != "RMI01";
                               });
                             },
                             onPicturesChanged: (pics) {
@@ -966,7 +966,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               });
                             },
                             canAdd: canAdd,
-                            isReworkMode: selectedChannel == "M326",
+                            isReworkMode: selectedChannel == "RMI01",
                             initiallySelectedIssues: _issues.toList(),
                             initiallyCreatedPictures: _pictures.toList(),
                             objectId: objectId,
@@ -977,7 +977,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           const SizedBox(height: 40),
                           Center(
                             child: Text(
-                              selectedChannel == "M326"
+                              selectedChannel == "RMI01"
                                   ? 'Premere pulsante GOOD / NO GOOD su HMI'
                                   : 'Premere pulsante NO GOOD fisico',
                               style: const TextStyle(fontSize: 36),
@@ -993,7 +993,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
               if (hasBeenEvaluated &&
                       !isObjectOK &&
-                      selectedChannel != "M326" ||
+                      selectedChannel != "RMI01" ||
                   canSubmit)
                 Padding(
                   padding: const EdgeInsets.only(top: 16),

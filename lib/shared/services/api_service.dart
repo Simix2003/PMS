@@ -50,18 +50,31 @@ class ApiService {
       'object_id': objectId,
       'issues': issues,
     };
+
     final response = await http.post(
       Uri.parse('$baseUrl/api/set_issues'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(payload),
     );
 
-    if (response.statusCode != 200) {
-      debugPrint('submitIssues error: ${response.statusCode}');
-      debugPrint('Body: ${response.body}');
-    }
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      // Try to extract the error message
+      String errorMessage = 'Errore durante l’invio.';
+      try {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        if (body.containsKey('error')) {
+          errorMessage = body['error'];
+        }
+      } catch (_) {
+        // If parsing fails, use raw body
+        errorMessage = response.body;
+      }
 
-    return response.statusCode == 200;
+      // Let the caller (e.g. _submitIssues) handle the message
+      throw Exception(errorMessage);
+    }
   }
 
   static Future<void> simulateTrigger(String line, String channel) async {

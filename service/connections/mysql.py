@@ -215,7 +215,12 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
         parsed = parse_issue_path(path, category)
 
         # Decode image if present
-        image_blob = compress_base64_to_jpeg_blob(image_base64, quality=70) if image_base64 else None
+        if image_base64:
+            image_blob = compress_base64_to_jpeg_blob(image_base64, quality=70)
+            if image_blob is None:
+                raise ValueError(f"Invalid image for defect path: {path}")
+        else:
+            image_blob = None
 
         sql = """
             INSERT INTO object_defects (

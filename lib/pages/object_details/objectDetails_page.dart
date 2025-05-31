@@ -76,8 +76,16 @@ class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
     // Sort events by end_time
     final ascending = selectedOrderDirection == 'Crescente';
     widget.events.sort((a, b) {
-      final da = DateTime.parse(a['end_time']);
-      final db = DateTime.parse(b['end_time']);
+      final aEnd = a['end_time'];
+      final bEnd = b['end_time'];
+
+      // Treat nulls as "latest" when sorting descending (or "earliest" if ascending)
+      if (aEnd == null && bEnd == null) return 0;
+      if (aEnd == null) return ascending ? 1 : -1;
+      if (bEnd == null) return ascending ? -1 : 1;
+
+      final da = DateTime.parse(aEnd);
+      final db = DateTime.parse(bEnd);
       return ascending ? da.compareTo(db) : db.compareTo(da);
     });
 

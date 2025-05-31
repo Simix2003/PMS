@@ -1,12 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-#from openai import OpenAI
-#from openai.types.chat import (
-#    ChatCompletionMessageParam,
-#    ChatCompletionSystemMessageParam,
-#    ChatCompletionUserMessageParam,
-#    ChatCompletionAssistantMessageParam,
-#)
+import requests
 from typing import List, Optional, Literal
 
 import os
@@ -14,9 +8,6 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection
-
-# Initialize OpenAI client
-#client = OpenAI(api_key="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")
 
 router = APIRouter()
 
@@ -214,60 +205,78 @@ CREATE TABLE IF NOT EXISTS ix_monitor.stringatrice_warnings (
 """
 
 SYSTEM_PROMPT = f"""
-Sei un assistente AI esperto in SQL per il database di produzione descritto sotto.
+Sei un assistente AI esperto in SQL. Devi generare query SQL per interrogare un database di monitoraggio produzione.
 
-─────────────────────────────  ISTRUZIONI OBBLIGATORIE  ─────────────────────────────
+──────────────────────────── ISTRUZIONI OBBLIGATORIE ─────────────────────────────
 
-1. ❌ NESSUN TESTO EXTRA
-   ❌ NON usare commenti, spiegazioni.
-   ✅ Scrivi SOLO la query all'interno di blocchi **```sql ... ```**
+1. ❌ NON SCRIVERE NULLA OLTRE LA QUERY
+   ❌ NON inserire spiegazioni, commenti, introduzioni o note.
+   ✅ Scrivi SOLO la query racchiusa in un blocco:
 
-2. ✅ JOIN obbligatorie (NO sotto-select!):
+   ```sql
+   SELECT ...
+   ```
 
-   FROM  ix_monitor.productions         p
-   JOIN  ix_monitor.objects             o  ON o.id = p.object_id
-   JOIN  ix_monitor.stations            s  ON s.id = p.station_id
-   JOIN  ix_monitor.production_lines    l  ON l.id = s.line_id
-   LEFT  JOIN ix_monitor.object_defects od ON od.production_id = p.id
-   LEFT  JOIN ix_monitor.defects        d  ON d.id = od.defect_id
+2. ✅ JOIN corrette da usare **sempre** (no sottoquery, no tabelle inventate):
 
-3. ✅ Filtri da usare:
-   • Linea      → l.display_name           (es. 'Linea B')
-   • Stazione   → s.name                   (es. 'M308')
-   • Data       → DATE(p.end_time)         oppure intervallo su p.end_time
-   • Esito      → p.esito con la mappa:    G=1, In Produzione=2, Escluso=4, G Operatore=5, NG=6
-   • Difetti    → usa già le JOIN a object_defects e defects
+   ```sql
+   FROM ix_monitor.productions p
+   JOIN ix_monitor.objects o ON o.id = p.object_id
+   JOIN ix_monitor.stations s ON s.id = p.station_id
+   JOIN ix_monitor.production_lines l ON l.id = s.line_id
+   LEFT JOIN ix_monitor.object_defects od ON od.production_id = p.id
+   LEFT JOIN ix_monitor.defects d ON d.id = od.defect_id
+   ```
 
-4. ✅ Seleziona sempre almeno questi campi:
+3. ❌ NON usare queste tabelle (non esistono):
+   - `ix_monitor.date`
+   - `ix_monitor.logs`
+   - `ix_monitor.sessions`
+   - NESSUNA tabella che non sia presente nello schema fornito
 
+4. ✅ Usa solo questi filtri:
+
+   - **Linea**      → `l.display_name` (es. 'Linea B')
+   - **Stazione**   → `s.name` (es. 'M308')
+   - **Data**       → `p.end_time` oppure `DATE(p.end_time)`
+   - **Esito**      → `p.esito`
+     - Dove: 1 = G, 2 = In Produzione, 4 = Escluso, 5 = G Operatore, 6 = NG
+   - **Difetti**    → tramite `d.category`
+
+5. ✅ La SELECT deve contenere almeno questi campi:
+
+   ```sql
    SELECT
-       p.id               AS production_id,
+       p.id AS production_id,
        o.id_modulo,
        p.esito,
        p.operator_id,
        p.cycle_time,
        p.start_time,
        p.end_time,
-       s.name             AS station_name,
-       l.display_name     AS line_display_name,
+       s.name AS station_name,
+       l.display_name AS line_display_name,
        GROUP_CONCAT(DISTINCT d.category) AS defect_categories
+   ```
 
-5. ✅ Clausole finali obbligatorie:
-   • GROUP BY p.id
-   • ORDER BY p.end_time DESC
-   • LIMIT 1000
+6. ✅ Clausole finali **sempre obbligatorie**:
 
-6. ❓ Se mancano Linea, Stazione o Data, chiedile PRIMA di scrivere la query.
-   Esempio: *"Quale linea e stazione desideri filtrare?"*
+   ```sql
+   GROUP BY p.id
+   ORDER BY p.end_time DESC
+   LIMIT 1000
+   ```
 
-7. ✅ FORMATO DI OUTPUT OBBLIGATORIO
-   Tutta la query deve essere dentro un unico blocco:
+7. ❓ Se la domanda non specifica **stazione**, **linea** o **data**, chiedi chiarimenti PRIMA di scrivere la query.
+   Esempio: *"Quale stazione vuoi analizzare?"*
 
-```sql
-SELECT ...
-```
+8. ✅ Rispetta **esattamente** il formato:
 
-────────────────────────────────────────────────────────────  SCHEMA  ────────────────────────────────────────────────────────────
+   ```sql
+   SELECT ...
+   ```
+
+────────────────────────────── SCHEMA DEL DATABASE ──────────────────────────────
 
 {DB_SCHEMA}
 """
@@ -277,37 +286,26 @@ SELECT ...
 @router.post("/api/chat_query", response_model=ChatResponse)
 async def chat_query(req: ChatRequest):
     try:
-        # Compose message list
-        #messages: List[ChatCompletionMessageParam] = [
-        #    ChatCompletionSystemMessageParam(role="system", content=SYSTEM_PROMPT)
-        #]
+        full_prompt = SYSTEM_PROMPT + f"\n\nL'utente ha chiesto: {req.message}"
 
-        # Convert history to strict types
-        #if req.history:
-        #    for msg in req.history:
-        #        if msg.role == "user":
-        #            messages.append(ChatCompletionUserMessageParam(role="user", content=msg.content))
-        #        elif msg.role == "assistant":
-        #            messages.append(ChatCompletionAssistantMessageParam(role="assistant", content=msg.content))
+        ollama_response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": "deepseek-r1:1.5b",
+                "prompt": full_prompt,
+                "stream": False
+            }
+        )
 
-        # Add current user message
-        #messages.append(ChatCompletionUserMessageParam(role="user", content=req.message))
+        if ollama_response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Errore chiamata Ollama")
 
-        # OpenAI call
-        #response = client.chat.completions.create(
-        #    model="gpt-4o-mini",
-        #    messages=messages,
-        #    temperature=0,
-        #)
-
-        #result = response.choices[0].message.content or ""
-        result = "Hello"
+        result = ollama_response.json().get("response", "")
         return ChatResponse(response=result)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Errore OpenAI: {e}")
+        raise HTTPException(status_code=500, detail=f"Errore DeepSeek: {e}")
     
-
 class SQLQueryRequest(BaseModel):
     query: str
 

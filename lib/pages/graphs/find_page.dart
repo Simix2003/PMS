@@ -8,7 +8,7 @@ import 'package:ix_monitor/pages/settings_page.dart';
 import 'dart:html' as html;
 //import '../ai_helper_chat.dart';
 import '../../shared/models/globals.dart';
-import '../ai_report.dart';
+//import '../ai_report.dart';
 import '../manuali/manualSelection_page.dart';
 import '../object_details/mbjDetails_page.dart';
 import '../object_details/objectDetails_page.dart';
@@ -18,7 +18,7 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'dart:ui';
-import 'package:rive/rive.dart';
+//import 'package:rive/rive.dart';
 
 class FindPage extends StatefulWidget {
   final List<Map<String, String>>? initialFilters;
@@ -97,8 +97,8 @@ class _FindPageState extends State<FindPage> {
 
   final List<Map<String, String>> activeFilters = [];
 
-  Artboard? _riveArtboard;
-  SMIBool? _boolInput;
+  //Artboard? _riveArtboard;
+  //SMIBool? _boolInput;
 
   final List<String> filterOptions = [
     'Data',
@@ -329,7 +329,7 @@ class _FindPageState extends State<FindPage> {
 
     _loadSettings();
 
-    rootBundle.load('rive/logo_interaction.riv').then(
+    /*rootBundle.load('rive/logo_interaction.riv').then(
       (data) async {
         final file = RiveFile.import(data);
         final artboard = file.mainArtboard;
@@ -343,7 +343,7 @@ class _FindPageState extends State<FindPage> {
 
         setState(() => _riveArtboard = artboard);
       },
-    );
+    );*/
 
     if (widget.initialFilters != null) {
       for (final filter in widget.initialFilters!) {
@@ -2035,7 +2035,7 @@ class _FindPageState extends State<FindPage> {
               ),
             ),
           ),*/
-          Positioned(
+          /*Positioned(
             right: 20,
             bottom: 20,
             child: MouseRegion(
@@ -2090,7 +2090,7 @@ class _FindPageState extends State<FindPage> {
                 ),
               ),
             ),
-          ),
+          ),*/
         ],
       ),
     );

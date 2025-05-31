@@ -384,22 +384,39 @@ class _DataViewPageState extends State<DataViewPage> {
     "Generico": Color(0xFFFF3B30), // iOS Red
   };
 
+  String selectedZone = 'Zona Bussing'; // Default selected zone
+
+  final List<String> availableZones = ['Zona Bussing', 'Zona Stringatrici'];
+
+  final Map<String, String> zoneDisplayNames = {
+    'Zona Bussing': 'Zona Bussing',
+    'Zona Stringatrici': 'Zona Stringatrici',
+  };
+
+  void _onZoneChange(String? newZone) {
+    if (newZone != null && newZone != selectedZone) {
+      setState(() {
+        selectedZone = newZone;
+      });
+
+      // Optional: perform additional logic when zone changes
+      print('Zone changed to $newZone');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-// Inside your Scaffold widget:
       appBar: AppBar(
         backgroundColor: Colors.white,
-        scrolledUnderElevation: 0,
         elevation: 0,
-        leadingWidth: 100, // ⬅️ Add space for both buttons
+        scrolledUnderElevation: 0,
+        leadingWidth: 100,
         leading: Row(
           mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            SizedBox(
-              width: 8,
-            ),
+            const SizedBox(width: 8),
             IconButton(
               icon: Icon(Icons.settings, color: Colors.grey[800]),
               tooltip: 'Impostazioni',
@@ -410,9 +427,7 @@ class _DataViewPageState extends State<DataViewPage> {
                 );
               },
             ),
-            SizedBox(
-              width: 8,
-            ),
+            const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.info_outline, color: Colors.blue),
               tooltip: 'Manuale',
@@ -420,25 +435,59 @@ class _DataViewPageState extends State<DataViewPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const ManualSelectionPage(),
-                  ),
+                      builder: (context) => const ManualSelectionPage()),
                 );
               },
             ),
           ],
         ),
-        title: const Text(
-          'Dati - ZONA BUSSING',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 20,
-            letterSpacing: -0.5,
-          ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Dati - ',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 20,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF007AFF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: DropdownButton<String>(
+                value: selectedZone,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF007AFF),
+                ),
+                underline: Container(),
+                borderRadius: BorderRadius.circular(16),
+                items: availableZones.map((zone) {
+                  return DropdownMenuItem(
+                    value: zone,
+                    child: Text(
+                      zoneDisplayNames[zone] ?? zone,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF007AFF),
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: _onZoneChange,
+              ),
+            ),
+          ],
         ),
         centerTitle: true,
         actions: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
                 Text(
@@ -449,7 +498,7 @@ class _DataViewPageState extends State<DataViewPage> {
                     color: Colors.grey[800],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -463,7 +512,7 @@ class _DataViewPageState extends State<DataViewPage> {
                       Icons.keyboard_arrow_down_rounded,
                       color: Color(0xFF007AFF),
                     ),
-                    underline: Container(), // Remove the default underline
+                    underline: Container(),
                     borderRadius: BorderRadius.circular(16),
                     items: availableLines.map((line) {
                       return DropdownMenuItem(
@@ -485,7 +534,6 @@ class _DataViewPageState extends State<DataViewPage> {
           ),
         ],
       ),
-
       body: _fetchedData == null
           ? const Center(
               child: CircularProgressIndicator(

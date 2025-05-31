@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/shared/widgets/solarPanelNew.dart';
 import '../../shared/services/api_service.dart';
+import '../../shared/widgets/shimmer_panel.dart';
 import '../../shared/widgets/solarPanel.dart';
 //import '../../shared/widgets/solarPanelNew.dart';
 
@@ -47,15 +48,43 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
       body: FutureBuilder<Map<String, dynamic>?>(
         future: ApiService.fetchMBJDetails(idModulo),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+          final isLoading = snapshot.connectionState == ConnectionState.waiting;
+
+          if (isLoading) {
+            // ✅ Use shimmer reveal on a fake placeholder panel
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(width: 16),
+                  // Right: shimmer reveal effect while loading
+                  Expanded(
+                    child: ShimmerPanelReveal(
+                      panel: DistancesSolarPanelWidget(
+                        cellDefects: [],
+                        showDimensions: false,
+                        showRibbons: false,
+                        showHorizontalGaps: false,
+                        showVerticalGaps: false,
+                        showGlassCell: false,
+                        showGlassRibbon: false,
+                        showWarnings: false,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
           }
+
           if (!snapshot.hasData || snapshot.data == null) {
             return const Center(
               child: Text('Nessun dettaglio trovato per questo modulo.'),
             );
           }
 
+          // 🟢 Normal behavior here (real panel)
           final mbjData = snapshot.data!;
           final glassWidth = (mbjData['glass_width'] ?? 2166).toDouble();
           final glassHeight = (mbjData['glass_height'] ?? 1297).toDouble();
@@ -161,23 +190,26 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
                       const SizedBox(width: 16),
                       // Right: the interactive SolarPanel viewer with distances
                       Expanded(
-                        child: DistancesSolarPanelWidget(
-                          glassWidth: glassWidth,
-                          glassHeight: glassHeight,
-                          interconnectionRibbon:
-                              mbjData['interconnection_ribbon'],
-                          interconnectionCell: mbjData['interconnection_cell'],
-                          horizontalCellGaps: mbjData['horizontal_cell_mm'],
-                          verticalCellGaps: mbjData['vertical_cell_mm'],
-                          glassCellMm: mbjData['glass_cell_mm'],
-                          showDimensions: true,
-                          showRibbons: showRibbons,
-                          showHorizontalGaps: showHorizontalGaps,
-                          showVerticalGaps: showVerticalGaps,
-                          showGlassCell: showGlassCell,
-                          showGlassRibbon: showGlassRibbon,
-                          showWarnings: showWarnings,
-                          cellDefects: parsedDefects,
+                        child: ShimmerPanelReveal(
+                          panel: DistancesSolarPanelWidget(
+                            glassWidth: glassWidth,
+                            glassHeight: glassHeight,
+                            interconnectionRibbon:
+                                mbjData['interconnection_ribbon'],
+                            interconnectionCell:
+                                mbjData['interconnection_cell'],
+                            horizontalCellGaps: mbjData['horizontal_cell_mm'],
+                            verticalCellGaps: mbjData['vertical_cell_mm'],
+                            glassCellMm: mbjData['glass_cell_mm'],
+                            showDimensions: true,
+                            showRibbons: showRibbons,
+                            showHorizontalGaps: showHorizontalGaps,
+                            showVerticalGaps: showVerticalGaps,
+                            showGlassCell: showGlassCell,
+                            showGlassRibbon: showGlassRibbon,
+                            showWarnings: showWarnings,
+                            cellDefects: parsedDefects,
+                          ),
                         ),
                       ),
                     ],

@@ -208,8 +208,8 @@ SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 REFRESHED_SETTINGS = {}
 SESSION_TIMEOUT = 600  # 600 seconds = 10 minutes
 
-#XML_FOLDER_PATH = r"D:\Imix\Lavori\2025\3SUN\MBJ\xml"
-XML_FOLDER_PATH = r"\\Desktop-ofbalr8\xml"
+XML_FOLDER_PATH = r"D:\Imix\Lavori\2025\3SUN\MBJ\xml"
+#XML_FOLDER_PATH = r"\\Desktop-ofbalr8\xml"
 IMAGES_DIR = BASE_DIR / "images"
 STATIONS_CONFIG_PATH = BASE_DIR / "stations.ini"
 

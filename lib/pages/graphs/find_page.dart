@@ -53,6 +53,7 @@ class _FindPageState extends State<FindPage> {
   String? selectedDifettoGroup;
   bool isExporting = false;
   bool searching = false;
+  bool showFilters = true;
 
   String? selectedCycleTimeCondition;
 
@@ -1403,16 +1404,24 @@ class _FindPageState extends State<FindPage> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(
+    String title, {
+    bool showToggle = false,
+    VoidCallback? onToggle,
+    int? activeCount,
+  }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
+          const SizedBox(width: 8),
           Expanded(child: Divider(color: Colors.grey.shade400)),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
-              title,
+              activeCount != null && activeCount > 0
+                  ? '$title ($activeCount)'
+                  : title,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -1421,6 +1430,16 @@ class _FindPageState extends State<FindPage> {
             ),
           ),
           Expanded(child: Divider(color: Colors.grey.shade400)),
+          if (showToggle && onToggle != null)
+            IconButton(
+              icon: Icon(
+                showFilters
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+                color: Colors.grey.shade700,
+              ),
+              onPressed: onToggle,
+            ),
         ],
       ),
     );
@@ -1675,14 +1694,14 @@ class _FindPageState extends State<FindPage> {
                   color: Colors.black.withOpacity(0.3),
                   alignment: Alignment.center,
                   child: Container(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.2),
-                          blurRadius: 20,
+                          blurRadius: 24,
                           offset: const Offset(0, 6),
                         ),
                       ],
@@ -1698,11 +1717,11 @@ class _FindPageState extends State<FindPage> {
                             color: Color(0xFF007AFF),
                           ),
                         ),
-                        SizedBox(height: 20),
+                        SizedBox(height: 16),
                         Text(
                           "Esportazione in corso...",
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 24,
                             fontWeight: FontWeight.w600,
                             color: Colors.black87,
                           ),
@@ -1711,7 +1730,7 @@ class _FindPageState extends State<FindPage> {
                         Text(
                           "Attendere qualche secondo...",
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 16,
                             color: Colors.black54,
                           ),
                         ),
@@ -1723,15 +1742,25 @@ class _FindPageState extends State<FindPage> {
             )
           else
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildFilterRowCard(),
                   if (activeFilters.isNotEmpty)
-                    _buildSectionTitle("Filtri Attivi"),
-                  if (activeFilters.isNotEmpty) _buildFilterChips(),
-                  const SizedBox(height: 20),
+                    _buildSectionTitle(
+                      "Filtri Attivi",
+                      showToggle: true,
+                      onToggle: () {
+                        setState(() {
+                          showFilters = !showFilters;
+                        });
+                      },
+                      activeCount: activeFilters.length,
+                    ),
+                  if (activeFilters.isNotEmpty && showFilters)
+                    _buildFilterChips(),
+                  const SizedBox(height: 16),
 
                   LayoutBuilder(
                     builder: (context, constraints) {
@@ -1777,7 +1806,7 @@ class _FindPageState extends State<FindPage> {
                           icon: const Icon(
                             Icons.search,
                             color: Colors.white,
-                            size: 25,
+                            size: 24,
                           ),
                           label: const Text("Cerca"),
                           style: ElevatedButton.styleFrom(
@@ -1803,7 +1832,7 @@ class _FindPageState extends State<FindPage> {
                                     '${results.length} Moduli Visualizzati',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
-                                      fontSize: 20,
+                                      fontSize: 24,
                                       color: Colors.black87,
                                     ),
                                   ),
@@ -1828,7 +1857,7 @@ class _FindPageState extends State<FindPage> {
                             countLabel,
                             const Spacer(),
                             ...controls.map((w) => Padding(
-                                  padding: const EdgeInsets.only(left: 12),
+                                  padding: const EdgeInsets.only(left: 16),
                                   child: w,
                                 )),
                           ],
@@ -1841,8 +1870,8 @@ class _FindPageState extends State<FindPage> {
                                 alignment: Alignment.centerLeft,
                                 child: countLabel),
                             Wrap(
-                              spacing: 12,
-                              runSpacing: 12,
+                              spacing: 8,
+                              runSpacing: 8,
                               alignment: WrapAlignment.end,
                               children: controls,
                             ),

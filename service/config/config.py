@@ -170,6 +170,7 @@ ISSUE_TREE = {
                     "Graffio su Cella": {
                         f"Stringa[{i}]": None for i in range(1, 13)
                     },
+                    "Altro": {}
                 }
             }
         }

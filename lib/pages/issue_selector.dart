@@ -66,6 +66,30 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     "Altro",
   ];
 
+  // ignore: constant_identifier_names
+  static const Map<String, String> KNOWN_DEFECT_PATHS = {
+    "Non Lavorato Poe Scaduto": "Generali.Non Lavorato Poe Scaduto",
+    "No Good da Bussing": "Generali.No Good da Bussing",
+    "Materiale Esterno su Celle": "Generali.Materiale Esterno su Celle",
+    "Passthrough al Bussing": "Generali.Passthrough al Bussing",
+    "Poe in Eccesso": "Generali.Poe in Eccesso",
+    "Solo Poe": "Generali.Solo Poe",
+    "Solo Vetro": "Generali.Solo Vetro",
+    "Matrice Incompleta": "Generali.Matrice Incompleta",
+    "Molteplici Bus Bar": "Generali.Molteplici Bus Bar",
+    "Test": "Generali.Test",
+    "Saldatura": "Saldatura",
+    "Disallineamento Ribbon": "Disallineamento",
+    "Disallineamento Stringa": "Disallineamento",
+    "Mancanza Ribbon": "Mancanza Ribbon",
+    "I Ribbon Leadwire": "I Ribbon Leadwire",
+    "Macchie ECA": "Macchie ECA",
+    "Celle Rotte": "Celle Rotte",
+    "Bad Soldering": "Bad Soldering",
+    "Lunghezza String Ribbon": "Lunghezza String Ribbon",
+    "Graffio su Cella": "Graffio su Cella",
+  };
+
   @override
   void initState() {
     super.initState();
@@ -862,9 +886,39 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                                 );
                               },
                             );
-
                             if (useSuggestion == true) {
-                              chosenText = suggestion;
+                              final String suggestedLabel = result[
+                                  'suggested_defect']; // e.g. "Macchie ECA"
+
+                              final path = KNOWN_DEFECT_PATHS[suggestedLabel];
+
+                              if (path != null) {
+                                final parts = path.split('.');
+                                final String group = parts.first;
+
+                                // Simulate _onGroupSelected(group)
+                                setState(() {
+                                  pathStack = parts.length > 1
+                                      ? parts.sublist(0, parts.length - 1)
+                                      : [group];
+                                });
+
+                                await _fetchCurrentItems(); // Load UI for the group
+
+                                // For deep selections like "Generali.No Good da Bussing"
+                                if (parts.length > 1) {
+                                  final fullPath =
+                                      "Dati.Esito.Esito_Scarto.Difetti.$path";
+                                  setState(() {
+                                    selectedLeaves.add(fullPath);
+                                    activeLeafDefect = fullPath;
+                                    widget.onIssueSelected(fullPath);
+                                  });
+                                }
+
+                                altroController.clear();
+                                return;
+                              }
                             }
                           }
                           final fullPath =

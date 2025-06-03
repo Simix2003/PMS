@@ -26,6 +26,14 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
   bool showGlassRibbon = false;
   bool showWarnings = false;
   bool showDetailedView = true;
+  late Future<Map<String, dynamic>?> mbjDataFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    final idModulo = widget.data['id_modulo'] ?? widget.data['object_id'];
+    mbjDataFuture = ApiService.fetchMBJDetails(idModulo);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +54,7 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
         ],
       ),
       body: FutureBuilder<Map<String, dynamic>?>(
-        future: ApiService.fetchMBJDetails(idModulo),
+        future: mbjDataFuture,
         builder: (context, snapshot) {
           final isLoading = snapshot.connectionState == ConnectionState.waiting;
 
@@ -79,8 +87,32 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
           }
 
           if (!snapshot.hasData || snapshot.data == null) {
-            return const Center(
-              child: Text('Nessun dettaglio trovato per questo modulo.'),
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.folder_off_rounded,
+                        size: 72, color: Colors.grey[500]),
+                    const SizedBox(height: 16),
+                    Text(
+                      'File XML non trovato 😕',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Il file XML con i dettagli tecnici non è più presente nel sistema.\nTuttavia, i dati dell’evento sono ancora visibili nella cronologia.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
             );
           }
 
@@ -93,139 +125,136 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
           final parsedDefects =
               (raw as List).map((e) => Map<String, dynamic>.from(e)).toList();
 
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: showDetailedView
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Left: the checkbox panel with Apple-style glassmorphism
-                      SizedBox(
-                        width: 250,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.8),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
-                              width: 1,
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1300),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: showDetailedView
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // ⬆️ Top ribbon-style checkbox panel
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 150),
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.8),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.2),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 4),
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.02),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 20,
-                                offset: const Offset(0, 4),
-                              ),
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.02),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Mostra Dimensioni (mm)',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.black.withOpacity(0.8),
-                                          letterSpacing: -0.5,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      _buildCheckboxTile(
-                                        'Interconnection Ribbon',
-                                        showRibbons,
-                                        (v) => setState(() => showRibbons = v!),
-                                      ),
-                                      _buildCheckboxTile(
-                                        'Gap Orizzontali',
-                                        showHorizontalGaps,
-                                        (v) => setState(
-                                            () => showHorizontalGaps = v!),
-                                      ),
-                                      _buildCheckboxTile(
-                                        'Gap Verticali',
-                                        showVerticalGaps,
-                                        (v) => setState(
-                                            () => showVerticalGaps = v!),
-                                      ),
-                                      _buildCheckboxTile(
-                                        'Distanza Vetro ↔ Celle',
-                                        showGlassCell,
-                                        (v) =>
-                                            setState(() => showGlassCell = v!),
-                                      ),
-                                      _buildCheckboxTile(
-                                        'Distanza Vetro ↔ Ribbon',
-                                        showGlassRibbon,
-                                        (v) => setState(
-                                            () => showGlassRibbon = v!),
-                                      ),
-                                      _buildCheckboxTile(
-                                        'Misure fuori Tolleranza',
-                                        showWarnings,
-                                        (v) =>
-                                            setState(() => showWarnings = v!),
-                                      ),
-                                    ],
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: BackdropFilter(
+                                filter:
+                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 24, vertical: 12),
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        _buildCheckboxTile(
+                                            'Interconnection Ribbon',
+                                            showRibbons,
+                                            (v) => setState(
+                                                () => showRibbons = v!)),
+                                        _buildCheckboxTile(
+                                            'Gap Orizzontali',
+                                            showHorizontalGaps,
+                                            (v) => setState(
+                                                () => showHorizontalGaps = v!)),
+                                        _buildCheckboxTile(
+                                            'Gap Verticali',
+                                            showVerticalGaps,
+                                            (v) => setState(
+                                                () => showVerticalGaps = v!)),
+                                        _buildCheckboxTile(
+                                            'Distanza Vetro ↔ Celle',
+                                            showGlassCell,
+                                            (v) => setState(
+                                                () => showGlassCell = v!)),
+                                        _buildCheckboxTile(
+                                            'Distanza Vetro ↔ Ribbon',
+                                            showGlassRibbon,
+                                            (v) => setState(
+                                                () => showGlassRibbon = v!)),
+                                        _buildCheckboxTile(
+                                            'Misure fuori Tolleranza',
+                                            showWarnings,
+                                            (v) => setState(
+                                                () => showWarnings = v!)),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      // Right: the interactive SolarPanel viewer with distances
-                      Expanded(
-                        child: ShimmerPanelReveal(
-                          panel: DistancesSolarPanelWidget(
-                            glassWidth: glassWidth,
-                            glassHeight: glassHeight,
-                            interconnectionRibbon:
-                                mbjData['interconnection_ribbon'],
-                            interconnectionCell:
-                                mbjData['interconnection_cell'],
-                            horizontalCellGaps: mbjData['horizontal_cell_mm'],
-                            verticalCellGaps: mbjData['vertical_cell_mm'],
-                            glassCellMm: mbjData['glass_cell_mm'],
-                            showDimensions: true,
-                            showRibbons: showRibbons,
-                            showHorizontalGaps: showHorizontalGaps,
-                            showVerticalGaps: showVerticalGaps,
-                            showGlassCell: showGlassCell,
-                            showGlassRibbon: showGlassRibbon,
-                            showWarnings: showWarnings,
-                            cellDefects: parsedDefects,
+
+                          const SizedBox(height: 24),
+
+                          // ⬇️ Bottom: the interactive SolarPanel widget
+                          SizedBox(
+                            width: double.infinity,
+                            child: ShimmerPanelReveal(
+                              panel: DistancesSolarPanelWidget(
+                                glassWidth: glassWidth,
+                                glassHeight: glassHeight,
+                                interconnectionRibbon:
+                                    mbjData['interconnection_ribbon'],
+                                interconnectionCell:
+                                    mbjData['interconnection_cell'],
+                                horizontalCellGaps:
+                                    mbjData['horizontal_cell_mm'],
+                                verticalCellGaps: mbjData['vertical_cell_mm'],
+                                glassCellMm: mbjData['glass_cell_mm'],
+                                showDimensions: true,
+                                showRibbons: showRibbons,
+                                showHorizontalGaps: showHorizontalGaps,
+                                showVerticalGaps: showVerticalGaps,
+                                showGlassCell: showGlassCell,
+                                showGlassRibbon: showGlassRibbon,
+                                showWarnings: showWarnings,
+                                cellDefects: parsedDefects,
+                              ),
+                            ),
                           ),
+                        ],
+                      )
+                    : Center(
+                        child: SolarPanelWidget(
+                          glassWidth: glassWidth,
+                          glassHeight: glassHeight,
+                          interconnectionRibbon:
+                              mbjData['interconnection_ribbon'],
+                          interconnectionCell: mbjData['interconnection_cell'],
+                          horizontalCellGaps: mbjData['horizontal_cell_mm'],
+                          verticalCellGaps: mbjData['vertical_cell_mm'],
+                          glassCellMm: mbjData['glass_cell_mm'],
+                          showDimensions: true,
                         ),
                       ),
-                    ],
-                  )
-                : Center(
-                    child: SolarPanelWidget(
-                      glassWidth: glassWidth,
-                      glassHeight: glassHeight,
-                      interconnectionRibbon: mbjData['interconnection_ribbon'],
-                      interconnectionCell: mbjData['interconnection_cell'],
-                      horizontalCellGaps: mbjData['horizontal_cell_mm'],
-                      verticalCellGaps: mbjData['vertical_cell_mm'],
-                      glassCellMm: mbjData['glass_cell_mm'],
-                      showDimensions: true,
-                    ),
-                  ),
+              ),
+            ),
           );
         },
       ),
@@ -233,10 +262,10 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
   }
 }
 
-// Add this helper method to your class:
 Widget _buildCheckboxTile(String title, bool value, Function(bool?) onChanged) {
   return Container(
-    margin: const EdgeInsets.only(bottom: 8),
+    margin:
+        const EdgeInsets.only(right: 12), // horizontal spacing between tiles
     child: InkWell(
       onTap: () => onChanged(!value),
       borderRadius: BorderRadius.circular(12),
@@ -249,6 +278,7 @@ Widget _buildCheckboxTile(String title, bool value, Function(bool?) onChanged) {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min, // <– prevents horizontal expansion
           children: [
             Container(
               width: 20,
@@ -264,23 +294,17 @@ Widget _buildCheckboxTile(String title, bool value, Function(bool?) onChanged) {
                 ),
               ),
               child: value
-                  ? const Icon(
-                      Icons.check,
-                      size: 14,
-                      color: Colors.white,
-                    )
+                  ? const Icon(Icons.check, size: 14, color: Colors.white)
                   : null,
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black.withOpacity(0.8),
-                  letterSpacing: -0.2,
-                ),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Colors.black.withOpacity(0.8),
+                letterSpacing: -0.2,
               ),
             ),
           ],

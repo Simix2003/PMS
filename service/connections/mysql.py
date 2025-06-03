@@ -498,3 +498,20 @@ def get_last_station_id_from_productions(id_modulo, connection):
     except Exception as e:
         logging.error(f"❌ Failed to retrieve last station for {id_modulo}: {e}")
         return None
+
+def check_existing_production(id_modulo, station: str, timestamp: datetime, conn) -> bool:
+    """Check if a production record for this module, station, and time already exists."""
+    cursor = conn.cursor() 
+    query = """
+        SELECT 1 FROM productions p
+        JOIN stations s ON p.last_station_id = s.id
+        JOIN objects o ON p.object_id = o.id
+        WHERE o.id_modulo = %s
+          AND s.name = %s
+          AND ABS(TIMESTAMPDIFF(SECOND, p.start_time, %s)) < 10
+        LIMIT 1;
+    """
+    cursor.execute(query, (id_modulo, station, timestamp))
+    result = cursor.fetchone()
+    cursor.close()
+    return result is not None

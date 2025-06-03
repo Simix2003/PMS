@@ -21,7 +21,6 @@ async def search_results(request: Request):
         payload = await request.json()
 
         filters = payload.get("filters", [])
-        print(filters)
         order_by_input = payload.get("order_by", "Data")
         order_by = COLUMN_MAP.get(order_by_input, "p.end_time")
         order_direction = payload.get("order_direction", "DESC")
@@ -61,7 +60,6 @@ async def search_results(request: Request):
                         clause_parts.append("od.defect_type = %s")
                         clause_params.append(parts[1])
                     elif defect_category == "Saldatura":
-                        print(len(parts))
                         if len(parts) > 1:
                             match = re.search(r'\[(\d+)\]', parts[1])
                             if match:

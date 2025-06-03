@@ -24,6 +24,9 @@ def get_all_settings():
         "moduli_window": settings.get("moduli_window", {}),
         "enable_consecutive_ko": settings.get("enable_consecutive_ko", {}),
         "consecutive_ko_limit": settings.get("consecutive_ko_limit", {}),
+        "always_export_history": settings.get("always_export_history", False),
+        "export_mbj_image": settings.get("export_mbj_image", True),
+        "mbj_fields": settings.get("mbj_fields", {}),
     }
 
 

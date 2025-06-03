@@ -127,18 +127,21 @@ void showObjectIssuesDialog({
 class ExportConfirmationDialog extends StatelessWidget {
   final int selectedCount;
   final List<Map<String, String>> activeFilters;
-  final void Function(bool exportFullHistory) onConfirm; // 👈 Accepts bool
+  final void Function(bool exportFullHistory) onConfirm;
+  final bool initialExportFullHistory; // 👈 Add this
 
   const ExportConfirmationDialog({
     super.key,
     required this.selectedCount,
     required this.activeFilters,
     required this.onConfirm,
+    this.initialExportFullHistory = false, // default
   });
 
   @override
   Widget build(BuildContext context) {
-    bool exportFullHistory = false; // ✅ Move here
+    bool exportFullHistory =
+        initialExportFullHistory; // 👈 Keep initial value here
 
     return AlertDialog(
       title: const Text('Conferma Esportazione'),
@@ -192,7 +195,7 @@ class ExportConfirmationDialog extends StatelessWidget {
                   ElevatedButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      onConfirm(exportFullHistory); // ✅ Now correct value!
+                      onConfirm(exportFullHistory); // ✅ Pass correct value
                     },
                     style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF007AFF),

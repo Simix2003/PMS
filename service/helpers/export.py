@@ -1,5 +1,4 @@
 from datetime import datetime
-import os
 import time
 from typing import Optional, Set
 from openpyxl.utils import get_column_letter
@@ -9,6 +8,12 @@ from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import PatternFill
 import pandas as pd
 from collections import defaultdict
+
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from service.routes.mbj_routes import get_mbj_details
 
 EXPORT_DIR = "./exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
@@ -28,9 +33,19 @@ EXCEL_DEFECT_COLUMNS = {
 }
 
 SHEET_NAMES = [
-    "Metadata", "Risolutivo", "Eventi","NG Generali", "NG Saldature", "NG Disall. Ribbon",
+    "Metadata", "Risolutivo", "Eventi", "MBJ", "NG Generali", "NG Saldature", "NG Disall. Ribbon",
     "NG Disall. Stringa", "NG Mancanza Ribbon", "NG I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Graffio su Cella", "NG Bad Soldering", "NG Altro"
 ]
+
+MBJ_FIELD_PREFIXES = {
+    "Mostra Ribbon": "Ribbon-Cell",
+    "Gap Orizzontali tra Celle": "GapY",
+    "Gap Verticali tra Celle": "GapX",
+    "Distanza Vetro-Cella": "Glass-Cell",
+    "Distanza Vetro-Ribbon": "Glass-Ribbon",
+    "Mostra Warnings": "Avvisi",
+}
+
 
 def clean_old_exports(max_age_hours: int = 2):
     now = time.time()
@@ -432,6 +447,123 @@ def eventi_sheet(ws, data: dict):
         ws.append(row_values)
 
     autofit_columns(ws, align_center_for={"Esito", "Numero Eventi"})
+
+def mbj_sheet(ws: Worksheet, data: Dict[str, Any]):
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+    min_cycle_threshold: float = data.get("min_cycle_threshold", 3.0)
+    mbj_fields: Dict[str, str] = data.get("mbj_fields", {})
+
+    enabled_prefixes = {
+        MBJ_FIELD_PREFIXES[k]
+        for k, v in mbj_fields.items()
+        if v and k in MBJ_FIELD_PREFIXES
+    }
+
+    objects_by_id = {o["id"]: o for o in objects}
+    stations_by_id = {s["id"]: s for s in stations}
+    lines_by_id = {l["id"]: l for l in production_lines}
+
+    rows: List[Dict[str, Any]] = []
+
+    for prod in productions:
+        obj = objects_by_id.get(prod.get("object_id"))
+        if not obj:
+            continue
+
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
+            continue
+
+        start_time = prod.get("start_time")
+        end_time = prod.get("end_time")
+        cycle_time_obj = prod.get("cycle_time")
+        cycle_time_str = str(cycle_time_obj or "")
+
+        cycle_seconds = None
+        if cycle_time_obj:
+            try:
+                h, m, s = map(float, str(cycle_time_obj).split(":"))
+                cycle_seconds = h * 3600 + m * 60 + s
+            except Exception:
+                pass
+
+        esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
+
+        station = stations_by_id.get(prod.get("station_id"))
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+        line_display_name = (
+            lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown")
+            if station else "Unknown"
+        )
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("display_name", "N/A")
+            if last_station_id else "N/A"
+        )
+
+        base_row = {
+            "Linea": line_display_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str,
+        }
+
+        raw = get_mbj_details(id_modulo)
+        mbj_values = raw if isinstance(raw, dict) else None
+
+        if mbj_values and enabled_prefixes:
+            if "Ribbon-Cell" in enabled_prefixes:
+                for row_idx, ribbon in mbj_values.get("interconnection_ribbon", {}).items():
+                    for side in ["left", "right"]:
+                        for pos in ["top", "bottom"]:
+                            val = ribbon.get(side, {}).get(pos)
+                            if val is not None:
+                                side_label = side.capitalize()
+                                pos_label = pos.capitalize()
+                                col_name = f"Ribbon-Cell [{row_idx}] {side_label} {pos_label}"
+                                base_row[col_name] = val
+
+            if "GapY" in enabled_prefixes:
+                for row_idx, gaps in mbj_values.get("horizontal_cell_mm", {}).items():
+                    for col_idx, val in enumerate(gaps):
+                        if val is not None:
+                            base_row[f"GapY [{row_idx},{col_idx}]"] = val
+
+            if "GapX" in enabled_prefixes:
+                for col_idx, gaps in mbj_values.get("vertical_cell_mm", {}).items():
+                    for row_idx, val in enumerate(gaps):
+                        if val is not None:
+                            base_row[f"GapX [{row_idx},{col_idx}]"] = val
+
+            if "Glass-Cell" in enabled_prefixes:
+                for side in ["top", "bottom"]:
+                    values = mbj_values.get("glass_cell_mm", {}).get(side, [])
+                    for col_idx, val in enumerate(values):
+                        if val is not None:
+                            base_row[f"Glass-Cell {side.capitalize()} [{col_idx}]"] = val
+
+            if "Glass-Ribbon" in enabled_prefixes:
+                # Placeholder if needed later
+                pass
+
+            if "Avvisi" in enabled_prefixes:
+                defects = mbj_values.get("cell_defects")
+                if defects:
+                    base_row["Avvisi"] = "; ".join(str(d) for d in defects)
+
+        rows.append(base_row)
+
+    df = pd.DataFrame(rows)
+    _append_dataframe(ws, df)
+    autofit_columns(ws, align_center_for={"Esito", "Tempo Ciclo"})
 
 def ng_generali_sheet(ws, data: dict) -> bool:
     """
@@ -1747,6 +1879,7 @@ SHEET_FUNCTIONS = {
     "Metadata": metadata_sheet,
     "Risolutivo": risolutivo_sheet,
     "Eventi": eventi_sheet,
+    "MBJ": mbj_sheet,
     "NG Generali": ng_generali_sheet,
     "NG Saldature": ng_saldature_sheet,
     "NG Disall. Ribbon": ng_disall_ribbon_sheet,

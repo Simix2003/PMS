@@ -56,6 +56,8 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
         # ▶ impostazioni globali
         settings = load_settings()
         export_data["min_cycle_threshold"] = settings.get("min_cycle_threshold", 3.0)
+        export_data["export_mbj_image"] = settings.get("export_mbj_image", True)
+        export_data["mbj_fields"] = settings.get("mbj_fields", {})
 
         with conn.cursor() as cursor:
             # -------- Reference tables ----------

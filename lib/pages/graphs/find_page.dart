@@ -323,6 +323,7 @@ class _FindPageState extends State<FindPage> {
 
   final List<Map<String, dynamic>> results = [];
   double _thresholdSeconds = 3;
+  bool _alwaysExportHistory = false;
 
   @override
   void initState() {
@@ -431,6 +432,8 @@ class _FindPageState extends State<FindPage> {
     try {
       final settings = await ApiService.getAllSettings();
       setState(() {
+        _alwaysExportHistory =
+            settings['always_export_history'] as bool? ?? false;
         _thresholdSeconds = (settings['min_cycle_threshold'] as num)
             .toDouble(); // we should set a global variable maybe
       });
@@ -1610,6 +1613,7 @@ class _FindPageState extends State<FindPage> {
                           return ExportConfirmationDialog(
                             selectedCount: selectedObjectIds.length,
                             activeFilters: activeFilters,
+                            initialExportFullHistory: _alwaysExportHistory,
                             onConfirm: (bool exportFullHistory) async {
                               final selectedIds = selectedObjectIds.toList();
 

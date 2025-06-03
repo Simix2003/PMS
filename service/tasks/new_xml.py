@@ -7,7 +7,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import get_last_station_id_from_productions, get_mysql_connection, insert_initial_production_data, update_production_final
+from service.connections.mysql import check_existing_production, get_last_station_id_from_productions, get_mysql_connection, insert_initial_production_data, update_production_final
 
 def wait_until_file_is_ready(file_path: str, timeout: int = 10) -> bool:
     """Wait until file is readable and not locked."""
@@ -53,7 +53,13 @@ def handle_new_xml_file(file_path: str):
         fine_scarto = (esito == 6)
 
         conn = get_mysql_connection()
-        last_station_id = get_last_station_id_from_productions(id_modulo, conn)
+        #print(id_modulo, station_name, data_inizio, esito)
+        # Check if this event already exists
+        if check_existing_production(id_modulo, station_name, data_inizio, conn):
+            logging.info(f"⚠️ Skipping duplicate production for {id_modulo} at {station_name}")
+            return
+        else:
+            last_station_id = get_last_station_id_from_productions(id_modulo, conn)
 
 
     except Exception as e:

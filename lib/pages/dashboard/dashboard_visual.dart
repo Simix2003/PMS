@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../visual_page.dart';
+import '../visual/visual_page.dart';
 
 class DashboardVisual extends StatelessWidget {
   const DashboardVisual({super.key});

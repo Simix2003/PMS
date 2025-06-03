@@ -1,12 +1,22 @@
+// ignore_for_file: library_private_types_in_public_api
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'visual_widgets.dart';
+import 'package:gauge_indicator/gauge_indicator.dart';
 
 /// ╔══════════════════════════════════════════════════════════════════╗
 /// ║  VISUAL MANAGEMENT  –  LINE-OVERVIEW SINGLE-PAGE DASHBOARD       ║
 /// ╚══════════════════════════════════════════════════════════════════╝
-class VisualPage extends StatelessWidget {
+class VisualPage extends StatefulWidget {
   const VisualPage({super.key});
+
+  @override
+  _VisualPageState createState() => _VisualPageState();
+}
+
+class _VisualPageState extends State<VisualPage> {
+  double value = 79;
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +36,7 @@ class VisualPage extends StatelessWidget {
                     child: HeaderBox(
                       title: 'Produzione Shift',
                       target: '360',
-                      icon: Icons.propane_outlined,
+                      icon: Icons.solar_power,
                     ),
                   ),
                   Expanded(
@@ -75,7 +85,6 @@ class VisualPage extends StatelessWidget {
                                       Expanded(
                                         child: Column(
                                           children: [
-                                            // Row titles
                                             // Row titles (aligned with the two card columns)
                                             Row(
                                               children: [
@@ -145,7 +154,8 @@ class VisualPage extends StatelessWidget {
                                                   const SizedBox(width: 8),
                                                   Expanded(
                                                     child: Card(
-                                                      color: Colors.amber,
+                                                      color:
+                                                          Colors.amber.shade700,
                                                       child: Center(
                                                         child: Text(
                                                           '19',
@@ -223,6 +233,7 @@ class VisualPage extends StatelessWidget {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Card(
+                                    color: Colors.yellow.shade100,
                                     child: Center(child: Text('Throughput')),
                                   ),
                                 ),
@@ -233,6 +244,7 @@ class VisualPage extends StatelessWidget {
                           // Second row with 1 card that fills all remaining space
                           Expanded(
                             child: Card(
+                              color: Colors.red.shade100,
                               child: Center(child: Text('Throughput cumulato')),
                             ),
                           ),
@@ -273,7 +285,7 @@ class VisualPage extends StatelessWidget {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 24,
+                                                        fontSize: 18,
                                                       ),
                                                     ),
                                                   ),
@@ -289,7 +301,8 @@ class VisualPage extends StatelessWidget {
                                                 children: [
                                                   Expanded(
                                                     child: Card(
-                                                      color: Colors.amber,
+                                                      color:
+                                                          Colors.amber.shade700,
                                                       child: Center(
                                                         child: Text(
                                                           '89%',
@@ -340,6 +353,7 @@ class VisualPage extends StatelessWidget {
                                 Expanded(
                                   flex: 3,
                                   child: Card(
+                                    color: Colors.green.shade100,
                                     child: Center(child: Text('Yield')),
                                   ),
                                 ),
@@ -350,6 +364,7 @@ class VisualPage extends StatelessWidget {
                           // Second row with 1 card that fills all remaining space
                           Expanded(
                             child: Card(
+                              color: Colors.purple.shade100,
                               child:
                                   Center(child: Text('Yield Oraria Cumulata')),
                             ),
@@ -391,9 +406,9 @@ class VisualPage extends StatelessWidget {
                                   time: '> 4h'),
                               SizedBox(height: 8),
                               LegendRow(
-                                  color: Colors.amber,
+                                  color: Colors.amber.shade700,
                                   role: 'Shift Manager',
-                                  time: '2h < x < 4h'),
+                                  time: '2h << 4h'),
                               SizedBox(height: 8),
                               LegendRow(
                                   color: Colors.green,
@@ -417,7 +432,7 @@ class VisualPage extends StatelessWidget {
                     child: HeaderBox(
                       title: 'UPTIME/DOWNTIME Shift',
                       target: '',
-                      icon: Icons.timelapse_outlined,
+                      icon: Icons.timer_outlined,
                     ),
                   ),
                   Expanded(
@@ -455,20 +470,101 @@ class VisualPage extends StatelessWidget {
                               children: [
                                 Expanded(
                                   child: Card(
-                                    color: Colors.green.shade100,
-                                    child:
-                                        Center(child: Text("Available Time")),
+                                    color: Colors.white,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Text(
+                                            'UpTime',
+                                            style: TextStyle(
+                                              fontSize: 32,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 32),
+                                          Column(
+                                            children: [
+                                              SizedBox(
+                                                width: 200, // radius * 2
+                                                child: Column(
+                                                  children: [
+                                                    AnimatedRadialGauge(
+                                                      duration: const Duration(
+                                                          milliseconds: 800),
+                                                      curve: Curves.easeInOut,
+                                                      value: value,
+                                                      radius: 100,
+                                                      axis: GaugeAxis(
+                                                        min: 0,
+                                                        max: 100,
+                                                        degrees: 180,
+                                                        style:
+                                                            const GaugeAxisStyle(
+                                                          thickness: 16,
+                                                          background:
+                                                              Color(0xFFDDDDDD),
+                                                          segmentSpacing: 0,
+                                                        ),
+                                                        progressBar:
+                                                            GaugeRoundedProgressBar(
+                                                          color: () {
+                                                            if (value <= 50) {
+                                                              return Colors.red;
+                                                            }
+                                                            if (value <= 75) {
+                                                              return Colors
+                                                                  .amber
+                                                                  .shade700;
+                                                            }
+                                                            return Colors.green;
+                                                          }(),
+                                                        ),
+                                                      ),
+                                                      builder: (context, child,
+                                                          value) {
+                                                        return Center(
+                                                          child: Text(
+                                                            '${value.toInt()}%',
+                                                            style:
+                                                                const TextStyle(
+                                                              fontSize: 32,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
+                                                    const SizedBox(height: 6),
+                                                    const Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceBetween,
+                                                      children: [
+                                                        Text('0%',
+                                                            style: TextStyle(
+                                                                fontSize: 14)),
+                                                        Text('100%',
+                                                            style: TextStyle(
+                                                                fontSize: 14)),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Expanded(
-                                  child: Card(
-                                    color: Colors.red.shade100,
-                                    child: Center(
-                                        child:
-                                            Text("Top 5 Difetti QG2 - Shift")),
-                                  ),
-                                ),
+                                const TopDefectsPieChart(),
                               ],
                             ),
                           ),
@@ -491,22 +587,20 @@ class VisualPage extends StatelessWidget {
                     child: Container(
                       height: 325,
                       margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
                         children: [
                           // LEFT COLUMN (1 card)
                           Expanded(
                             flex: 3,
-                            child: Expanded(
-                              child: Card(
-                                color: Colors.green.shade100,
-                                child: Center(
-                                    child: Text("Top 5 Difetti QG2 - Shift")),
-                              ),
+                            child: Card(
+                              color: Colors.green.shade100,
+                              child: Center(
+                                  child: Text("Top 5 Difetti QG2 - Shift")),
                             ),
                           ),
 

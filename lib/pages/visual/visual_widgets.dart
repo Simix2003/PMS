@@ -1,5 +1,5 @@
-// ────────── BLUE TOP-STRIP BOX ──────────
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 class HeaderBox extends StatelessWidget {
   final String title, target;
@@ -39,8 +39,8 @@ class HeaderBox extends StatelessWidget {
                   ),
                 )
               else
-                RichText(
-                  text: TextSpan(
+                Text.rich(
+                  TextSpan(
                     style: const TextStyle(fontSize: 32),
                     children: [
                       TextSpan(
@@ -48,7 +48,6 @@ class HeaderBox extends StatelessWidget {
                         style: const TextStyle(
                           color: Color.fromRGBO(229, 217, 57, 1),
                           fontWeight: FontWeight.bold,
-                          fontSize: 32,
                         ),
                       ),
                       const TextSpan(
@@ -56,7 +55,6 @@ class HeaderBox extends StatelessWidget {
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 32,
                         ),
                       ),
                       TextSpan(
@@ -64,7 +62,6 @@ class HeaderBox extends StatelessWidget {
                         style: const TextStyle(
                           color: Color.fromRGBO(229, 217, 57, 1),
                           fontWeight: FontWeight.bold,
-                          fontSize: 32,
                         ),
                       ),
                       const TextSpan(
@@ -72,11 +69,11 @@ class HeaderBox extends StatelessWidget {
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 32,
                         ),
                       ),
                     ],
                   ),
+                  textAlign: TextAlign.center,
                 ),
               const SizedBox(width: 8),
               if (target.isNotEmpty)
@@ -113,7 +110,7 @@ class HeaderBox extends StatelessWidget {
             child: Icon(
               icon,
               color: Colors.white,
-              size: 40,
+              size: 50,
             ),
           ),
         ],
@@ -180,7 +177,7 @@ class TrafficLightWithBackground extends StatelessWidget {
           ),
           Positioned(
             top: 75,
-            child: TrafficLightCircle(color: Colors.amber, label: '1'),
+            child: TrafficLightCircle(color: Colors.amber.shade700, label: '1'),
           ),
           Positioned(
             top: 130,
@@ -247,5 +244,70 @@ class LegendRow extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class TopDefectsPieChart extends StatelessWidget {
+  const TopDefectsPieChart({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Card(
+        color: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              const Text(
+                "Top 5 Difetti QG2 - Shift",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: PieChart(
+                  PieChartData(
+                    sectionsSpace: 2,
+                    centerSpaceRadius: 15,
+                    sections: _generateSections(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<PieChartSectionData> _generateSections() {
+    // Example hardcoded data — replace with your dynamic values
+    final data = [
+      {'label': 'Macchie ECA', 'value': 30.0, 'color': Colors.red},
+      {'label': 'Celle Rotte', 'value': 25.0, 'color': Colors.purple},
+      {
+        'label': 'Disallineamento',
+        'value': 20.0,
+        'color': Colors.amber.shade700
+      },
+      {'label': 'Saldatura', 'value': 15.0, 'color': Colors.green},
+      {'label': 'Altro', 'value': 10.0, 'color': Colors.blue},
+    ];
+
+    return data
+        .map(
+          (e) => PieChartSectionData(
+            value: e['value'] as double,
+            color: e['color'] as Color,
+            title: '${e['value']}%',
+            radius: 50,
+            titleStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        )
+        .toList();
   }
 }

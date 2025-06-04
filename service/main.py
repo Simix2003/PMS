@@ -21,8 +21,8 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 # Local imports
 from controllers.plc import PLCConnection
 from service.controllers.debug_plc import FakePLCConnection
-from service.config.config import CHANNELS, IMAGES_DIR, STATIONS_CONFIG_PATH, load_station_configs, debug
-from service.connections.mysql import get_mysql_connection
+from service.config.config import CHANNELS, IMAGES_DIR, debug
+from service.connections.mysql import get_mysql_connection, load_channels_from_db
 from service.connections.xml_watcher import watch_folder_for_new_xml
 from service.tasks.main_task import background_task, make_status_callback
 from service.state.global_state import plc_connections, stop_threads, passato_flags
@@ -42,44 +42,59 @@ from service.routes.ml_routes import router as ml_router
 # from service.AI.AI import router as ai_router  # Uncomment if needed
 
 # ---------------- INIT GLOBAL FLAGS ----------------
-logger.info("🔄 Initializing global flags for each Line.Station")
-for line in CHANNELS:
-    for station in CHANNELS[line]:
-        key = f"{line}.{station}"
-        stop_threads[key] = False
-        passato_flags[key] = False
-logger.info("✅ Global flags initialized.")
-
-
-# ---------------- START PLC BACKGROUND TASKS ----------------
-def start_plc_background_tasks():
-    logger.info("🔄 Loading station configurations and starting PLC background tasks")
-    try:
-        line_configs = load_station_configs(str(STATIONS_CONFIG_PATH))
-        logger.info(f"✅ Loaded station configs from {STATIONS_CONFIG_PATH}")
-    except Exception as e:
-        logger.error(f"❌ Failed to load station configs: {e}")
-        raise
-
-    for line, config in line_configs.items():
-        plc_ip = config["PLC"]["IP"]
-        plc_slot = config["PLC"]["SLOT"]
-        for station in config["stations"]:
+def init_global_flags():
+    logger.info("🔄 Initializing global flags for each Line.Station")
+    stop_threads.clear()
+    passato_flags.clear()
+    for line, stations in CHANNELS.items():
+        for station in stations:
             key = f"{line}.{station}"
+            stop_threads[key] = False
+            passato_flags[key] = False
+    logger.info("✅ Global flags initialized.")
+
+def start_plc_background_tasks():
+    logger.info("🔄 Starting PLC background tasks using MySQL-based CHANNELS")
+
+    shared_plc_connections: dict[tuple[str, int], PLCConnection] = {}
+
+    for line, stations in CHANNELS.items():
+        for station, config in stations.items():
+            key = f"{line}.{station}"
+
+            plc_info = config.get("plc")
+            if not plc_info:
+                logger.warning(f"⚠️ Skipping {key} – missing 'plc' configuration")
+                continue
+
+            plc_ip = plc_info.get("ip")
+            plc_slot = plc_info.get("slot", 0)  # Default slot = 0
+            plc_key = (plc_ip, plc_slot)
+
             if debug:
                 plc_conn = FakePLCConnection(station)
                 logger.info(f"  • Using FakePLCConnection for {key}")
             else:
-                plc_conn = PLCConnection(
-                    ip_address=plc_ip,
-                    slot=plc_slot,
-                    status_callback=make_status_callback(station),
-                )
-                logger.info(f"  • Connecting to real PLC at {plc_ip}:{plc_slot} for {key}")
+                if plc_key in shared_plc_connections:
+                    plc_conn = shared_plc_connections[plc_key]
+                    logger.info(f"  • Reusing existing PLC connection for {key} ({plc_ip}:{plc_slot})")
+                else:
+                    try:
+                        plc_conn = PLCConnection(
+                            ip_address=plc_ip,
+                            slot=plc_slot,
+                            status_callback=make_status_callback(station),
+                        )
+                        shared_plc_connections[plc_key] = plc_conn
+                        logger.info(f"  • Created new PLC connection to {plc_ip}:{plc_slot} for {key}")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to connect PLC for {key}: {e}")
+                        continue
 
             plc_connections[key] = plc_conn
             asyncio.create_task(background_task(plc_conn, key))
             logger.info(f"🚀 Background task created and scheduled for {key}")
+
     logger.info("✅ All PLC background tasks started.")
 
 
@@ -94,6 +109,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("🟢 MySQL connected.")
     except Exception as e:
         logger.error(f"❌ MySQL connection failed: {e}")
+        raise
+
+     # --- Load channel configurations ---
+    logger.info("🔄 Loading station channel configurations from DB")
+    try:
+        CHANNELS.clear()
+        CHANNELS.update(load_channels_from_db())
+        init_global_flags()
+        logger.info("✅ CHANNELS loaded from DB")
+    except Exception as e:
+        logger.error(f"❌ Failed to load CHANNELS: {e}")
         raise
 
     # --- Load settings ---

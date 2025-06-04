@@ -1,5 +1,6 @@
 import base64
 from datetime import datetime
+import json
 import logging
 import pymysql
 from pymysql.cursors import DictCursor
@@ -48,6 +49,47 @@ def get_mysql_connection():
         global_state.mysql_connection = conn
         logging.info("✅ MySQL reconnected")
         return conn
+
+def get_line_name(line_id: int):
+    """Return the production line name for a given ID."""
+    conn = get_mysql_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT name FROM production_lines WHERE id = %s", (line_id,))
+        row = cursor.fetchone()
+        return row["name"] if row else None
+
+def load_channels_from_db() -> dict:
+    """Load station configs from MySQL and return the CHANNELS dict."""
+    conn = get_mysql_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT id, line_id, name, config, plc FROM stations")
+        rows = cursor.fetchall()
+
+    result: dict = {}
+    for row in rows:
+        if row["config"] is None:
+            continue
+
+        line_name = get_line_name(row["line_id"])
+        if not line_name:
+            continue
+
+        try:
+            cfg = json.loads(row["config"]) if isinstance(row["config"], str) else row["config"]
+        except Exception:
+            logging.warning(f"Invalid config JSON for station {row['name']}")
+            continue
+
+        plc_info = row.get("plc")
+        if plc_info:
+            try:
+                cfg["plc"] = json.loads(plc_info) if isinstance(plc_info, str) else plc_info
+            except Exception:
+                cfg["plc"] = None
+
+        result.setdefault(line_name, {})[row["name"]] = cfg
+
+    return result
 
 async def insert_initial_production_data(data, station_name, connection, esito):
     """

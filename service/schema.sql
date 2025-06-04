@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS ix_monitor.stations (
   display_name VARCHAR(50) NULL DEFAULT NULL,
   type ENUM('creator', 'qc', 'rework', 'other') NULL DEFAULT 'other',
   config JSON NULL DEFAULT NULL,
+  plc JSON NULL DEFAULT NULL,
   created_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   INDEX line_id (line_id ASC) INVISIBLE,

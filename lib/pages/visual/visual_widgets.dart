@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -145,7 +147,7 @@ class TrafficLightCircle extends StatelessWidget {
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 24,
-            color: Colors.white,
+            color: Colors.black,
           ),
         ),
       ),
@@ -173,11 +175,11 @@ class TrafficLightWithBackground extends StatelessWidget {
           ),
           Positioned(
             top: 20,
-            child: TrafficLightCircle(color: Colors.red, label: '2'),
+            child: TrafficLightCircle(color: Colors.amber.shade700, label: '2'),
           ),
           Positioned(
             top: 75,
-            child: TrafficLightCircle(color: Colors.amber.shade700, label: '1'),
+            child: TrafficLightCircle(color: Colors.yellow, label: '1'),
           ),
           Positioned(
             top: 130,
@@ -220,28 +222,28 @@ class LegendRow extends StatelessWidget {
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 24,
-                color: Colors.white,
+                color: Colors.black,
               ),
             ),
           ),
         ),
         const SizedBox(width: 8),
-
-        // Time cell
-        Expanded(
-          flex: 2,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              time,
-              style: const TextStyle(fontSize: 24, color: Colors.black),
+        if (time.isNotEmpty)
+          // Time cell
+          Expanded(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.black),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                time,
+                style: const TextStyle(fontSize: 24, color: Colors.black),
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -252,6 +254,8 @@ class TopDefectsPieChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final data = _getData(); // so we use it for both chart and legend
+
     return Expanded(
       child: Card(
         color: Colors.white,
@@ -259,17 +263,44 @@ class TopDefectsPieChart extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              const Text(
-                "Top 5 Difetti QG2 - Shift",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              // Legend
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: data.map((e) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: e['color'] as Color,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          e['label'] as String,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
               ),
               const SizedBox(width: 12),
+
+              // Pie Chart
               Expanded(
                 child: PieChart(
                   PieChartData(
                     sectionsSpace: 2,
                     centerSpaceRadius: 15,
-                    sections: _generateSections(),
+                    sections: _generateSections(data),
                   ),
                 ),
               ),
@@ -280,20 +311,19 @@ class TopDefectsPieChart extends StatelessWidget {
     );
   }
 
-  List<PieChartSectionData> _generateSections() {
-    // Example hardcoded data — replace with your dynamic values
-    final data = [
-      {'label': 'Macchie ECA', 'value': 30.0, 'color': Colors.red},
-      {'label': 'Celle Rotte', 'value': 25.0, 'color': Colors.purple},
+  List<Map<String, dynamic>> _getData() {
+    return [
+      {'label': 'Mancata Saldatura', 'value': 49.0, 'color': Colors.purple},
+      {'label': 'Mancato Carico', 'value': 32.0, 'color': Colors.red},
       {
-        'label': 'Disallineamento',
-        'value': 20.0,
+        'label': 'Driver Bruciato',
+        'value': 10.0,
         'color': Colors.amber.shade700
       },
-      {'label': 'Saldatura', 'value': 15.0, 'color': Colors.green},
-      {'label': 'Altro', 'value': 10.0, 'color': Colors.blue},
     ];
+  }
 
+  List<PieChartSectionData> _generateSections(List<Map<String, dynamic>> data) {
     return data
         .map(
           (e) => PieChartSectionData(
@@ -309,5 +339,1056 @@ class TopDefectsPieChart extends StatelessWidget {
           ),
         )
         .toList();
+  }
+}
+
+List<TableRow> buildCustomRows() {
+  final sampleData = [
+    ["Mancato Carico", "AIN1", "3", "126"],
+    ["Mancata Saldatura", "AIN2", "1", "294"],
+    ["Driver Bruciato", "AIN1", "1", "180"]
+  ];
+
+  return sampleData.map((row) {
+    return TableRow(
+      decoration: const BoxDecoration(color: Colors.white),
+      children: row.map((cell) {
+        return Padding(
+          padding: const EdgeInsets.all(8),
+          child: Center(
+            child: Text(
+              cell,
+              style: const TextStyle(fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }).toList();
+}
+
+class ThroughputBarChart extends StatelessWidget {
+  final List<Map<String, int>> data = const [
+    {'ok': 200, 'ng': 100}, // Shift S1
+    {'ok': 95, 'ng': 10}, // Shift S2
+    {'ok': 110, 'ng': 30}, // Shift S3
+  ];
+
+  final double globalTarget = 360; // Or any fixed/shared value
+  const ThroughputBarChart({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final maxY = _calculateMaxY() + 100;
+
+    return Expanded(
+      flex: 2,
+      child: Card(
+        color: Colors.white,
+        elevation: 10,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Throughput',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: Stack(
+                  children: [
+                    BarChart(
+                      BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY: maxY,
+                        barTouchData: BarTouchData(enabled: false),
+                        titlesData: FlTitlesData(
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                const shifts = ['S1', 'S2', 'S3'];
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(
+                                    shifts[value.toInt()],
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        gridData: FlGridData(show: false),
+                        borderData: FlBorderData(show: false),
+                        barGroups: _buildBarGroups(data),
+                        extraLinesData: ExtraLinesData(
+                          horizontalLines: [
+                            HorizontalLine(
+                              y: globalTarget,
+                              color: Colors.orangeAccent,
+                              strokeWidth: 2,
+                              dashArray: [6, 3],
+                              label: HorizontalLineLabel(
+                                show: true,
+                                alignment: Alignment.topRight,
+                                labelResolver: (line) =>
+                                    'Target: ${line.y.toInt()}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orangeAccent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // 💬 OK count inside green
+                    Positioned.fill(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final chartWidth = constraints.maxWidth;
+                          final chartHeight = constraints.maxHeight;
+                          final barCount = data.length;
+                          final groupSpace = chartWidth / (barCount * 2);
+
+                          return Stack(
+                            children: List.generate(barCount, (index) {
+                              final ok = data[index]['ok']!;
+                              final barCenterX = (2 * index + 1) * groupSpace;
+                              final okHeight = chartHeight * (ok / maxY);
+                              final topOffset = chartHeight - okHeight;
+
+                              return Positioned(
+                                left: barCenterX - 12,
+                                top: topOffset,
+                                child: Text(
+                                  '$ok',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              );
+                            }),
+                          );
+                        },
+                      ),
+                    ),
+
+                    // 💬 Total count above bar
+                    Positioned.fill(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final chartWidth = constraints.maxWidth;
+                          final chartHeight = constraints.maxHeight;
+                          final barCount = data.length;
+                          final groupSpace = chartWidth / (barCount * 2);
+
+                          return Stack(
+                            children: List.generate(barCount, (index) {
+                              final ok = data[index]['ok']!;
+                              final ng = data[index]['ng']!;
+                              final total = ok + ng;
+                              final barCenterX = (2 * index + 1) * groupSpace;
+                              final barHeight = chartHeight * (total / maxY);
+                              final topOffset = chartHeight - barHeight - 40;
+
+                              return Positioned(
+                                left: barCenterX - 16,
+                                top: topOffset,
+                                child: Text(
+                                  '$total',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              );
+                            }),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  double _calculateMaxY() {
+    final int maxTotal =
+        data.map((e) => e['ok']! + e['ng']!).reduce((a, b) => a > b ? a : b);
+
+    final double finalMax =
+        maxTotal > globalTarget ? maxTotal.toDouble() : globalTarget;
+    return finalMax;
+  }
+
+  List<BarChartGroupData> _buildBarGroups(List<Map<String, int>> data) {
+    return List.generate(data.length, (index) {
+      final ok = data[index]['ok']!;
+      final ng = data[index]['ng']!;
+      final total = ok + ng;
+
+      return BarChartGroupData(
+        x: index,
+        barRods: [
+          BarChartRodData(
+            fromY: 0,
+            toY: total.toDouble(),
+            width: 64,
+            rodStackItems: [
+              BarChartRodStackItem(
+                  0, ok.toDouble(), Colors.green), // ✅ Green bottom
+              BarChartRodStackItem(
+                  ok.toDouble(), total.toDouble(), Colors.red), // ✅ Red top
+            ],
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
+          ),
+        ],
+        showingTooltipIndicators: [],
+      );
+    });
+  }
+}
+
+class HourlyYieldBarChart extends StatelessWidget {
+  final List<Map<String, int>> data;
+  final List<String> hourLabels;
+
+  const HourlyYieldBarChart({
+    super.key,
+    required this.data,
+    required this.hourLabels,
+  });
+
+  double _calculateMaxY() {
+    final totals = data.map((e) => e['ok']! + e['ng']!).toList();
+    final maxData =
+        totals.isNotEmpty ? totals.reduce((a, b) => a > b ? a : b) : 0;
+    return maxData.toDouble() + 20; // Add some padding
+  }
+
+  List<BarChartGroupData> _buildBarGroups(double maxY) {
+    return List.generate(data.length, (index) {
+      final ok = data[index]['ok']!;
+      final ng = data[index]['ng']!;
+      final total = ok + ng;
+
+      return BarChartGroupData(
+        x: index,
+        barRods: [
+          BarChartRodData(
+            fromY: 0,
+            toY: total.toDouble(),
+            width: 28,
+            rodStackItems: [
+              BarChartRodStackItem(0, ok.toDouble(), Colors.green),
+              BarChartRodStackItem(ok.toDouble(), total.toDouble(), Colors.red),
+            ],
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
+          ),
+        ],
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxY = _calculateMaxY();
+    final double targetLine = 45;
+
+    return Card(
+      color: Colors.white,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Throughput Cumulativo',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            Expanded(
+              child: BarChart(
+                BarChartData(
+                  alignment: BarChartAlignment.spaceAround,
+                  maxY: maxY,
+                  barTouchData: BarTouchData(enabled: false),
+                  titlesData: FlTitlesData(
+                    leftTitles:
+                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles:
+                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles:
+                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          final i = value.toInt();
+                          if (i >= 0 && i < hourLabels.length) {
+                            return Text(
+                              hourLabels[i],
+                              style: const TextStyle(fontSize: 16),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ),
+                  ),
+                  gridData: FlGridData(show: false),
+                  borderData: FlBorderData(show: false),
+                  barGroups: _buildBarGroups(maxY),
+                  extraLinesData: ExtraLinesData(horizontalLines: [
+                    HorizontalLine(
+                      y: targetLine,
+                      color: Colors.orangeAccent,
+                      strokeWidth: 2,
+                      dashArray: [8, 4],
+                      label: HorizontalLineLabel(
+                        show: true,
+                        alignment: Alignment.topRight,
+                        labelResolver: (line) =>
+                            'Target: ${targetLine.toInt()}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orangeAccent,
+                        ),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+  final bool isDashed;
+
+  const LegendItem({
+    super.key,
+    required this.color,
+    required this.label,
+    this.isDashed = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        isDashed
+            ? Container(
+                width: 20,
+                height: 4,
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                        color: color, width: 2, style: BorderStyle.solid),
+                  ),
+                ),
+                child: LayoutBuilder(
+                  builder: (_, __) => Row(
+                    children: List.generate(4, (_) {
+                      return Expanded(
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 2),
+                          color: color,
+                          height: 2,
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              )
+            : Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.rectangle,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+        const SizedBox(width: 6),
+        Text(label),
+      ],
+    );
+  }
+}
+
+class YieldComparisonBarChart extends StatelessWidget {
+  final List<Map<String, dynamic>> data;
+  final double target;
+
+  const YieldComparisonBarChart({
+    super.key,
+    required this.data,
+    this.target = 90,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Colors.white,
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            const Text(
+              'Yield per Turno',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100,
+              child: Stack(
+                children: [
+                  // 🔹 Chart
+                  BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: 100,
+                      barTouchData: BarTouchData(enabled: false),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              int i = value.toInt();
+                              return Text(data[i]['shift']);
+                            },
+                          ),
+                        ),
+                        topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                      ),
+                      gridData: FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      barGroups: List.generate(data.length, (index) {
+                        final item = data[index];
+                        return BarChartGroupData(
+                          x: index,
+                          barRods: [
+                            BarChartRodData(
+                              fromY: 0,
+                              toY: item['bussing1'].toDouble(),
+                              width: 40,
+                              color: Colors.blue,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            BarChartRodData(
+                              fromY: 0,
+                              toY: item['bussing2'].toDouble(),
+                              width: 40,
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ],
+                          barsSpace: 6,
+                        );
+                      }),
+                      extraLinesData: ExtraLinesData(horizontalLines: [
+                        HorizontalLine(
+                          y: target,
+                          color: Colors.orange,
+                          strokeWidth: 2,
+                          dashArray: [8, 4],
+                          label: HorizontalLineLabel(
+                            show: true,
+                            labelResolver: (line) => '${target.toInt()}%',
+                            alignment: Alignment.topRight,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange,
+                            ),
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ),
+                  // 🔹 Overlay percentages
+                  Positioned.fill(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final barGroupCount = data.length;
+                        final barWidth = 32.0;
+                        final barSpacing = 8.0;
+
+                        final chartWidth = constraints.maxWidth;
+                        final chartHeight = constraints.maxHeight;
+
+                        return Stack(
+                          children: List.generate(barGroupCount, (index) {
+                            final item = data[index];
+                            final bussing1 = item['bussing1'].toDouble();
+                            final bussing2 = item['bussing2'].toDouble();
+
+                            final groupCenterX =
+                                ((index + 0.5) * chartWidth / barGroupCount);
+
+                            final b1Top = chartHeight * (1 - bussing1 / 100);
+                            final b2Top = chartHeight * (1 - bussing2 / 100);
+
+                            return Stack(
+                              children: [
+                                Positioned(
+                                  left:
+                                      groupCenterX - barWidth - barSpacing / 2,
+                                  top: b1Top + 4,
+                                  child: Text(
+                                    '${bussing1.toInt()}%',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: groupCenterX + barSpacing / 2,
+                                  top: b2Top + 4,
+                                  child: Text(
+                                    '${bussing2.toInt()}%',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 20,
+              children: const [
+                LegendItem(color: Colors.blue, label: 'Bussing 1'),
+                LegendItem(color: Colors.green, label: 'Bussing 2'),
+                LegendItem(
+                    color: Colors.orange, label: 'Target', isDashed: true),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class YieldLineChart extends StatelessWidget {
+  final List<Map<String, dynamic>>
+      hourlyData; // [{hour: '08:00', bussing1: 92, bussing2: 88}, ...]
+  final double target;
+
+  const YieldLineChart({
+    super.key,
+    required this.hourlyData,
+    this.target = 90,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Card(
+        color: Colors.white,
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            children: [
+              const Text(
+                'Yield Oraria Cumulata',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: LineChart(
+                  LineChartData(
+                    minY: 50,
+                    maxY: 120,
+                    lineTouchData: LineTouchData(enabled: false),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: false,
+                        ),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          getTitlesWidget: (value, meta) {
+                            final index = value.toInt();
+                            // Only show label if it's an integer and a valid index
+                            if (index >= 0 &&
+                                index < hourlyData.length &&
+                                value == index.toDouble()) {
+                              return SideTitleWidget(
+                                meta: meta,
+                                child: Text(
+                                  hourlyData[index]['hour'],
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
+                      topTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    ),
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: true,
+                      horizontalInterval: 20,
+                      getDrawingHorizontalLine: (value) => FlLine(
+                        color: Colors.grey.withOpacity(0.2),
+                        strokeWidth: 1,
+                      ),
+                    ),
+                    borderData: FlBorderData(
+                      show: true,
+                      border: const Border(
+                        left: BorderSide(),
+                        bottom: BorderSide(),
+                      ),
+                    ),
+                    lineBarsData: [
+                      LineChartBarData(
+                        isCurved: false,
+                        spots: List.generate(
+                          hourlyData.length,
+                          (i) => FlSpot(i.toDouble(),
+                              hourlyData[i]['bussing1'].toDouble()),
+                        ),
+                        color: Colors.blue,
+                        barWidth: 2,
+                        dotData: FlDotData(show: false),
+                      ),
+                      LineChartBarData(
+                        isCurved: false,
+                        spots: List.generate(
+                          hourlyData.length,
+                          (i) => FlSpot(i.toDouble(),
+                              hourlyData[i]['bussing2'].toDouble()),
+                        ),
+                        color: Colors.green,
+                        barWidth: 2,
+                        dotData: FlDotData(show: false),
+                      ),
+                      // 🔸 Target line (dashed)
+                      LineChartBarData(
+                        spots: List.generate(
+                          hourlyData.length,
+                          (i) => FlSpot(i.toDouble(), target),
+                        ),
+                        color: Colors.orange,
+                        isStrokeCapRound: true,
+                        barWidth: 2,
+                        isCurved: false,
+                        dashArray: [6, 4],
+                        dotData: FlDotData(show: false),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 20,
+                children: const [
+                  LegendItem(color: Colors.blue, label: 'Bussing 1'),
+                  LegendItem(color: Colors.green, label: 'Bussing 2'),
+                  LegendItem(
+                      color: Colors.orange, label: 'Target', isDashed: true),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class TopDefectsHorizontalBarChart extends StatelessWidget {
+  final List<String> defectLabels = [
+    'NG Macchie ECA',
+    'NG Saldatura',
+    'NG Bad Soldering',
+    'NG Mancanza l_Ribbon',
+    'NG Celle Rotte',
+  ];
+
+  final List<int> ain1Counts = [17, 8, 9, 7, 3];
+  final List<int> ain2Counts = [4, 5, 0, 1, 2];
+
+  TopDefectsHorizontalBarChart({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 10,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: AspectRatio(
+          aspectRatio: 1.4,
+          child: Stack(
+            children: [
+              RotatedBox(
+                quarterTurns: 1, // Rotate chart 90° clockwise
+                child: BarChart(
+                  BarChartData(
+                    maxY: 20,
+                    alignment: BarChartAlignment.center,
+                    barGroups: List.generate(defectLabels.length, (index) {
+                      final ain1 = ain1Counts[index].toDouble();
+                      final ain2 = ain2Counts[index].toDouble();
+                      return BarChartGroupData(
+                        x: index,
+                        barRods: [
+                          BarChartRodData(
+                            toY: ain1,
+                            width: 12,
+                            color: Colors.blue,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          BarChartRodData(
+                            toY: ain2,
+                            width: 12,
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ],
+                        barsSpace: 6,
+                      );
+                    }),
+                    titlesData: FlTitlesData(
+                      leftTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 80,
+                          getTitlesWidget: (value, meta) {
+                            final i = value.toInt();
+                            if (i < defectLabels.length) {
+                              return RotatedBox(
+                                quarterTurns: -1,
+                                child: Text(
+                                  defectLabels[i],
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
+                    ),
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      getDrawingHorizontalLine: (value) => FlLine(
+                        color: Colors.grey.withOpacity(0.2),
+                        strokeWidth: 1,
+                      ),
+                    ),
+                    borderData: FlBorderData(show: false),
+                  ),
+                ),
+              ),
+
+              // ✅ Value labels
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final barHeight =
+                          constraints.maxHeight / defectLabels.length;
+                      return Column(
+                        children: List.generate(defectLabels.length, (index) {
+                          final ain1 = ain1Counts[index];
+                          final ain2 = ain2Counts[index];
+                          return SizedBox(
+                            height: barHeight,
+                            child: Row(
+                              children: [
+                                const Spacer(),
+                                Text(
+                                  '$ain1',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '$ain2',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 20,
+                children: const [
+                  LegendItem(color: Colors.blue, label: 'Bussing 1'),
+                  LegendItem(color: Colors.green, label: 'Bussing 2'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class VPFDefectsHorizontalBarChart extends StatelessWidget {
+  final List<String> defectLabels = [
+    'NG Macchie ECA',
+    'NG Saldatura',
+    'NG Bad Soldering',
+  ];
+
+  final List<int> ain1Counts = [17, 8, 9];
+  final List<int> ain2Counts = [4, 5, 0];
+
+  VPFDefectsHorizontalBarChart({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 10,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Stack(
+            children: [
+              RotatedBox(
+                quarterTurns: 1, // Rotate chart 90° clockwise
+                child: BarChart(
+                  BarChartData(
+                    maxY: 20,
+                    alignment: BarChartAlignment.center,
+                    barGroups: List.generate(defectLabels.length, (index) {
+                      final ain1 = ain1Counts[index].toDouble();
+                      final ain2 = ain2Counts[index].toDouble();
+                      return BarChartGroupData(
+                        x: index,
+                        barRods: [
+                          BarChartRodData(
+                            toY: ain1,
+                            width: 12,
+                            color: Colors.purple,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          BarChartRodData(
+                            toY: ain2,
+                            width: 12,
+                            color: Colors.grey,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ],
+                        barsSpace: 6,
+                      );
+                    }),
+                    titlesData: FlTitlesData(
+                      leftTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 80,
+                          getTitlesWidget: (value, meta) {
+                            final i = value.toInt();
+                            if (i < defectLabels.length) {
+                              return RotatedBox(
+                                quarterTurns: -1,
+                                child: Text(
+                                  defectLabels[i],
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
+                    ),
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      getDrawingHorizontalLine: (value) => FlLine(
+                        color: Colors.grey.withOpacity(0.2),
+                        strokeWidth: 1,
+                      ),
+                    ),
+                    borderData: FlBorderData(show: false),
+                  ),
+                ),
+              ),
+
+              // ✅ Value labels
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final barHeight =
+                          constraints.maxHeight / defectLabels.length;
+                      return Column(
+                        children: List.generate(defectLabels.length, (index) {
+                          final ain1 = ain1Counts[index];
+                          final ain2 = ain2Counts[index];
+                          return SizedBox(
+                            height: barHeight,
+                            child: Row(
+                              children: [
+                                const Spacer(),
+                                Text(
+                                  '$ain1',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.purple,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '$ain2',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 20,
+                children: const [
+                  LegendItem(color: Colors.purple, label: 'M308'),
+                  LegendItem(color: Colors.grey, label: 'M309'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

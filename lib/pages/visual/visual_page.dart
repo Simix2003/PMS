@@ -1,13 +1,10 @@
 // ignore_for_file: library_private_types_in_public_api
 
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
+//import 'package:fl_chart/fl_chart.dart';
 import 'visual_widgets.dart';
 import 'package:gauge_indicator/gauge_indicator.dart';
 
-/// ╔══════════════════════════════════════════════════════════════════╗
-/// ║  VISUAL MANAGEMENT  –  LINE-OVERVIEW SINGLE-PAGE DASHBOARD       ║
-/// ╚══════════════════════════════════════════════════════════════════╝
 class VisualPage extends StatefulWidget {
   const VisualPage({super.key});
 
@@ -17,6 +14,40 @@ class VisualPage extends StatefulWidget {
 
 class _VisualPageState extends State<VisualPage> {
   double value = 79;
+  Color errorColor = Colors.amber.shade700;
+  Color warningColor = Colors.yellow.shade400;
+  Color okColor = Colors.green.shade400;
+  Color textColor = Colors.black;
+  double circleSize = 32;
+
+  final List<Map<String, dynamic>> yieldData = [
+    {"shift": "S1", "bussing1": 86, "bussing2": 92},
+    {"shift": "S2", "bussing1": 78, "bussing2": 83},
+    {"shift": "S3", "bussing1": 91, "bussing2": 89},
+  ];
+
+  final hourlyYieldData = [
+    {'hour': '08', 'bussing1': 91, 'bussing2': 88},
+    {'hour': '09', 'bussing1': 92, 'bussing2': 90},
+    {'hour': '10', 'bussing1': 75, 'bussing2': 85},
+    {'hour': '11', 'bussing1': 78, 'bussing2': 91},
+    {'hour': '12', 'bussing1': 62, 'bussing2': 86},
+    {'hour': '13', 'bussing1': 53, 'bussing2': 89},
+    {'hour': '14', 'bussing1': 80, 'bussing2': 87},
+    {'hour': '15', 'bussing1': 92, 'bussing2': 88},
+  ];
+
+  // Function that takes in input the Current value, the target value and the threshold
+  // and returns the color of the gauge
+  Color getColor(double value, double target, double threshold) {
+    if (value > target) {
+      return okColor;
+    } else if (value < target - threshold) {
+      return warningColor;
+    } else {
+      return errorColor;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +55,7 @@ class _VisualPageState extends State<VisualPage> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -32,7 +63,7 @@ class _VisualPageState extends State<VisualPage> {
               Row(
                 children: const [
                   Expanded(
-                    flex: 3,
+                    flex: 4,
                     child: HeaderBox(
                       title: 'Produzione Shift',
                       target: '360',
@@ -60,11 +91,11 @@ class _VisualPageState extends State<VisualPage> {
 
               const SizedBox(height: 12),
 
-              // ────── PLACEHOLDERS FOR FIRST ROW ──────
+              // ────── VALUES FIRST ROW ──────
               Row(
                 children: [
                   Expanded(
-                    flex: 3,
+                    flex: 4,
                     child: Container(
                       height: 425,
                       margin: const EdgeInsets.only(right: 6, bottom: 16),
@@ -80,6 +111,7 @@ class _VisualPageState extends State<VisualPage> {
                             child: Row(
                               children: [
                                 Expanded(
+                                  flex: 3,
                                   child: Column(
                                     children: [
                                       Expanded(
@@ -89,12 +121,12 @@ class _VisualPageState extends State<VisualPage> {
                                             Row(
                                               children: [
                                                 const SizedBox(
-                                                  width: 70,
+                                                  width: 100,
                                                 ), // aligns with the AIN 1 / AIN 2 label
                                                 Expanded(
                                                   child: Center(
                                                     child: Text(
-                                                      'IN Good Shift',
+                                                      'Bussing IN',
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -103,11 +135,11 @@ class _VisualPageState extends State<VisualPage> {
                                                     ),
                                                   ),
                                                 ),
-                                                const SizedBox(width: 8),
+                                                const SizedBox(width: 70),
                                                 Expanded(
                                                   child: Center(
                                                     child: Text(
-                                                      'OUT NG Shift',
+                                                      'NG Bussing OUT',
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -134,36 +166,97 @@ class _VisualPageState extends State<VisualPage> {
                                                       color: Colors.black,
                                                     ),
                                                   ),
-                                                  SizedBox(width: 8),
+
+                                                  // 🔴 First Circle
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    width: circleSize,
+                                                    height: circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color: getColor(
+                                                          176, 180, 25),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+
+                                                  const SizedBox(width: 8),
                                                   Expanded(
                                                     child: Card(
-                                                      color: Colors.green,
-                                                      child: Center(
-                                                        child: Text(
-                                                          '176',
-                                                          style: TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 32,
-                                                            color: Colors.white,
+                                                      color: Colors.white,
+                                                      child: Container(
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          border: Border.all(
+                                                            color: textColor,
+                                                            width: 1,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(12),
+                                                        ),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        child: Center(
+                                                          child: Text(
+                                                            '176',
+                                                            style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 32,
+                                                              color: textColor,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
                                                     ),
                                                   ),
+
+                                                  const SizedBox(width: 24),
+
+                                                  // 🟢 Second Circle
+                                                  Container(
+                                                    width: circleSize,
+                                                    height: circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          getColor(19, 10, 5),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+
                                                   const SizedBox(width: 8),
+
                                                   Expanded(
                                                     child: Card(
-                                                      color:
-                                                          Colors.amber.shade700,
-                                                      child: Center(
-                                                        child: Text(
-                                                          '19',
-                                                          style: TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 32,
-                                                            color: Colors.white,
+                                                      color: Colors.white,
+                                                      child: Container(
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          border: Border.all(
+                                                            color: textColor,
+                                                            width: 1,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(12),
+                                                        ),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        child: Center(
+                                                          child: Text(
+                                                            '19',
+                                                            style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 32,
+                                                              color: textColor,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
@@ -188,34 +281,89 @@ class _VisualPageState extends State<VisualPage> {
                                                     ),
                                                   ),
                                                   SizedBox(width: 8),
+
+                                                  Container(
+                                                    width: circleSize,
+                                                    height: circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color: getColor(
+                                                          176, 180, 25),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                  SizedBox(width: 8),
                                                   Expanded(
                                                     child: Card(
-                                                      color: Colors.red,
-                                                      child: Center(
-                                                        child: Text(
-                                                          '42',
-                                                          style: TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 32,
-                                                            color: Colors.white,
+                                                      color: Colors.white,
+                                                      child: Container(
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          border: Border.all(
+                                                            color: textColor,
+                                                            width: 1,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(12),
+                                                        ),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        child: Center(
+                                                          child: Text(
+                                                            '42',
+                                                            style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 32,
+                                                              color: textColor,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
                                                     ),
                                                   ),
+                                                  const SizedBox(width: 24),
+                                                  // 🟢 Second Circle
+                                                  Container(
+                                                    width: circleSize,
+                                                    height: circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color: getColor(4, 10, 5),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
                                                   const SizedBox(width: 8),
                                                   Expanded(
                                                     child: Card(
-                                                      color: Colors.red,
-                                                      child: Center(
-                                                        child: Text(
-                                                          '4',
-                                                          style: TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 32,
-                                                            color: Colors.white,
+                                                      color: Colors.white,
+                                                      child: Container(
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          border: Border.all(
+                                                            color: textColor,
+                                                            width: 1,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(12),
+                                                        ),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        child: Center(
+                                                          child: Text(
+                                                            '4',
+                                                            style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 32,
+                                                              color: textColor,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
@@ -231,23 +379,35 @@ class _VisualPageState extends State<VisualPage> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Expanded(
-                                  child: Card(
-                                    color: Colors.yellow.shade100,
-                                    child: Center(child: Text('Throughput')),
-                                  ),
-                                ),
+                                ThroughputBarChart(),
                               ],
                             ),
                           ),
                           const SizedBox(height: 8),
                           // Second row with 1 card that fills all remaining space
                           Expanded(
-                            child: Card(
-                              color: Colors.red.shade100,
-                              child: Center(child: Text('Throughput cumulato')),
-                            ),
-                          ),
+                              child: HourlyYieldBarChart(
+                            data: [
+                              {'ok': 30, 'ng': 10},
+                              {'ok': 40, 'ng': 5},
+                              {'ok': 50, 'ng': 2},
+                              {'ok': 28, 'ng': 6},
+                              {'ok': 35, 'ng': 4},
+                              {'ok': 38, 'ng': 1},
+                              {'ok': 42, 'ng': 3},
+                              {'ok': 33, 'ng': 7},
+                            ],
+                            hourLabels: [
+                              '08:00',
+                              '09:00',
+                              '10:00',
+                              '11:00',
+                              '12:00',
+                              '13:00',
+                              '14:00',
+                              '15:00',
+                            ],
+                          )),
                         ],
                       ),
                     ),
@@ -299,18 +459,49 @@ class _VisualPageState extends State<VisualPage> {
                                             Expanded(
                                               child: Row(
                                                 children: [
+                                                  // Circle
+                                                  Container(
+                                                    width: circleSize,
+                                                    height: circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          getColor(89, 100, 25),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+
+                                                  const SizedBox(
+                                                    width: 8,
+                                                  ),
+
                                                   Expanded(
                                                     child: Card(
-                                                      color:
-                                                          Colors.amber.shade700,
-                                                      child: Center(
-                                                        child: Text(
-                                                          '89%',
-                                                          style: TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 32,
-                                                            color: Colors.white,
+                                                      color: Colors.white,
+                                                      child: Container(
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          border: Border.all(
+                                                            color: textColor,
+                                                            width: 1,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(12),
+                                                        ),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        child: Center(
+                                                          child: Text(
+                                                            '89%',
+                                                            style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 32,
+                                                              color: textColor,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
@@ -324,17 +515,48 @@ class _VisualPageState extends State<VisualPage> {
                                             Expanded(
                                               child: Row(
                                                 children: [
+                                                  // Circle
+                                                  Container(
+                                                    width: circleSize,
+                                                    height: circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          getColor(90, 90, 25),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+
+                                                  const SizedBox(
+                                                    width: 8,
+                                                  ),
                                                   Expanded(
                                                     child: Card(
-                                                      color: Colors.green,
-                                                      child: Center(
-                                                        child: Text(
-                                                          '90%',
-                                                          style: TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 32,
-                                                            color: Colors.white,
+                                                      color: Colors.white,
+                                                      child: Container(
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          border: Border.all(
+                                                            color: textColor,
+                                                            width: 1,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(12),
+                                                        ),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                vertical: 12),
+                                                        child: Center(
+                                                          child: Text(
+                                                            '90%',
+                                                            style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 32,
+                                                              color: textColor,
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
@@ -352,22 +574,16 @@ class _VisualPageState extends State<VisualPage> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   flex: 3,
-                                  child: Card(
-                                    color: Colors.green.shade100,
-                                    child: Center(child: Text('Yield')),
-                                  ),
+                                  child: YieldComparisonBarChart(
+                                      data: yieldData, target: 90),
                                 ),
                               ],
                             ),
                           ),
                           const SizedBox(height: 8),
                           // Second row with 1 card that fills all remaining space
-                          Expanded(
-                            child: Card(
-                              color: Colors.purple.shade100,
-                              child:
-                                  Center(child: Text('Yield Oraria Cumulata')),
-                            ),
+                          YieldLineChart(
+                            hourlyData: hourlyYieldData,
                           ),
                         ],
                       ),
@@ -389,9 +605,13 @@ class _VisualPageState extends State<VisualPage> {
                           // Traffic light
                           Column(
                             mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               const TrafficLightWithBackground(),
+                              Text('Ultimi XXX Shift',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold)),
                             ],
                           ),
                           Spacer(),
@@ -401,19 +621,17 @@ class _VisualPageState extends State<VisualPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               LegendRow(
-                                  color: Colors.red,
+                                  color: errorColor,
                                   role: 'Head of production',
                                   time: '> 4h'),
                               SizedBox(height: 8),
                               LegendRow(
-                                  color: Colors.amber.shade700,
+                                  color: warningColor,
                                   role: 'Shift Manager',
                                   time: '2h << 4h'),
                               SizedBox(height: 8),
                               LegendRow(
-                                  color: Colors.green,
-                                  role: 'Area Head',
-                                  time: '< 2h'),
+                                  color: okColor, role: 'Chiusi', time: ''),
                             ],
                           ),
                           SizedBox(height: 24),
@@ -426,8 +644,9 @@ class _VisualPageState extends State<VisualPage> {
 
               // ────── SECOND HEADER ROW ──────
               Row(
-                children: const [
-                  Expanded(
+                children: [
+                  // LEFT SIDE – UPTIME/DOWNTIME
+                  const Expanded(
                     flex: 3,
                     child: HeaderBox(
                       title: 'UPTIME/DOWNTIME Shift',
@@ -435,12 +654,44 @@ class _VisualPageState extends State<VisualPage> {
                       icon: Icons.timer_outlined,
                     ),
                   ),
+
+                  // RIGHT SIDE – Pareto + NG Card
                   Expanded(
                     flex: 3,
-                    child: HeaderBox(
-                      title: 'Pareto Shift',
-                      target: '',
-                      icon: Icons.bar_chart_rounded,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: 65,
+                          child: Card(
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            color: warningColor,
+                            margin: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 8, horizontal: 12),
+                              child: Text(
+                                '23',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  color: textColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const Expanded(
+                          child: HeaderBox(
+                            title: 'Pareto Shift',
+                            target: '',
+                            icon: Icons.bar_chart_rounded,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -465,7 +716,7 @@ class _VisualPageState extends State<VisualPage> {
                         children: [
                           // LEFT COLUMN (2 stacked rows)
                           Expanded(
-                            flex: 1,
+                            flex: 2,
                             child: Column(
                               children: [
                                 Expanded(
@@ -478,14 +729,14 @@ class _VisualPageState extends State<VisualPage> {
                                             MainAxisAlignment.center,
                                         children: [
                                           const Text(
-                                            'UpTime',
+                                            'Available\nTime',
                                             style: TextStyle(
-                                              fontSize: 32,
+                                              fontSize: 28,
                                               fontWeight: FontWeight.bold,
                                               color: Colors.black87,
                                             ),
                                           ),
-                                          const SizedBox(width: 32),
+                                          const SizedBox(width: 16),
                                           Column(
                                             children: [
                                               SizedBox(
@@ -513,14 +764,12 @@ class _VisualPageState extends State<VisualPage> {
                                                             GaugeRoundedProgressBar(
                                                           color: () {
                                                             if (value <= 50) {
-                                                              return Colors.red;
+                                                              return errorColor;
                                                             }
                                                             if (value <= 75) {
-                                                              return Colors
-                                                                  .amber
-                                                                  .shade700;
+                                                              return warningColor;
                                                             }
-                                                            return Colors.green;
+                                                            return okColor;
                                                           }(),
                                                         ),
                                                       ),
@@ -569,13 +818,78 @@ class _VisualPageState extends State<VisualPage> {
                             ),
                           ),
                           const SizedBox(width: 8),
-
-                          // RIGHT COLUMN (1 full-height card)
                           Expanded(
-                            flex: 1,
-                            child: Card(
-                              color: Colors.blue.shade100,
-                              child: Center(child: Text("Uptime % Chart")),
+                            flex: 3,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  SizedBox(
+                                    height: 275,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        border: Border.all(
+                                            color: Colors.black, width: 1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Table(
+                                          border: TableBorder.all(
+                                              color: Colors.black, width: 0.5),
+                                          columnWidths: const {
+                                            0: FlexColumnWidth(2),
+                                            1: FlexColumnWidth(2),
+                                            2: FlexColumnWidth(2),
+                                            3: FlexColumnWidth(2),
+                                            4: FlexColumnWidth(2),
+                                          },
+                                          children: [
+                                            const TableRow(
+                                              decoration: BoxDecoration(
+                                                  color: Colors.white),
+                                              children: [
+                                                Padding(
+                                                  padding: EdgeInsets.all(8),
+                                                  child: Text("Tipo \nFermata",
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold)),
+                                                ),
+                                                Padding(
+                                                  padding: EdgeInsets.all(8),
+                                                  child: Text("Macchina",
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold)),
+                                                ),
+                                                Padding(
+                                                  padding: EdgeInsets.all(8),
+                                                  child: Text("Frequenza",
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold)),
+                                                ),
+                                                Padding(
+                                                  padding: EdgeInsets.all(8),
+                                                  child: Text(
+                                                      "Fermo Cumulato (min)",
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold)),
+                                                ),
+                                              ],
+                                            ),
+                                            ...buildCustomRows(),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -590,18 +904,14 @@ class _VisualPageState extends State<VisualPage> {
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         children: [
                           // LEFT COLUMN (1 card)
                           Expanded(
                             flex: 3,
-                            child: Card(
-                              color: Colors.green.shade100,
-                              child: Center(
-                                  child: Text("Top 5 Difetti QG2 - Shift")),
-                            ),
+                            child: TopDefectsHorizontalBarChart(),
                           ),
 
                           const SizedBox(width: 8),
@@ -609,12 +919,7 @@ class _VisualPageState extends State<VisualPage> {
                           // RIGHT COLUMN (1 full-height card)
                           Expanded(
                             flex: 2,
-                            child: Card(
-                              color: Colors.blue.shade100,
-                              child: Center(
-                                  child: Text(
-                                      "Difetti Visti alla VPF - WiP - Shift")),
-                            ),
+                            child: VPFDefectsHorizontalBarChart(),
                           ),
                         ],
                       ),

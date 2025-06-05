@@ -13,6 +13,10 @@ class FakePLCConnection(PLCConnection):
     def __init__(self, station_id: str):
         self.connected = True
         self.station_id = station_id  # e.g. "LineaB.M309"
+         # Required for buffer logic
+        self.ip_address = f"192.168.32.2"
+        self.slot = 1
+        self.client = FakeClient()
 
     def is_connected(self):
         return True
@@ -29,3 +33,23 @@ class FakePLCConnection(PLCConnection):
 
     def read_string(self, db, byte, length):
         return global_state.debug_moduli.get(self.station_id, "Fake String")
+
+class FakeClient:
+    def __init__(self):
+        self.connected = True
+
+    def get_connected(self):
+        return self.connected
+
+    def connect(self, ip, rack, slot):
+        print(f"🔌 (Fake) Connected to PLC at {ip}")
+
+    def disconnect(self):
+        print("🔌 (Fake) Disconnected")
+
+    def db_read(self, db_number, start, size):
+        # Return dummy bytearray of requested size
+        return bytearray([0] * size)
+
+    def db_write(self, db_number, start, data):
+        print(f"📤 (Fake) Writing to DB{db_number}, start={start}, data={data}")

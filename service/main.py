@@ -21,7 +21,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 # Local imports
 from controllers.plc import PLCConnection
 from service.controllers.debug_plc import FakePLCConnection
-from service.config.config import CHANNELS, IMAGES_DIR, debug
+from service.config.config import CHANNELS, IMAGES_DIR, PLC_DB_RANGES, debug
 from service.connections.mysql import get_mysql_connection, load_channels_from_db
 from service.connections.xml_watcher import watch_folder_for_new_xml
 from service.tasks.main_task import background_task, make_status_callback
@@ -68,7 +68,7 @@ def start_plc_background_tasks():
                 continue
 
             plc_ip = plc_info.get("ip")
-            plc_slot = plc_info.get("slot", 0)  # Default slot = 0
+            plc_slot = plc_info.get("slot", 0)
             plc_key = (plc_ip, plc_slot)
 
             if debug:
@@ -111,11 +111,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error(f"❌ MySQL connection failed: {e}")
         raise
 
-     # --- Load channel configurations ---
+    # --- Load channel configurations ---
     logger.info("🔄 Loading station channel configurations from DB")
     try:
         CHANNELS.clear()
-        CHANNELS.update(load_channels_from_db())
+        PLC_DB_RANGES.clear()  # ← Assuming you define this global elsewhere
+
+        channels, plc_db_ranges = load_channels_from_db()
+
+        CHANNELS.update(channels)
+        PLC_DB_RANGES.update(plc_db_ranges)
+
         init_global_flags()
         logger.info("✅ CHANNELS loaded from DB")
     except Exception as e:

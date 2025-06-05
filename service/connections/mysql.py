@@ -59,14 +59,20 @@ def get_line_name(line_id: int):
         row = cursor.fetchone()
         return row["name"] if row else None
 
-def load_channels_from_db() -> dict:
-    """Load station configs from MySQL and return the CHANNELS dict."""
+def load_channels_from_db() -> tuple[dict, dict]:
+    """
+    Load station configs from MySQL and return:
+    1. CHANNELS dict: {line_name: {station_name: config_dict}}
+    2. PLC DB RANGES dict: {(ip, slot): {db_number: {'min': x, 'max': y}}}
+    """
     conn = get_mysql_connection()
     with conn.cursor() as cursor:
         cursor.execute("SELECT id, line_id, name, config, plc FROM stations")
         rows = cursor.fetchall()
 
-    result: dict = {}
+    channels: dict = {}
+    plc_db_ranges: dict[tuple[str, int], dict[int, dict[str, int]]] = {}
+
     for row in rows:
         if row["config"] is None:
             continue
@@ -88,9 +94,26 @@ def load_channels_from_db() -> dict:
             except Exception:
                 cfg["plc"] = None
 
-        result.setdefault(line_name, {})[row["name"]] = cfg
+        # Save config
+        channels.setdefault(line_name, {})[row["name"]] = cfg
 
-    return result
+        # Collect DB range info if PLC and config present
+        plc = cfg.get("plc")
+        if not plc:
+            continue
+
+        plc_key = (plc["ip"], plc.get("slot", 0))
+
+        for key, field in cfg.items():
+            if isinstance(field, dict) and "db" in field and "byte" in field:
+                db = field["db"]
+                byte = field["byte"]
+
+                db_range = plc_db_ranges.setdefault(plc_key, {}).setdefault(db, {"min": byte, "max": byte})
+                db_range["min"] = min(db_range["min"], byte)
+                db_range["max"] = max(db_range["max"], byte)
+                
+    return channels, plc_db_ranges
 
 async def insert_initial_production_data(data, station_name, connection, esito):
     """

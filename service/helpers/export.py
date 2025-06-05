@@ -33,7 +33,8 @@ EXCEL_DEFECT_COLUMNS = {
 }
 
 SHEET_NAMES = [
-    "Metadata", "Risolutivo", "Eventi", "MBJ", "NG Generali", "NG Saldature", "NG Disall. Ribbon",
+    "Metadata", "Risolutivo", "Eventi", #"MBJ", 
+    "NG Generali", "NG Saldature", "NG Disall. Ribbon",
     "NG Disall. Stringa", "NG Mancanza Ribbon", "NG I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Graffio su Cella", "NG Bad Soldering", "NG Altro"
 ]
 
@@ -121,7 +122,7 @@ def metadata_sheet(ws, data: dict):
     ws.append([])
     ws.append(["Data e ora esportazione:", current_time])
     ws.append(["Numero totale moduli esportati:", len(id_moduli)])
-    ws.append(["Numero totale produzioni esportate:", len(productions)])
+    ws.append(["Numero totale eventi esportati:", len(productions)])
 
     # ➕ Breakdown by adjusted esito logic
     good = 0
@@ -209,6 +210,8 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 FILL_BLUE = PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid")
 FILL_WHITE = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+FILL_QG = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")  # Light grey
+
 
 # Excel helpers --------------------------------------------------------------
 
@@ -246,17 +249,11 @@ def _append_dataframe(
         for col_idx in range(1, len(row_values) + 1):
             ws.cell(row=row_idx, column=col_idx).fill = current_fill
 
-
 # ---------------------------------------------------------------------------
 # Sheet generators -----------------------------------------------------------
 # ---------------------------------------------------------------------------
 
 def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
-    """Create the historical/traceability *Risolutivo* sheet.
-
-    **Note:** Starting May‑2025 this sheet no longer includes the *Numero Eventi*
-    column – that information is now available in the companion *Eventi* sheet.
-    """
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
@@ -267,6 +264,14 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
     objects_by_id = {o["id"]: o for o in objects}
     stations_by_id = {s["id"]: s for s in stations}
     lines_by_id = {l["id"]: l for l in production_lines}
+
+    # Map defects by production_id
+    defects_by_production = {}
+    for d in object_defects:
+        pid = d.get("production_id")
+        if pid not in defects_by_production:
+            defects_by_production[pid] = []
+        defects_by_production[pid].append(d)
 
     rows: List[Dict[str, Any]] = []
 
@@ -285,13 +290,12 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # --- cycle time to seconds ----------------------------------------
         cycle_seconds = None
         if cycle_time_obj:
             try:
                 h, m, s = map(float, str(cycle_time_obj).split(":"))
                 cycle_seconds = h * 3600 + m * 60 + s
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
 
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
@@ -311,8 +315,8 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
             else "N/A"
         )
 
-        # build NG labels ---------------------------------------------------
-        prod_defects = [d for d in object_defects if d.get("production_id") == production_id]
+        # build NG Causale from this production
+        prod_defects = defects_by_production.get(production_id, [])
         ng_labels = set()
         for d in prod_defects:
             cat = d.get("category")
@@ -343,6 +347,55 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
             elif cat == "Altro":
                 ng_labels.add("NG Altro")
 
+        # Only for Rework stations, get the NG from the latest QG before this
+        ng_labels_qg = set()
+        if station and station.get("type") == "rework":
+            obj_id = prod.get("object_id")
+            prod_time = prod.get("start_time")
+
+            # find latest previous QG production
+            prev_qg = sorted(
+                [
+                    p for p in productions
+                    if p.get("object_id") == obj_id
+                    and p.get("start_time") < prod_time
+                    and stations_by_id.get(p.get("station_id"), {}).get("type") == "qc"
+                ],
+                key=lambda x: x.get("start_time"),
+                reverse=True,
+            )
+            if prev_qg:
+                prev_qg_id = prev_qg[0].get("id")
+                prev_qg_defects = defects_by_production.get(prev_qg_id, [])
+                for d in prev_qg_defects:
+                    cat = d.get("category")
+                    if cat == "Disallineamento":
+                        if d.get("stringa") is not None:
+                            ng_labels_qg.add("NG Disall. Stringa")
+                        elif d.get("i_ribbon") is not None:
+                            ng_labels_qg.add("NG Disall. Ribbon")
+                    elif cat == "Generali":
+                        defect_type = d.get("defect_type")
+                        ng_labels_qg.add(f"NG {defect_type}" if defect_type else "NG Generali")
+                    elif cat == "Saldatura":
+                        ng_labels_qg.add("NG Saldatura")
+                    elif cat == "Mancanza Ribbon":
+                        ng_labels_qg.add("NG Mancanza I_Ribbon")
+                    elif cat == "I_Ribbon Leadwire":
+                        ng_labels_qg.add("NG I_Ribbon Leadwire")
+                    elif cat == "Macchie ECA":
+                        ng_labels_qg.add("NG Macchie ECA")
+                    elif cat == "Celle Rotte":
+                        ng_labels_qg.add("NG Celle Rotte")
+                    elif cat == "Lunghezza String Ribbon":
+                        ng_labels_qg.add("NG Lunghezza String Ribbon")
+                    elif cat == "Graffio su Cella":
+                        ng_labels_qg.add("NG Graffio su Cella")
+                    elif cat == "Bad Soldering":
+                        ng_labels_qg.add("NG Bad Soldering")
+                    elif cat == "Altro":
+                        ng_labels_qg.add("NG Altro")
+
         rows.append(
             {
                 "Linea": line_display_name,
@@ -354,6 +407,7 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
                 "Esito": esito,
                 "Tempo Ciclo": cycle_time_str,
                 "NG Causale": ";".join(sorted(ng_labels)) if ng_labels else "",
+                "NG Causale (QG)": ";".join(sorted(ng_labels_qg)) if ng_labels_qg else "",
             }
         )
 
@@ -369,12 +423,12 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
             "Esito",
             "Tempo Ciclo",
             "NG Causale",
+            "NG Causale (QG)",
         ],
     )
 
     _append_dataframe(ws, df)
-
-    autofit_columns(ws, align_center_for={"Esito", "NG Causale"})
+    autofit_columns(ws, align_center_for={"Esito", "NG Causale (QG)"})
 
 def eventi_sheet(ws, data: dict):
     objects = data.get("objects", [])
@@ -440,12 +494,13 @@ def eventi_sheet(ws, data: dict):
         "Linea", "Stazione", "Stringatrice", "ID Modulo", "Numero Eventi"
     ])
 
-    ws.append(df.columns.tolist())
+    #ws.append(df.columns.tolist())
     
-    for idx, row in df.iterrows():
-        row_values = [row[col] for col in df.columns]
-        ws.append(row_values)
+    #for idx, row in df.iterrows():
+    #    row_values = [row[col] for col in df.columns]
+    #    ws.append(row_values)
 
+    _append_dataframe(ws, df)
     autofit_columns(ws, align_center_for={"Esito", "Numero Eventi"})
 
 def mbj_sheet(ws: Worksheet, data: Dict[str, Any]):
@@ -568,7 +623,7 @@ def mbj_sheet(ws: Worksheet, data: Dict[str, Any]):
 def ng_generali_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Generali' sheet using pre-fetched data.
-    One row per production that has at least one 'Generali' defect.
+    Both QG-originated and ReWork defects show "NG", but only QG-only cells get gray fill.
     """
     rows_written = 0
     objects = data.get("objects", [])
@@ -578,19 +633,52 @@ def ng_generali_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
+    # Build lookups
     objects_by_id = {obj["id"]: obj for obj in objects}
-    stations_by_id = {station["id"]: station for station in stations}
-    lines_by_id = {line["id"]: line for line in production_lines}
+    stations_by_id = {s["id"]: s for s in stations}
+    lines_by_id = {l["id"]: l for l in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {
+        p["id"]: stations_by_id.get(p["station_id"], {}).get("type")
+        for p in productions
+    }
 
+    # 1) Group all QG‐found "Generali" defects by id_modulo
+    qg_gen_by_modulo = {}
+    for d in object_defects:
+        prod_id = d.get("production_id")
+        if not prod_id:
+            continue
+        # Only consider defects that happened in a QC station
+        if station_type_by_prod.get(prod_id) != "qc":
+            continue
+        if d.get("category") != "Generali":
+            continue
+
+        prod = productions_by_id.get(prod_id)
+        if not prod:
+            continue
+
+        obj = objects_by_id.get(prod.get("object_id"))
+        if not obj:
+            continue
+
+        mod_id = obj["id_modulo"]
+        qg_gen_by_modulo.setdefault(mod_id, []).append(d)
+
+    # 2) Build the header
+    defect_columns = [
+        "Poe Scaduto", "No Good da Bussing", "Materiale Esterno su Celle", "Passthrough al Bussing",
+        "Poe in Eccesso", "Solo Poe", "Solo Vetro", "Matrice Incompleta",
+        "Molteplici Bus Bar", "Test"
+    ]
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
-        "Poe Scaduto", "No Good da Bussing",
-        "Materiale Esterno su Celle", "Passthrough al Bussing", 
-        "Poe in Eccesso", "Solo Poe", "Solo Vetro", "Matrice Incompleta", 
-        "Molteplici Bus Bar","Test"
-    ]
-    ws.append(header)
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+    ] + defect_columns
+
+    all_rows = []
+    grey_cells = []
 
     for prod in productions:
         object_id = prod.get("object_id")
@@ -607,7 +695,6 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -620,7 +707,10 @@ def ng_generali_sheet(ws, data: dict) -> bool:
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_display_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        line_display_name = (
+            lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            if station else "Unknown"
+        )
 
         last_station_name = "N/A"
         last_station_id = prod.get("last_station_id")
@@ -629,62 +719,70 @@ def ng_generali_sheet(ws, data: dict) -> bool:
             if last_station:
                 last_station_name = last_station.get("display_name", "N/A")
 
-        prod_defects = [
-            d for d in object_defects
+        # 3) Collect ReWork defects for "Generali"
+        rework_defects_dict = {
+            d.get("defect_type")
+            for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Generali"
-        ]
-        if not prod_defects:
+        }
+
+        # 4) Get QG defects for this id_modulo
+        fallback_qg_list = qg_gen_by_modulo.get(id_modulo, [])
+        qg_defect_types = {d.get("defect_type") for d in fallback_qg_list}
+
+        # 5) Build final "all_defects" set (= union of QG types and ReWork types)
+        all_defect_types = qg_defect_types.union(rework_defects_dict)
+        if not all_defect_types:
             continue
 
+        # 6) Build row dictionary
+        row = {
+            "Linea": line_display_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str,
+        }
+
+        # 7) For each defect column, assign "NG" if present, and gray‐fill only if QG-only.
+        for col in defect_columns:
+            if col in rework_defects_dict or col in qg_defect_types:
+                row[col] = "NG"
+                # Only gray if it is in QG set AND not overridden by ReWork
+                if col in qg_defect_types and col not in rework_defects_dict:
+                    grey_cells.append((len(all_rows) + 2, col))
+            else:
+                row[col] = ""
+
+        all_rows.append(row)
         rows_written += 1
 
-        general_defects = {d.get("defect_type") for d in prod_defects}
-        flag_poe = "NG" if "Non Lavorato Poe Scaduto" in general_defects else ""
-        flag_bus = "NG" if "No Good da Bussing" in general_defects else ""
-        flag_materiale = "NG" if "Materiale Esterno su Celle" in general_defects else ""
-        flag_passthrough = "NG" if "Passthrough al Bussing" in general_defects else ""
-        flag_poe_in_eccesso = "NG" if "Poe in Eccesso" in general_defects else ""
-        flag_solo_poe = "NG" if "Solo Poe" in general_defects else ""
-        flag_solo_vetro = "NG" if "Solo Vetro" in general_defects else ""
-        flag_matrice_incompleta = "NG" if "Matrice Incompleta" in general_defects else ""
-        flag_molteplici_bus_bar = "NG" if "Molteplici Bus Bar" in general_defects else ""
-        flag_test = "NG" if "Test" in general_defects else ""
-
-        row = [
-            line_display_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str,
-            flag_poe,
-            flag_bus,
-            flag_materiale,
-            flag_passthrough,
-            flag_poe_in_eccesso,
-            flag_solo_poe,
-            flag_solo_vetro,
-            flag_matrice_incompleta,
-            flag_molteplici_bus_bar,
-            flag_test
-        ]
-        ws.append(row)
-
+    # 8) Append DataFrame and apply gray fill
     if rows_written > 0:
-        autofit_columns(ws, align_center_for={
-            "Esito", "Poe Scaduto", "No Good da Bussing",
-            "Materiale Esterno su Celle", "Passthrough al Bussing", "Poe in Eccesso","Solo Poe", "Solo Vetro", "Matrice Incompleta", "Molteplici Bus Bar", "Test"
-        })
+        import pandas as pd
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Map header name → column index
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
+        autofit_columns(ws, align_center_for=set(defect_columns + ["Esito"]))
         return True
-    else:
-        return False
+
+    return False
 
 def ng_saldature_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Saldature' sheet using pre-fetched data.
-    One row per production that has at least one 'Saldatura' defect.
+    One row per production that has at least one 'Saldatura' defect,
+    either directly or inherited from QG (colored in gray).
     """
     rows_written = 0
     objects = data.get("objects", [])
@@ -694,22 +792,48 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
     object_defects = data.get("object_defects", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
+    # Build lookups
     objects_by_id = {obj["id"]: obj for obj in objects}
-    stations_by_id = {station["id"]: station for station in stations}
-    lines_by_id = {line["id"]: line for line in production_lines}
+    stations_by_id = {s["id"]: s for s in stations}
+    lines_by_id = {l["id"]: l for l in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {
+        p["id"]: stations_by_id.get(p["station_id"], {}).get("type")
+        for p in productions
+    }
 
+    # 1) Group all QG‐found “Saldatura” defects by id_modulo,
+    #    exactly the same pattern you use in ng_disall_ribbon_sheet:
+    qg_sald_by_modulo = {}
+    for d in object_defects:
+        prod_id = d.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        if d.get("category") != "Saldatura":
+            continue
+
+        prod = productions_by_id.get(prod_id)
+        if not prod:
+            continue
+
+        obj = objects_by_id.get(prod.get("object_id"))
+        if not obj:
+            continue
+
+        mod_id = obj["id_modulo"]
+        qg_sald_by_modulo.setdefault(mod_id, []).append(d)
+
+    # 2) Build the exact header order
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
-    ]
-    for i in range(1, 13):
-        header.append(f"Stringa {i}")
-        header.append(f"Stringa {i}M")
-    ws.append(header)
+        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
+    ] + [f"Stringa {i}" for i in range(1, 13)] + [f"Stringa {i}M" for i in range(1, 13)]
+
+    all_rows = []
+    grey_cells = []
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
@@ -723,7 +847,7 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
+        # Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -735,7 +859,8 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+        station_name = station["display_name"] if station else "Unknown"
+        is_rework = (station.get("type") == "rework") if station else False
 
         line_name = "Unknown"
         if station and station.get("line_id"):
@@ -746,70 +871,115 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
         last_station_name = "N/A"
         last_station_id = prod.get("last_station_id")
         if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
+            last_stat = stations_by_id.get(last_station_id)
+            if last_stat:
+                last_station_name = last_stat.get("display_name", "N/A")
 
-        # Only include productions with at least one "Saldatura" defect
+        # 3) Collect all Saldatura defects at ReWork station
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Saldatura"
         ]
-        if not prod_defects:
+
+        # 4) If there are none in ReWork, but this is a ReWork row,
+        #    fall back to any QG‐collected Saldatura defects for that module:
+        fallback_qg_defects = []
+        if not prod_defects and is_rework:
+            fallback_qg_defects = qg_sald_by_modulo.get(id_modulo, [])
+
+        # If we have neither, skip
+        if not prod_defects and not fallback_qg_defects:
             continue
 
-        # Map of (stringa, lato) → list of s_ribbon
-        pin_map = {}
-        for defect in prod_defects:
-            stringa = defect.get("stringa")
-            lato = defect.get("ribbon_lato")
-            s_ribbon = defect.get("s_ribbon")
-
-            if stringa is None or lato is None or s_ribbon is None:
-                continue
-
-            try:
-                key = (int(stringa), str(lato))
-                pin_map.setdefault(key, []).append(str(s_ribbon))
-            except (ValueError, TypeError):
-                continue
-
-        # Build saldatura cells: 24 columns (Stringa 1, 1M, ..., 12, 12M)
+        # 5) Prepare a 24‐cell buffer, one slot per header column
         saldatura_cols = [""] * 24
-        for (stringa_num, lato), pins in pin_map.items():
-            if not (1 <= stringa_num <= 12):
-                continue
-            formatted = f"NG: {';'.join(pins)};"
-            col_index = (stringa_num - 1) * 2
+        grey_indexes = set()
+
+        def _mark_ng(stringa, lato, s_ribbon, is_qg_flag=False):
+            """
+            stringa: the stringa number
+            lato: “M” or something else
+            s_ribbon: the s_ribbon value to show
+            is_qg_flag: if True, we'll gray‐highlight later
+            """
+            try:
+                si = int(stringa)
+            except:
+                return
+            if not (1 <= si <= 12):
+                return
+
+            # If lato != "M": map to index 0..11
+            # If lato == "M": map to index 12..23
             if lato == "M":
-                col_index += 1
-            saldatura_cols[col_index] = formatted
+                idx = (si - 1) + 12
+            else:
+                idx = (si - 1)
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + saldatura_cols
+            # Append “NG: s_ribbon;” to that cell
+            text = f"NG: {s_ribbon};"
+            if saldatura_cols[idx]:
+                saldatura_cols[idx] += " " + text
+            else:
+                saldatura_cols[idx] = text
 
-        ws.append(row)
+            if is_qg_flag:
+                grey_indexes.add(idx)
+            else:
+                grey_indexes.discard(idx)
+
+        # 6) First mark all fallback QG defects in “gray” (is_qg_flag=True)
+        for d in fallback_qg_defects:
+            _mark_ng(d.get("stringa"), d.get("ribbon_lato"), d.get("s_ribbon"), is_qg_flag=True)
+
+        # 7) Then override any of those with actual ReWork defects (is_qg_flag=False)
+        for d in prod_defects:
+            _mark_ng(d.get("stringa"), d.get("ribbon_lato"), d.get("s_ribbon"), is_qg_flag=False)
+
+        # 8) Build our row dict exactly in header order
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str,
+        }
+        # Fill columns “Stringa 1” … “Stringa 12” then “Stringa 1M” … “Stringa 12M”
+        for i in range(1, 13):
+            row[f"Stringa {i}"] = saldatura_cols[i - 1]
+            row[f"Stringa {i}M"] = saldatura_cols[(i - 1) + 12]
+
+        # 9) Record which (row, column) need gray‐fill
+        #    We use len(all_rows)+2 because row 1 is header, row 2 is first data.
+        for idx in grey_indexes:
+            col_name = header[8 + idx]
+            grey_cells.append((len(all_rows) + 2, col_name))
+
+        all_rows.append(row)
         rows_written += 1
 
+    # 10) Dump to DataFrame + append; then gray‐fill exactly as in ribbon logic
     if rows_written > 0:
+        import pandas as pd
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Map header cell → column index
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
         autofit_columns(ws, align_center_for=set(header))
         return True
-    else:
-        return False
+
+    return False
 
 def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
-    """
-    Generate the 'NG Disallineamento Ribbon' sheet using pre-fetched data.
-    One row per production with at least one Disallineamento Ribbon defect.
-    """
     rows_written = 0
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -819,8 +989,22 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
     objects_by_id = {obj["id"]: obj for obj in objects}
-    stations_by_id = {station["id"]: station for station in stations}
-    lines_by_id = {line["id"]: line for line in production_lines}
+    stations_by_id = {s["id"]: s for s in stations}
+    lines_by_id = {l["id"]: l for l in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {p["id"]: stations_by_id.get(p["station_id"], {}).get("type") for p in productions}
+
+    # Group QG Disallineamento Ribbon defects by id_modulo
+    qg_disall_by_modulo = {}
+    for d in object_defects:
+        prod_id = d.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        if d.get("category") == "Disallineamento" and d.get("i_ribbon") is not None and d.get("ribbon_lato") in {"F", "M", "B"}:
+            prod = productions_by_id.get(prod_id)
+            obj = objects_by_id.get(prod.get("object_id")) if prod else None
+            if obj:
+                qg_disall_by_modulo.setdefault(obj["id_modulo"], []).append(d)
 
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
@@ -829,7 +1013,6 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
         "Ribbon 1 M", "Ribbon 2 M", "Ribbon 3 M", "Ribbon 4 M",
         "Ribbon 1 B", "Ribbon 2 B", "Ribbon 3 B"
     ]
-    ws.append(header)
 
     ribbon_map = {
         ("F", 1): 0, ("F", 2): 1, ("F", 3): 2,
@@ -837,9 +1020,11 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
         ("B", 1): 7, ("B", 2): 8, ("B", 3): 9,
     }
 
+    all_rows = []
+    grey_cells = []
+
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
@@ -853,7 +1038,7 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
+        # Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -866,21 +1051,11 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
+        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
+        is_rework = station.get("type") == "rework" if station else False
 
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
-
-        last_station_name = "N/A"
-        last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
-
-        # Filter defects with category = 'Disallineamento' and valid ribbon data
+        # Local defects
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and
@@ -888,45 +1063,83 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
                d.get("i_ribbon") is not None and
                d.get("ribbon_lato") in ["F", "M", "B"]
         ]
-        if not prod_defects:
+
+        # Fallback to QG defects if ReWork has none
+        fallback_qg_defects = []
+        if not prod_defects and is_rework:
+            fallback_qg_defects = qg_disall_by_modulo.get(id_modulo, [])
+
+        if not prod_defects and not fallback_qg_defects:
             continue
 
         ribbon_cols = [""] * 10
-        for defect in prod_defects:
-            lato = defect.get("ribbon_lato")
-            i_ribbon = defect.get("i_ribbon")
+        grey_indexes = set()
+
+        for d in fallback_qg_defects:
+            lato = d.get("ribbon_lato")
+            i_ribbon = d.get("i_ribbon")
             try:
-                idx = ribbon_map.get((str(lato), int(i_ribbon))) # type: ignore
+                idx = ribbon_map.get((str(lato), int(i_ribbon)))  # type: ignore
                 if idx is not None:
                     ribbon_cols[idx] = "NG"
-            except (ValueError, TypeError):
+                    grey_indexes.add(idx)
+            except Exception:
                 continue
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + ribbon_cols
+        for d in prod_defects:
+            lato = d.get("ribbon_lato")
+            i_ribbon = d.get("i_ribbon")
+            try:
+                idx = ribbon_map.get((str(lato), int(i_ribbon)))  # type: ignore
+                if idx is not None:
+                    ribbon_cols[idx] = "NG"
+                    if idx in grey_indexes:
+                        grey_indexes.remove(idx)
+            except Exception:
+                continue
 
-        ws.append(row)
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str,
+        }
+
+        # Fill in Ribbon values
+        for i, col in enumerate([
+            "Ribbon 1 F", "Ribbon 2 F", "Ribbon 3 F",
+            "Ribbon 1 M", "Ribbon 2 M", "Ribbon 3 M", "Ribbon 4 M",
+            "Ribbon 1 B", "Ribbon 2 B", "Ribbon 3 B"
+        ]):
+            row[col] = ribbon_cols[i]
+
+        for idx in grey_indexes:
+            grey_cells.append((len(all_rows) + 2, list(header)[8 + idx]))  # +2 to account for header
+
+        all_rows.append(row)
         rows_written += 1
 
     if rows_written > 0:
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Apply gray background to QG-only defects
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
         autofit_columns(ws, align_center_for=set(header))
         return True
-    else:
-        return False
+
+    return False
 
 def ng_disall_stringa_sheet(ws, data: dict) -> bool:
-    """
-    Generate the 'NG Disallineamento Stringa' sheet using pre-fetched data.
-    One row per production with at least one Disallineamento Stringa defect.
-    """
     rows_written = 0
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -936,18 +1149,32 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
     objects_by_id = {obj["id"]: obj for obj in objects}
-    stations_by_id = {station["id"]: station for station in stations}
-    lines_by_id = {line["id"]: line for line in production_lines}
+    stations_by_id = {s["id"]: s for s in stations}
+    lines_by_id = {l["id"]: l for l in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {p["id"]: stations_by_id.get(p["station_id"], {}).get("type") for p in productions}
+
+    # Group QG Disallineamento defects by id_modulo
+    qg_disall_by_modulo = {}
+    for d in object_defects:
+        prod_id = d.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        prod = productions_by_id.get(prod_id)
+        obj = objects_by_id.get(prod.get("object_id")) if prod else None
+        if obj and d.get("category") == "Disallineamento" and d.get("stringa"):
+            qg_disall_by_modulo.setdefault(obj["id_modulo"], []).append(d)
 
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
-    ws.append(header)
+
+    all_rows = []
+    grey_cells = []
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
@@ -961,7 +1188,7 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
+        # Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -974,64 +1201,86 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
+        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
+        is_rework = station.get("type") == "rework" if station else False
 
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
-
-        last_station_name = "N/A"
-        last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
-
+        # Get local defects
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and
                d.get("category") == "Disallineamento" and
                d.get("stringa") is not None
         ]
-        if not prod_defects:
+
+        # If Rework has no defects, fallback to QG
+        fallback_qg_defects = []
+        if not prod_defects and is_rework:
+            fallback_qg_defects = qg_disall_by_modulo.get(id_modulo, [])
+
+        if not prod_defects and not fallback_qg_defects:
             continue
 
         stringa_cols = [""] * 12
+        grey_indexes = set()
+
+        for defect in fallback_qg_defects:
+            stringa_num = defect.get("stringa")
+            try:
+                idx = int(stringa_num)
+                if 1 <= idx <= 12:
+                    stringa_cols[idx - 1] = "NG"
+                    grey_indexes.add(idx - 1)
+            except Exception:
+                continue
+
         for defect in prod_defects:
             stringa_num = defect.get("stringa")
             try:
-                index = int(stringa_num)
-                if 1 <= index <= 12:
-                    stringa_cols[index - 1] = "NG"
-            except (ValueError, TypeError):
+                idx = int(stringa_num)
+                if 1 <= idx <= 12:
+                    stringa_cols[idx - 1] = "NG"
+                    if idx - 1 in grey_indexes:
+                        grey_indexes.remove(idx - 1)
+            except Exception:
                 continue
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + stringa_cols
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str
+        }
+        for i in range(12):
+            row[f"Stringa {i + 1}"] = stringa_cols[i]
 
-        ws.append(row)
+        for idx in grey_indexes:
+            grey_cells.append((len(all_rows) + 2, f"Stringa {idx + 1}"))  # row+2 for header offset
+
+        all_rows.append(row)
         rows_written += 1
 
     if rows_written > 0:
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Apply gray background to QG-inherited defects
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
         autofit_columns(ws, align_center_for=set(header))
         return True
-    else:
-        return False
+
+    return False
 
 def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
-    """
-    Generate the 'NG Mancanza Ribbon' sheet using pre-fetched data.
-    One row per production with at least one Mancanza Ribbon defect.
-    """
     rows_written = 0
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1043,6 +1292,21 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
     objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {
+        p["id"]: stations_by_id.get(p["station_id"], {}).get("type") for p in productions
+    }
+
+    # Collect QG defects by id_modulo
+    qg_defects_by_modulo = {}
+    for defect in object_defects:
+        prod_id = defect.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        prod = productions_by_id.get(prod_id)
+        obj = objects_by_id.get(prod["object_id"]) if prod else None
+        if obj:
+            qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
@@ -1051,11 +1315,18 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
         "Ribbon 1 M", "Ribbon 2 M", "Ribbon 3 M", "Ribbon 4 M",
         "Ribbon 1 B", "Ribbon 2 B", "Ribbon 3 B"
     ]
-    ws.append(header)
+
+    ribbon_map = {
+        ("F", 1): 0, ("F", 2): 1, ("F", 3): 2,
+        ("M", 1): 3, ("M", 2): 4, ("M", 3): 5, ("M", 4): 6,
+        ("B", 1): 7, ("B", 2): 8, ("B", 3): 9,
+    }
+
+    all_rows = []
+    grey_cells = []
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
@@ -1069,7 +1340,6 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -1082,33 +1352,38 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
-
-        last_station_name = "N/A"
-        last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
+        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
+        is_rework = station.get("type") == "rework" if station else False
 
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Mancanza Ribbon"
         ]
-        if not prod_defects:
+
+        fallback_qg_defects = []
+        if not prod_defects and is_rework:
+            fallback_qg_defects = [
+                d for d in qg_defects_by_modulo.get(id_modulo, [])
+                if d.get("category") == "Mancanza Ribbon"
+            ]
+
+        if not prod_defects and not fallback_qg_defects:
             continue
 
         ribbon_cols = [""] * 10
-        ribbon_map = {
-            ("F", 1): 0, ("F", 2): 1, ("F", 3): 2,
-            ("M", 1): 3, ("M", 2): 4, ("M", 3): 5, ("M", 4): 6,
-            ("B", 1): 7, ("B", 2): 8, ("B", 3): 9,
-        }
+        grey_map = set()
+
+        for defect in fallback_qg_defects:
+            lato = defect.get("ribbon_lato")
+            i_ribbon = defect.get("i_ribbon")
+            try:
+                idx = ribbon_map.get((str(lato), int(i_ribbon))) # type: ignore
+                if idx is not None:
+                    ribbon_cols[idx] = "NG"
+                    grey_map.add(idx)
+            except Exception:
+                continue
 
         for defect in prod_defects:
             lato = defect.get("ribbon_lato")
@@ -1117,33 +1392,59 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
                 idx = ribbon_map.get((str(lato), int(i_ribbon))) # type: ignore
                 if idx is not None:
                     ribbon_cols[idx] = "NG"
-            except (ValueError, TypeError):
+                    if idx in grey_map:
+                        grey_map.remove(idx)
+            except Exception:
                 continue
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + ribbon_cols
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str,
+            "Ribbon 1 F": ribbon_cols[0],
+            "Ribbon 2 F": ribbon_cols[1],
+            "Ribbon 3 F": ribbon_cols[2],
+            "Ribbon 1 M": ribbon_cols[3],
+            "Ribbon 2 M": ribbon_cols[4],
+            "Ribbon 3 M": ribbon_cols[5],
+            "Ribbon 4 M": ribbon_cols[6],
+            "Ribbon 1 B": ribbon_cols[7],
+            "Ribbon 2 B": ribbon_cols[8],
+            "Ribbon 3 B": ribbon_cols[9],
+        }
 
-        ws.append(row)
+        for idx in grey_map:
+            col_name = header[8 + idx]  # first 8 cols before ribbon cols
+            grey_cells.append((len(all_rows) + 2, col_name))
+
+        all_rows.append(row)
         rows_written += 1
 
     if rows_written > 0:
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Apply grey background to QG-inherited defects
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
         autofit_columns(ws, align_center_for=set(header))
         return True
-    else:
-        return False
+
+    return False
     
 def ng_iribbon_leadwire_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG I_Ribbon Leadwire' sheet using pre-fetched data.
-    One row per production with at least one I_Ribbon Leadwire defect (only side M ribbons 1–4).
+    Includes ReWork rows and shows QG-inherited defects in gray.
     """
     rows_written = 0
     objects = data.get("objects", [])
@@ -1154,19 +1455,35 @@ def ng_iribbon_leadwire_sheet(ws, data: dict) -> bool:
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
     objects_by_id = {obj["id"]: obj for obj in objects}
-    stations_by_id = {station["id"]: station for station in stations}
-    lines_by_id = {line["id"]: line for line in production_lines}
+    stations_by_id = {s["id"]: s for s in stations}
+    lines_by_id = {l["id"]: l for l in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {
+        p["id"]: stations_by_id.get(p["station_id"], {}).get("type") for p in productions
+    }
+
+    # Collect QG defects by id_modulo
+    qg_defects_by_modulo = {}
+    for defect in object_defects:
+        prod_id = defect.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        prod = productions_by_id.get(prod_id)
+        obj = objects_by_id.get(prod["object_id"]) if prod else None
+        if obj:
+            qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
         "Ribbon 1 M", "Ribbon 2 M", "Ribbon 3 M", "Ribbon 4 M"
     ]
-    ws.append(header)
+
+    all_rows = []
+    grey_cells = []
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
@@ -1180,7 +1497,6 @@ def ng_iribbon_leadwire_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -1193,70 +1509,93 @@ def ng_iribbon_leadwire_sheet(ws, data: dict) -> bool:
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
-
-        last_station_name = "N/A"
-        last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
+        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
+        is_rework = station.get("type") == "rework" if station else False
 
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "I_Ribbon Leadwire"
         ]
-        if not prod_defects:
+        fallback_qg_defects = []
+        if not prod_defects and is_rework:
+            fallback_qg_defects = [
+                d for d in qg_defects_by_modulo.get(id_modulo, [])
+                if d.get("category") == "I_Ribbon Leadwire"
+            ]
+
+        if not prod_defects and not fallback_qg_defects:
             continue
 
-        ribbon_cols = [""] * 4  # Only 4 ribbons on M side
-        ribbon_map = {
-            1: 0,
-            2: 1,
-            3: 2,
-            4: 3,
-        }
+        ribbon_cols = [""] * 4
+        grey_map = set()
+        ribbon_map = {1: 0, 2: 1, 3: 2, 4: 3}
 
-        for defect in prod_defects:
-            lato = defect.get("ribbon_lato")
-            i_ribbon = defect.get("i_ribbon")
+        for d in fallback_qg_defects:
+            lato = d.get("ribbon_lato")
+            i_ribbon = d.get("i_ribbon")
             if lato == "M":
                 try:
-                    idx = ribbon_map.get(int(i_ribbon))  # type: ignore
+                    idx = ribbon_map.get(int(i_ribbon))
                     if idx is not None:
                         ribbon_cols[idx] = "NG"
-                except (ValueError, TypeError):
+                        grey_map.add(idx)
+                except Exception:
                     continue
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + ribbon_cols
+        for d in prod_defects:
+            lato = d.get("ribbon_lato")
+            i_ribbon = d.get("i_ribbon")
+            if lato == "M":
+                try:
+                    idx = ribbon_map.get(int(i_ribbon))
+                    if idx is not None:
+                        ribbon_cols[idx] = "NG"
+                        if idx in grey_map:
+                            grey_map.remove(idx)  # override QG mark
+                except Exception:
+                    continue
 
-        ws.append(row)
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Ribbon 1 M": ribbon_cols[0],
+            "Ribbon 2 M": ribbon_cols[1],
+            "Ribbon 3 M": ribbon_cols[2],
+            "Ribbon 4 M": ribbon_cols[3],
+        }
+
+        for idx in grey_map:
+            grey_cells.append((len(all_rows) + 2, f"Ribbon {idx + 1} M"))  # +2: account for header
+
+        all_rows.append(row)
         rows_written += 1
 
     if rows_written > 0:
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Apply grey background to QG-inherited defects
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
         autofit_columns(ws, align_center_for=set(header))
         return True
-    else:
-        return False
+
+    return False
 
 def ng_macchie_eca_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Macchie ECA' sheet using pre-fetched data.
-    One row per production with at least one Macchie ECA defect.
+    Includes ReWork productions and marks inherited QG defects in gray.
     """
     rows_written = 0
     objects = data.get("objects", [])
@@ -1269,16 +1608,32 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
     objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {
+        p["id"]: stations_by_id.get(p["station_id"], {}).get("type") for p in productions
+    }
+
+    # Collect QG defects by id_modulo
+    qg_defects_by_modulo = {}
+    for defect in object_defects:
+        prod_id = defect.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        prod = productions_by_id.get(prod_id)
+        obj = objects_by_id.get(prod["object_id"]) if prod else None
+        if obj:
+            qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
-    ws.append(header)
+
+    all_rows = []
+    grey_cells = []
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
@@ -1292,7 +1647,6 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -1305,61 +1659,76 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
-
-        last_station_name = "N/A"
-        last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
+        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
+        is_rework = station.get("type") == "rework" if station else False
 
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Macchie ECA"
         ]
-        if not prod_defects:
+        fallback_qg_defects = []
+        if not prod_defects and is_rework:
+            fallback_qg_defects = [
+                d for d in qg_defects_by_modulo.get(id_modulo, [])
+                if d.get("category") == "Macchie ECA"
+            ]
+
+        if not prod_defects and not fallback_qg_defects:
             continue
 
-        stringa_cols = [""] * 12
-        for defect in prod_defects:
-            stringa_num = defect.get("stringa")
-            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
-                stringa_cols[stringa_num - 1] = "NG"
-            elif isinstance(stringa_num, str) and stringa_num.isdigit():
-                index = int(stringa_num)
-                if 1 <= index <= 12:
-                    stringa_cols[index - 1] = "NG"
+        found_stringa = {}
+        for d in fallback_qg_defects:
+            idx = d.get("stringa")
+            if isinstance(idx, int) and 1 <= idx <= 12:
+                found_stringa[idx] = "QG"
+        for d in prod_defects:
+            idx = d.get("stringa")
+            if isinstance(idx, int) and 1 <= 12:
+                found_stringa[idx] = "CURRENT"
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + stringa_cols
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str
+        }
 
-        ws.append(row)
+        for i in range(1, 13):
+            if found_stringa.get(i):
+                row[f"Stringa {i}"] = "NG"
+                if found_stringa[i] == "QG":
+                    grey_cells.append((len(all_rows) + 2, f"Stringa {i}"))  # +2 because of header
+            else:
+                row[f"Stringa {i}"] = ""
+
+        all_rows.append(row)
         rows_written += 1
 
     if rows_written > 0:
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Highlight QG-inherited NG cells
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
         autofit_columns(ws, align_center_for=set(header))
         return True
-    else:
-        return False
+
+    return False
 
 def ng_bad_soldering_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Bad Soldering' sheet using pre-fetched data.
-    One row per production with at least one Bad Soldering defect.
+    Includes ReWork productions and marks inherited QG defects in gray.
     """
     rows_written = 0
     objects = data.get("objects", [])
@@ -1372,16 +1741,32 @@ def ng_bad_soldering_sheet(ws, data: dict) -> bool:
     objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {
+        p["id"]: stations_by_id.get(p["station_id"], {}).get("type") for p in productions
+    }
+
+    # Collect QG defects by id_modulo
+    qg_defects_by_modulo = {}
+    for defect in object_defects:
+        prod_id = defect.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        prod = productions_by_id.get(prod_id)
+        obj = objects_by_id.get(prod["object_id"]) if prod else None
+        if obj:
+            qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
-    ws.append(header)
+
+    all_rows = []
+    grey_cells = []
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
@@ -1395,7 +1780,6 @@ def ng_bad_soldering_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -1408,61 +1792,76 @@ def ng_bad_soldering_sheet(ws, data: dict) -> bool:
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
-
-        last_station_name = "N/A"
-        last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
+        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
+        is_rework = station.get("type") == "rework" if station else False
 
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Bad Soldering"
         ]
-        if not prod_defects:
+        fallback_qg_defects = []
+        if not prod_defects and is_rework:
+            fallback_qg_defects = [
+                d for d in qg_defects_by_modulo.get(id_modulo, [])
+                if d.get("category") == "Bad Soldering"
+            ]
+
+        if not prod_defects and not fallback_qg_defects:
             continue
 
-        stringa_cols = [""] * 12
-        for defect in prod_defects:
-            stringa_num = defect.get("stringa")
-            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
-                stringa_cols[stringa_num - 1] = "NG"
-            elif isinstance(stringa_num, str) and stringa_num.isdigit():
-                index = int(stringa_num)
-                if 1 <= index <= 12:
-                    stringa_cols[index - 1] = "NG"
+        found_stringa = {}
+        for d in fallback_qg_defects:
+            idx = d.get("stringa")
+            if isinstance(idx, int) and 1 <= idx <= 12:
+                found_stringa[idx] = "QG"
+        for d in prod_defects:
+            idx = d.get("stringa")
+            if isinstance(idx, int) and 1 <= idx <= 12:
+                found_stringa[idx] = "CURRENT"
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + stringa_cols
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str
+        }
 
-        ws.append(row)
+        for i in range(1, 13):
+            if found_stringa.get(i):
+                row[f"Stringa {i}"] = "NG"
+                if found_stringa[i] == "QG":
+                    grey_cells.append((len(all_rows) + 2, f"Stringa {i}"))  # +2 accounts for header row
+            else:
+                row[f"Stringa {i}"] = ""
+
+        all_rows.append(row)
         rows_written += 1
 
     if rows_written > 0:
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Highlight QG-inherited NG cells
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
         autofit_columns(ws, align_center_for=set(header))
         return True
-    else:
-        return False
+
+    return False
 
 def ng_celle_rotte_sheet(ws, data: dict) -> bool:
     """
     Generate the 'NG Celle Rotte' sheet using pre-fetched data.
-    One row per production with at least one Celle Rotte defect.
+    Includes QG defects shown in ReWork step with gray background.
     """
     rows_written = 0
     objects = data.get("objects", [])
@@ -1475,16 +1874,32 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
     objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {
+        p["id"]: stations_by_id.get(p["station_id"], {}).get("type") for p in productions
+    }
+
+    # Group QG defects by id_modulo
+    qg_defects_by_modulo = {}
+    for defect in object_defects:
+        prod_id = defect.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        prod = productions_by_id.get(prod_id)
+        obj = objects_by_id.get(prod["object_id"]) if prod else None
+        if obj:
+            qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
-    ws.append(header)
+
+    all_rows = []
+    grey_cells = []
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
@@ -1498,7 +1913,6 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -1511,62 +1925,73 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
-
-        last_station_name = "N/A"
-        last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
+        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
+        is_rework = station.get("type") == "rework" if station else False
 
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Celle Rotte"
         ]
-        if not prod_defects:
+        fallback_qg_defects = []
+        if not prod_defects and is_rework:
+            fallback_qg_defects = [
+                d for d in qg_defects_by_modulo.get(id_modulo, [])
+                if d.get("category") == "Celle Rotte"
+            ]
+
+        if not prod_defects and not fallback_qg_defects:
             continue
 
-        stringa_cols = [""] * 12
-        for defect in prod_defects:
-            stringa_num = defect.get("stringa")
-            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
-                stringa_cols[stringa_num - 1] = "NG"
-            elif isinstance(stringa_num, str) and stringa_num.isdigit():
-                index = int(stringa_num)
-                if 1 <= index <= 12:
-                    stringa_cols[index - 1] = "NG"
+        found_stringa = {}
+        for d in fallback_qg_defects:
+            idx = d.get("stringa")
+            if isinstance(idx, int) and 1 <= idx <= 12:
+                found_stringa[idx] = "QG"
+        for d in prod_defects:
+            idx = d.get("stringa")
+            if isinstance(idx, int) and 1 <= idx <= 12:
+                found_stringa[idx] = "CURRENT"
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + stringa_cols
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str
+        }
 
-        ws.append(row)
+        for i in range(1, 13):
+            if found_stringa.get(i):
+                row[f"Stringa {i}"] = "NG"
+                if found_stringa[i] == "QG":
+                    grey_cells.append((len(all_rows) + 2, f"Stringa {i}"))  # +2 = header + 1-based row
+            else:
+                row[f"Stringa {i}"] = ""
+
+        all_rows.append(row)
         rows_written += 1
 
     if rows_written > 0:
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Gray background for QG defects
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
         autofit_columns(ws, align_center_for=set(header))
         return True
-    else:
-        return False
+
+    return False
 
 def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
-    """
-    Generate the 'NG Lunghezza String Ribbon' sheet using pre-fetched data.
-    One row per production with at least one relevant defect.
-    """
     rows_written = 0
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1578,16 +2003,32 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
     objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {
+        p["id"]: stations_by_id.get(p["station_id"], {}).get("type") for p in productions
+    }
+
+    # Group QG defects by id_modulo
+    qg_defects_by_modulo = {}
+    for defect in object_defects:
+        prod_id = defect.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        prod = productions_by_id.get(prod_id)
+        obj = objects_by_id.get(prod["object_id"]) if prod else None
+        if obj:
+            qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
-    ws.append(header)
+
+    all_rows = []
+    grey_cells = []
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
@@ -1601,7 +2042,7 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
+        # Convert cycle time
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -1614,62 +2055,72 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
-
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
-
-        last_station_name = "N/A"
-        last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
+        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
+        is_rework = station.get("type") == "rework" if station else False
 
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Lunghezza String Ribbon"
         ]
-        if not prod_defects:
+        fallback_qg_defects = []
+        if not prod_defects and is_rework:
+            fallback_qg_defects = [
+                d for d in qg_defects_by_modulo.get(id_modulo, [])
+                if d.get("category") == "Lunghezza String Ribbon"
+            ]
+
+        if not prod_defects and not fallback_qg_defects:
             continue
 
-        stringa_cols = [""] * 12
-        for defect in prod_defects:
-            stringa_num = defect.get("stringa")
-            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
-                stringa_cols[stringa_num - 1] = "NG"
-            elif isinstance(stringa_num, str) and stringa_num.isdigit():
-                index = int(stringa_num)
-                if 1 <= index <= 12:
-                    stringa_cols[index - 1] = "NG"
+        found_stringa = {}
+        for d in fallback_qg_defects:
+            idx = d.get("stringa")
+            if isinstance(idx, int) and 1 <= idx <= 12:
+                found_stringa[idx] = "QG"
+        for d in prod_defects:
+            idx = d.get("stringa")
+            if isinstance(idx, int) and 1 <= idx <= 12:
+                found_stringa[idx] = "CURRENT"
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + stringa_cols
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str,
+        }
 
-        ws.append(row)
+        for i in range(1, 13):
+            if found_stringa.get(i):
+                row[f"Stringa {i}"] = "NG"
+                if found_stringa[i] == "QG":
+                    grey_cells.append((len(all_rows) + 2, f"Stringa {i}"))
+            else:
+                row[f"Stringa {i}"] = ""
+
+        all_rows.append(row)
         rows_written += 1
 
     if rows_written > 0:
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Gray background for QG cells
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
         autofit_columns(ws, align_center_for=set(header))
         return True
-    else:
-        return False
+    return False
 
 def ng_graffio_su_cella_sheet(ws, data: dict) -> bool:
-    """
-    Generate the 'NG Graffio su Cella' sheet using pre-fetched data.
-    One row per production with at least one 'Graffio su Cella' defect.
-    """
     rows_written = 0
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1681,19 +2132,36 @@ def ng_graffio_su_cella_sheet(ws, data: dict) -> bool:
     objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+
+    station_type_by_prod = {
+        p["id"]: stations_by_id.get(p["station_id"], {}).get("type")
+        for p in productions
+    }
+
+    # id_modulo → QG defects
+    qg_defects_by_modulo = {}
+    for defect in object_defects:
+        prod_id = defect.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        prod = productions_by_id.get(prod_id)
+        obj = objects_by_id.get(prod["object_id"]) if prod else None
+        if obj:
+            qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
-    ws.append(header)
+
+    rows = []
+    grey_cells = []  # List of (row_index, column_name)
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
-
         id_modulo = obj.get("id_modulo")
         if not id_modulo:
             continue
@@ -1703,8 +2171,6 @@ def ng_graffio_su_cella_sheet(ws, data: dict) -> bool:
         end_time = prod.get("end_time")
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
-
-        # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -1712,68 +2178,83 @@ def ng_graffio_su_cella_sheet(ws, data: dict) -> bool:
                 cycle_seconds = h * 3600 + m * 60 + s
             except Exception:
                 pass
-
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
+        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
 
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
+        is_rework = station.get("type") == "rework" if station else False
 
-        last_station_name = "N/A"
-        last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
-
-        # ✅ This is the key change!
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Graffio su Cella"
         ]
-        if not prod_defects:
+
+        fallback_qg_defects = []
+        if is_rework and not prod_defects:
+            fallback_qg_defects = [
+                d for d in qg_defects_by_modulo.get(id_modulo, [])
+                if d.get("category") == "Graffio su Cella"
+            ]
+
+        if not prod_defects and not fallback_qg_defects:
             continue
 
-        stringa_cols = [""] * 12
-        for defect in prod_defects:
-            stringa_num = defect.get("stringa")
-            if isinstance(stringa_num, int) and 1 <= stringa_num <= 12:
-                stringa_cols[stringa_num - 1] = "NG"
-            elif isinstance(stringa_num, str) and stringa_num.isdigit():
-                index = int(stringa_num)
-                if 1 <= index <= 12:
-                    stringa_cols[index - 1] = "NG"
+        # Map of stringa → origin
+        stringa_origin = {}
+        for d in fallback_qg_defects:
+            try:
+                i = int(d.get("stringa"))
+                if 1 <= i <= 12:
+                    stringa_origin[i] = "QG"
+            except: continue
+        for d in prod_defects:
+            try:
+                i = int(d.get("stringa"))
+                if 1 <= i <= 12:
+                    stringa_origin[i] = "CURRENT"
+            except: continue
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + stringa_cols
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str,
+        }
+        for i in range(1, 13):
+            label = f"Stringa {i}"
+            if i in stringa_origin:
+                row[label] = "NG"
+                if stringa_origin[i] == "QG":
+                    grey_cells.append((len(rows) + 2, label))  # +2 for Excel row offset (header + 1-based)
+            else:
+                row[label] = ""
 
-        ws.append(row)
-        rows_written += 1
+        rows.append(row)
 
-    if rows_written > 0:
-        autofit_columns(ws, align_center_for=set(header))
-        return True
-    else:
+    if not rows:
         return False
-    
+
+    # Zebra append
+    _append_dataframe(ws, pd.DataFrame(rows, columns=header), zebra_key="ID Modulo")
+
+    # Apply grey fill
+    header_map = {cell.value: cell.column for cell in ws[1]}  # Column name to index
+    for row_idx, col_name in grey_cells:
+        col_idx = header_map.get(col_name)
+        if col_idx:
+            ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
+    autofit_columns(ws, align_center_for=set(header))
+    return True
+
 def ng_altro_sheet(ws, data: dict) -> bool:
-    """
-    Generate the 'NG Altro' sheet using pre-fetched data.
-    One row per production. Columns are dynamically created from unique 'extra_data' descriptions.
-    """
     rows_written = 0
     objects = data.get("objects", [])
     productions = data.get("productions", [])
@@ -1785,6 +2266,10 @@ def ng_altro_sheet(ws, data: dict) -> bool:
     objects_by_id = {obj["id"]: obj for obj in objects}
     stations_by_id = {station["id"]: station for station in stations}
     lines_by_id = {line["id"]: line for line in production_lines}
+    productions_by_id = {p["id"]: p for p in productions}
+    station_type_by_prod = {
+        p["id"]: stations_by_id.get(p["station_id"], {}).get("type") for p in productions
+    }
 
     # Step 1: gather all unique "Altro" extra_data values
     unique_altro_descriptions = sorted({
@@ -1793,16 +2278,28 @@ def ng_altro_sheet(ws, data: dict) -> bool:
         if d.get("category") == "Altro" and d.get("extra_data")
     })
 
-    # Step 2: build header
+    # Step 2: QG defects by id_modulo
+    qg_defects_by_modulo = {}
+    for defect in object_defects:
+        prod_id = defect.get("production_id")
+        if not prod_id or station_type_by_prod.get(prod_id) != "qc":
+            continue
+        prod = productions_by_id.get(prod_id)
+        obj = objects_by_id.get(prod["object_id"]) if prod else None
+        if obj:
+            qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
+
+    # Step 3: Build rows and track grey cells
     header = [
         "Linea", "Stazione", "Stringatrice", "ID Modulo",
         "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
     ] + unique_altro_descriptions
-    ws.append(header)
+
+    all_rows = []
+    grey_cells = []
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
@@ -1816,7 +2313,6 @@ def ng_altro_sheet(ws, data: dict) -> bool:
         cycle_time_obj = prod.get("cycle_time")
         cycle_time_str = str(cycle_time_obj or "")
 
-        # ✅ Convert cycle time to seconds
         cycle_seconds = None
         if cycle_time_obj:
             try:
@@ -1829,57 +2325,82 @@ def ng_altro_sheet(ws, data: dict) -> bool:
 
         station = stations_by_id.get(prod.get("station_id"))
         station_name = station.get("display_name", "Unknown") if station else "Unknown"
+        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
+        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
 
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
+        is_rework = station.get("type") == "rework" if station else False
 
-        last_station_name = "N/A"
-        last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
-
+        # Fetch ReWork defects first
         prod_defects = [
             d for d in object_defects
             if d.get("production_id") == production_id and d.get("category") == "Altro"
         ]
-        if not prod_defects:
+        # Fallback to QG if ReWork has none
+        fallback_qg_defects = []
+        if not prod_defects and is_rework:
+            fallback_qg_defects = [
+                d for d in qg_defects_by_modulo.get(id_modulo, [])
+                if d.get("category") == "Altro"
+            ]
+
+        if not prod_defects and not fallback_qg_defects:
             continue
 
-        altro_found = {d.get("extra_data", "").strip() for d in prod_defects}
+        row = {
+            "Linea": line_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Data Ingresso": start_time,
+            "Data Uscita": end_time,
+            "Esito": esito,
+            "Tempo Ciclo": cycle_time_str,
+        }
 
-        altro_cols = ["NG" if desc in altro_found else "" for desc in unique_altro_descriptions]
+        # Track which fields are QG
+        found_descriptions = {}
+        for d in fallback_qg_defects:
+            desc = d.get("extra_data", "").strip()
+            if desc:
+                found_descriptions[desc] = "QG"
+        for d in prod_defects:
+            desc = d.get("extra_data", "").strip()
+            if desc:
+                found_descriptions[desc] = "CURRENT"
 
-        row = [
-            line_name,
-            station_name,
-            last_station_name,
-            id_modulo,
-            start_time.strftime('%Y-%m-%d %H:%M:%S') if start_time else "",
-            end_time.strftime('%Y-%m-%d %H:%M:%S') if end_time else "",
-            esito,
-            cycle_time_str
-        ] + altro_cols
+        for desc in unique_altro_descriptions:
+            if found_descriptions.get(desc):
+                row[desc] = "NG"
+                if found_descriptions[desc] == "QG":
+                    grey_cells.append((len(all_rows) + 2, desc))  # +2 offset for Excel
+            else:
+                row[desc] = ""
 
-        ws.append(row)
+        all_rows.append(row)
         rows_written += 1
 
+    # Step 4: Export + Zebra + Grey
     if rows_written > 0:
+        df = pd.DataFrame(all_rows, columns=header)
+        _append_dataframe(ws, df, zebra_key="ID Modulo")
+
+        # Grey fill inherited QG cells
+        header_map = {cell.value: cell.column for cell in ws[1]}
+        for row_idx, col_name in grey_cells:
+            col_idx = header_map.get(col_name)
+            if col_idx:
+                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+
         autofit_columns(ws, align_center_for=set(header))
         return True
-    else:
-        return False
+    return False
 
 # --- Mapping sheet names to functions ---
 SHEET_FUNCTIONS = {
     "Metadata": metadata_sheet,
     "Risolutivo": risolutivo_sheet,
     "Eventi": eventi_sheet,
-    "MBJ": mbj_sheet,
+    #"MBJ": mbj_sheet,
     "NG Generali": ng_generali_sheet,
     "NG Saldature": ng_saldature_sheet,
     "NG Disall. Ribbon": ng_disall_ribbon_sheet,

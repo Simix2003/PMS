@@ -3,4 +3,4 @@ Aggiungere folder "models" con il modello di IA sotto C
 Copiare Stations Table ( Aggiungere type ENUM : mbj, colonna config JSON e plc JSON )
 
 Cambiare nome cartelle immagini da M308 a MIN01 e da M309 a MIN02
-Cambiare nome Config da M308 a MIN01 e da M309 a MIN02 ( "C:\IX-Monitor\stations.ini" ) ( Mettere [STATIONS] nel file )
+Cambiare nome Cartella da "IX-Monitor" a "PMS"

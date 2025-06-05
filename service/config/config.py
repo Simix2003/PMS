@@ -73,7 +73,7 @@ ISSUE_TREE = {
     }
 }
 
-BASE_DIR = Path("C:/IX-Monitor")
+BASE_DIR = Path("C:/PMS")
 
 ML_MODEL_PATH = os.path.join(BASE_DIR, "models", "fine-tuned-defects_V2")
 KNOWN_DEFECTS = [

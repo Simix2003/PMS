@@ -4,3 +4,29 @@ Copiare Stations Table ( Aggiungere type ENUM : mbj, colonna config JSON e plc J
 
 Cambiare nome cartelle immagini da M308 a MIN01 e da M309 a MIN02
 Cambiare nome Cartella da "IX-Monitor" a "PMS"
+
+############################
+
+CREATE TABLE defect_photos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    photo LONGBLOB NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+##########################
+Per migrare le photos nella nuova tabella:
+
+# CREARE LA COLONNA photo_id
+ALTER TABLE object_defects ADD COLUMN photo_id INT NULL;
+
+
+# USARE SOFTWARE: migrate_mysql.exe
+
+# MODIFICARE LA TABELLA
+ALTER TABLE object_defects
+  DROP COLUMN photo,
+  ADD CONSTRAINT fk_object_defects_photo
+    FOREIGN KEY (photo_id)
+    REFERENCES defect_photos(id)
+    ON DELETE SET NULL;

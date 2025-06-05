@@ -89,3 +89,22 @@ async def set_outcome(request: Request):
     })
 
     return {"status": "ok"}
+
+@router.get("/api/tablet_stations")
+async def get_qg_stations():
+    try:
+        conn = get_mysql_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT name, display_name 
+                FROM stations 
+                WHERE type IN ('qc', 'rework')
+                  AND config IS NOT NULL 
+                  AND config != ''
+                  AND plc IS NOT NULL 
+                  AND plc != ''
+            """)
+            stations = cursor.fetchall()
+        return {"stations": stations}
+    except Exception as e:
+        return {"error": str(e)}

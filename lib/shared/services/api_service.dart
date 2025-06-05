@@ -646,4 +646,14 @@ class ApiService {
       return null;
     }
   }
+
+  Future<Map<String, dynamic>?> getQGStations() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/tablet_stations'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to load stations: ${response.body}");
+      return null;
+    }
+  }
 }

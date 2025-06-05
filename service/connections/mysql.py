@@ -2,6 +2,7 @@ import base64
 from datetime import datetime
 import json
 import logging
+from typing import Optional
 import pymysql
 from pymysql.cursors import DictCursor
 
@@ -249,7 +250,7 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
     # 2. Load the issues from temporary storage using the proper line name.
     issues = get_latest_issues(line_name, channel_id)
     data["issues"] = issues  # Inject into data if needed later.
-    
+
     # 3. Insert each defect
     for issue in issues:
         path = issue.get("path")
@@ -263,17 +264,21 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
         parsed = parse_issue_path(path, category)
 
         # Decode image if present
+        photo_id = None
         if image_base64:
             image_blob = compress_base64_to_jpeg_blob(image_base64, quality=70)
             if image_blob is None:
                 raise ValueError(f"Invalid image for defect path: {path}")
-        else:
-            image_blob = None
 
+            # Insert into photos and get the ID
+            cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (image_blob,))
+            photo_id = cursor.lastrowid
+
+        # Insert into object_defects
         sql = """
             INSERT INTO object_defects (
                 production_id, defect_id, defect_type, stringa,
-                s_ribbon, i_ribbon, ribbon_lato, extra_data, photo
+                s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         cursor.execute(sql, (
@@ -285,7 +290,7 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
             parsed["i_ribbon"],
             parsed["ribbon_lato"],
             parsed["extra_data"],
-            image_blob
+            photo_id
         ))
 
 async def update_esito(esito: int, production_id: int, cursor, connection):
@@ -313,12 +318,19 @@ def save_warning_on_mysql(
     defect_name: str,
     source_station: dict,
     suppress_on_source: bool = False,
-    image_blob: bytes = None # type: ignore
+    image_blob: Optional[bytes] = None
 ):
     try:
         source_station_name = source_station["display_name"] if isinstance(source_station, dict) else str(source_station)
 
         with mysql_conn.cursor() as cursor:
+            # Insert image if present
+            photo_id = None
+            if image_blob:
+                cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (image_blob,))
+                photo_id = cursor.lastrowid
+
+            # Insert warning with photo_id
             cursor.execute("""
                 INSERT INTO stringatrice_warnings (
                     line_name,
@@ -331,7 +343,7 @@ def save_warning_on_mysql(
                     timestamp,
                     source_station,
                     suppress_on_source,
-                    photo
+                    photo_id
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 target_station["line_name"],
@@ -344,12 +356,13 @@ def save_warning_on_mysql(
                 datetime.now(),
                 source_station_name,
                 suppress_on_source,
-                image_blob
+                photo_id
             ))
             mysql_conn.commit()
             inserted_id = cursor.lastrowid
             print(f"💾 Warning saved for {target_station['name']} (from {source_station_name}) with ID {inserted_id}")
             return inserted_id
+
     except Exception as e:
         logging.error(f"❌ Failed to save warning to MySQL: {e}")
         return None
@@ -481,7 +494,12 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                             inserted_id = save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
                             if inserted_id:
                                 with mysql_conn.cursor(DictCursor) as cursor:
-                                    cursor.execute("SELECT * FROM stringatrice_warnings WHERE id = %s", (inserted_id,))
+                                    cursor.execute("""
+                                        SELECT w.*, p.photo
+                                        FROM stringatrice_warnings w
+                                        LEFT JOIN photos p ON w.photo_id = p.id
+                                        WHERE w.id = %s
+                                    """, (inserted_id,))
                                     row = cursor.fetchone()
                                     if row:
                                         row["suppress_on_source"] = bool(int(row.get("suppress_on_source", 0)))
@@ -512,7 +530,12 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                     inserted_id = save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
                     if inserted_id:
                         with mysql_conn.cursor(DictCursor) as cursor:
-                            cursor.execute("SELECT * FROM stringatrice_warnings WHERE id = %s", (inserted_id,))
+                            cursor.execute("""
+                                SELECT w.*, p.photo
+                                FROM stringatrice_warnings w
+                                LEFT JOIN photos p ON w.photo_id = p.id
+                                WHERE w.id = %s
+                            """, (inserted_id,))
                             row = cursor.fetchone()
                             if row:
                                 row["suppress_on_source"] = bool(int(row.get("suppress_on_source", 0)))

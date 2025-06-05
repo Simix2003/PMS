@@ -7,7 +7,7 @@ Cambiare nome Cartella da "IX-Monitor" a "PMS"
 
 ############################
 
-CREATE TABLE defect_photos (
+CREATE TABLE photos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     photo LONGBLOB NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -26,7 +26,19 @@ ALTER TABLE object_defects ADD COLUMN photo_id INT NULL;
 # MODIFICARE LA TABELLA
 ALTER TABLE object_defects
   DROP COLUMN photo,
-  ADD CONSTRAINT fk_object_defects_photo
+  ADD CONSTRAINT fk_object_photos
     FOREIGN KEY (photo_id)
-    REFERENCES defect_photos(id)
+    REFERENCES photos(id)
+    ON DELETE SET NULL;
+
+
+#################################
+Per migrare photos dei warning stringatrice nella nuova tabella : ( non migriamo le photo, tanto non le avranno scattate)
+
+ALTER TABLE stringatrice_warnings
+  DROP COLUMN photo,
+  ADD COLUMN photo_id INT NULL,
+  ADD CONSTRAINT fk_warning_photo
+    FOREIGN KEY (photo_id)
+    REFERENCES photos(id)
     ON DELETE SET NULL;

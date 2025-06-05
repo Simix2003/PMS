@@ -32,6 +32,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final Set<String> _issues = {};
   final WebSocketService webSocketService = WebSocketService();
   final WebSocketService warningswebSocketService = WebSocketService();
+  final ApiService apiService = ApiService();
   List<Map<String, dynamic>> warnings = [];
   final Set<String> shownWarningTimestamps = {};
   final List<Map<String, dynamic>> _warningDialogQueue = [];
@@ -48,12 +49,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // STATIONS //Should get from MySQL : stations
   String selectedChannel = ""; // Force user to pick a channel
-  final List<String> availableChannels = ["", "MIN01", "MIN02", "RMI01"];
-  final Map<String, String> stationDisplayNames = {
+  List<String> availableChannels = [""];
+  Map<String, String> stationDisplayNames = {
     '': '🔧 Selezionare Stazione',
-    'MIN01': 'M308 - QG2 di M306',
-    'MIN02': 'M309 - QG2 di M307',
-    'RMI01': 'M326 - ReWork1',
   };
 
   // LINES //Should get from MySQL : production_lines
@@ -77,7 +75,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _startup() async {
-    if (selectedChannel.isEmpty) return; // Prevent running on invalid selection
+    final response = await apiService.getQGStations();
+    if (response != null && response["stations"] != null) {
+      final stations = response["stations"] as List<dynamic>;
+      setState(() {
+        for (var s in stations) {
+          final name = s["name"];
+          final displayName = s["display_name"];
+          availableChannels.add(name);
+          stationDisplayNames[name] = displayName;
+        }
+      });
+    }
+
+    if (selectedChannel.isEmpty) return;
     _connectWebSocket();
     _fetchPLCStatus();
   }

@@ -445,7 +445,7 @@ class _DataViewPageState extends State<DataViewPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Dati - ',
+              'Dati',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 20,
@@ -453,7 +453,7 @@ class _DataViewPageState extends State<DataViewPage> {
               ),
             ),
             const SizedBox(height: 4),
-            Container(
+            /*Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color: const Color(0xFF007AFF).withOpacity(0.1),
@@ -481,7 +481,7 @@ class _DataViewPageState extends State<DataViewPage> {
                 }).toList(),
                 onChanged: _onZoneChange,
               ),
-            ),
+            ),*/
           ],
         ),
         centerTitle: true,

@@ -4,16 +4,19 @@ import logging
 
 import os
 import sys
+
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection, insert_initial_production_data, update_production_final
 from service.connections.temp_data import remove_temp_issues
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
-from service.config.config import debug
+from service.config.config import PLC_DB_RANGES, debug
 from service.routes.broadcast import broadcast
 from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
+from service.helpers.buffer_plc_extract import extract_bool, extract_string
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
     print(f"[{full_station_id}] Starting background task.")
@@ -36,24 +39,48 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 await asyncio.sleep(1)
                 continue  # Skip this cycle if config not found
 
+            # Get full DB buffer once for this PLC
+            plc_key = (plc_connection.ip_address, plc_connection.slot)
+            db = paths["trigger"]["db"]  # assuming all signals use same DB
+
+            db_range = PLC_DB_RANGES.get(plc_key, {}).get(db)
+            if not db_range:
+                logging.error(f"❌ No DB range defined for {plc_key} DB{db}")
+                await asyncio.sleep(1)
+                continue
+
+            start_byte = db_range["min"]
+            size = db_range["max"] - db_range["min"] + 1
+
+            # Read full DB buffer
+            buffer = await asyncio.to_thread(plc_connection.client.db_read, db, start_byte, size)
+
             trigger_conf = paths["trigger"]
             if debug:
                 trigger_value = global_state.debug_triggers.get(full_station_id, False)
             else:
-                trigger_value = await asyncio.to_thread(
-                    plc_connection.read_bool,
-                    trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
-                )
+                #trigger_value = await asyncio.to_thread(
+                #    plc_connection.read_bool,
+                #    trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
+                #)
+                trigger_value = extract_bool(buffer, trigger_conf["byte"], trigger_conf["bit"], start_byte)
 
             if trigger_value is None:
                 raise Exception("Trigger read returned None")
 
             if trigger_value != prev_trigger:
                 prev_trigger = trigger_value
-                await on_trigger_change(plc_connection, line_name, channel_id, None, trigger_value, None)
+                await on_trigger_change(
+                    plc_connection,
+                    line_name,
+                    channel_id,
+                    None,  # node
+                    trigger_value,
+                    None,  # data
+                    buffer,           # pass buffer
+                    start_byte
+                )
 
-            # Outcome check
-            paths = get_channel_config(line_name, channel_id)
             if not paths:
                 logging.error(f"❌ Missing config for {line_name}.{channel_id}")
                 await asyncio.sleep(1)
@@ -62,13 +89,15 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             # Now you're safe to use it:
             fb_conf = paths["fine_buona"]
             fs_conf = paths["fine_scarto"]
-            pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
             if debug:
                 fine_buona = False
                 fine_scarto = global_state.debug_triggers_fisici.get(full_station_id, False)
             else:
-                fine_buona = await asyncio.to_thread(plc_connection.read_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"])
-                fine_scarto = await asyncio.to_thread(plc_connection.read_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"])
+                #fine_buona = await asyncio.to_thread(plc_connection.read_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"])
+                #fine_scarto = await asyncio.to_thread(plc_connection.read_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"])
+                fine_buona = extract_bool(buffer, fb_conf["byte"], fb_conf["bit"], start_byte)
+                fine_scarto = extract_bool(buffer, fs_conf["byte"], fs_conf["bit"], start_byte)
+
 
 
             if fine_buona is None or fine_scarto is None:
@@ -79,14 +108,18 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 result = await read_data(plc_connection, line_name, channel_id,
                                         richiesta_ok=fine_buona,
                                         richiesta_ko=fine_scarto,
-                                        data_inizio=data_inizio)
+                                        data_inizio=data_inizio, 
+                                        buffer=buffer, 
+                                        start_byte=start_byte,
+                                        )
                 
                 # 🔍 Read current Id_Modulo again directly from PLC
                 id_mod_conf = paths["id_modulo"]
-                current_id_modulo = global_state.debug_moduli.get(full_station_id) if debug else await asyncio.to_thread(
-                    plc_connection.read_string,
-                    id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
-                )
+                #current_id_modulo = global_state.debug_moduli.get(full_station_id) if debug else await asyncio.to_thread(
+                #    plc_connection.read_string,
+                #    id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
+                #)
+                current_id_modulo = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
 
                 expected_id = global_state.expected_moduli.get(full_station_id)
 
@@ -121,7 +154,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
             await asyncio.sleep(5)
 
-async def on_trigger_change(plc_connection: PLCConnection, line_name: str, channel_id: str, node, val, data):
+async def on_trigger_change(plc_connection: PLCConnection, line_name: str, channel_id: str, node, val, data, buffer: bytes | None = None, start_byte: int | None = None):
     if not isinstance(val, bool):
         return
 
@@ -150,17 +183,24 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         if debug:
             object_id = global_state.debug_moduli.get(full_id)
         else:
-            object_id = await asyncio.to_thread(plc_connection.read_string, id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"])    
+            #object_id = await asyncio.to_thread(plc_connection.read_string, id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"])
+            object_id = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)    
         ###############################################################################################################################
 
         str_conf = paths["stringatrice"]
-        values = [await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i) for i in range(str_conf["length"])]
+        #values = [await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i) for i in range(str_conf["length"])]
+        values = [
+            extract_bool(buffer, str_conf["byte"], i, start_byte)
+            for i in range(str_conf["length"])
+        ]
+
         if not any(values):
             values[0] = True
         stringatrice_index = values.index(True) + 1
         stringatrice = str(stringatrice_index)
 
-        issues_value = await asyncio.to_thread(plc_connection.read_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"])
+        #issues_value = await asyncio.to_thread(plc_connection.read_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"])
+        issues_value = extract_bool(buffer, esito_conf["byte"], esito_conf["bit"], start_byte)
         issues_submitted = issues_value is True
 
         trigger_timestamps[full_id] = datetime.now()
@@ -172,9 +212,10 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         
         escl_conf = paths.get("stazione_esclusa")
         if escl_conf:
-            esclusione_attiva = await asyncio.to_thread(
-                plc_connection.read_bool, escl_conf["db"], escl_conf["byte"], escl_conf["bit"]
-            )
+            #esclusione_attiva = await asyncio.to_thread(
+            #    plc_connection.read_bool, escl_conf["db"], escl_conf["byte"], escl_conf["bit"]
+            #)
+            esclusione_attiva = extract_bool(buffer, escl_conf["byte"], escl_conf["bit"], start_byte)
         else:
             esclusione_attiva = False
 
@@ -215,7 +256,9 @@ async def read_data(
     channel_id: str,
     richiesta_ko: bool,
     richiesta_ok: bool,
-    data_inizio: datetime | None
+    data_inizio: datetime | None,
+    buffer: bytes | None = None,
+    start_byte: int | None = None
 ):
     try:
         full_id = f"{line_name}.{channel_id}"
@@ -236,20 +279,22 @@ async def read_data(
         if debug:
             data["Id_Modulo"] = global_state.debug_moduli.get(full_id)
         else:
-            data["Id_Modulo"] = await asyncio.to_thread(
-                plc_connection.read_string,
-                id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
-            )
+            #data["Id_Modulo"] = await asyncio.to_thread(
+            #    plc_connection.read_string,
+            #    id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
+            #)
+            data["Id_Modulo"] = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
         ###############################################################################################################################
         
         
 
         # Read Id_Utente
         id_utente_conf = config["id_utente"]
-        data["Id_Utente"] = await asyncio.to_thread(
-            plc_connection.read_string,
-            id_utente_conf["db"], id_utente_conf["byte"], id_utente_conf["length"]
-        )
+        #data["Id_Utente"] = await asyncio.to_thread(
+        #    plc_connection.read_string,
+        #    id_utente_conf["db"], id_utente_conf["byte"], id_utente_conf["length"]
+        #)
+        data["Id_Utente"] = extract_string(buffer, id_utente_conf["byte"], id_utente_conf["length"], start_byte)
 
         data["DataInizio"] = data_inizio
         data["DataFine"] = datetime.now()
@@ -261,9 +306,13 @@ async def read_data(
 
         # Read stringatrice bits if relevant
         str_conf = config["stringatrice"]
+        #values = [
+        #    await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
+        #    for i in range(str_conf["length"])
+        #]
         values = [
-            await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
-            for i in range(str_conf["length"])
+        extract_bool(buffer, str_conf["byte"], i, start_byte)
+        for i in range(str_conf["length"])
         ]
         if not any(values):
             values[0] = True

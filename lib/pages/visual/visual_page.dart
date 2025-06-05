@@ -602,16 +602,32 @@ class _VisualPageState extends State<VisualPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Traffic light
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              const TrafficLightWithBackground(),
-                              Text('Ultimi XXX Shift',
-                                  style: TextStyle(
+                              // Left side: Traffic light + text
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const TrafficLightWithBackground(),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Ultimi XXX Shift',
+                                    style: TextStyle(
                                       fontSize: 16,
-                                      fontWeight: FontWeight.bold)),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(
+                                width: 48,
+                              ),
+
+                              // Right side: Escalation button
+                              const EscalationButton(),
                             ],
                           ),
                           Spacer(),
@@ -634,7 +650,7 @@ class _VisualPageState extends State<VisualPage> {
                                   color: okColor, role: 'Chiusi', time: ''),
                             ],
                           ),
-                          SizedBox(height: 24),
+                          SizedBox(height: 16),
                         ],
                       ),
                     ),

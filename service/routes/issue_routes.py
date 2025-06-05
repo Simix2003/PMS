@@ -162,12 +162,13 @@ async def get_issues_for_object(id_modulo: str, production_id: int = Query(None)
             else:
                 print('Using provided ProductionId: %s' % production_id)
 
-            # 3. Estrai i difetti associati
+            # 3. Estrai i difetti associati con join alle foto
             cursor.execute("""
                 SELECT d.category, od.defect_type, od.i_ribbon, od.stringa, 
-                       od.ribbon_lato, od.s_ribbon, od.extra_data, od.photo
+                       od.ribbon_lato, od.s_ribbon, od.extra_data, p.photo
                 FROM object_defects od
                 JOIN defects d ON od.defect_id = d.id
+                LEFT JOIN photos p ON od.photo_id = p.id
                 WHERE od.production_id = %s
             """, (production_id,))
 
@@ -178,7 +179,7 @@ async def get_issues_for_object(id_modulo: str, production_id: int = Query(None)
             for row in defects:
                 cat = row["category"]
                 base64_photo = None
-                if "photo" in row and row["photo"]:
+                if row.get("photo"):
                     base64_photo = f"data:image/jpeg;base64,{base64.b64encode(row['photo']).decode()}"
 
                 if cat == "Generali":

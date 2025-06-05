@@ -22,9 +22,11 @@ def get_unacknowledged_warnings(line_name: str):
 
     with conn.cursor(DictCursor) as cursor:
         cursor.execute("""
-            SELECT * FROM stringatrice_warnings
-            WHERE line_name = %s AND acknowledged = 0
-            ORDER BY timestamp DESC
+            SELECT w.*, p.photo
+            FROM stringatrice_warnings w
+            LEFT JOIN photos p ON w.photo_id = p.id
+            WHERE w.line_name = %s AND w.acknowledged = 0
+            ORDER BY w.timestamp DESC
         """, (line_name,))
         rows = cursor.fetchall()
 
@@ -90,21 +92,21 @@ async def suppress_with_photo(data: dict = Body(...)):
     timestamp = datetime.fromisoformat(timestamp_raw).strftime('%Y-%m-%d %H:%M:%S')
 
     image_base64 = data.get("photo")
-    if not image_base64:
-        print("⚠️ No image provided in request")
-    else:
-        print(f"📸 Received base64 image length: {len(image_base64)}")
-
     image_blob = compress_base64_to_jpeg_blob(image_base64, quality=70) if image_base64 else None
 
     try:
         with conn.cursor() as cursor:
+            photo_id = None
+            if image_blob:
+                cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (image_blob,))
+                photo_id = cursor.lastrowid
+
             cursor.execute("""
                 UPDATE stringatrice_warnings
                 SET suppress_on_source = 1,
-                    photo = %s
+                    photo_id = %s
                 WHERE line_name = %s AND timestamp = %s
-            """, (image_blob, line_name, timestamp))
+            """, (photo_id, line_name, timestamp))
             conn.commit()
     except Exception as e:
         conn.rollback()
@@ -148,20 +150,23 @@ if debug:
 
         conn = get_mysql_connection()
 
-        # ✅ Save to MySQL first to generate an ID
         inserted_id = save_warning_on_mysql(
             warning_payload,
             conn,
             station,
             defect,
-            {"display_name": source_station},  # ← simulate full source_station
+            {"display_name": source_station},
             suppress_on_source=False
         )
 
-        # ✅ Fetch full row and broadcast it
         if inserted_id:
             with conn.cursor(DictCursor) as cursor:
-                cursor.execute("SELECT * FROM stringatrice_warnings WHERE id = %s", (inserted_id,))
+                cursor.execute("""
+                    SELECT w.*, p.photo
+                    FROM stringatrice_warnings w
+                    LEFT JOIN photos p ON w.photo_id = p.id
+                    WHERE w.id = %s
+                """, (inserted_id,))
                 row = cursor.fetchone()
 
                 if row:
@@ -169,12 +174,8 @@ if debug:
                     if row.get("photo"):
                         row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
 
-                    # ✅ Convert datetime to ISO string
                     if isinstance(row.get("timestamp"), datetime):
                         row["timestamp"] = row["timestamp"].isoformat()
-
-                    # 🧼 (Optional) remove None values if needed
-                    # row = {k: v for k, v in row.items() if v is not None}
 
                     await broadcast_stringatrice_warning(line, row)
                     return {"status": "sent", "payload": row}

@@ -350,6 +350,7 @@ class ApiService {
     required String? orderBy,
     required String? orderDirection,
     required String? limit,
+    required bool showAllEvents,
   }) async {
     final uri = Uri.parse('$baseUrl/api/search');
 
@@ -379,6 +380,7 @@ class ApiService {
         "order_by": orderBy,
         "order_direction": orderDirection,
         "limit": limit,
+        "show_all_events": showAllEvents,
       }),
     );
 

@@ -6,7 +6,8 @@ import 'visual_widgets.dart';
 import 'package:gauge_indicator/gauge_indicator.dart';
 
 class VisualPage extends StatefulWidget {
-  const VisualPage({super.key});
+  final String zone;
+  const VisualPage({super.key, required this.zone});
 
   @override
   _VisualPageState createState() => _VisualPageState();
@@ -51,6 +52,7 @@ class _VisualPageState extends State<VisualPage> {
 
   @override
   Widget build(BuildContext context) {
+    print("🔴 VisualPage.build() called for zone ${widget.zone}");
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(

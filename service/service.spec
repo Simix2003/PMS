@@ -11,10 +11,8 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        'torch',
-        'tensorflow',
-        'scipy',
-        'tensorboard'
+    'tensorflow',
+    'tensorboard'
     ],
     noarchive=False,
     optimize=0,

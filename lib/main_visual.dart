@@ -1,19 +1,27 @@
+// ignore_for_file: avoid_web_libraries_in_flutter
+
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
-//import 'package:rive/rive.dart';
 import 'pages/loading_Screen/loading_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('it_IT'); // ensure locale data is ready
-  //await RiveFile.initialize(); // <-- Required on Web
+  await initializeDateFormatting('it_IT');
 
-  runApp(const MyApp());
+  // 🌍 Get the first segment of the path to determine the zone
+  final uri = html.window.location;
+  final pathSegments = uri.pathname!.split('/')..removeWhere((e) => e.isEmpty);
+  final zone = pathSegments.isNotEmpty ? pathSegments.first : 'default';
+
+  runApp(MyApp(zone: zone));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final String zone;
+
+  const MyApp({super.key, required this.zone});
 
   @override
   Widget build(BuildContext context) {
@@ -21,10 +29,9 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'PMS',
 
-      // 👇 Force Italian locale
       locale: const Locale('it', 'IT'),
       supportedLocales: const [Locale('it', 'IT')],
-      localizationsDelegates: [
+      localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
@@ -35,7 +42,9 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Roboto',
       ),
-      home: LoadingScreen(targetPage: 'Visual'),
+
+      // 🎯 Pass the zone to your first screen
+      home: LoadingScreen(targetPage: 'Visual', zone: zone),
     );
   }
 }

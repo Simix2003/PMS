@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 
 import '../utils/helpers.dart';
 
@@ -248,6 +249,188 @@ class IAConfirmationDialog extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class ShimmeringText extends StatelessWidget {
+  final String text;
+  final TextStyle? style;
+  final Color baseColor;
+  final Color highlightColor;
+
+  const ShimmeringText({
+    super.key,
+    required this.text,
+    this.style,
+    this.baseColor = Colors.blueGrey,
+    this.highlightColor = Colors.white70,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: baseColor,
+      period: const Duration(milliseconds: 500),
+      highlightColor: highlightColor,
+      child: Text(
+        text,
+        style: style ??
+            const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 2,
+            ),
+      ),
+    );
+  }
+}
+
+class ETAEstimateCard extends StatelessWidget {
+  final String estimatedFixTime;
+
+  const ETAEstimateCard({super.key, required this.estimatedFixTime});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blue.shade200, Colors.purpleAccent.shade100],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purpleAccent.withOpacity(0.5),
+            blurRadius: 16,
+            spreadRadius: 1.5,
+          )
+        ],
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.bolt_rounded, color: Colors.white),
+          const SizedBox(width: 8),
+          Text(
+            'Tempo di Lavorazione stimato: $estimatedFixTime',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            '* BETA',
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ShimmerRevealETA extends StatefulWidget {
+  final String estimatedFixTime;
+
+  const ShimmerRevealETA({super.key, required this.estimatedFixTime});
+
+  @override
+  State<ShimmerRevealETA> createState() => _ShimmerRevealETAState();
+}
+
+class _ShimmerRevealETAState extends State<ShimmerRevealETA>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _shimmerPosition;
+  bool _animationDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    _shimmerPosition = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    _controller.forward();
+
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() {
+          _animationDone = true;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final card = ETAEstimateCard(estimatedFixTime: widget.estimatedFixTime);
+
+    if (_animationDone) {
+      return card;
+    }
+
+    return AnimatedBuilder(
+      animation: _shimmerPosition,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            // Underlying card with reduced opacity
+            Opacity(
+              opacity: 0.2,
+              child: card,
+            ),
+
+            // Shimmer effect
+            ShaderMask(
+              shaderCallback: (rect) {
+                return LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Colors.white.withOpacity(0.1),
+                    Colors.white.withOpacity(0.9),
+                    Colors.white.withOpacity(0.1),
+                  ],
+                  stops: const [0.0, 0.5, 1.0],
+                ).createShader(
+                  Rect.fromLTWH(
+                    rect.width * _shimmerPosition.value,
+                    0,
+                    rect.width,
+                    rect.height,
+                  ),
+                );
+              },
+              blendMode: BlendMode.srcATop,
+              child: card,
+            ),
+          ],
+        );
+      },
     );
   }
 }

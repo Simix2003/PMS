@@ -48,3 +48,9 @@ In modo da creare i due certificati necessari per HTTPS.
 i file saranno sotto : C:\Users\papar
 
 Bisogna spostarli sotto : C:\IX-Monitor\ssl
+
+OS: Windows ( In modo da avere possibilità di far girare EXE o Container Linux)
+CPU: 8 vCPU o superiore
+RAM: 16 GB o superiore
+SSD: 256 GB o superiore ( DATABASE MYSQL IN LOCALE OPPURE NOOO???)
+IP statico + porte aperte 8001 e 8050–>8055

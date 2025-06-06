@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../../shared/services/api_service.dart';
-import '../../shared/widgets/ia_confirmation.dart';
+import '../../shared/widgets/AI.dart';
 
 class HeaderBox extends StatelessWidget {
   final String title, target;

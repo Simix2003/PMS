@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/dashboard/dashboard_visual.dart';
 import 'dart:ui';
 import 'dart:math' as math;
-
 import '../../shared/services/api_service.dart';
+import '../../shared/widgets/AI.dart';
 import '../dashboard/dashboard_data.dart';
 import '../dashboard/dashboard_home.dart';
 import '../dashboard/dashboard_stringatrice.dart';
@@ -419,6 +419,17 @@ class _LoadingScreenState extends State<LoadingScreen>
                                             ),
                                           ],
                                         ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      ShimmeringText(
+                                        text: "2.0.0",
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 2,
+                                        ),
+                                        baseColor: Colors.blueGrey.shade800,
+                                        highlightColor: Colors.white70,
                                       ),
                                     ],
                                   ),

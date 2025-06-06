@@ -76,7 +76,13 @@ ISSUE_TREE = {
 
 BASE_DIR = Path("C:/PMS")
 
-ML_MODEL_PATH = os.path.join(BASE_DIR, "models", "fine-tuned-defects_V2")
+# Directory for all saved ML models
+ML_MODELS_DIR = os.path.join(BASE_DIR, "models")
+
+# Specific models
+DEFECT_SIMILARITY_MODEL_PATH = os.path.join(ML_MODELS_DIR, "fine-tuned-defects_V2")
+ETA_MODEL_PATH_TEMPLATE = lambda station_name: os.path.join(ML_MODELS_DIR, f"eta_{station_name}.pkl")
+
 KNOWN_DEFECTS = [
     "Non Lavorato Poe Scaduto", 
     "No Good da Bussing",

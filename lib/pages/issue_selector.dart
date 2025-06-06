@@ -4,7 +4,7 @@ import 'package:ix_monitor/pages/picture_gallery.dart';
 import 'package:ix_monitor/pages/picture_page.dart';
 import '../../shared/services/api_service.dart';
 import '../shared/services/info_service.dart';
-import '../shared/widgets/ia_confirmation.dart';
+import '../shared/widgets/AI.dart';
 
 class IssueSelectorWidget extends StatefulWidget {
   final String selectedLine;

@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/api_service.dart';
+import 'AI.dart';
 
 class ObjectCard extends StatefulWidget {
   final String objectId;
@@ -34,6 +35,7 @@ class ObjectCard extends StatefulWidget {
 
 class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
   bool _isHoveringKO = false;
+  String? estimatedFixTime; // Example: "7 min"
 
   void _sendOutcome(BuildContext context, String outcome) async {
     HapticFeedback.mediumImpact();
@@ -77,6 +79,22 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
   }
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.reWork) {
+      _fetchETAPrediction();
+    }
+  }
+
+  Future<void> _fetchETAPrediction() async {
+    // Simulated ETA logic (later replace with API call)
+    await Future.delayed(Duration(milliseconds: 500));
+    setState(() {
+      estimatedFixTime = "7 min";
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     Color? glowColor;
     if (widget.hasBeenEvaluated) {
@@ -105,6 +123,11 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (widget.reWork &&
+              !widget.hasBeenEvaluated &&
+              estimatedFixTime != null)
+            ShimmerRevealETA(estimatedFixTime: estimatedFixTime!),
+
           // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -114,7 +137,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Production Unit',
+                    'Modulo:',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w400,
@@ -171,7 +194,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
           // Status text
           Text(
             widget.hasBeenEvaluated
-                ? (widget.isObjectOK ? "Status: Unità OK" : "Status: Unità KO")
+                ? (widget.isObjectOK ? "Status: Modulo G" : "Status: Modulo NG")
                 : "Status: Attesa validazione",
             style: TextStyle(
               fontSize: 14,

@@ -54,6 +54,8 @@ class _FindPageState extends State<FindPage> {
   bool isExporting = false;
   bool searching = false;
   bool showFilters = true;
+  bool isShowingAllEvents = false;
+  int _totalEvents = 0;
 
   String? selectedCycleTimeCondition;
 
@@ -1468,6 +1470,9 @@ class _FindPageState extends State<FindPage> {
 
   void _onSearchPressed() async {
     setState(() => results.clear());
+    setState(() {
+      _totalEvents = 0;
+    });
     setState(() => searching = true);
 
     try {
@@ -1481,6 +1486,7 @@ class _FindPageState extends State<FindPage> {
         orderBy: selectedOrderBy,
         orderDirection: selectedOrderDirection,
         limit: selectedLimit,
+        showAllEvents: isShowingAllEvents,
       );
 
       setState(() {
@@ -1491,6 +1497,7 @@ class _FindPageState extends State<FindPage> {
           final objectId = row['object_id'];
           final productionIds =
               (row['production_ids'] as List).map((e) => e.toString()).toList();
+          _totalEvents += productionIds.length;
 
           if (objectId != null && productionIds.isNotEmpty) {
             moduloIdToProductionIds[objectId] = productionIds;
@@ -1502,6 +1509,11 @@ class _FindPageState extends State<FindPage> {
         }
       });
     } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Errore nel caricamento dei risultati: $e')),
+      );
+      setState(() => searching = false);
+
       print("❌ Errore nel caricamento dei risultati: $e");
       // Show a Snackbar or Alert if needed
     }
@@ -1832,14 +1844,50 @@ class _FindPageState extends State<FindPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    '${results.length} Moduli Visualizzati',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 24,
-                                      color: Colors.black87,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '${results.length} Moduli Visualizzati',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 24,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            isShowingAllEvents =
+                                                !isShowingAllEvents;
+                                          });
+
+                                          _onSearchPressed();
+                                        },
+                                        child: Tooltip(
+                                          message: isShowingAllEvents
+                                              ? 'Nascondi eventi che non rispettano i filtri'
+                                              : 'Mostra tutti gli eventi',
+                                          child: Icon(
+                                            isShowingAllEvents
+                                                ? Icons.visibility_off
+                                                : Icons.remove_red_eye,
+                                            color: Colors.black54,
+                                            size: 24,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                                  if (!isSelecting)
+                                    Text(
+                                      '$_totalEvents Eventi Visualizzati',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 16,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
                                   if (isSelecting)
                                     Text(
                                       '${selectedObjectIds.length} Moduli Selezionati',

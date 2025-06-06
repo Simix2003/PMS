@@ -26,6 +26,9 @@ async def search_results(request: Request):
         order_direction = payload.get("order_direction", "DESC")
         limit = int(payload.get("limit", 1000))
         direction = "ASC" if order_direction.lower() == "crescente" else "DESC"
+        show_all_events = payload.get("show_all_events", False)
+
+        print(f"show_all_events: {show_all_events}")
 
         join_clauses = []
         where_clauses = []
@@ -329,25 +332,61 @@ async def search_results(request: Request):
                 MIN(od.extra_data) AS extra_data
             """
 
-        query = f"""
-        SELECT {select_fields}
-        FROM productions p
-        JOIN objects o ON p.object_id = o.id
-        JOIN stations s ON p.station_id = s.id
-        LEFT JOIN stations ls ON p.last_station_id = ls.id
-        {join_sql}
-        LEFT JOIN production_lines pl ON s.line_id = pl.id
-        {where_sql}
-        GROUP BY p.id
-        {order_clause}
-        LIMIT %s
-        """
-        params.append(limit)
-
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
-            cursor.execute(query, tuple(params))
-            rows = cursor.fetchall()
+            if show_all_events:
+                # First: Get object_ids that match filters
+                object_id_query = f"""
+                    SELECT DISTINCT o.id AS object_id
+                    FROM productions p
+                    JOIN objects o ON p.object_id = o.id
+                    JOIN stations s ON p.station_id = s.id
+                    LEFT JOIN stations ls ON p.last_station_id = ls.id
+                    {join_sql}
+                    LEFT JOIN production_lines pl ON s.line_id = pl.id
+                    {where_sql}
+                    LIMIT %s
+                """
+                cursor.execute(object_id_query, tuple(params + [limit]))
+                object_id_rows = cursor.fetchall()
+                object_ids = [r["object_id"] for r in object_id_rows]
+
+                if not object_ids:
+                    return {"results": []}
+
+                # Second: Fetch all productions with those object_ids
+                full_query = f"""
+                    SELECT {select_fields}
+                    FROM productions p
+                    JOIN objects o ON p.object_id = o.id
+                    JOIN stations s ON p.station_id = s.id
+                    LEFT JOIN stations ls ON p.last_station_id = ls.id
+                    {join_sql}
+                    LEFT JOIN production_lines pl ON s.line_id = pl.id
+                    WHERE o.id IN ({','.join(['%s'] * len(object_ids))})
+                    GROUP BY p.id
+                    {order_clause}
+                """
+                cursor.execute(full_query, tuple(object_ids))
+                rows = cursor.fetchall()
+            else:
+                # Old query logic (no show_all_events mode)
+                query = f"""
+                    SELECT {select_fields}
+                    FROM productions p
+                    JOIN objects o ON p.object_id = o.id
+                    JOIN stations s ON p.station_id = s.id
+                    LEFT JOIN stations ls ON p.last_station_id = ls.id
+                    {join_sql}
+                    LEFT JOIN production_lines pl ON s.line_id = pl.id
+                    {where_sql}
+                    GROUP BY p.id
+                    {order_clause}
+                    LIMIT %s
+                """
+                params.append(limit)
+                cursor.execute(query, tuple(params))
+                rows = cursor.fetchall()
 
             # Group rows by id_modulo (i.e. unique object)
             grouped = defaultdict(list)

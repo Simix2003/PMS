@@ -273,3 +273,19 @@ class PLCConnection:
                     logging.error(f"❌ Retry failed: REAL DB{db_number}, byte {byte_index}: {str(e2)}")
                     self.connected = False
                     return None
+                
+    def db_read(self, db_number: int, start_byte: int, size: int) -> bytearray:
+        with self.lock:
+            self._ensure_connection()
+            try:
+                return self.client.db_read(db_number, start_byte, size)
+            except Exception as e:
+                logging.warning(f"⚠️ Error reading DB block {db_number} from byte {start_byte} (size {size}): {e}")
+                self.connected = False
+                self.reconnect()
+                try:
+                    return self.client.db_read(db_number, start_byte, size)
+                except Exception as e2:
+                    logging.error(f"❌ Retry failed: DB{db_number} [{start_byte}:{start_byte + size}]: {e2}")
+                    self.connected = False
+                    return bytearray(size)  # Return dummy buffer to avoid crash

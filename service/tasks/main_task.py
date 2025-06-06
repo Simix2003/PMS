@@ -53,7 +53,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             size = db_range["max"] - db_range["min"] + 1
 
             # Read full DB buffer
-            buffer = await asyncio.to_thread(plc_connection.client.db_read, db, start_byte, size)
+            buffer = await asyncio.to_thread(plc_connection.db_read, db, start_byte, size)
 
             trigger_conf = paths["trigger"]
             if debug:
@@ -74,10 +74,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     plc_connection,
                     line_name,
                     channel_id,
-                    None,  # node
                     trigger_value,
-                    None,  # data
-                    buffer,           # pass buffer
+                    buffer,
                     start_byte
                 )
 
@@ -154,7 +152,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
             await asyncio.sleep(5)
 
-async def on_trigger_change(plc_connection: PLCConnection, line_name: str, channel_id: str, node, val, data, buffer: bytes | None = None, start_byte: int | None = None):
+async def on_trigger_change(plc_connection: PLCConnection, line_name: str, channel_id: str, val, buffer: bytes | None = None, start_byte: int | None = None):
     if not isinstance(val, bool):
         return
 
@@ -204,11 +202,10 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         issues_submitted = issues_value is True
 
         trigger_timestamps[full_id] = datetime.now()
-        print(f"trigger_timestamps[{full_id}]: {trigger_timestamps[full_id]}")
 
         # Read the initial data from the PLC using read_data.
         data_inizio = trigger_timestamps[full_id]
-        initial_data = await read_data(plc_connection, line_name, channel_id, richiesta_ok=False, richiesta_ko=False, data_inizio=data_inizio)
+        initial_data = await read_data(plc_connection, line_name, channel_id, richiesta_ok=False, richiesta_ko=False, data_inizio=data_inizio, buffer=buffer, start_byte=start_byte)
         
         escl_conf = paths.get("stazione_esclusa")
         if escl_conf:
@@ -260,70 +257,73 @@ async def read_data(
     buffer: bytes | None = None,
     start_byte: int | None = None
 ):
-    try:
-        full_id = f"{line_name}.{channel_id}"
+    full_id = f"{line_name}.{channel_id}"
 
-        if data_inizio is None:
+    try:
+        # Step 1: Validate buffer and start_byte
+        if buffer is None or start_byte is None:
+            logging.error(f"[{full_id}] ❌ Cannot proceed: buffer or start_byte is None")
+            return None
+
+        # Step 2: Validate data_inizio
+        if data_inizio is None or not isinstance(data_inizio, datetime):
+            logging.warning(f"[{full_id}] ⚠️ data_inizio was None or invalid; using current time instead")
             data_inizio = datetime.now()
 
+        # Step 3: Load config
         config = get_channel_config(line_name, channel_id)
         if config is None:
+            logging.error(f"[{full_id}] ❌ Missing config for line/channel")
             return None
 
         data = {}
 
-        # Read Id_Modulo
+        # Step 4: Read Id_Modulo
         id_mod_conf = config["id_modulo"]
-
-        ###############################################################################################################################
         if debug:
-            data["Id_Modulo"] = global_state.debug_moduli.get(full_id)
+            data["Id_Modulo"] = global_state.debug_moduli.get(full_id) or ""
         else:
-            #data["Id_Modulo"] = await asyncio.to_thread(
-            #    plc_connection.read_string,
-            #    id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
-            #)
-            data["Id_Modulo"] = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
-        ###############################################################################################################################
-        
-        
+            data["Id_Modulo"] = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte) or ""
+        if not data["Id_Modulo"]:
+            logging.warning(f"[{full_id}] ⚠️ Id_Modulo is empty or unreadable")
 
-        # Read Id_Utente
+        # Step 5: Read Id_Utente
         id_utente_conf = config["id_utente"]
-        #data["Id_Utente"] = await asyncio.to_thread(
-        #    plc_connection.read_string,
-        #    id_utente_conf["db"], id_utente_conf["byte"], id_utente_conf["length"]
-        #)
-        data["Id_Utente"] = extract_string(buffer, id_utente_conf["byte"], id_utente_conf["length"], start_byte)
+        data["Id_Utente"] = extract_string(buffer, id_utente_conf["byte"], id_utente_conf["length"], start_byte) or ""
 
+        # Step 6: Timestamps
         data["DataInizio"] = data_inizio
         data["DataFine"] = datetime.now()
         tempo_ciclo = data["DataFine"] - data_inizio
         data["Tempo_Ciclo"] = str(tempo_ciclo)
 
-        # Set linea_in_lavorazione if needed
-        data["Linea_in_Lavorazione"] = [line_name == "Linea1", line_name == "Linea2", line_name == "Linea3", line_name == "Linea4", line_name == "Linea5"]
+        # Step 7: Linea flags
+        data["Linea_in_Lavorazione"] = [
+            line_name == "Linea1",
+            line_name == "Linea2",
+            line_name == "Linea3",
+            line_name == "Linea4",
+            line_name == "Linea5"
+        ]
 
-        # Read stringatrice bits if relevant
+        # Step 8: Read Stringatrice flags
         str_conf = config["stringatrice"]
-        #values = [
-        #    await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
-        #    for i in range(str_conf["length"])
-        #]
         values = [
-        extract_bool(buffer, str_conf["byte"], i, start_byte)
-        for i in range(str_conf["length"])
+            extract_bool(buffer, str_conf["byte"], i, start_byte)
+            for i in range(str_conf["length"])
         ]
         if not any(values):
-            values[0] = True
+            values[0] = True  # Default fallback
         data["Lavorazione_Eseguita_Su_Stringatrice"] = values
 
+        # Step 9: Set KO flag
         data["Compilato_Su_Ipad_Scarto_Presente"] = richiesta_ko
 
         return data
 
     except Exception as e:
         logging.error(f"[{full_id}] ❌ Error reading PLC data: {e}")
+        print(f"[{full_id}] ❌ EXCEPTION in read_data: {e}")
         return None
 
 def make_status_callback(full_station_id: str):

@@ -141,6 +141,7 @@ class ApiService {
     final response = await http.get(Uri.parse(url));
     if (response.statusCode == 200) {
       final jsonMap = json.decode(response.body);
+
       for (var station in jsonMap['stations'].values) {
         station['last_object'] ??= 'No Data';
         station['last_esito'] ??= 'No Data';
@@ -156,7 +157,25 @@ class ApiService {
           station['cycle_times'] = <num>[]; // fallback
         }
       }
-      return Map<String, dynamic>.from(jsonMap);
+
+      Map<String, dynamic> deepCastToStringKeyedMap(Map input) {
+        return input.map((key, value) {
+          if (value is Map) {
+            return MapEntry(key.toString(), deepCastToStringKeyedMap(value));
+          } else if (value is List) {
+            return MapEntry(
+                key.toString(),
+                value.map((e) {
+                  return e is Map ? deepCastToStringKeyedMap(e) : e;
+                }).toList());
+          } else {
+            return MapEntry(key.toString(), value);
+          }
+        });
+      }
+
+      final cleaned = deepCastToStringKeyedMap(jsonMap as Map);
+      return cleaned;
     } else {
       throw Exception('Errore durante il caricamento dei dati');
     }

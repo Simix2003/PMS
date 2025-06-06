@@ -15,6 +15,9 @@ flutter build web --web-renderer html --release -t lib/main_data.dart -o build/w
 # Build for port 8052 (Stringatrici)
 flutter build web --web-renderer html --release -t lib/main_stringatrici.dart -o build/web_stringatrici
 
+# Build for port 8053 (Visual)
+flutter build web --web-renderer html --release -t lib/main_visual.dart -o build/web_visual
+
 flutter run -d chrome --web-renderer html -t lib/main_home.dart
 flutter run -d chrome --web-renderer html -t lib/main_data.dart
 flutter run -d chrome --web-renderer html -t lib/main_stringatrici.dart

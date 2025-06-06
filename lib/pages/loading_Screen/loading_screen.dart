@@ -10,8 +10,10 @@ import '../dashboard/dashboard_stringatrice.dart';
 
 class LoadingScreen extends StatefulWidget {
   final String targetPage;
+  final String zone;
 
-  const LoadingScreen({super.key, required this.targetPage});
+  const LoadingScreen(
+      {super.key, required this.targetPage, this.zone = 'default'});
 
   @override
   State<LoadingScreen> createState() => _LoadingScreenState();
@@ -128,7 +130,8 @@ class _LoadingScreenState extends State<LoadingScreen>
           break;
         case 'Visual':
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const DashboardVisual()),
+            MaterialPageRoute(
+                builder: (_) => DashboardVisual(zone: widget.zone)),
           );
           break;
       }

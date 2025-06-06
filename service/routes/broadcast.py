@@ -106,6 +106,14 @@ async def broadcast(line_name: str, channel_id: str, message: dict):
         except Exception:
             subscriptions[summary_key].remove(ws)
 
+async def broadcast_zone_update(line_name: str, zone: str, payload: dict):
+    key = f"{line_name}.visual.{zone}"
+    for ws in subscriptions.get(key, set()).copy():
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            subscriptions[key].discard(ws)
+
 async def broadcast_stringatrice_warning(line_name: str, warning: dict):
     """
     Send a warning packet to every subscriber of /ws/warnings/{line_name}

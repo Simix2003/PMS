@@ -42,3 +42,11 @@ ALTER TABLE stringatrice_warnings
     FOREIGN KEY (photo_id)
     REFERENCES photos(id)
     ON DELETE SET NULL;
+
+
+###################
+TO MAKE DATABASE BETTER
+
+CREATE INDEX idx_prod_time ON productions(start_time, end_time);
+
+CREATE INDEX idx_prod_obj_last ON productions(object_id, last_station_id);

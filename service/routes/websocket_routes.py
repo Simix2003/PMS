@@ -29,6 +29,20 @@ async def websocket_summary(websocket: WebSocket, line_name: str):
         print(f"❌ Dashboard summary client for {line_name} disconnected")
         subscriptions[key].remove(websocket)
 
+@router.websocket("/ws/visual/{line_name}/{zone}")
+async def websocket_visual(websocket: WebSocket, line_name: str, zone: str):
+    await websocket.accept()
+    key = f"{line_name}.visual.{zone}"
+    print(f"🖼️ Visual page client connected for {line_name} / {zone}")
+
+    subscriptions.setdefault(key, set()).add(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        print(f"❌ Visual page client for {line_name}/{zone} disconnected")
+        subscriptions[key].remove(websocket)
 
 @router.websocket("/ws/warnings/{line_name}")
 async def websocket_warnings(websocket: WebSocket, line_name: str):

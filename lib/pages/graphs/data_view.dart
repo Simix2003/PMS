@@ -393,7 +393,7 @@ class _DataViewPageState extends State<DataViewPage> {
     'Zona Stringatrici': 'Zona Stringatrici',
   };
 
-  void _onZoneChange(String? newZone) {
+  /*void _onZoneChange(String? newZone) {
     if (newZone != null && newZone != selectedZone) {
       setState(() {
         selectedZone = newZone;
@@ -402,7 +402,7 @@ class _DataViewPageState extends State<DataViewPage> {
       // Optional: perform additional logic when zone changes
       print('Zone changed to $newZone');
     }
-  }
+  }*/
 
   @override
   Widget build(BuildContext context) {
@@ -601,14 +601,23 @@ class _DataViewPageState extends State<DataViewPage> {
               : Builder(
                   builder: (context) {
                     final data = _fetchedData!;
-                    final stations = data['stations'].entries.toList();
 
+                    // 1) Take `data['stations']` (a LinkedHashMap<dynamic, dynamic>)
+                    //    and re‐cast it so Dart knows it’s Map<String, dynamic>.
+                    final rawStationsMap = data['stations'] as Map;
+                    final stationsMap = rawStationsMap.cast<String, dynamic>();
+                    final stations = stationsMap.entries.toList();
+
+                    // 2) When you go through each station entry, do a similar re‐cast for that nested map:
                     final maxY = stations.map((entry) {
-                          final counts = entry.value as Map<String, dynamic>;
+                          // entry.value is dynamic, but really it’s a Map<String, dynamic> underneath
+                          final counts =
+                              (entry.value as Map).cast<String, dynamic>();
                           return (counts['good_count'] as int) +
                               (counts['bad_count'] as int);
                         }).fold(0, (a, b) => a > b ? a : b) +
-                        20;
+                        20.toDouble();
+
 
                     return SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
@@ -628,24 +637,22 @@ class _DataViewPageState extends State<DataViewPage> {
                             selectedTurno,
                           ),
                           const SizedBox(height: 24),
-                          // we should pass it as a parameter
+                          // Note how we re‐cast again before modifying stationData:
                           ...['MIN01', 'MIN02', 'RMI01'].map((stationCode) {
                             final entry = stations.firstWhere(
                               (e) => e.key == stationCode,
                               orElse: () => const MapEntry('', {}),
                             );
-
                             if (entry.key.isEmpty) return const SizedBox();
 
+                            // Cast the `entry.value` into Map<String, dynamic> safely:
                             final stationData = Map<String, dynamic>.from(
-                                entry.value); // Clone to safely override
+                                (entry.value as Map).cast<String, dynamic>());
 
-                            // We should use station.type to determine the type of station example : station.type == 'rework'
                             if (stationCode == 'RMI01') {
                               stationData['good_count'] =
                                   stationData['ok_op_count'] ?? 0;
                             }
-
                             final visualName =
                                 stationData['display'] ?? entry.key;
 
@@ -868,8 +875,8 @@ class _DataViewPageState extends State<DataViewPage> {
     final m309 = stations.firstWhere((e) => e.key == 'MIN02',
         orElse: () => MapEntry('MIN02', {}));
 
-    final m308Data = m308.value as Map<String, dynamic>? ?? {};
-    final m309Data = m309.value as Map<String, dynamic>? ?? {};
+    final m308Data = Map<String, dynamic>.from(m308.value as Map);
+    final m309Data = Map<String, dynamic>.from(m309.value as Map);
 
     final m308Cycle = _parseCycleTime(m308Data['avg_cycle_time']);
     final m309Cycle = _parseCycleTime(m309Data['avg_cycle_time']);

@@ -1,5 +1,7 @@
+import snap7.util as u
+
 def extract_bool(buffer, byte_offset, bit_index, base_offset):
-    return snap7.util.get_bool(buffer, byte_offset - base_offset, bit_index)
+    return u.get_bool(buffer, byte_offset - base_offset, bit_index)
 
 def extract_string(buffer, byte_offset, length, base_offset):
     pos = byte_offset - base_offset

@@ -2,6 +2,7 @@ Aggiungere folder "models" con il modello di IA sotto C
 
 Copiare Stations Table ( Aggiungere type ENUM : mbj, colonna config JSON e plc JSON )
 
+CONTROLLARE BENE LE IMMAGINI E I FILE JSON, CREDO SIANO PIù GIUSTI QUELLI SUL PC 3SUN
 Cambiare nome cartelle immagini da M308 a MIN01 e da M309 a MIN02
 Cambiare nome Cartella da "IX-Monitor" a "PMS"
 
@@ -50,3 +51,6 @@ TO MAKE DATABASE BETTER
 CREATE INDEX idx_prod_time ON productions(start_time, end_time);
 
 CREATE INDEX idx_prod_obj_last ON productions(object_id, last_station_id);
+
+{"trigger": {"db": 19606, "bit": 4, "byte": 0}, "id_modulo": {"db": 19606, "byte": 2, "length": 20}, "id_utente": {"db": 19606, "byte": 24, "length": 20}, "fine_buona": {"db": 19606, "bit": 6, "byte": 0}, "fine_scarto": {"db": 19606, "bit": 7, "byte": 0}, "stringatrice": {"db": 19606, "byte": 46, "length": 5}, "stazione_esclusa": {"db": 19606, "bit": 3, "byte": 1}, "esito_scarto_compilato": {"db": 19606, "bit": 0, "byte": 144}, "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "bit": 3, "byte": 144}}
+{"ip": "192.168.32.2", "rack": 0, "slot": 1}

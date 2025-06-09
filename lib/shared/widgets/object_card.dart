@@ -123,10 +123,10 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.reWork &&
+          /*if (widget.reWork &&
               !widget.hasBeenEvaluated &&
               estimatedFixTime != null)
-            ShimmerRevealETA(estimatedFixTime: estimatedFixTime!),
+            ShimmerRevealETA(estimatedFixTime: estimatedFixTime!),*/
 
           // Header
           Row(

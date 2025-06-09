@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-debug = False
+debug = True
 
 CHANNELS: dict = {}
 PLC_DB_RANGES: dict = {}  # {(ip, slot): {db_number: {"min": x, "max": y}}}

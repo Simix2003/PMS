@@ -1495,8 +1495,6 @@ class _EscalationDialogState extends State<EscalationDialog> {
         });
         reasonController.clear();
       });
-
-      Navigator.pop(context);
     }
   }
 

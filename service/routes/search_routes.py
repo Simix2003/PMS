@@ -22,7 +22,7 @@ async def search_results(request: Request):
 
         filters = payload.get("filters", [])
         order_by_input = payload.get("order_by", "Data")
-        order_by = COLUMN_MAP.get(order_by_input, "p.end_time")
+        order_by = COLUMN_MAP.get(order_by_input, "p.start_time")
         order_direction = payload.get("order_direction", "DESC")
         limit = int(payload.get("limit", 1000))
         direction = "ASC" if order_direction.lower() == "crescente" else "DESC"
@@ -179,9 +179,9 @@ async def search_results(request: Request):
                                         shift_day = from_dt + timedelta(days=i)
                                         next_day = shift_day + timedelta(days=1)
                                         clauses.append("""
-                                            (DATE(p.end_time) = %s AND TIME(p.end_time) >= '22:00:00')
+                                            (DATE(p.start_time) = %s AND TIME(p.start_time) >= '22:00:00')
                                             OR
-                                            (DATE(p.end_time) = %s AND TIME(p.end_time) <= '05:59:59')
+                                            (DATE(p.start_time) = %s AND TIME(p.start_time) <= '05:59:59')
                                         """)
                                         group_params.extend([
                                             shift_day.strftime("%Y-%m-%d"),
@@ -192,12 +192,12 @@ async def search_results(request: Request):
                                     for i in range((to_dt - from_dt).days + 1):
                                         day = (from_dt + timedelta(days=i)).strftime("%Y-%m-%d")
                                         group_clauses.append(
-                                            "(DATE(p.end_time) = %s AND TIME(p.end_time) BETWEEN %s AND %s)"
+                                            "(DATE(p.start_time) = %s AND TIME(p.start_time) BETWEEN %s AND %s)"
                                         )
                                         group_params.extend([day, *turno_times[turno]])
                             else:
                                 # No turno → normal datetime range
-                                group_clauses.append("p.end_time BETWEEN %s AND %s")
+                                group_clauses.append("p.start_time BETWEEN %s AND %s")
                                 group_params.extend([from_dt, to_dt])
                     elif filter_type == "Tempo Ciclo":
                         condition = f.get("condition")
@@ -270,7 +270,7 @@ async def search_results(request: Request):
                                             if from_iso and to_iso:
                                                 from_dt = datetime.fromisoformat(from_iso)
                                                 to_dt = datetime.fromisoformat(to_iso)
-                                                subquery_clauses.append("p2.end_time BETWEEN %s AND %s")
+                                                subquery_clauses.append("p2.start_time BETWEEN %s AND %s")
                                                 subquery_params.extend([from_dt, to_dt])
 
                             subquery_sql = " AND ".join(subquery_clauses)
@@ -399,9 +399,8 @@ async def search_results(request: Request):
                 if not events:
                     continue
 
-                # Sort: treat None end_time as very recent (i.e., highest priority)
                 events.sort(
-                    key=lambda x: x["end_time"] if x["end_time"] is not None else datetime.max,
+                    key=lambda x: x["start_time"] if x["start_time"] is not None else datetime.max,
                     reverse=True
                 )
 

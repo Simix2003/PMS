@@ -139,7 +139,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         raise
 
     # --- Start PLC tasks ---
-    start_plc_background_tasks()
+    #start_plc_background_tasks()
 
     # --- Start XML watcher ---
     #logger.info("🔄 Starting XML folder watcher task")

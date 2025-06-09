@@ -227,15 +227,18 @@ def _append_dataframe(
     # Header first
     ws.append(df.columns.tolist())
 
-    for _, row in df.iterrows():
-        key_value = row[zebra_key]
+    columns = list(df.columns)
+    zebra_idx = df.columns.get_loc(zebra_key)
+
+    for row_tuple in df.itertuples(index=False, name=None):
+        key_value = row_tuple[zebra_idx]
         if key_value != current_key:
             current_fill = FILL_BLUE if current_fill == FILL_WHITE else FILL_WHITE
             current_key = key_value
 
         row_values: List[Any] = []
-        for col in df.columns:
-            val = row[col]
+        for idx, val in enumerate(row_tuple):
+            col = columns[idx]
             if col in {"Data Ingresso", "Data Uscita"} and val:
                 try:
                     row_values.append(val.strftime("%Y-%m-%d %H:%M:%S"))

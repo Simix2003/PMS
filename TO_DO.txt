@@ -55,6 +55,49 @@ CREATE INDEX idx_prod_obj_last ON productions(object_id, last_station_id);
 #################################
 Copiare NGINX config file ( usare PMS al posto di IX-Monitor e aggiunta porta 8053)
 
+###########################
+Create visual_table for the Visual Managment:
+CREATE TABLE visual_summary (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+
+    zone VARCHAR(50) NOT NULL,  -- e.g. "Line1", "Line2", "QG Area"
+    view_type ENUM('1_station', '2_station', '5_station') NOT NULL,
+    station_1_name VARCHAR(50),
+    station_2_name VARCHAR(50),
+
+    timestamp DATETIME NOT NULL,
+
+    -- 🟦 Station 1 metrics
+    station_1_in INT,
+    station_1_out_ng INT,
+    station_1_yield FLOAT,
+    station_1_yield_shift_1 FLOAT,
+    station_1_yield_shift_2 FLOAT,
+    station_1_yield_shift_3 FLOAT,
+    station_1_yield_last_8_hour_json JSON,
+
+    -- 🟦 Station 2 metrics
+    station_2_in INT,
+    station_2_out_ng INT,
+    station_2_yield FLOAT,
+    station_2_yield_shift_1 FLOAT,
+    station_2_yield_shift_2 FLOAT,
+    station_2_yield_shift_3 FLOAT,
+    station_2_yield_last_8_hour_json JSON,
+
+    -- 🟧 Aggregated metrics
+    stations_throughput_shift_1 INT,
+    stations_throughput_shift_2 INT,
+    stations_throughput_shift_3 INT,
+    stations_throughput_last_8_hour_json JSON,
+
+    -- 🔒 Unique + Performance Indexes
+    UNIQUE KEY uniq_zone (zone),
+    INDEX (view_type),
+    INDEX (timestamp)
+);
+
+
 
 
 

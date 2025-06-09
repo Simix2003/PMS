@@ -25,6 +25,7 @@ from service.config.config import CHANNELS, IMAGES_DIR, PLC_DB_RANGES, debug
 from service.connections.mysql import get_mysql_connection, load_channels_from_db
 from service.connections.xml_watcher import watch_folder_for_new_xml
 from service.tasks.main_task import background_task, make_status_callback
+from service.tasks.visual_summary_task import visual_summary_background_task
 from service.state.global_state import plc_connections, stop_threads, passato_flags
 from service.routes.plc_routes import router as plc_router
 from service.routes.issue_routes import router as issue_router
@@ -141,12 +142,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     start_plc_background_tasks()
 
     # --- Start XML watcher ---
-    logger.info("🔄 Starting XML folder watcher task")
-    try:
-        asyncio.create_task(watch_folder_for_new_xml())
-        logger.info("✅ XML watcher task scheduled.")
-    except Exception as e:
-        logger.error(f"❌ Failed to schedule XML watcher: {e}")
+    #logger.info("🔄 Starting XML folder watcher task")
+    #try:
+    #    asyncio.create_task(watch_folder_for_new_xml())
+    #    logger.info("✅ XML watcher task scheduled.")
+    #except Exception as e:
+    #    logger.error(f"❌ Failed to schedule XML watcher: {e}")
+
+    # --- Start visual summary updater ---
+    #logger.info("🔄 Starting Visual Summary background task")
+    #try:
+    #    asyncio.create_task(visual_summary_background_task())
+    #    logger.info("✅ Visual Summary updater task scheduled.")
+    #except Exception as e:
+    #    logger.error(f"❌ Failed to start visual summary task: {e}")
 
     # Expose PLC connections on app.state
     app.state.plc_connections = plc_connections
@@ -214,7 +223,7 @@ def register_routers(app: FastAPI):
     app.include_router(ml_router)
     logger.info("  • ml_router registered")
     # app.include_router(ai_router)
-    # logger.info("  • ai_router registered (commented out)")
+    # logger.info("  • ai_router registered")
 
     logger.info("✅ All routers registered")
 

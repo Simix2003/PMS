@@ -13,7 +13,7 @@ void main() async {
   // 🌍 Get the first segment of the path to determine the zone
   final uri = html.window.location;
   final pathSegments = uri.pathname!.split('/')..removeWhere((e) => e.isEmpty);
-  final zone = pathSegments.isNotEmpty ? pathSegments.first : 'default';
+  final zone = pathSegments.isNotEmpty ? pathSegments.first : 'AIN';
 
   runApp(MyApp(zone: zone));
 }

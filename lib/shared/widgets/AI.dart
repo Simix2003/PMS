@@ -1,5 +1,7 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -291,51 +293,85 @@ class ETAEstimateCard extends StatelessWidget {
 
   const ETAEstimateCard({super.key, required this.estimatedFixTime});
 
+  void _showExplanationDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Come stimiamo il tempo'),
+          content: const Text(
+            'Il tempo stimato si basa su altri moduli che hanno avuto gli stessi difetti '
+            'negli ultimi 90 giorni. Se troviamo abbastanza esempi simili, calcoliamo una media '
+            'del tempo che hanno impiegato alla stazione di ReWork.',
+            style: TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Chiudi'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.blue.shade200, Colors.purpleAccent.shade100],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return IntrinsicWidth(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade200, Colors.purpleAccent.shade100],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.purpleAccent.withOpacity(0.5),
+              blurRadius: 16,
+              spreadRadius: 1.5,
+            )
+          ],
+          borderRadius: BorderRadius.circular(16),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.purpleAccent.withOpacity(0.5),
-            blurRadius: 16,
-            spreadRadius: 1.5,
-          )
-        ],
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.bolt_rounded, color: Colors.white),
-          const SizedBox(width: 8),
-          Text(
-            'Tempo di Lavorazione stimato: $estimatedFixTime',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              letterSpacing: 0.5,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.bolt_rounded, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(
+              'Tempo di Lavorazione stimato: $estimatedFixTime minuti',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            '* BETA',
-            style: TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              letterSpacing: 0.5,
+            const SizedBox(width: 16),
+            IconButton(
+              icon:
+                  const Icon(Icons.info_outline, color: Colors.white, size: 18),
+              onPressed: () => _showExplanationDialog(context),
+              tooltip: 'Spiegazione ETA',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            const Text(
+              '*BETA',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -352,36 +388,32 @@ class ShimmerRevealETA extends StatefulWidget {
 
 class _ShimmerRevealETAState extends State<ShimmerRevealETA>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _shimmerPosition;
   bool _animationDone = false;
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    );
 
-    _shimmerPosition = Tween<double>(begin: -1.0, end: 2.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-
-    _controller.forward();
-
-    _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        setState(() {
-          _animationDone = true;
-        });
-      }
+    // Start shimmer, then fade-in actual card
+    Future.delayed(const Duration(microseconds: 800), () {
+      _fadeController.forward();
+      setState(() => _animationDone = true);
     });
+
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    _fadeAnimation =
+        CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
@@ -389,48 +421,17 @@ class _ShimmerRevealETAState extends State<ShimmerRevealETA>
   Widget build(BuildContext context) {
     final card = ETAEstimateCard(estimatedFixTime: widget.estimatedFixTime);
 
-    if (_animationDone) {
-      return card;
+    if (!_animationDone) {
+      return Shimmer.fromColors(
+        baseColor: Colors.grey.shade300,
+        highlightColor: Colors.white,
+        child: card,
+      );
     }
 
-    return AnimatedBuilder(
-      animation: _shimmerPosition,
-      builder: (context, child) {
-        return Stack(
-          children: [
-            // Underlying card with reduced opacity
-            Opacity(
-              opacity: 0.2,
-              child: card,
-            ),
-
-            // Shimmer effect
-            ShaderMask(
-              shaderCallback: (rect) {
-                return LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    Colors.white.withOpacity(0.1),
-                    Colors.white.withOpacity(0.9),
-                    Colors.white.withOpacity(0.1),
-                  ],
-                  stops: const [0.0, 0.5, 1.0],
-                ).createShader(
-                  Rect.fromLTWH(
-                    rect.width * _shimmerPosition.value,
-                    0,
-                    rect.width,
-                    rect.height,
-                  ),
-                );
-              },
-              blendMode: BlendMode.srcATop,
-              child: card,
-            ),
-          ],
-        );
-      },
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: card,
     );
   }
 }

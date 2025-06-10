@@ -668,6 +668,40 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>?> predictReworkETAByObject(
+      String objectId) async {
+    final url = Uri.parse('$baseUrl/api/ml/predict_eta_by_id_modulo');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_modulo': objectId}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['confidence'] == 'high') {
+          return {
+            'eta_sec': data['eta_sec'],
+            'eta_min': data['eta_min'].round(),
+            'reasoning': data['reasoning'],
+            'samples': data['historical_samples']
+          };
+        } else {
+          debugPrint('ℹ️ Low-confidence ETA for object_id $objectId');
+          return null;
+        }
+      } else {
+        debugPrint('❌ Failed to get ETA by object_id: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('❌ Exception during predictReworkETAByObject: $e');
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> getQGStations() async {
     final response = await http.get(Uri.parse('$baseUrl/api/tablet_stations'));
     if (response.statusCode == 200) {

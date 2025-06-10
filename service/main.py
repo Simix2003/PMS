@@ -2,9 +2,9 @@ import asyncio
 import os
 import sys
 import logging
-
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
 
 import uvicorn
 from fastapi import FastAPI
@@ -39,12 +39,10 @@ from service.routes.websocket_routes import router as websocket_router
 from service.routes.health_check_routes import router as health_check_router
 from service.routes.mbj_routes import router as mbj_router
 from service.routes.ml_routes import router as ml_router
-from service.routes.visual_routes import router as visual_router
-# from service.AI.AI import router as ai_router  # Uncomment if needed
+from service.routes.visual_routes import initialize_visual_cache, router as visual_router
 
 # ---------------- INIT GLOBAL FLAGS ----------------
 def init_global_flags():
-    logger.info("🔄 Initializing global flags for each Line.Station")
     stop_threads.clear()
     passato_flags.clear()
     for line, stations in CHANNELS.items():
@@ -52,190 +50,128 @@ def init_global_flags():
             key = f"{line}.{station}"
             stop_threads[key] = False
             passato_flags[key] = False
-    logger.info("✅ Global flags initialized.")
 
-def start_plc_background_tasks():
-    logger.info("🔄 Starting PLC background tasks using MySQL-based CHANNELS")
+# ---------------- FAST STARTUP ----------------
+_executor = ThreadPoolExecutor(max_workers=10)
 
-    shared_plc_connections: dict[tuple[str, int], PLCConnection] = {}
+async def async_load_channels():
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(_executor, load_channels_from_db)
 
+async def async_get_refreshed_settings():
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(_executor, get_refreshed_settings)
+
+async def start_background_tasks():
+    try:
+        initialize_visual_cache()
+        logger.info("✅ visual_data cache initialized")
+    except Exception as e:
+        logger.error(f"❌ visual_data cache init failed: {e}")
+
+    #try:
+    #    asyncio.create_task(watch_folder_for_new_xml())
+    #    logger.info("✅ XML watcher task started")
+    #except Exception as e:
+    #    logger.error(f"❌ XML watcher task failed: {e}")
+
+    logger.info("🔄 Starting PLC background tasks")
+    shared_conns: dict[tuple[str, int], PLCConnection] = {}
     for line, stations in CHANNELS.items():
         for station, config in stations.items():
             key = f"{line}.{station}"
-
             plc_info = config.get("plc")
             if not plc_info:
-                logger.warning(f"⚠️ Skipping {key} – missing 'plc' configuration")
+                logger.warning(f"⚠️ No PLC config for {key}")
                 continue
 
-            plc_ip = plc_info.get("ip")
-            plc_slot = plc_info.get("slot", 0)
-            plc_key = (plc_ip, plc_slot)
+            ip, slot = plc_info.get("ip"), plc_info.get("slot", 0)
+            pkey = (ip, slot)
 
             if debug:
-                plc_conn = FakePLCConnection(station)
-                logger.info(f"  • Using FakePLCConnection for {key}")
+                plc = FakePLCConnection(station)
             else:
-                if plc_key in shared_plc_connections:
-                    plc_conn = shared_plc_connections[plc_key]
-                    logger.info(f"  • Reusing existing PLC connection for {key} ({plc_ip}:{plc_slot})")
-                else:
-                    try:
-                        plc_conn = PLCConnection(
-                            ip_address=plc_ip,
-                            slot=plc_slot,
-                            status_callback=make_status_callback(station),
-                        )
-                        shared_plc_connections[plc_key] = plc_conn
-                        logger.info(f"  • Created new PLC connection to {plc_ip}:{plc_slot} for {key}")
-                    except Exception as e:
-                        logger.error(f"❌ Failed to connect PLC for {key}: {e}")
-                        continue
+                try:
+                    if pkey in shared_conns:
+                        plc = shared_conns[pkey]
+                    else:
+                        plc = PLCConnection(ip_address=ip, slot=slot, status_callback=make_status_callback(station))
+                        shared_conns[pkey] = plc
+                except Exception as e:
+                    logger.error(f"❌ PLC connect failed for {key}: {e}")
+                    continue
 
-            plc_connections[key] = plc_conn
-            asyncio.create_task(background_task(plc_conn, key))
-            logger.info(f"🚀 Background task created and scheduled for {key}")
+            plc_connections[key] = plc
+            asyncio.create_task(background_task(plc, key))
+    logger.info("✅ All PLC background tasks launched")
 
-    logger.info("✅ All PLC background tasks started.")
-
-
-# ---------------- APP LIFESPAN ----------------
+# ---------------- LIFESPAN ----------------
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    logger.info("🚀 FastAPI lifespan: STARTUP phase")
-    # --- Initialize MySQL ---
-    logger.info("🔄 Attempting to connect to MySQL")
+    logger.info("🚀 FastAPI lifespan STARTUP")
+
+    # Fast connect check
     try:
         conn = get_mysql_connection()
-        logger.info("🟢 MySQL connected.")
+        logger.info("🟢 MySQL connected")
     except Exception as e:
-        logger.error(f"❌ MySQL connection failed: {e}")
+        logger.error(f"❌ MySQL failed: {e}")
         raise
 
-    # --- Load channel configurations ---
-    logger.info("🔄 Loading station channel configurations from DB")
+    # Load channels + DB ranges
     try:
         CHANNELS.clear()
-        PLC_DB_RANGES.clear()  # ← Assuming you define this global elsewhere
-
-        channels, plc_db_ranges = load_channels_from_db()
-
+        PLC_DB_RANGES.clear()
+        channels, plc_ranges = await async_load_channels()
         CHANNELS.update(channels)
-        PLC_DB_RANGES.update(plc_db_ranges)
-
+        PLC_DB_RANGES.update(plc_ranges)
         init_global_flags()
-        logger.info("✅ CHANNELS loaded from DB")
+        logger.info("✅ CHANNELS loaded")
     except Exception as e:
-        logger.error(f"❌ Failed to load CHANNELS: {e}")
+        logger.error(f"❌ CHANNEL loading failed: {e}")
         raise
 
-    # --- Load settings ---
-    logger.info("🔄 Loading and refreshing settings")
-    try:
-        get_refreshed_settings()
-        logger.info("✅ Settings refreshed.")
-    except Exception as e:
-        logger.error(f"❌ Settings refresh failed: {e}")
-        raise
+    # Settings reload (non-blocking)
+    asyncio.create_task(async_get_refreshed_settings())
 
-    # --- Start PLC tasks ---
-    #start_plc_background_tasks()
+    # Start other background jobs (non-blocking)
+    asyncio.create_task(start_background_tasks())
 
-    # --- Start XML watcher ---
-    #logger.info("🔄 Starting XML folder watcher task")
-    #try:
-    #    asyncio.create_task(watch_folder_for_new_xml())
-    #    logger.info("✅ XML watcher task scheduled.")
-    #except Exception as e:
-    #    logger.error(f"❌ Failed to schedule XML watcher: {e}")
-
-    # --- Start visual summary updater ---
-    #logger.info("🔄 Starting Visual Summary background task")
-    #try:
-    #    asyncio.create_task(visual_summary_background_task())
-    #    logger.info("✅ Visual Summary updater task scheduled.")
-    #except Exception as e:
-    #    logger.error(f"❌ Failed to start visual summary task: {e}")
-
-    # Expose PLC connections on app.state
     app.state.plc_connections = plc_connections
-
-    logger.info("✅ FastAPI lifespan: STARTUP phase complete. Yielding control to FastAPI.")
     try:
+        logger.info("✅ STARTUP complete")
         yield
     finally:
-        # --- Shutdown / Cleanup ---
-        logger.info("🔄 FastAPI lifespan: SHUTDOWN phase")
+        logger.info("🔄 SHUTDOWN phase")
         try:
             conn = get_mysql_connection()
             conn.close()
-            logger.info("🔴 MySQL disconnected.")
+            logger.info("🔴 MySQL disconnected")
         except Exception as e:
-            logger.warning(f"⚠️ MySQL disconnection failed: {e}")
-        logger.info("✅ FastAPI lifespan: SHUTDOWN phase complete.")
+            logger.warning(f"⚠️ MySQL close failed: {e}")
+        logger.info("✅ SHUTDOWN complete")
 
-
-# ---------------- APP INIT ----------------
-logger.info("🔄 Initializing FastAPI application instance")
+# ---------------- FASTAPI INIT ----------------
+logger.info("🔄 Creating FastAPI app")
 app = FastAPI(lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Change this in production!
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-logger.info("✅ CORS middleware configured")
-
-# Mount static directory for images
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
-logger.info(f"✅ StaticFiles mounted at /images -> {IMAGES_DIR}")
 
+# Register routers
+for router, name in [
+    (issue_router, "issue"), (warning_router, "warning"), (plc_router, "plc"),
+    (overlay_router, "overlay"), (export_router, "export"), (settings_router, "settings"),
+    (graph_router, "graph"), (station_router, "station"), (search_router, "search"),
+    (websocket_router, "websocket"), (health_check_router, "health_check"),
+    (mbj_router, "mbj"), (ml_router, "ml"), (visual_router, "visual")
+]:
+    app.include_router(router)
+    logger.info(f"  • {name}_router registered")
 
-# ---------------- ROUTE REGISTRATION ----------------
-def register_routers(app: FastAPI):
-    logger.info("🔄 Registering API routers")
-    app.include_router(issue_router)
-    logger.info("  • issue_router registered")
-    app.include_router(warning_router)
-    logger.info("  • warning_router registered")
-    app.include_router(plc_router)
-    logger.info("  • plc_router registered")
-    app.include_router(overlay_router)
-    logger.info("  • overlay_router registered")
-    app.include_router(export_router)
-    logger.info("  • export_router registered")
-    app.include_router(settings_router)
-    logger.info("  • settings_router registered")
-    app.include_router(graph_router)
-    logger.info("  • graph_router registered")
-    app.include_router(station_router)
-    logger.info("  • station_router registered")
-    app.include_router(search_router)
-    logger.info("  • search_router registered")
-    app.include_router(websocket_router)
-    logger.info("  • websocket_router registered")
-    app.include_router(health_check_router)
-    logger.info("  • health_check_router registered")
-    app.include_router(mbj_router)
-    logger.info("  • mbj_router registered")
-    app.include_router(ml_router)
-    logger.info("  • ml_router registered")
-    app.include_router(visual_router)
-    logger.info("  • visual_router registered")
-    # app.include_router(ai_router)
-    # logger.info("  • ai_router registered")
-
-    logger.info("✅ All routers registered")
-
-
-register_routers(app)
-logger.info("✅ FastAPI application initialization complete")
-
+logger.info("✅ FastAPI app ready")
 
 # ---------------- MAIN ENTRY ----------------
 if __name__ == "__main__":
-    logger.info("🚀 Starting Uvicorn server")
+    logger.info("🚀 Launching Uvicorn")
     uvicorn.run(app, host="0.0.0.0", port=8001)
-    logger.info("🚪 Uvicorn server terminated")

@@ -385,9 +385,24 @@ class ThroughputBarChart extends StatelessWidget {
     this.globalTarget = 360,
   });
 
+  double _calculateSmartMaxY(int maxTotal, bool showTarget) {
+    if (!showTarget) {
+      // Scale based only on max bar height
+      return maxTotal + (maxTotal * 0.1).clamp(20, 100);
+    }
+
+    // If target is shown, ensure it's included in maxY
+    final base = globalTarget > maxTotal ? globalTarget : maxTotal.toDouble();
+    final padding = (base * 0.1).clamp(20, 100);
+    return base + padding;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final maxY = _calculateMaxY() + 100;
+    final maxTotal =
+        data.map((e) => e['ok']! + e['ng']!).reduce((a, b) => a > b ? a : b);
+    final bool showTarget = maxTotal >= globalTarget * 0.5;
+    final double maxY = _calculateSmartMaxY(maxTotal, showTarget);
 
     return Expanded(
       flex: 2,
@@ -431,7 +446,28 @@ class ThroughputBarChart extends StatelessWidget {
                       BarChartData(
                         alignment: BarChartAlignment.spaceAround,
                         maxY: maxY,
-                        barTouchData: BarTouchData(enabled: false),
+                        barTouchData: BarTouchData(
+                          enabled: true,
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) => Colors.transparent,
+                            tooltipPadding: EdgeInsets.zero, // ← no padding
+                            tooltipMargin: 0, // ← no margin
+                            fitInsideHorizontally: true,
+                            fitInsideVertically: true,
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              final value = rod.toY.toString();
+                              return BarTooltipItem(
+                                value,
+                                const TextStyle(
+                                  color: Colors
+                                      .black, // You can pick the color to match your bar
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                         titlesData: FlTitlesData(
                           leftTitles: AxisTitles(
                             sideTitles: SideTitles(showTitles: false),
@@ -513,42 +549,6 @@ class ThroughputBarChart extends StatelessWidget {
                         },
                       ),
                     ),
-
-                    // 💬 Total count above bar
-                    Positioned.fill(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final chartWidth = constraints.maxWidth;
-                          final chartHeight = constraints.maxHeight;
-                          final barCount = data.length;
-                          final groupSpace = chartWidth / (barCount * 2);
-
-                          return Stack(
-                            children: List.generate(barCount, (index) {
-                              final ok = data[index]['ok']!;
-                              final ng = data[index]['ng']!;
-                              final total = ok + ng;
-                              final barCenterX = (2 * index + 1) * groupSpace;
-                              final barHeight = chartHeight * (total / maxY);
-                              final topOffset = chartHeight - barHeight - 40;
-
-                              return Positioned(
-                                left: barCenterX - 16,
-                                top: topOffset,
-                                child: Text(
-                                  '$total',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              );
-                            }),
-                          );
-                        },
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -557,15 +557,6 @@ class ThroughputBarChart extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  double _calculateMaxY() {
-    final int maxTotal =
-        data.map((e) => e['ok']! + e['ng']!).reduce((a, b) => a > b ? a : b);
-
-    final double finalMax =
-        maxTotal > globalTarget ? maxTotal.toDouble() : globalTarget;
-    return finalMax;
   }
 
   List<BarChartGroupData> _buildBarGroups(List<Map<String, int>> data) {
@@ -578,19 +569,20 @@ class ThroughputBarChart extends StatelessWidget {
         x: index,
         barRods: [
           BarChartRodData(
+            color: Colors.transparent,
             fromY: 0,
             toY: total.toDouble(),
             width: 64,
             rodStackItems: [
-              BarChartRodStackItem(
-                  0, ok.toDouble(), Colors.green), // ✅ Green bottom
-              BarChartRodStackItem(
-                  ok.toDouble(), total.toDouble(), Colors.red), // ✅ Red top
+              if (ok > 0) BarChartRodStackItem(0, ok.toDouble(), Colors.green),
+              if (ng > 0)
+                BarChartRodStackItem(
+                    ok.toDouble(), (ok + ng).toDouble(), Colors.red),
             ],
             borderRadius: const BorderRadius.all(Radius.circular(4)),
           ),
         ],
-        showingTooltipIndicators: [],
+        showingTooltipIndicators: [0, 1],
       );
     });
   }
@@ -621,14 +613,18 @@ class HourlyBarChart extends StatelessWidget {
 
       return BarChartGroupData(
         x: index,
+        showingTooltipIndicators: [0, 1],
         barRods: [
           BarChartRodData(
+            color: Colors.transparent,
             fromY: 0,
             toY: total.toDouble(),
             width: 28,
             rodStackItems: [
-              BarChartRodStackItem(0, ok.toDouble(), Colors.green),
-              BarChartRodStackItem(ok.toDouble(), total.toDouble(), Colors.red),
+              if (ok > 0) BarChartRodStackItem(0, ok.toDouble(), Colors.green),
+              if (ng > 0)
+                BarChartRodStackItem(
+                    ok.toDouble(), total.toDouble(), Colors.red),
             ],
             borderRadius: const BorderRadius.all(Radius.circular(4)),
           ),
@@ -681,7 +677,28 @@ class HourlyBarChart extends StatelessWidget {
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
                       maxY: maxY,
-                      barTouchData: BarTouchData(enabled: false),
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          getTooltipColor: (_) => Colors.transparent,
+                          tooltipPadding: EdgeInsets.zero, // ← no padding
+                          tooltipMargin: 0, // ← no margin
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            final value = rod.toY.toString();
+                            return BarTooltipItem(
+                              value,
+                              const TextStyle(
+                                color: Colors
+                                    .black, // You can pick the color to match your bar
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                       titlesData: FlTitlesData(
                         leftTitles: AxisTitles(
                             sideTitles: SideTitles(showTitles: false)),
@@ -716,41 +733,6 @@ class HourlyBarChart extends StatelessWidget {
                           dashArray: [8, 4],
                         ),
                       ]),
-                    ),
-                  ),
-                  // Total values above bars
-                  Positioned.fill(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final chartWidth = constraints.maxWidth;
-                        final chartHeight = constraints.maxHeight;
-                        final barCount = data.length;
-                        final groupSpace = chartWidth / (barCount * 2);
-
-                        return Stack(
-                          children: List.generate(barCount, (index) {
-                            final ok = data[index]['ok']!;
-                            final ng = data[index]['ng']!;
-                            final total = ok + ng;
-                            final barCenterX = (2 * index + 1) * groupSpace;
-                            final barHeight = chartHeight * (total / maxY);
-                            final topOffset = (chartHeight - barHeight) - 40;
-
-                            return Positioned(
-                              left: barCenterX - 8,
-                              top: topOffset,
-                              child: Text(
-                                '$total',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            );
-                          }),
-                        );
-                      },
                     ),
                   ),
                 ],
@@ -820,6 +802,24 @@ class LegendItem extends StatelessWidget {
   }
 }
 
+// ───── Shift Order Helper ─────
+List<Map<String, dynamic>> reorderShifts(
+    List<Map<String, dynamic>> data, String currentShift) {
+  final order = {
+    'S1': ['S2', 'S3', 'S1'],
+    'S2': ['S3', 'S1', 'S2'],
+    'S3': ['S1', 'S2', 'S3'],
+  }[currentShift];
+
+  if (order == null) return data;
+
+  return order
+      .map((s) => data.firstWhere((d) => d['shift'] == s, orElse: () => {}))
+      .where((d) => d.isNotEmpty)
+      .toList();
+}
+
+// ───── Main Chart ─────
 class YieldComparisonBarChart extends StatelessWidget {
   final List<Map<String, dynamic>> data;
   final double target;
@@ -830,8 +830,18 @@ class YieldComparisonBarChart extends StatelessWidget {
     this.target = 90,
   });
 
+  String _getCurrentShift() {
+    final hour = DateTime.now().hour;
+    if (hour >= 6 && hour < 14) return 'S1';
+    if (hour >= 14 && hour < 22) return 'S2';
+    return 'S3';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final currentShift = _getCurrentShift();
+    final orderedData = reorderShifts(data, currentShift);
+
     return Card(
       color: Colors.white,
       elevation: 6,
@@ -854,7 +864,28 @@ class YieldComparisonBarChart extends StatelessWidget {
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
                       maxY: 100,
-                      barTouchData: BarTouchData(enabled: false),
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          getTooltipColor: (_) => Colors.transparent,
+                          tooltipPadding: EdgeInsets.zero, // ← no padding
+                          tooltipMargin: 0, // ← no margin
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            final value = rod.toY.toString();
+                            return BarTooltipItem(
+                              '$value%',
+                              const TextStyle(
+                                color: Colors
+                                    .black, // You can pick the color to match your bar
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                       titlesData: FlTitlesData(
                         leftTitles: AxisTitles(
                             sideTitles: SideTitles(showTitles: false)),
@@ -863,7 +894,7 @@ class YieldComparisonBarChart extends StatelessWidget {
                             showTitles: true,
                             getTitlesWidget: (value, meta) {
                               int i = value.toInt();
-                              return Text(data[i]['shift']);
+                              return Text(orderedData[i]['shift']);
                             },
                           ),
                         ),
@@ -874,9 +905,10 @@ class YieldComparisonBarChart extends StatelessWidget {
                       ),
                       gridData: FlGridData(show: false),
                       borderData: FlBorderData(show: false),
-                      barGroups: List.generate(data.length, (index) {
-                        final item = data[index];
+                      barGroups: List.generate(orderedData.length, (index) {
+                        final item = orderedData[index];
                         return BarChartGroupData(
+                          showingTooltipIndicators: [0, 1],
                           x: index,
                           barRods: [
                             BarChartRodData(
@@ -890,7 +922,7 @@ class YieldComparisonBarChart extends StatelessWidget {
                               fromY: 0,
                               toY: item['bussing2'].toDouble(),
                               width: 40,
-                              color: Colors.green,
+                              color: Colors.lightBlue.shade300,
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ],
@@ -917,63 +949,6 @@ class YieldComparisonBarChart extends StatelessWidget {
                       ]),
                     ),
                   ),
-                  // 🔹 Overlay percentages
-                  Positioned.fill(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final barGroupCount = data.length;
-                        final barWidth = 32.0;
-                        final barSpacing = 8.0;
-
-                        final chartWidth = constraints.maxWidth;
-                        final chartHeight = constraints.maxHeight;
-
-                        return Stack(
-                          children: List.generate(barGroupCount, (index) {
-                            final item = data[index];
-                            final bussing1 = item['bussing1'].toDouble();
-                            final bussing2 = item['bussing2'].toDouble();
-
-                            final groupCenterX =
-                                ((index + 0.5) * chartWidth / barGroupCount);
-
-                            final b1Top = chartHeight * (1 - bussing1 / 100);
-                            final b2Top = chartHeight * (1 - bussing2 / 100);
-
-                            return Stack(
-                              children: [
-                                Positioned(
-                                  left:
-                                      groupCenterX - barWidth - barSpacing / 2,
-                                  top: b1Top + 4,
-                                  child: Text(
-                                    '${bussing1.toInt()}%',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  left: groupCenterX + barSpacing / 2,
-                                  top: b2Top + 4,
-                                  child: Text(
-                                    '${bussing2.toInt()}%',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            );
-                          }),
-                        );
-                      },
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -981,9 +956,10 @@ class YieldComparisonBarChart extends StatelessWidget {
             Wrap(
               alignment: WrapAlignment.center,
               spacing: 20,
-              children: const [
+              children: [
                 LegendItem(color: Colors.blue, label: 'Bussing 1'),
-                LegendItem(color: Colors.green, label: 'Bussing 2'),
+                LegendItem(
+                    color: Colors.lightBlue.shade300, label: 'Bussing 2'),
                 LegendItem(
                     color: Colors.orange, label: 'Target', isDashed: true),
               ],
@@ -1095,7 +1071,7 @@ class YieldLineChart extends StatelessWidget {
                           (i) => FlSpot(i.toDouble(),
                               (hourlyData2[i]['yield'] ?? 0).toDouble()),
                         ),
-                        color: Colors.green,
+                        color: Colors.lightBlue.shade300,
                         barWidth: 2,
                         dotData: FlDotData(show: false),
                       ),
@@ -1119,9 +1095,10 @@ class YieldLineChart extends StatelessWidget {
               Wrap(
                 alignment: WrapAlignment.center,
                 spacing: 20,
-                children: const [
+                children: [
                   LegendItem(color: Colors.blue, label: 'Stazione 1'),
-                  LegendItem(color: Colors.green, label: 'Stazione 2'),
+                  LegendItem(
+                      color: Colors.lightBlue.shade300, label: 'Stazione 2'),
                   LegendItem(
                       color: Colors.orange, label: 'Target', isDashed: true),
                 ],
@@ -1181,7 +1158,7 @@ class TopDefectsHorizontalBarChart extends StatelessWidget {
                           BarChartRodData(
                             toY: ain2,
                             width: 12,
-                            color: Colors.green,
+                            color: Colors.lightBlue.shade300,
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ],
@@ -1259,10 +1236,10 @@ class TopDefectsHorizontalBarChart extends StatelessWidget {
                                 const SizedBox(width: 8),
                                 Text(
                                   '$ain2',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.green,
+                                    color: Colors.lightBlue.shade300,
                                   ),
                                 ),
                               ],
@@ -1278,9 +1255,10 @@ class TopDefectsHorizontalBarChart extends StatelessWidget {
               Wrap(
                 alignment: WrapAlignment.end,
                 spacing: 20,
-                children: const [
+                children: [
                   LegendItem(color: Colors.blue, label: 'Bussing 1'),
-                  LegendItem(color: Colors.green, label: 'Bussing 2'),
+                  LegendItem(
+                      color: Colors.lightBlue.shade300, label: 'Bussing 2'),
                 ],
               ),
             ],

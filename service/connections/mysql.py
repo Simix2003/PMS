@@ -220,17 +220,13 @@ async def insert_initial_production_data(data, station_name, connection, esito):
         return None
 
 async def update_production_final(production_id, data, station_name, connection, fine_buona, fine_scarto):
-    """
-    Always update end_time. Update esito only if the current value is 2.
-    """
     try:
         with connection.cursor() as cursor:
-            # Step 1: Read current esito
             cursor.execute("SELECT esito FROM productions WHERE id = %s", (production_id,))
             row = cursor.fetchone()
             if not row:
                 logging.warning(f"No production found with ID {production_id}")
-                return False
+                return False, None, None
 
             current_esito = row["esito"]
             final_esito = 6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1
@@ -238,9 +234,7 @@ async def update_production_final(production_id, data, station_name, connection,
                 final_esito = 5 if fine_buona else 6
             end_time = data.get("DataFine")
 
-            # Step 2: Conditional update
             if current_esito == 2 or station_name == "RMI01":
-
                 sql_update = """
                     UPDATE productions 
                     SET end_time = %s, esito = %s 
@@ -258,12 +252,12 @@ async def update_production_final(production_id, data, station_name, connection,
                 logging.info(f"ℹ️ Updated only end_time for production {production_id} (esito was already {current_esito})")
 
             connection.commit()
-            return True
+            return True, final_esito, end_time
 
     except Exception as e:
         connection.rollback()
         logging.error(f"Error updating production {production_id}: {e}")
-        return False
+        return False, None, None
 
 async def insert_defects(data, production_id, channel_id, line_name, cursor):
     # 1. Get defects mapping from DB.

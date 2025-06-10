@@ -36,6 +36,7 @@ class ObjectCard extends StatefulWidget {
 class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
   bool _isHoveringKO = false;
   String? estimatedFixTime; // Example: "7 min"
+  bool maybeMBJ = false;
 
   void _sendOutcome(BuildContext context, String outcome) async {
     HapticFeedback.mediumImpact();
@@ -87,14 +88,21 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
   }
 
   Future<void> _fetchETAPrediction() async {
-    final etaInfo = await ApiService.predictReworkETAByObject(widget.objectId);
-    if (etaInfo != null) {
-      estimatedFixTime = etaInfo['eta_min'].toString();
-      print("ETA: ${etaInfo['eta_min']} min (${etaInfo['samples']} samples)");
-    } else {
-      estimatedFixTime = null;
-      print("No ETA available for this module.");
-    }
+    final result = await ApiService.predictReworkETAByObject(widget.objectId);
+    final etaInfo = result['etaInfo'];
+    final noDefects = result['noDefectsFound'];
+
+    setState(() {
+      if (etaInfo != null) {
+        estimatedFixTime = etaInfo['eta_min'].toString();
+        print("ETA: ${etaInfo['eta_min']} min (${etaInfo['samples']} samples)");
+      } else {
+        estimatedFixTime = null;
+        if (noDefects == true) {
+          maybeMBJ = true;
+        }
+      }
+    });
   }
 
   @override
@@ -151,7 +159,8 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.memory, color: Colors.blueGrey, size: 20),
+                      const Icon(Icons.memory,
+                          color: Colors.blueGrey, size: 20),
                       const SizedBox(width: 6),
                       Text(
                         widget.objectId,
@@ -161,6 +170,33 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                           color: Colors.black87,
                         ),
                       ),
+                      if (maybeMBJ) ...[
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade600.withOpacity(0.2),
+                            border: Border.all(color: Colors.red, width: 1.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.warning_amber_rounded,
+                                  color: Colors.red, size: 16),
+                              SizedBox(width: 4),
+                              Text(
+                                "Il modulo potrebbe essere NG dall'MBJ",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.red,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],

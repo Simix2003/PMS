@@ -93,7 +93,15 @@ async def run_eta_prediction(production_id: int):
             current_defects = Counter(row["defect_id"] for row in current_defects_raw)
 
             if not current_defects:
-                return JSONResponse(status_code=404, content={"error": "No defects found for this production_id"})
+                return JSONResponse(
+                    status_code=419,
+                    content={
+                        "error": f"No DEFECTS found for production_id {production_id}",
+                        "reason": "no_defects"
+                    }
+                )
+
+
 
             # Step 2: Get historical rework station defects and cycle times
             cursor.execute("""

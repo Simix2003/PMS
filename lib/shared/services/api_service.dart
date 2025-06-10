@@ -668,7 +668,7 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>?> predictReworkETAByObject(
+  static Future<Map<String, dynamic>> predictReworkETAByObject(
       String objectId) async {
     final url = Uri.parse('$baseUrl/api/ml/predict_eta_by_id_modulo');
 
@@ -683,22 +683,27 @@ class ApiService {
         final data = jsonDecode(response.body);
         if (data['confidence'] == 'high') {
           return {
-            'eta_sec': data['eta_sec'],
-            'eta_min': data['eta_min'].round(),
-            'reasoning': data['reasoning'],
-            'samples': data['historical_samples']
+            'etaInfo': {
+              'eta_sec': data['eta_sec'],
+              'eta_min': data['eta_min'].round(),
+              'reasoning': data['reasoning'],
+              'samples': data['historical_samples']
+            },
+            'noDefectsFound': false
           };
         } else {
-          debugPrint('ℹ️ Low-confidence ETA for object_id $objectId');
-          return null;
+          return {'etaInfo': null, 'noDefectsFound': false};
         }
+      } else if (response.statusCode == 419) {
+        debugPrint('ℹ️ No DEFECTS found for object_id $objectId');
+        return {'etaInfo': null, 'noDefectsFound': true};
       } else {
         debugPrint('❌ Failed to get ETA by object_id: ${response.statusCode}');
-        return null;
+        return {'etaInfo': null, 'noDefectsFound': false};
       }
     } catch (e) {
       debugPrint('❌ Exception during predictReworkETAByObject: $e');
-      return null;
+      return {'etaInfo': null, 'noDefectsFound': false};
     }
   }
 

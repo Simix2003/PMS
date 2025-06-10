@@ -87,11 +87,14 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
   }
 
   Future<void> _fetchETAPrediction() async {
-    // Simulated ETA logic (later replace with API call)
-    await Future.delayed(Duration(milliseconds: 500));
-    setState(() {
-      estimatedFixTime = "7 min";
-    });
+    final etaInfo = await ApiService.predictReworkETAByObject(widget.objectId);
+    if (etaInfo != null) {
+      estimatedFixTime = etaInfo['eta_min'].toString();
+      print("ETA: ${etaInfo['eta_min']} min (${etaInfo['samples']} samples)");
+    } else {
+      estimatedFixTime = null;
+      print("No ETA available for this module.");
+    }
   }
 
   @override
@@ -123,10 +126,10 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /*if (widget.reWork &&
+          if (widget.reWork &&
               !widget.hasBeenEvaluated &&
               estimatedFixTime != null)
-            ShimmerRevealETA(estimatedFixTime: estimatedFixTime!),*/
+            ShimmerRevealETA(estimatedFixTime: estimatedFixTime!),
 
           // Header
           Row(

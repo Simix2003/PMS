@@ -1,18 +1,13 @@
 from fastapi import APIRouter
-from fastapi.responses import FileResponse, JSONResponse
-import pandas as pd
+from fastapi.responses import  JSONResponse
 from pydantic import BaseModel
 import torch
 import os
 import sys
 import logging
 from sentence_transformers import SentenceTransformer, util
-import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error
-import joblib
-from decimal import Decimal
+from collections import defaultdict, Counter
+from dataclasses import dataclass, field
 
 # Extend Python path for module resolution
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -68,197 +63,145 @@ async def check_defect_similarity(data: DefectInput):
             "confidence": round(best_score, 2)
         }
 
-class TrainingRequest(BaseModel):
-    station_name: str
+# ------------------- MODELS -------------------
 
-@router.post("/api/ml/generate_eta_dataset")
-async def generate_eta_dataset(req: TrainingRequest):
-    try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            query = """
-            SELECT
-              p.id AS production_id,
-              p.object_id,
-              TIME_TO_SEC(p.cycle_time) AS cycle_time_sec,
-              COUNT(od.id) AS total_defects,
-              COUNT(DISTINCT od.stringa) AS unique_stringhe,
-              MAX(od.photo_id IS NOT NULL) AS has_photo,
-              SUM(od.defect_id IN (2, 10)) AS saldatura_count,
-              SUM(od.defect_id = 5) AS macchie_eca_count,
-              SUM(od.defect_id = 4) AS mancanza_ribbon_count,
-              SUM(od.defect_id = 6) AS celle_rotte_count,
-              SUM(od.defect_id = 3) AS disallineamento_count,
-              SUM(od.defect_id = 7) AS lunghezza_ribbon_count,
-              SUM(od.defect_id = 8) AS leadwire_count,
-              SUM(od.defect_id = 9) AS graffi_count,
-              SUM(od.defect_id IN (1, 99)) AS altro_count
-            FROM productions p
-            JOIN object_defects od ON od.production_id = p.id
-            WHERE
-              p.station_id = (SELECT id FROM stations WHERE name = %s LIMIT 1)
-              AND p.start_time IS NOT NULL
-              AND p.end_time IS NOT NULL
-            GROUP BY p.id
-            """
-            cursor.execute(query, (req.station_name,))
-            rows = cursor.fetchall()
-
-        # Convert to DataFrame
-        df = pd.DataFrame(rows)
-
-        # Convert Decimal to float
-        for col in df.columns:
-            df[col] = df[col].apply(lambda x: float(x) if isinstance(x, Decimal) else x)
-
-
-        if df.empty:
-            return JSONResponse(content={"message": "No data found for this station."})
-
-        # Train model
-        features = df.drop(columns=["production_id", "object_id", "cycle_time_sec"])
-        target = df["cycle_time_sec"]
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            features, target, test_size=0.2, random_state=42
-        )
-
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
-        model.fit(X_train, y_train)
-
-        y_pred = model.predict(X_test)
-        mae = mean_absolute_error(y_test, y_pred)
-
-        # Save model
-        # Ensure the directory exists before saving any model
-        os.makedirs(ML_MODELS_DIR, exist_ok=True)
-
-        model_path = ETA_MODEL_PATH_TEMPLATE(req.station_name)
-        joblib.dump(model, model_path)
-        
-
-        return {
-            "message": f"✅ Model trained and saved for station {req.station_name}",
-            "rows_used": len(df),
-            "features": list(features.columns),
-            "mae_sec": round(float(mae), 2),
-            "model_path": model_path,
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Error generating ETA model: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-    
 class PredictionRequest(BaseModel):
     production_id: int
 
-@router.post("/api/ml/predict_eta")
-async def predict_eta(req: PredictionRequest):
+class EtaByModuloRequest(BaseModel):
+    id_modulo: str
+
+@dataclass
+class DefectHistory:
+    defects: Counter = field(default_factory=Counter)
+    cycle_time_sec: float | None = None
+
+def time_to_seconds(t):
+    return t.total_seconds() if t else None
+
+# ------------------- MAIN LOGIC -------------------
+
+async def run_eta_prediction(production_id: int):
     try:
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
-            # Get defects + station for this production
+            # Step 1: Get defects for this production_id
             cursor.execute("""
-                SELECT
-                  p.station_id,
-                  COUNT(od.id) AS total_defects,
-                  COUNT(DISTINCT od.stringa) AS unique_stringhe,
-                  MAX(od.photo_id IS NOT NULL) AS has_photo,
-                  SUM(od.defect_id IN (2, 10)) AS saldatura_count,
-                  SUM(od.defect_id = 5) AS macchie_eca_count,
-                  SUM(od.defect_id = 4) AS mancanza_ribbon_count,
-                  SUM(od.defect_id = 6) AS celle_rotte_count,
-                  SUM(od.defect_id = 3) AS disallineamento_count,
-                  SUM(od.defect_id = 7) AS lunghezza_ribbon_count,
-                  SUM(od.defect_id = 8) AS leadwire_count,
-                  SUM(od.defect_id = 9) AS graffi_count,
-                  SUM(od.defect_id IN (1, 99)) AS altro_count
-                FROM productions p
-                JOIN object_defects od ON od.production_id = p.id
-                WHERE p.id = %s
-                GROUP BY p.id
-            """, (req.production_id,))
-            row = cursor.fetchone()
+                SELECT defect_id FROM object_defects WHERE production_id = %s
+            """, (production_id,))
+            current_defects_raw = cursor.fetchall()
+            current_defects = Counter(row["defect_id"] for row in current_defects_raw)
 
-            if not row:
-                return JSONResponse(status_code=404, content={"error": "Production ID not found or has no defects"})
+            if not current_defects:
+                return JSONResponse(status_code=404, content={"error": "No defects found for this production_id"})
 
-            station_name = "RMI01"  # Hardcoded for now
+            # Step 2: Get historical rework station defects and cycle times
+            cursor.execute("""
+                SELECT od.production_id, od.defect_id, p.cycle_time
+                FROM object_defects od
+                JOIN productions p ON od.production_id = p.id
+                JOIN stations s ON p.station_id = s.id
+                WHERE s.type = 'rework'
+                  AND p.start_time >= NOW() - INTERVAL 90 DAY
+                  AND p.cycle_time IS NOT NULL
+            """)
+            rows = cursor.fetchall()
 
-        # Load model
-        model_path = ETA_MODEL_PATH_TEMPLATE(station_name)
-        if not os.path.exists(model_path):
-            return JSONResponse(status_code=404, content={"error": f"No trained model found for station {station_name}"})
+        # Step 3: Group by production_id
+        history = defaultdict(DefectHistory)
+        for row in rows:
+            entry = history[row["production_id"]]
+            entry.defects[row["defect_id"]] += 1
+            entry.cycle_time_sec = time_to_seconds(row["cycle_time"])
 
-        model = joblib.load(model_path)
+        # Step 4: Match by frequency-based similarity
+        matches = []
+        for pid, data in history.items():
+            if data.cycle_time_sec is None:
+                continue
+            intersection = current_defects & data.defects
+            shared_count = sum(intersection.values())
+            total_count = sum(current_defects.values())
+            score = shared_count / max(1, total_count)
+            if score >= 0.5:
+                matches.append((score, data.cycle_time_sec))
 
-        # Define features
-        feature_cols = [
-            "total_defects", "unique_stringhe", "has_photo",
-            "saldatura_count", "macchie_eca_count", "mancanza_ribbon_count",
-            "celle_rotte_count", "disallineamento_count", "lunghezza_ribbon_count",
-            "leadwire_count", "graffi_count", "altro_count"
-        ]
+        sample_size = len(matches)
 
-        feature_vector = []
-        reasoning = {}
+        if sample_size == 0:
+            return {
+                "eta_sec": None,
+                "eta_min": None,
+                "model_used": "defect_frequency_lookup",
+                "reasoning": "No similar past defects found at rework stations",
+                "similar_average_sec": None,
+                "similar_average_min": None,
+                "historical_samples": 0,
+                "confidence": "low"
+            }
 
-        for col in feature_cols:
-            value = float(row[col]) if col != "has_photo" else int(row[col])
-            feature_vector.append(value)
-            if value != 0:
-                reasoning[col] = round(value, 2)
+        # Step 5: Weighted average
+        total_weight = sum(score for score, _ in matches)
+        prediction = sum(score * ct for score, ct in matches) / total_weight
+        avg_sec = sum(ct for _, ct in matches) / sample_size
 
-        prediction = model.predict([feature_vector])[0]
-
-        # ------------------------------
-        # Historical average logic
-        # ------------------------------
-        def get_average_for_signature(conn, total_defects, unique_stringhe, saldatura_count):
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT 
-                        AVG(TIME_TO_SEC(p.cycle_time)) AS avg_cycle_time_sec,
-                        COUNT(*) AS sample_size
-                    FROM productions p
-                    JOIN object_defects od ON od.production_id = p.id
-                    WHERE p.station_id = (SELECT id FROM stations WHERE name = 'RMI01' LIMIT 1)
-                      AND p.start_time IS NOT NULL
-                      AND p.end_time IS NOT NULL
-                    GROUP BY p.id
-                    HAVING 
-                        COUNT(od.id) = %s
-                        AND COUNT(DISTINCT od.stringa) = %s
-                        AND SUM(od.defect_id IN (2, 10)) = %s
-                    LIMIT 1
-                """, (
-                    reasoning.get("total_defects", 0),
-                    reasoning.get("unique_stringhe", 0),
-                    reasoning.get("saldatura_count", 0)
-                ))
-                match = cursor.fetchone()
-                if match:
-                    return float(match["avg_cycle_time_sec"]), match["sample_size"]
-                return None, 0
-
-        avg_sec, sample_size = get_average_for_signature(
-            conn,
-            reasoning.get("total_defects", 0),
-            reasoning.get("unique_stringhe", 0),
-            reasoning.get("saldatura_count", 0)
-        )
+        reasoning = f"{sample_size} similar rework cases matched using >=50% defect frequency similarity."
 
         return {
-            "eta_sec": round(float(prediction), 2),
-            "eta_min": round(float(prediction) / 60, 2),
-            "model_used": os.path.basename(model_path),
+            "eta_sec": round(prediction, 2),
+            "eta_min": round(prediction / 60, 2),
+            "model_used": "defect_frequency_lookup",
             "reasoning": reasoning,
-            "similar_average_sec": round(avg_sec, 2) if avg_sec else None,
-            "similar_average_min": round(avg_sec / 60, 2) if avg_sec else None,
+            "similar_average_sec": round(avg_sec, 2),
+            "similar_average_min": round(avg_sec / 60, 2),
             "historical_samples": sample_size,
-            "confidence": "low" if sample_size < 3 else "high"
+            "confidence": "high" if sample_size >= 3 else "low"
         }
 
     except Exception as e:
         logger.error(f"❌ ETA prediction error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+# ------------------- ROUTES -------------------
+
+@router.post("/api/ml/predict_eta")
+async def predict_eta(req: PredictionRequest):
+    return await run_eta_prediction(req.production_id)
+
+@router.post("/api/ml/predict_eta_by_id_modulo")
+async def predict_eta_by_id_modulo(req: EtaByModuloRequest):
+    try:
+        conn = get_mysql_connection()
+        with conn.cursor() as cursor:
+            # Step 1: Resolve id_modulo → object.id
+            cursor.execute("""
+                SELECT id FROM objects WHERE id_modulo = %s
+            """, (req.id_modulo,))
+            object_row = cursor.fetchone()
+
+            if not object_row:
+                return JSONResponse(status_code=404, content={"error": f"id_modulo '{req.id_modulo}' not found in object table"})
+
+            object_id = object_row["id"]
+
+            # Step 2: Find latest QC production for this object
+            cursor.execute("""
+                SELECT p.id AS production_id
+                FROM productions p
+                JOIN stations s ON p.station_id = s.id
+                WHERE p.object_id = %s AND s.type = 'qc'
+                ORDER BY p.start_time DESC
+                LIMIT 1
+            """, (object_id,))
+            prod_row = cursor.fetchone()
+
+            if not prod_row:
+                return JSONResponse(status_code=404, content={"error": f"No production at QC for object_id {object_id}"})
+
+            production_id = prod_row["production_id"]
+
+        return await run_eta_prediction(production_id)
+
+    except Exception as e:
+        logger.error(f"❌ predict_eta_by_id_modulo error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})

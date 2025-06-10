@@ -677,4 +677,32 @@ class ApiService {
       return null;
     }
   }
+
+  static Future<Map<String, dynamic>> fetchZoneVisualData(String zone) async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=$zone'));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      // Optional: ensure no null fields crash your UI
+      return {
+        ...data,
+        'station_1_in': data['station_1_in'] ?? 0,
+        'station_2_in': data['station_2_in'] ?? 0,
+        'station_1_out_ng': data['station_1_out_ng'] ?? 0,
+        'station_2_out_ng': data['station_2_out_ng'] ?? 0,
+        'station_1_yield': data['station_1_yield'] ?? 100,
+        'station_2_yield': data['station_2_yield'] ?? 100,
+        'station_1_yield_shifts': data['station_1_yield_shifts'] ?? [],
+        'station_2_yield_shifts': data['station_2_yield_shifts'] ?? [],
+        'station_1_yield_last_8h': data['station_1_yield_last_8h'] ?? [],
+        'station_2_yield_last_8h': data['station_2_yield_last_8h'] ?? [],
+        'shift_throughput': data['shift_throughput'] ?? [],
+        'last_8h_throughput': data['last_8h_throughput'] ?? [],
+      };
+    } else {
+      throw Exception('Failed to load zone data');
+    }
+  }
 }

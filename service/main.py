@@ -25,7 +25,6 @@ from service.config.config import CHANNELS, IMAGES_DIR, PLC_DB_RANGES, debug
 from service.connections.mysql import get_mysql_connection, load_channels_from_db
 from service.connections.xml_watcher import watch_folder_for_new_xml
 from service.tasks.main_task import background_task, make_status_callback
-from service.tasks.visual_summary_task import visual_summary_background_task
 from service.state.global_state import plc_connections, stop_threads, passato_flags
 from service.routes.plc_routes import router as plc_router
 from service.routes.issue_routes import router as issue_router
@@ -40,6 +39,7 @@ from service.routes.websocket_routes import router as websocket_router
 from service.routes.health_check_routes import router as health_check_router
 from service.routes.mbj_routes import router as mbj_router
 from service.routes.ml_routes import router as ml_router
+from service.routes.visual_routes import router as visual_router
 # from service.AI.AI import router as ai_router  # Uncomment if needed
 
 # ---------------- INIT GLOBAL FLAGS ----------------
@@ -222,6 +222,8 @@ def register_routers(app: FastAPI):
     logger.info("  • mbj_router registered")
     app.include_router(ml_router)
     logger.info("  • ml_router registered")
+    app.include_router(visual_router)
+    logger.info("  • visual_router registered")
     # app.include_router(ai_router)
     # logger.info("  • ai_router registered")
 

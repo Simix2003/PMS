@@ -25,6 +25,7 @@ class _LoadingScreenState extends State<LoadingScreen>
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   double _loadingProgress = 0.0;
+  String versionNumber = "2.0.1";
 
   // For animated background blobs
   final List<Blob> _blobs = List.generate(
@@ -422,7 +423,7 @@ class _LoadingScreenState extends State<LoadingScreen>
                                       ),
                                       const SizedBox(height: 16),
                                       ShimmeringText(
-                                        text: "2.0.0",
+                                        text: versionNumber,
                                         style: TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w600,

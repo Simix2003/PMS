@@ -374,14 +374,16 @@ List<TableRow> buildCustomRows() {
 }
 
 class ThroughputBarChart extends StatelessWidget {
-  final List<Map<String, int>> data = const [
-    {'ok': 200, 'ng': 100}, // Shift S1
-    {'ok': 95, 'ng': 10}, // Shift S2
-    {'ok': 110, 'ng': 30}, // Shift S3
-  ];
+  final List<Map<String, int>> data;
+  final List<String> labels;
+  final double globalTarget;
 
-  final double globalTarget = 360; // Or any fixed/shared value
-  const ThroughputBarChart({super.key});
+  const ThroughputBarChart({
+    super.key,
+    required this.data,
+    required this.labels,
+    this.globalTarget = 360,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -400,12 +402,26 @@ class ThroughputBarChart extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Throughput',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  const Text(
+                    'Throughput',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  // Show global target
+                  Spacer(),
+                  Text(
+                    'Target: ${globalTarget.toInt()}',
+                    style: const TextStyle(
+                      color: Colors.orangeAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               Expanded(
@@ -430,17 +446,20 @@ class ThroughputBarChart extends StatelessWidget {
                             sideTitles: SideTitles(
                               showTitles: true,
                               getTitlesWidget: (value, meta) {
-                                const shifts = ['S1', 'S2', 'S3'];
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    shifts[value.toInt()],
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
+                                final index = value.toInt();
+                                if (index >= 0 && index < labels.length) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Text(
+                                      labels[index],
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                }
+                                return const SizedBox.shrink();
                               },
                             ),
                           ),
@@ -455,17 +474,6 @@ class ThroughputBarChart extends StatelessWidget {
                               color: Colors.orangeAccent,
                               strokeWidth: 2,
                               dashArray: [6, 3],
-                              label: HorizontalLineLabel(
-                                show: true,
-                                alignment: Alignment.topRight,
-                                labelResolver: (line) =>
-                                    'Target: ${line.y.toInt()}',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.orangeAccent,
-                                ),
-                              ),
                             ),
                           ],
                         ),
@@ -486,7 +494,7 @@ class ThroughputBarChart extends StatelessWidget {
                               final ok = data[index]['ok']!;
                               final barCenterX = (2 * index + 1) * groupSpace;
                               final okHeight = chartHeight * (ok / maxY);
-                              final topOffset = chartHeight - okHeight;
+                              final topOffset = chartHeight - okHeight - 40;
 
                               return Positioned(
                                 left: barCenterX - 12,
@@ -588,11 +596,11 @@ class ThroughputBarChart extends StatelessWidget {
   }
 }
 
-class HourlyYieldBarChart extends StatelessWidget {
+class HourlyBarChart extends StatelessWidget {
   final List<Map<String, int>> data;
   final List<String> hourLabels;
 
-  const HourlyYieldBarChart({
+  const HourlyBarChart({
     super.key,
     required this.data,
     required this.hourLabels,
@@ -602,7 +610,7 @@ class HourlyYieldBarChart extends StatelessWidget {
     final totals = data.map((e) => e['ok']! + e['ng']!).toList();
     final maxData =
         totals.isNotEmpty ? totals.reduce((a, b) => a > b ? a : b) : 0;
-    return maxData.toDouble() + 20; // Add some padding
+    return maxData.toDouble() + 30; // Add some padding
   }
 
   List<BarChartGroupData> _buildBarGroups(double maxY) {
@@ -643,68 +651,109 @@ class HourlyYieldBarChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: Text(
-                'Throughput Cumulativo',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            Expanded(
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: maxY,
-                  barTouchData: BarTouchData(enabled: false),
-                  titlesData: FlTitlesData(
-                    leftTitles:
-                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles:
-                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    topTitles:
-                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        getTitlesWidget: (value, meta) {
-                          final i = value.toInt();
-                          if (i >= 0 && i < hourLabels.length) {
-                            return Text(
-                              hourLabels[i],
-                              style: const TextStyle(fontSize: 16),
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      ),
+            Row(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Throughput Cumulativo',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  gridData: FlGridData(show: false),
-                  borderData: FlBorderData(show: false),
-                  barGroups: _buildBarGroups(maxY),
-                  extraLinesData: ExtraLinesData(horizontalLines: [
-                    HorizontalLine(
-                      y: targetLine,
-                      color: Colors.orangeAccent,
-                      strokeWidth: 2,
-                      dashArray: [8, 4],
-                      label: HorizontalLineLabel(
-                        show: true,
-                        alignment: Alignment.topRight,
-                        labelResolver: (line) =>
-                            'Target: ${targetLine.toInt()}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orangeAccent,
+                ),
+                const Spacer(),
+                Text(
+                  'Target: $targetLine',
+                  style: TextStyle(
+                    color: Colors.orangeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: Stack(
+                children: [
+                  BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: maxY,
+                      barTouchData: BarTouchData(enabled: false),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              final i = value.toInt();
+                              if (i >= 0 && i < hourLabels.length) {
+                                return Text(
+                                  hourLabels[i],
+                                  style: const TextStyle(fontSize: 16),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
                         ),
                       ),
+                      gridData: FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      barGroups: _buildBarGroups(maxY),
+                      extraLinesData: ExtraLinesData(horizontalLines: [
+                        HorizontalLine(
+                          y: targetLine,
+                          color: Colors.orangeAccent,
+                          strokeWidth: 2,
+                          dashArray: [8, 4],
+                        ),
+                      ]),
                     ),
-                  ]),
-                ),
+                  ),
+                  // Total values above bars
+                  Positioned.fill(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final chartWidth = constraints.maxWidth;
+                        final chartHeight = constraints.maxHeight;
+                        final barCount = data.length;
+                        final groupSpace = chartWidth / (barCount * 2);
+
+                        return Stack(
+                          children: List.generate(barCount, (index) {
+                            final ok = data[index]['ok']!;
+                            final ng = data[index]['ng']!;
+                            final total = ok + ng;
+                            final barCenterX = (2 * index + 1) * groupSpace;
+                            final barHeight = chartHeight * (total / maxY);
+                            final topOffset = (chartHeight - barHeight) - 40;
+
+                            return Positioned(
+                              left: barCenterX - 8,
+                              top: topOffset,
+                              child: Text(
+                                '$total',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            );
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -947,18 +996,21 @@ class YieldComparisonBarChart extends StatelessWidget {
 }
 
 class YieldLineChart extends StatelessWidget {
-  final List<Map<String, dynamic>>
-      hourlyData; // [{hour: '08:00', bussing1: 92, bussing2: 88}, ...]
+  final List<Map<String, dynamic>> hourlyData1;
+  final List<Map<String, dynamic>> hourlyData2;
   final double target;
 
   const YieldLineChart({
     super.key,
-    required this.hourlyData,
+    required this.hourlyData1,
+    required this.hourlyData2,
     this.target = 90,
   });
 
   @override
   Widget build(BuildContext context) {
+    final length = hourlyData1.length; // assume same length for both
+
     return Expanded(
       child: Card(
         color: Colors.white,
@@ -976,28 +1028,25 @@ class YieldLineChart extends StatelessWidget {
               Expanded(
                 child: LineChart(
                   LineChartData(
-                    minY: 50,
-                    maxY: 120,
+                    minY: 0,
+                    maxY: 110,
                     lineTouchData: LineTouchData(enabled: false),
                     titlesData: FlTitlesData(
                       leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: false,
-                        ),
+                        sideTitles: SideTitles(showTitles: false),
                       ),
                       bottomTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
                           getTitlesWidget: (value, meta) {
                             final index = value.toInt();
-                            // Only show label if it's an integer and a valid index
                             if (index >= 0 &&
-                                index < hourlyData.length &&
+                                index < hourlyData1.length &&
                                 value == index.toDouble()) {
                               return SideTitleWidget(
                                 meta: meta,
                                 child: Text(
-                                  hourlyData[index]['hour'],
+                                  hourlyData1[index]['hour'],
                                   style: const TextStyle(fontSize: 12),
                                 ),
                               );
@@ -1031,9 +1080,9 @@ class YieldLineChart extends StatelessWidget {
                       LineChartBarData(
                         isCurved: false,
                         spots: List.generate(
-                          hourlyData.length,
+                          hourlyData1.length,
                           (i) => FlSpot(i.toDouble(),
-                              hourlyData[i]['bussing1'].toDouble()),
+                              (hourlyData1[i]['yield'] ?? 0).toDouble()),
                         ),
                         color: Colors.blue,
                         barWidth: 2,
@@ -1042,18 +1091,17 @@ class YieldLineChart extends StatelessWidget {
                       LineChartBarData(
                         isCurved: false,
                         spots: List.generate(
-                          hourlyData.length,
+                          hourlyData2.length,
                           (i) => FlSpot(i.toDouble(),
-                              hourlyData[i]['bussing2'].toDouble()),
+                              (hourlyData2[i]['yield'] ?? 0).toDouble()),
                         ),
                         color: Colors.green,
                         barWidth: 2,
                         dotData: FlDotData(show: false),
                       ),
-                      // 🔸 Target line (dashed)
                       LineChartBarData(
                         spots: List.generate(
-                          hourlyData.length,
+                          length,
                           (i) => FlSpot(i.toDouble(), target),
                         ),
                         color: Colors.orange,
@@ -1072,8 +1120,8 @@ class YieldLineChart extends StatelessWidget {
                 alignment: WrapAlignment.center,
                 spacing: 20,
                 children: const [
-                  LegendItem(color: Colors.blue, label: 'Bussing 1'),
-                  LegendItem(color: Colors.green, label: 'Bussing 2'),
+                  LegendItem(color: Colors.blue, label: 'Stazione 1'),
+                  LegendItem(color: Colors.green, label: 'Stazione 2'),
                   LegendItem(
                       color: Colors.orange, label: 'Target', isDashed: true),
                 ],

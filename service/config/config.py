@@ -4,6 +4,15 @@ from pathlib import Path
 debug = True
 
 CHANNELS: dict = {}
+ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
+    "AIN": {
+        "station_1_in":     ["MIN01"], # Should be AIN01
+        "station_2_in":     ["MIN02"], # Should be AIN02
+        "station_1_out_ng": ["MIN01"], 
+        "station_2_out_ng": ["MIN02"]
+    },
+}
+
 PLC_DB_RANGES: dict = {}  # {(ip, slot): {db_number: {"min": x, "max": y}}}
 
 ISSUE_TREE = {

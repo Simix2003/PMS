@@ -1,3 +1,4 @@
+import logging
 import asyncio
 from fastapi import WebSocket
 
@@ -10,6 +11,8 @@ from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
 from service.state.global_state import subscriptions
 import service.state.global_state as global_state
+
+logger = logging.getLogger("PMS")
 
 async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connection: PLCConnection, line_name: str):
     paths = get_channel_config(line_name, channel_id)
@@ -106,12 +109,28 @@ async def broadcast(line_name: str, channel_id: str, message: dict):
         except Exception:
             subscriptions[summary_key].remove(ws)
 
+# Initialize this once (preferably in your global_state)
+if not hasattr(global_state, "last_sent"):
+    global_state.last_sent = {}
+
 async def broadcast_zone_update(line_name: str, zone: str, payload: dict):
+    print(f"📢 Broadcasting {zone} update to {line_name}")
     key = f"{line_name}.visual.{zone}"
-    for ws in subscriptions.get(key, set()).copy():
+    ws_set = subscriptions.get(key, set()).copy()
+
+    # 🚫 Skip if identical to last payload sent
+    if global_state.last_sent.get(key) == payload:
+        return
+
+    global_state.last_sent[key] = payload  # 💾 Cache latest payload
+
+    for ws in ws_set:
         try:
+            if getattr(ws, "client_state", None) and ws.client_state.name != "CONNECTED":
+                raise ConnectionError("WebSocket not connected")
             await ws.send_json(payload)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"❌ WebSocket broadcast failed ({key}): {e}")
             subscriptions[key].discard(ws)
 
 async def broadcast_stringatrice_warning(line_name: str, warning: dict):

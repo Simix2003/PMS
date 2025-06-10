@@ -17,6 +17,7 @@ from service.routes.broadcast import broadcast
 from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_string
+from service.helpers.visual_helper import update_visual_data_on_new_module
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
     print(f"[{full_station_id}] Starting background task.")
@@ -126,7 +127,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     with open("plc_mismatches.txt", "a") as f:
                         f.write(f"[{now}] {full_station_id}\n")
-                        f.write(f"  ⚠️ DISCREPANZA! Atteso: {expected_id}, Letto: {current_id_modulo}\n")
+                        f.write(f" DISCREPANZA! Atteso: {expected_id}, Letto: {current_id_modulo}\n")
                         f.write(f"  Inizio Ciclo: {data_inizio}, Fine Ciclo: {datetime.now()}\n")
                         f.write(f"  fine_buona: {fine_buona}, fine_scarto: {fine_scarto}\n")
                         f.write("-" * 60 + "\n")
@@ -136,11 +137,37 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     production_id = incomplete_productions.get(full_station_id)
                     if production_id:
                         conn = get_mysql_connection()
-                        await update_production_final(production_id, result, channel_id, conn, fine_buona, fine_scarto)
-                        ##############await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False)
-                        ##############await asyncio.to_thread(plc_connection.write_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"], False)
-                        ##############await asyncio.to_thread(plc_connection.write_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"], False)
-                        incomplete_productions.pop(full_station_id)
+                        success, final_esito, end_time = await update_production_final(
+                            production_id, result, channel_id, conn, fine_buona, fine_scarto
+                        )
+                        if success:
+                            try:
+                                zone = "AIN"  # TODO: derive dynamically from MySQL if needed
+                                assert end_time and final_esito is not None
+
+                                print(f"Preparing to update visual data for:")
+                                print(f"  • zone         = {zone}")
+                                print(f"  • station_name = {channel_id}")
+                                print(f"  • esito        = {final_esito}")
+                                print(f"  • end_time     = {end_time}")
+
+                                timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
+
+                                update_visual_data_on_new_module(
+                                    zone=zone,
+                                    station_name=channel_id,
+                                    esito=final_esito,
+                                    ts=timestamp
+                                )
+
+                                print(f"📡 Called update_visual_data_on_new_module ✅")
+
+                            except Exception as vis_err:
+                                logging.warning(f"⚠️ Could not update visual_data for {channel_id}: {vis_err}")
+
+                            incomplete_productions.pop(full_station_id)
+                        else:
+                            print(f"❌ Failed to update production in DB, skipping visual update.")
                     else:
                         logging.warning(f"⚠️ No initial production record found for {full_station_id}; skipping update.")
                     remove_temp_issues(line_name, channel_id, result.get("Id_Modulo"))
@@ -167,8 +194,10 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         trigger_timestamps.pop(full_id, None)
 
         # Write FALSE to esito_scarto_compilato.
-        esito_conf = paths["esito_scarto_compilato"]
-        await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
+        esito_conf = paths.get("esito_scarto_compilato")
+        if esito_conf:
+            await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
+
 
         # Write FALSE to pezzo_salvato_su_DB_con_inizio_ciclo.
         pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
@@ -198,8 +227,11 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         stringatrice = str(stringatrice_index)
 
         #issues_value = await asyncio.to_thread(plc_connection.read_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"])
-        issues_value = extract_bool(buffer, esito_conf["byte"], esito_conf["bit"], start_byte)
-        issues_submitted = issues_value is True
+        if esito_conf:
+            issues_value = extract_bool(buffer, esito_conf["byte"], esito_conf["bit"], start_byte)
+            issues_submitted = issues_value is True
+        else:
+            issues_submitted = False
 
         trigger_timestamps[full_id] = datetime.now()
 
@@ -226,7 +258,8 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         global_state.expected_moduli[full_id] = object_id
 
         # Write TRUE to pezzo_salvato_su_DB_con_inizio_ciclo.
-        await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True)
+        if not debug:
+            await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True)
 
         await broadcast(line_name, channel_id, {
             "trigger": True,

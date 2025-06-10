@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../shared/services/api_service.dart';
+import '../../shared/services/socket_service.dart';
 import 'shimmer_placeHolder.dart';
 import 'visual_widgets.dart';
 import 'package:gauge_indicator/gauge_indicator.dart';
@@ -15,7 +16,8 @@ class VisualPage extends StatefulWidget {
 }
 
 class _VisualPageState extends State<VisualPage> {
-  double value = 79;
+  final WebSocketService _webSocketService = WebSocketService();
+  bool _isWebSocketConnected = false;
   Color errorColor = Colors.amber.shade700;
   Color warningColor = Colors.yellow.shade400;
   Color okColor = Colors.green.shade400;
@@ -114,10 +116,80 @@ class _VisualPageState extends State<VisualPage> {
     }
   }
 
+  void _initializeWebSocket() {
+    if (_isWebSocketConnected) return;
+    _webSocketService.connectToVisual(
+      line: 'Linea2',
+      zone: widget.zone,
+      onMessage: (data) {
+        if (!mounted) return;
+
+        setState(() {
+          print("🔴 Visual WebSocket message received: $data");
+          bussingIn_1 = data['station_1_in'] ?? 0;
+          bussingIn_2 = data['station_2_in'] ?? 0;
+          ng_bussingOut_1 = data['station_1_out_ng'] ?? 0;
+          ng_bussingOut_2 = data['station_2_out_ng'] ?? 0;
+          currentYield_1 = data['station_1_yield'] ?? 100;
+          currentYield_2 = data['station_2_yield'] ?? 100;
+
+          yieldLast8h_1 = List<Map<String, dynamic>>.from(
+              data['station_1_yield_last_8h'] ?? []);
+          yieldLast8h_2 = List<Map<String, dynamic>>.from(
+              data['station_2_yield_last_8h'] ?? []);
+          shiftThroughput =
+              List<Map<String, dynamic>>.from(data['shift_throughput'] ?? []);
+          hourlyThroughput =
+              List<Map<String, dynamic>>.from(data['last_8h_throughput'] ?? []);
+          station1Shifts = List<Map<String, dynamic>>.from(
+              data['station_1_yield_shifts'] ?? []);
+          station2Shifts = List<Map<String, dynamic>>.from(
+              data['station_2_yield_shifts'] ?? []);
+
+          mergedShiftData = List.generate(station1Shifts.length, (index) {
+            return {
+              'shift': station1Shifts[index]['label'],
+              'bussing1': station1Shifts[index]['yield'],
+              'bussing2': station2Shifts[index]['yield'],
+            };
+          });
+
+          throughputData = shiftThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            return {'ok': total - ng, 'ng': ng};
+          }).toList();
+
+          shiftLabels =
+              shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
+
+          hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            return {'ok': total - ng, 'ng': ng};
+          }).toList();
+
+          hourLabels =
+              hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+        });
+      },
+      onDone: () => print("🛑 Visual WebSocket closed"),
+      onError: (err) => print("❌ WebSocket error: $err"),
+    );
+    _isWebSocketConnected = true;
+  }
+
   @override
   void initState() {
     super.initState();
-    fetchZoneData();
+    fetchZoneData(); // initial REST fetch
+    _initializeWebSocket(); // listen to updates after
+  }
+
+  @override
+  void dispose() {
+    _webSocketService.close(); // clean up WebSocket
+    super.dispose();
   }
 
   @override

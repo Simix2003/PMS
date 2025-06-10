@@ -1,0 +1,44 @@
+[2025-06-10 15:41:52] Linea2.MIN01
+[2025-06-10 15:41:57] Linea2.MIN01
+[2025-06-10 15:42:02] Linea2.MIN01
+[2025-06-10 15:42:07] Linea2.MIN01
+[2025-06-10 15:42:12] Linea2.MIN01
+[2025-06-10 15:42:17] Linea2.MIN01
+[2025-06-10 15:42:22] Linea2.MIN01
+[2025-06-10 15:42:27] Linea2.MIN01
+[2025-06-10 15:42:32] Linea2.MIN01
+[2025-06-10 15:42:37] Linea2.MIN01
+[2025-06-10 15:42:42] Linea2.MIN01
+[2025-06-10 15:42:47] Linea2.MIN01
+[2025-06-10 15:42:52] Linea2.MIN01
+[2025-06-10 15:42:57] Linea2.MIN01
+[2025-06-10 15:44:51] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SCHBGHC25411170, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-10 15:44:37.022171, Fine Ciclo: 2025-06-10 15:44:51.101335
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-10 15:49:27] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SCHBGHC25411171, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-10 15:49:18.591368, Fine Ciclo: 2025-06-10 15:49:27.627316
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-10 15:52:23] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SCHBGHC25411172, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-10 15:52:19.353069, Fine Ciclo: 2025-06-10 15:52:23.374240
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-10 15:57:04] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SCHBGHC25411173, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-10 15:56:56.510137, Fine Ciclo: 2025-06-10 15:57:04.518237
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-10 16:06:30] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SCHBGHC25411174, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-10 16:06:16.884984, Fine Ciclo: 2025-06-10 16:06:30.928827
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-10 16:07:13] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SCHBGHC25411175, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-10 16:07:09.589045, Fine Ciclo: 2025-06-10 16:07:13.628544
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------

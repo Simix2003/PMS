@@ -52,11 +52,11 @@ CREATE TABLE `object_defects` (
   PRIMARY KEY (`id`),
   KEY `production_id` (`production_id`),
   KEY `defect_id` (`defect_id`),
-  KEY `fk_object_defects_photo` (`photo_id`),
-  CONSTRAINT `fk_object_defects_photo` FOREIGN KEY (`photo_id`) REFERENCES `photos` (`id`) ON DELETE SET NULL,
+  KEY `fk_object_photos` (`photo_id`),
+  CONSTRAINT `fk_object_photos` FOREIGN KEY (`photo_id`) REFERENCES `photos` (`id`) ON DELETE SET NULL,
   CONSTRAINT `object_defects_ibfk_1` FOREIGN KEY (`production_id`) REFERENCES `productions` (`id`),
   CONSTRAINT `object_defects_ibfk_2` FOREIGN KEY (`defect_id`) REFERENCES `defects` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3213 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6117 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -76,7 +76,7 @@ CREATE TABLE `objects` (
   UNIQUE KEY `id_UNIQUE` (`id`),
   KEY `creator_station_id` (`creator_station_id`),
   CONSTRAINT `objects_ibfk_1` FOREIGN KEY (`creator_station_id`) REFERENCES `stations` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=23964 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=37009 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -91,7 +91,7 @@ CREATE TABLE `photos` (
   `photo` longblob NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=51 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=82 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -131,9 +131,11 @@ CREATE TABLE `productions` (
   UNIQUE KEY `id_UNIQUE` (`id`) /*!80000 INVISIBLE */,
   KEY `object_id` (`object_id`),
   KEY `station_id` (`station_id`),
+  KEY `idx_prod_time` (`start_time`,`end_time`),
+  KEY `idx_prod_obj_last` (`object_id`,`last_station_id`),
   CONSTRAINT `productions_ibfk_1` FOREIGN KEY (`object_id`) REFERENCES `objects` (`id`),
   CONSTRAINT `productions_ibfk_2` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=23909 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=36967 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -199,7 +201,7 @@ CREATE TABLE `stringatrice_warnings` (
   PRIMARY KEY (`id`),
   KEY `fk_warning_photo` (`photo_id`),
   CONSTRAINT `fk_warning_photo` FOREIGN KEY (`photo_id`) REFERENCES `photos` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=94 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=227 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -211,4 +213,4 @@ CREATE TABLE `stringatrice_warnings` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-06-05 16:22:58
+-- Dump completed on 2025-06-10 21:05:32

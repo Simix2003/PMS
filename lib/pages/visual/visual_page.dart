@@ -6,7 +6,7 @@ import '../../shared/services/socket_service.dart';
 import 'escalation_visual.dart';
 import 'shimmer_placeHolder.dart';
 import 'visual_widgets.dart';
-import 'package:gauge_indicator/gauge_indicator.dart';
+//import 'package:gauge_indicator/gauge_indicator.dart';
 
 class VisualPage extends StatefulWidget {
   final String zone;
@@ -251,7 +251,7 @@ class _VisualPageState extends State<VisualPage> {
                           flex: 4,
                           child: HeaderBox(
                             title: 'Produzione Shift',
-                            target: '$shift_target',
+                            target: '$shift_target moduli',
                             icon: Icons.solar_power,
                           ),
                         ),
@@ -259,7 +259,7 @@ class _VisualPageState extends State<VisualPage> {
                           flex: 3,
                           child: HeaderBox(
                             title: 'YIELD',
-                            target: '$yield_target_1',
+                            target: '$yield_target_1 %',
                             icon: Icons.show_chart,
                           ),
                         ),
@@ -728,8 +728,7 @@ class _VisualPageState extends State<VisualPage> {
                                                                           12),
                                                               child: Center(
                                                                 child: Text(
-                                                                  currentYield_1
-                                                                      .toString(),
+                                                                  '${currentYield_1.toString()}%',
                                                                   style:
                                                                       TextStyle(
                                                                     fontWeight:
@@ -795,8 +794,7 @@ class _VisualPageState extends State<VisualPage> {
                                                                           12),
                                                               child: Center(
                                                                 child: Text(
-                                                                  currentYield_2
-                                                                      .toString(),
+                                                                  '${currentYield_2.toString()}%',
                                                                   style:
                                                                       TextStyle(
                                                                     fontWeight:

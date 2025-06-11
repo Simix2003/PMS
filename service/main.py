@@ -40,6 +40,7 @@ from service.routes.health_check_routes import router as health_check_router
 from service.routes.mbj_routes import router as mbj_router
 from service.routes.ml_routes import router as ml_router
 from service.routes.visual_routes import initialize_visual_cache, router as visual_router
+from service.routes.escalation_routes import router as escalation_router
 
 # ---------------- INIT GLOBAL FLAGS ----------------
 def init_global_flags():
@@ -164,7 +165,7 @@ for router, name in [
     (overlay_router, "overlay"), (export_router, "export"), (settings_router, "settings"),
     (graph_router, "graph"), (station_router, "station"), (search_router, "search"),
     (websocket_router, "websocket"), (health_check_router, "health_check"),
-    (mbj_router, "mbj"), (ml_router, "ml"), (visual_router, "visual")
+    (mbj_router, "mbj"), (ml_router, "ml"), (visual_router, "visual"), (escalation_router, "escalation")
 ]:
     app.include_router(router)
     logger.info(f"  • {name}_router registered")

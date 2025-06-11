@@ -744,4 +744,92 @@ class ApiService {
       throw Exception('Failed to load zone data');
     }
   }
+
+  Future<Map<String, dynamic>?> createStop({
+    required int stationId,
+    required String startTime,
+    required int operatorId,
+    required String stopType,
+    required String reason,
+    required String status,
+    int? linkedProductionId,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/escalation/create_stop');
+
+    final payload = {
+      "station_id": stationId,
+      "start_time": startTime,
+      "operator_id": operatorId,
+      "stop_type": stopType,
+      "reason": reason,
+      "status": status,
+      if (linkedProductionId != null)
+        "linked_production_id": linkedProductionId,
+    };
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to create stop: ${response.body}");
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> updateStopStatus({
+    required int stopId,
+    required String newStatus,
+    required String changedAt,
+    required int operatorId,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/escalation/update_status');
+
+    final payload = {
+      "stop_id": stopId,
+      "new_status": newStatus,
+      "changed_at": changedAt,
+      "operator_id": operatorId,
+    };
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to update stop status: ${response.body}");
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getStopDetails(int stopId) async {
+    final url = Uri.parse('$baseUrl/api/escalation/get_stop_details/$stopId');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to load stop details: ${response.body}");
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getStopsForStation(int stationId) async {
+    final url = Uri.parse('$baseUrl/api/escalation/get_stops/$stationId');
+    final response = await http.get(url);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to load stops: ${response.body}");
+      return null;
+    }
+  }
 }

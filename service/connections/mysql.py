@@ -597,3 +597,134 @@ def check_existing_production(id_modulo, station: str, timestamp: datetime, conn
     result = cursor.fetchone()
     cursor.close()
     return result is not None
+
+# Create full stop + first level entry
+def create_stop(
+    station_id: int,
+    start_time,
+    end_time,
+    operator_id: str,
+    stop_type: str,
+    reason: str,
+    status: str,
+    linked_production_id: Optional[int],
+    conn
+) -> int:
+    """Insert a new stop and its initial status level."""
+    cursor = conn.cursor()
+
+    # Insert stop
+    query_stop = """
+        INSERT INTO stops (station_id, start_time, end_time, operator_id, type, reason, status, linked_production_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    cursor.execute(query_stop, (station_id, start_time, end_time, operator_id, stop_type, reason, status, linked_production_id))
+    stop_id = cursor.lastrowid
+
+    # Insert first status level
+    query_level = """
+        INSERT INTO stop_status_changes (stop_id, status, changed_at, operator_id)
+        VALUES (%s, %s, %s, %s)
+    """
+    cursor.execute(query_level, (stop_id, status, start_time, operator_id))
+
+    conn.commit()
+    cursor.close()
+    return stop_id
+
+
+def update_stop_status(stop_id, new_status, changed_at, operator_id, conn):
+    with conn.cursor() as cursor:
+
+        # Always update status and operator_id
+        sql = """
+            UPDATE stops 
+            SET status=%s, operator_id=%s
+            WHERE id=%s
+        """
+        cursor.execute(sql, (new_status, operator_id, stop_id))
+
+        if new_status == "CLOSED":
+            cursor.execute("SELECT start_time FROM stops WHERE id=%s", (stop_id,))
+            row = cursor.fetchone()
+
+            if not row or not row[0]:
+                raise Exception(f"Start time not found for stop_id={stop_id}")
+
+            start_time = row[0]
+
+            # Normalize start_time to real datetime
+            if isinstance(start_time, str):
+                try:
+                    start_time = datetime.fromisoformat(start_time)
+                except ValueError:
+                    # Fallback: MySQL sometimes returns string format "YYYY-MM-DD HH:MM:SS"
+                    start_time = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
+
+            elif isinstance(start_time, datetime.date):
+                start_time = datetime.combine(start_time, datetime.min.time())
+
+            end_time = datetime.now()
+
+            stop_duration = int((end_time - start_time).total_seconds())
+
+            cursor.execute("""
+                UPDATE stops 
+                SET end_time=%s, stop_time=%s 
+                WHERE id=%s
+            """, (end_time, stop_duration, stop_id))
+
+    conn.commit()
+
+# Get stops for a station
+def get_stops_for_station(station_id: int, conn, limit: int = 100):
+    """Get recent stops for a given station."""
+    cursor = conn.cursor()
+    query = """
+        SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
+        FROM stops
+        WHERE station_id = %s
+        ORDER BY start_time DESC
+        LIMIT %s
+    """
+    cursor.execute(query, (station_id, limit))
+    results = cursor.fetchall()
+    cursor.close()
+    return results
+
+# Get full stop with escalation levels
+def get_stop_with_levels(stop_id: int, conn):
+    """Fetch stop info + all its levels."""
+    cursor = conn.cursor()
+
+    stop_query = """
+        SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
+        FROM stops
+        WHERE id = %s
+    """
+    cursor.execute(stop_query, (stop_id,))
+    stop_data = cursor.fetchone()
+
+    levels_query = """
+        SELECT id, status, changed_at, operator_id, created_at
+        FROM stop_status_changes
+        WHERE stop_id = %s
+        ORDER BY changed_at ASC
+    """
+    cursor.execute(levels_query, (stop_id,))
+    levels_data = cursor.fetchall()
+
+    cursor.close()
+    return {
+        "stop": stop_data,
+        "levels": levels_data
+    }
+
+# Delete stop fully
+def delete_stop(stop_id: int, conn):
+    """Delete stop and its levels (full cleanup)."""
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM stop_status_changes WHERE stop_id = %s", (stop_id,))
+    cursor.execute("DELETE FROM stops WHERE id = %s", (stop_id,))
+    conn.commit()
+    cursor.close()

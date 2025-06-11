@@ -94,7 +94,7 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     """
     if now is None:
         now = datetime.now()
-        #fake_now = now - timedelta(days=1)
+        #fake_now = now - timedelta(days=3)
         #now = fake_now
 
     cfg = ZONE_SOURCES[zone]
@@ -195,15 +195,12 @@ def update_visual_data_on_new_module(
         esito: int,
         ts: datetime
     ) -> None:
-    print(f"🛠️ Entered update_visual_data_on_new_module for zone={zone}, station={station_name}, esito={esito}, ts={ts}")
 
     if zone not in global_state.visual_data:
-        print(f"⚠️ Zone {zone} not in visual_data → recomputing snapshot from scratch")
         global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
         return
 
     with _update_lock:
-        print(f"🔒 Acquired visual_data lock for {zone}")
         data = global_state.visual_data[zone]
         cfg  = ZONE_SOURCES[zone]
 
@@ -212,24 +209,19 @@ def update_visual_data_on_new_module(
         cached_shift_start = data.get("__shift_start")
 
         if cached_shift_start != current_shift_start.isoformat():
-            print(f"🔁 Detected shift change → Recomputing full zone snapshot for {zone}")
             global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
             return
 
         # 2. Update station counters
         if station_name in cfg["station_1_in"]:
-            print(f"➕ Incrementing station_1_in for {station_name}")
             data["station_1_in"] += 1
         elif station_name in cfg["station_2_in"]:
-            print(f"➕ Incrementing station_2_in for {station_name}")
             data["station_2_in"] += 1
 
         if esito == 6:
             if station_name in cfg["station_1_out_ng"]:
-                print(f"❌ Incrementing station_1_out_ng for {station_name}")
                 data["station_1_out_ng"] += 1
             elif station_name in cfg["station_2_out_ng"]:
-                print(f"❌ Incrementing station_2_out_ng for {station_name}")
                 data["station_2_out_ng"] += 1
 
         # 3. Recompute shift yield
@@ -237,7 +229,6 @@ def update_visual_data_on_new_module(
         s2_good = data["station_2_in"] - data["station_2_out_ng"]
         data["station_1_yield"] = compute_yield(s1_good, data["station_1_out_ng"])
         data["station_2_yield"] = compute_yield(s2_good, data["station_2_out_ng"])
-        print(f"📊 station_1_yield: {data['station_1_yield']}, station_2_yield: {data['station_2_yield']}")
 
         # 3-bis. Incremental update for shifts
         current_shift_label = (
@@ -275,10 +266,8 @@ def update_visual_data_on_new_module(
         hour_label = hour_start.strftime("%H:%M")
 
         def _touch_hourly(list_key, is_station1: bool):
-            print(f"⏱️  Updating hourly bin for {list_key}")
             lst = data[list_key]
             if not lst or lst[-1]["hour"] != hour_label:
-                print(f"🔄 New hour bin: {hour_label}")
                 lst[:] = lst[-7:]
                 lst.append({"hour": hour_label, "start": ts.isoformat(),
                             "end": (ts + timedelta(hours=1)).isoformat(),
@@ -311,7 +300,6 @@ def update_visual_data_on_new_module(
        
         try:
             loop = asyncio.get_running_loop()
-            print(f'📡 Scheduling broadcast_zone_update for {zone}...')
             payload = copy.deepcopy(data)
             loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(
@@ -319,7 +307,6 @@ def update_visual_data_on_new_module(
                 )
             )
 
-            print('✅ Visual data broadcast scheduled')
         except Exception as e:
             logger.warning(f"⚠️ Could not schedule WebSocket update for {zone}: {e}")
 

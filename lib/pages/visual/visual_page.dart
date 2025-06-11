@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
+import 'escalation_visual.dart';
 import 'shimmer_placeHolder.dart';
 import 'visual_widgets.dart';
 import 'package:gauge_indicator/gauge_indicator.dart';
@@ -46,6 +47,8 @@ class _VisualPageState extends State<VisualPage> {
   int yield_threshold_2 = 25;
 
   int last_n_shifts = 3;
+
+  int shift_target = 360;
 
   List<Map<String, dynamic>> yieldLast8h_1 = [];
   List<Map<String, dynamic>> yieldLast8h_2 = [];
@@ -243,12 +246,12 @@ class _VisualPageState extends State<VisualPage> {
                   children: [
                     // ────── FIRST HEADER ROW ──────
                     Row(
-                      children: const [
+                      children: [
                         Expanded(
                           flex: 4,
                           child: HeaderBox(
                             title: 'Produzione Shift',
-                            target: '360',
+                            target: '$shift_target',
                             icon: Icons.solar_power,
                           ),
                         ),
@@ -256,7 +259,7 @@ class _VisualPageState extends State<VisualPage> {
                           flex: 3,
                           child: HeaderBox(
                             title: 'YIELD',
-                            target: '90%',
+                            target: '$yield_target_1',
                             icon: Icons.show_chart,
                           ),
                         ),
@@ -864,13 +867,21 @@ class _VisualPageState extends State<VisualPage> {
                                       children: [
                                         const TrafficLightWithBackground(),
                                         const SizedBox(height: 8),
-                                        Text(
-                                          'Ultimi $last_n_shifts Shift',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
+                                        (last_n_shifts > 0)
+                                            ? Text(
+                                                'Ultimi $last_n_shifts Turni',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              )
+                                            : Text(
+                                                'Ultimo Turno',
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
                                       ],
                                     ),
                                     const SizedBox(

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-debug = False
+debug = True
 
 CHANNELS: dict = {}
 #TODO

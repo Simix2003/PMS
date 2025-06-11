@@ -396,12 +396,6 @@ class _ShimmerRevealETAState extends State<ShimmerRevealETA>
   void initState() {
     super.initState();
 
-    // Start shimmer, then fade-in actual card
-    Future.delayed(const Duration(microseconds: 800), () {
-      _fadeController.forward();
-      setState(() => _animationDone = true);
-    });
-
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -409,6 +403,12 @@ class _ShimmerRevealETAState extends State<ShimmerRevealETA>
 
     _fadeAnimation =
         CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut);
+
+    // Delay long enough to allow at least one shimmer pass (e.g. 1s)
+    Future.delayed(const Duration(seconds: 1), () {
+      _fadeController.forward();
+      setState(() => _animationDone = true);
+    });
   }
 
   @override
@@ -425,6 +425,8 @@ class _ShimmerRevealETAState extends State<ShimmerRevealETA>
       return Shimmer.fromColors(
         baseColor: Colors.grey.shade300,
         highlightColor: Colors.white,
+        period: const Duration(
+            milliseconds: 1500), // optional: control shimmer speed
         child: card,
       );
     }

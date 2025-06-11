@@ -1,0 +1,60 @@
+[2025-06-11 10:15:03] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607242, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 10:04:07.710367, Fine Ciclo: 2025-06-11 10:15:03.511319
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 10:15:23] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607243, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 10:15:21.672615, Fine Ciclo: 2025-06-11 10:15:23.691689
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 10:15:42] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607244, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 10:15:39.803642, Fine Ciclo: 2025-06-11 10:15:42.837278
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 10:50:31] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607245, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 10:50:25.696033, Fine Ciclo: 2025-06-11 10:50:31.790738
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 10:51:14] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607246, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 10:51:11.181784, Fine Ciclo: 2025-06-11 10:51:14.176263
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 10:51:33] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607247, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 10:51:33.290189, Fine Ciclo: 2025-06-11 10:51:33.312001
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 10:58:43] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607248, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 10:58:39.572962, Fine Ciclo: 2025-06-11 10:58:43.587591
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 10:58:59] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607249, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 10:58:56.888955, Fine Ciclo: 2025-06-11 10:58:59.931434
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 10:59:16] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607250, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 10:59:13.209208, Fine Ciclo: 2025-06-11 10:59:16.242631
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 11:10:07] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607251, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 11:10:01.138288, Fine Ciclo: 2025-06-11 11:10:07.162309
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 11:10:27] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607252, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 11:10:23.346193, Fine Ciclo: 2025-06-11 11:10:27.387976
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------
+[2025-06-11 11:10:44] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607253, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-11 11:10:42.579019, Fine Ciclo: 2025-06-11 11:10:44.597870
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------

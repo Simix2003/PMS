@@ -515,8 +515,6 @@ class ThroughputBarChart extends StatelessWidget {
                         ),
                       ),
                     ),
-
-                    // 💬 OK count inside green
                     Positioned.fill(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
@@ -528,12 +526,16 @@ class ThroughputBarChart extends StatelessWidget {
                           return Stack(
                             children: List.generate(barCount, (index) {
                               final ok = data[index]['ok']!;
+                              if (ok <= 0) {
+                                return const SizedBox(); // Skip if ok == 0
+                              }
+
                               final barCenterX = (2 * index + 1) * groupSpace;
                               final okHeight = chartHeight * (ok / maxY);
                               final topOffset = chartHeight - okHeight - 40;
 
                               return Positioned(
-                                left: barCenterX - 12,
+                                left: barCenterX - 4,
                                 top: topOffset,
                                 child: Text(
                                   '$ok',

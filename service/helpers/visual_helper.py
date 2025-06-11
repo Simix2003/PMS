@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import sys
+import copy
 
 from service.routes.broadcast import broadcast_zone_update
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -120,17 +121,36 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
         s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "ng")
         s2_g = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "good")
         s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
-        s1_yield_shifts.append({"label": label, "start": start.isoformat(),
-                                "end": end.isoformat(), "yield": compute_yield(s1_g, s1_n)})
-        s2_yield_shifts.append({"label": label, **s1_yield_shifts[-1] |   # copy start/end/label
-                                {"yield": compute_yield(s2_g, s2_n)}})
+
+        s1_yield_shifts.append({
+            "label": label,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "yield": compute_yield(s1_g, s1_n),
+            "good": s1_g,
+            "ng": s1_n
+        })
+
+        s2_yield_shifts.append({
+            "label": label,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "yield": compute_yield(s2_g, s2_n),
+            "good": s2_g,
+            "ng": s2_n
+        })
 
         # throughput
-        tot  = (count_unique_objects(cursor, cfg["station_1_in"], start, end, "all") +
-                count_unique_objects(cursor, cfg["station_2_in"], start, end, "all"))
-        ng   = s1_n + s2_n
-        shift_throughput.append({"label": label, "start": start.isoformat(),
-                                 "end": end.isoformat(), "total": tot, "ng": ng})
+        tot = (count_unique_objects(cursor, cfg["station_1_in"], start, end, "all") +
+            count_unique_objects(cursor, cfg["station_2_in"], start, end, "all"))
+        ng = s1_n + s2_n
+        shift_throughput.append({
+            "label": label,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "total": tot,
+            "ng": ng
+        })
 
     # -------- last 8 h bins (yield + throughput) -----
     last_8h_throughput, s1_y8h, s2_y8h = [], [], []
@@ -219,6 +239,37 @@ def update_visual_data_on_new_module(
         data["station_2_yield"] = compute_yield(s2_good, data["station_2_out_ng"])
         print(f"📊 station_1_yield: {data['station_1_yield']}, station_2_yield: {data['station_2_yield']}")
 
+        # 3-bis. Incremental update for shifts
+        current_shift_label = (
+            "S1" if 6 <= current_shift_start.hour < 14 else
+            "S2" if 14 <= current_shift_start.hour < 22 else
+            "S3"
+        )
+
+        # Update shift_throughput
+        for shift in data["shift_throughput"]:
+            if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                shift["total"] += 1
+                if esito == 6:
+                    shift["ng"] += 1
+                break
+
+        # Update station yield shifts
+        def update_shift_yield(station_yield_shifts, is_relevant_station):
+            if not is_relevant_station:
+                return
+            for shift in station_yield_shifts:
+                if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                    if esito == 6:
+                        shift["ng"] += 1
+                    else:
+                        shift["good"] += 1
+                    shift["yield"] = compute_yield(shift["good"], shift["ng"])
+                    break
+
+        update_shift_yield(data["station_1_yield_shifts"], station_name in cfg["station_1_out_ng"])
+        update_shift_yield(data["station_2_yield_shifts"], station_name in cfg["station_2_out_ng"])
+
         # 4. Update hourly bins
         hour_start = ts.replace(minute=0, second=0, microsecond=0)
         hour_label = hour_start.strftime("%H:%M")
@@ -261,11 +312,12 @@ def update_visual_data_on_new_module(
         try:
             loop = asyncio.get_running_loop()
             print(f'📡 Scheduling broadcast_zone_update for {zone}...')
+            payload = copy.deepcopy(data)
             loop.call_soon_threadsafe(
-            lambda: asyncio.create_task(
-                broadcast_zone_update(line_name="Linea2", zone=zone, payload=data)
+                lambda: asyncio.create_task(
+                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                )
             )
-        )
 
             print('✅ Visual data broadcast scheduled')
         except Exception as e:

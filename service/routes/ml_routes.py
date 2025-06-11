@@ -1,36 +1,69 @@
 from fastapi import APIRouter
-from fastapi.responses import  JSONResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import torch
 import os
 import sys
 import logging
-from sentence_transformers import SentenceTransformer, util
 from collections import defaultdict, Counter
 from dataclasses import dataclass, field
+from fastapi import APIRouter
+from pydantic import BaseModel
+import torch
+from torch.nn import functional as F
+from transformers import AutoTokenizer, AutoModel
 
 # Extend Python path for module resolution
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.config.config import KNOWN_DEFECTS, DEFECT_SIMILARITY_MODEL_PATH, ML_MODELS_DIR, ETA_MODEL_PATH_TEMPLATE
+from service.config.config import KNOWN_DEFECTS, DEFECT_SIMILARITY_MODEL_PATH
 from service.connections.mysql import get_mysql_connection
 
 router = APIRouter()
-
 logger = logging.getLogger("PMS")
 
-# Try loading the model
-model = None
-KNOWN_EMBEDDINGS = None
+# ───────────────────────────────────────────────────────────────
 
+# Mean pooling function (same as sentence-transformers default behavior)
+def mean_pooling(model_output, attention_mask):
+    token_embeddings = model_output.last_hidden_state  # (batch_size, seq_len, hidden_size)
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+    sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+    return sum_embeddings / sum_mask
+
+# Model loader function (cleaner structure)
+def load_model_and_tokenizer(model_path):
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModel.from_pretrained(model_path)
+    model.to(torch.device("cpu"))
+    return tokenizer, model
+
+# Compute embeddings function (shared for both known and input)
+def compute_embeddings(sentences, tokenizer, model):
+    encoded_input = tokenizer(
+        sentences,
+        padding=True,
+        truncation=True,
+        return_tensors='pt'
+    )
+    with torch.no_grad():
+        model_output = model(**encoded_input)
+    embeddings = mean_pooling(model_output, encoded_input['attention_mask'])
+    return embeddings
+
+# Load model at startup
 try:
-    model = SentenceTransformer(DEFECT_SIMILARITY_MODEL_PATH)
-    KNOWN_EMBEDDINGS = model.encode(KNOWN_DEFECTS, convert_to_tensor=True)
+    tokenizer, model = load_model_and_tokenizer(DEFECT_SIMILARITY_MODEL_PATH)
+    KNOWN_EMBEDDINGS = compute_embeddings(KNOWN_DEFECTS, tokenizer, model)
     logger.info(f"✅ Loaded ML model from: {DEFECT_SIMILARITY_MODEL_PATH}")
 except Exception as e:
     logger.error(f"❌ Could not load ML model from {DEFECT_SIMILARITY_MODEL_PATH}: {e}")
     model = None
+    tokenizer = None
     KNOWN_EMBEDDINGS = None
+
+# ───────────────────────────────────────────────────────────────
 
 class DefectInput(BaseModel):
     input_text: str
@@ -44,12 +77,14 @@ async def check_defect_similarity(data: DefectInput):
             "confidence": 0.0
         }
 
-    input_embedding = model.encode(data.input_text, convert_to_tensor=True)
-    cosine_scores = util.cos_sim(input_embedding, KNOWN_EMBEDDINGS)
+    # Compute embedding for input text
+    input_embedding = compute_embeddings([data.input_text], tokenizer, model)
 
-    scores = cosine_scores[0]  # shape: (N,)
-    best_idx = int(torch.argmax(scores))
-    best_score = float(scores[best_idx])
+    # Cosine similarity with precomputed known embeddings
+    cosine_scores = F.cosine_similarity(input_embedding, KNOWN_EMBEDDINGS)
+
+    best_idx = int(torch.argmax(cosine_scores))
+    best_score = float(cosine_scores[best_idx])
     best_match = KNOWN_DEFECTS[best_idx]
 
     if best_score > 0.75:
@@ -62,6 +97,7 @@ async def check_defect_similarity(data: DefectInput):
             "suggested_defect": None,
             "confidence": round(best_score, 2)
         }
+
 
 # ------------------- MODELS -------------------
 

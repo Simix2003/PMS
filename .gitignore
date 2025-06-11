@@ -45,8 +45,6 @@ app.*.map.json
 /android/app/release
 
 # In .gitignore
-services/api/build/
-services/api/dist/
 /service/build/
 /service/dist/
 **/venv/

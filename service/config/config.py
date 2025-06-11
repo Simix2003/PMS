@@ -1,9 +1,10 @@
 import os
 from pathlib import Path
 
-debug = True
+debug = False
 
 CHANNELS: dict = {}
+#TODO
 ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
     "AIN": {
         "station_1_in":     ["MIN01"], # Should be AIN01
@@ -90,7 +91,6 @@ ML_MODELS_DIR = os.path.join(BASE_DIR, "models")
 
 # Specific models
 DEFECT_SIMILARITY_MODEL_PATH = os.path.join(ML_MODELS_DIR, "fine-tuned-defects_V2")
-ETA_MODEL_PATH_TEMPLATE = lambda station_name: os.path.join(ML_MODELS_DIR, f"eta_{station_name}.pkl")
 
 KNOWN_DEFECTS = [
     "Non Lavorato Poe Scaduto", 

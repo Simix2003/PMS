@@ -1,4 +1,4 @@
-// ignore_for_file: library_private_types_in_public_api, non_constant_identifier_names
+// ignore_for_file: library_private_types_in_public_api, non_constant_identifier_names, avoid_print
 
 import 'package:flutter/material.dart';
 import '../../shared/services/api_service.dart';
@@ -25,12 +25,27 @@ class _VisualPageState extends State<VisualPage> {
   double circleSize = 32;
   bool isLoading = true;
 
+  int station_1_status = 1;
+  int station_2_status = 1;
+
   int ng_bussingOut_1 = 0;
   int ng_bussingOut_2 = 0;
   int bussingIn_1 = 0;
   int bussingIn_2 = 0;
   int currentYield_1 = 100;
   int currentYield_2 = 100;
+
+  int ng_target_1 = 10;
+  int ng_threshold_1 = 5;
+  int ng_target_2 = 10;
+  int ng_threshold_2 = 5;
+
+  int yield_target_1 = 90;
+  int yield_threshold_1 = 25;
+  int yield_target_2 = 90;
+  int yield_threshold_2 = 25;
+
+  int last_n_shifts = 3;
 
   List<Map<String, dynamic>> yieldLast8h_1 = [];
   List<Map<String, dynamic>> yieldLast8h_2 = [];
@@ -45,14 +60,35 @@ class _VisualPageState extends State<VisualPage> {
   List<Map<String, int>> hourlyData = [];
   List<String> hourLabels = [];
 
-  Color getColor(double value, double target, double threshold) {
-    return Colors.black;
+  Color getYieldColor(int value, int target, int threshold) {
     if (value > target) {
       return okColor;
     } else if (value < target - threshold) {
       return warningColor;
     } else {
       return errorColor;
+    }
+  }
+
+  Color getNgColor(int value, int target, int threshold) {
+    if (value > target) {
+      return okColor;
+    } else if (value < target - threshold) {
+      return warningColor;
+    } else {
+      return errorColor;
+    }
+  }
+
+  Color getStationColor(int value) {
+    if (value == 1) {
+      return okColor;
+    } else if (value == 2) {
+      return warningColor;
+    } else if (value == 3) {
+      return errorColor;
+    } else {
+      return Colors.black;
     }
   }
 
@@ -323,8 +359,8 @@ class _VisualPageState extends State<VisualPage> {
                                                           height: circleSize,
                                                           decoration:
                                                               BoxDecoration(
-                                                            color: getColor(
-                                                                176, 180, 25),
+                                                            color: getStationColor(
+                                                                station_1_status),
                                                             shape:
                                                                 BoxShape.circle,
                                                           ),
@@ -383,8 +419,10 @@ class _VisualPageState extends State<VisualPage> {
                                                           height: circleSize,
                                                           decoration:
                                                               BoxDecoration(
-                                                            color: getColor(
-                                                                19, 10, 5),
+                                                            color: getNgColor(
+                                                                ng_bussingOut_1,
+                                                                ng_target_1,
+                                                                ng_threshold_1),
                                                             shape:
                                                                 BoxShape.circle,
                                                           ),
@@ -459,8 +497,8 @@ class _VisualPageState extends State<VisualPage> {
                                                           height: circleSize,
                                                           decoration:
                                                               BoxDecoration(
-                                                            color: getColor(
-                                                                176, 180, 25),
+                                                            color: getStationColor(
+                                                                station_2_status),
                                                             shape:
                                                                 BoxShape.circle,
                                                           ),
@@ -515,8 +553,10 @@ class _VisualPageState extends State<VisualPage> {
                                                           height: circleSize,
                                                           decoration:
                                                               BoxDecoration(
-                                                            color: getColor(
-                                                                4, 10, 5),
+                                                            color: getNgColor(
+                                                                ng_bussingOut_2,
+                                                                ng_target_2,
+                                                                ng_threshold_2),
                                                             shape:
                                                                 BoxShape.circle,
                                                           ),
@@ -648,8 +688,10 @@ class _VisualPageState extends State<VisualPage> {
                                                           height: circleSize,
                                                           decoration:
                                                               BoxDecoration(
-                                                            color: getColor(
-                                                                89, 100, 25),
+                                                            color: getYieldColor(
+                                                                currentYield_1,
+                                                                yield_target_1,
+                                                                yield_threshold_1),
                                                             shape:
                                                                 BoxShape.circle,
                                                           ),
@@ -714,8 +756,10 @@ class _VisualPageState extends State<VisualPage> {
                                                           height: circleSize,
                                                           decoration:
                                                               BoxDecoration(
-                                                            color: getColor(
-                                                                90, 90, 25),
+                                                            color: getYieldColor(
+                                                                currentYield_2,
+                                                                yield_target_2,
+                                                                yield_threshold_2),
                                                             shape:
                                                                 BoxShape.circle,
                                                           ),
@@ -821,7 +865,7 @@ class _VisualPageState extends State<VisualPage> {
                                         const TrafficLightWithBackground(),
                                         const SizedBox(height: 8),
                                         Text(
-                                          'Ultimi XXX Shift',
+                                          'Ultimi $last_n_shifts Shift',
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,

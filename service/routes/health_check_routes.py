@@ -2,7 +2,6 @@ from fastapi import APIRouter
 from typing import Dict
 import os
 import sys
-import socket
 import logging
 
 

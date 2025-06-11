@@ -53,6 +53,7 @@ dependencies:
   mesh: ^0.5.0
   shimmer: ^3.0.0
   gauge_indicator: ^0.4.3
+  glass_kit: ^4.0.1
 
 dev_dependencies:
   flutter_test:

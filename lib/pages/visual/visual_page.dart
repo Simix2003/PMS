@@ -50,6 +50,10 @@ class _VisualPageState extends State<VisualPage> {
 
   int shift_target = 360;
 
+  int _shiftManagerCount = 0;
+  int _headOfProductionCount = 0;
+  int _closedCount = 0;
+
   List<Map<String, dynamic>> yieldLast8h_1 = [];
   List<Map<String, dynamic>> yieldLast8h_2 = [];
   List<Map<String, dynamic>> shiftThroughput = [];
@@ -666,12 +670,12 @@ class _VisualPageState extends State<VisualPage> {
                                                       Expanded(
                                                         child: Center(
                                                           child: Text(
-                                                            'Yield media',
+                                                            'Yield media (turno)',
                                                             style: TextStyle(
                                                               fontWeight:
                                                                   FontWeight
                                                                       .bold,
-                                                              fontSize: 18,
+                                                              fontSize: 16,
                                                             ),
                                                           ),
                                                         ),
@@ -863,7 +867,12 @@ class _VisualPageState extends State<VisualPage> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        const TrafficLightWithBackground(),
+                                        TrafficLightWithBackground(
+                                          shiftManagerCount: _shiftManagerCount,
+                                          headOfProductionCount:
+                                              _headOfProductionCount,
+                                          closedCount: _closedCount,
+                                        ),
                                         const SizedBox(height: 8),
                                         (last_n_shifts > 0)
                                             ? Text(

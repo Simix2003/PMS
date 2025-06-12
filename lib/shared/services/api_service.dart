@@ -748,7 +748,7 @@ class ApiService {
   Future<Map<String, dynamic>?> createStop({
     required int stationId,
     required String startTime,
-    required int operatorId,
+    required String operatorId,
     required String stopType,
     required String reason,
     required String status,
@@ -785,7 +785,7 @@ class ApiService {
     required int stopId,
     required String newStatus,
     required String changedAt,
-    required int operatorId,
+    required String operatorId,
   }) async {
     final url = Uri.parse('$baseUrl/api/escalation/update_status');
 

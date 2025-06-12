@@ -55,6 +55,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   String? _selectedStatus;
   bool _showClosed = false;
   bool _busy = false;
+  final String operatorId = 'NO OPERATOR';
 
   final Map<String, int> stationNameToId = {
     "MIN01": 1,
@@ -126,7 +127,6 @@ class _EscalationDialogState extends State<_EscalationDialog> {
           _selectedType == null ||
           _selectedStatus == null) return;
 
-      final int operatorId = 0;
       String chosenText = reason;
       final payloadSuccess = await _callCreateStop(chosenText, operatorId);
       if (!payloadSuccess) print("❌ Failed payloadSuccess");
@@ -140,9 +140,9 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     }
   }
 
-  Future<bool> _callCreateStop(String reason, int operatorId) async {
+  Future<bool> _callCreateStop(String reason, String operatorId) async {
     setState(() => _busy = true);
-    final nowIso = DateTime.now().toIso8601String();
+    final nowIso = DateTime.now().toIso8601String().split('.').first;
     final res = await _api.createStop(
       stationId: convertStationNameToId(_selectedStation!),
       startTime: nowIso,
@@ -175,12 +175,12 @@ class _EscalationDialogState extends State<_EscalationDialog> {
 
   Future<bool> _callUpdateStatus(int stopId) async {
     setState(() => _busy = true);
-    final nowIso = DateTime.now().toIso8601String();
+    final nowIso = DateTime.now().toIso8601String().split('.').first;
     final res = await _api.updateStopStatus(
       stopId: stopId,
       newStatus: _selectedStatus!,
       changedAt: nowIso,
-      operatorId: 0,
+      operatorId: 'NO OPERATOR',
     );
     setState(() => _busy = false);
 

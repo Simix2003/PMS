@@ -94,7 +94,7 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     """
     if now is None:
         now = datetime.now()
-        #fake_now = now - timedelta(days=3)
+        #fake_now = now - timedelta(days=4)
         #now = fake_now
 
     cfg = ZONE_SOURCES[zone]

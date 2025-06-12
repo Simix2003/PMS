@@ -103,3 +103,8 @@
   Inizio Ciclo: 2025-06-11 13:55:43.902714, Fine Ciclo: 2025-06-11 13:55:49.969074
   fine_buona: False, fine_scarto: True
 ------------------------------------------------------------
+[2025-06-12 09:05:34] Linea2.MIN01
+ DISCREPANZA! Atteso: 3SBHBGHC25607131, Letto: SIMULATED123456789
+  Inizio Ciclo: 2025-06-12 09:00:45.064160, Fine Ciclo: 2025-06-12 09:05:34.382063
+  fine_buona: False, fine_scarto: True
+------------------------------------------------------------

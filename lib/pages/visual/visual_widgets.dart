@@ -183,15 +183,19 @@ class TrafficLightWithBackground extends StatelessWidget {
           ),
           Positioned(
             top: 20,
-            child: TrafficLightCircle(color: Colors.amber.shade700, label: '2'),
+            child: TrafficLightCircle(
+                color: Colors.amber.shade700,
+                label: headOfProductionCount.toString()),
           ),
           Positioned(
             top: 75,
-            child: TrafficLightCircle(color: Colors.yellow, label: '1'),
+            child: TrafficLightCircle(
+                color: Colors.yellow, label: shiftManagerCount.toString()),
           ),
           Positioned(
             top: 130,
-            child: TrafficLightCircle(color: Colors.green, label: '5'),
+            child: TrafficLightCircle(
+                color: Colors.green, label: closedCount.toString()),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 // ignore_for_file: library_private_types_in_public_api, non_constant_identifier_names, avoid_print
 
 import 'package:flutter/material.dart';
+import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
 import 'escalation_visual.dart';
@@ -50,10 +51,6 @@ class _VisualPageState extends State<VisualPage> {
 
   int shift_target = 360;
 
-  int _shiftManagerCount = 0;
-  int _headOfProductionCount = 0;
-  int _closedCount = 0;
-
   List<Map<String, dynamic>> yieldLast8h_1 = [];
   List<Map<String, dynamic>> yieldLast8h_2 = [];
   List<Map<String, dynamic>> shiftThroughput = [];
@@ -97,6 +94,21 @@ class _VisualPageState extends State<VisualPage> {
     } else {
       return Colors.black;
     }
+  }
+
+  Map<String, int> calculateEscalationCounts(
+      List<Map<String, dynamic>> escalations) {
+    final shiftManager =
+        escalations.where((e) => e['status'] == 'SHIFT_MANAGER').length;
+    final headOfProduction =
+        escalations.where((e) => e['status'] == 'HEAD_OF_PRODUCTION').length;
+    final closed = escalations.where((e) => e['status'] == 'CLOSED').length;
+
+    return {
+      'shiftManager': shiftManager,
+      'headOfProduction': headOfProduction,
+      'closed': closed,
+    };
   }
 
   Future<void> fetchZoneData() async {
@@ -235,9 +247,16 @@ class _VisualPageState extends State<VisualPage> {
     super.dispose();
   }
 
+  void _refreshEscalationTrafficLight() {
+    setState(() {
+      // recalculates counts automatically
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     print("🔴 VisualPage.build() called for zone ${widget.zone}");
+    final counts = calculateEscalationCounts(escalations);
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -868,10 +887,11 @@ class _VisualPageState extends State<VisualPage> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         TrafficLightWithBackground(
-                                          shiftManagerCount: _shiftManagerCount,
+                                          shiftManagerCount:
+                                              counts['shiftManager'] ?? 0,
                                           headOfProductionCount:
-                                              _headOfProductionCount,
-                                          closedCount: _closedCount,
+                                              counts['headOfProduction'] ?? 0,
+                                          closedCount: counts['closed'] ?? 0,
                                         ),
                                         const SizedBox(height: 8),
                                         (last_n_shifts > 0)
@@ -896,7 +916,10 @@ class _VisualPageState extends State<VisualPage> {
                                     ),
 
                                     // Right side: Escalation button
-                                    const EscalationButton(),
+                                    EscalationButton(
+                                      onEscalationsUpdated:
+                                          _refreshEscalationTrafficLight,
+                                    ),
                                   ],
                                 ),
                                 Spacer(),

@@ -155,22 +155,41 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     # -------- last 8 h bins (yield + throughput) -----
     last_8h_throughput, s1_y8h, s2_y8h = [], [], []
     for label, h_start, h_end in get_last_8h_bins(now):
+        # THROUGHPUT
         tot  = (count_unique_objects(cursor, cfg["station_1_in"], h_start, h_end, "all") +
-                count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all"))
+                count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all")) or 0
         ng   = (count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") +
-                count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng"))
-        last_8h_throughput.append({"hour": label, "start": h_start.isoformat(),
-                                   "end": h_end.isoformat(), "total": tot, "ng": ng})
+                count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng")) or 0
 
-        # yields per station
-        s1_g = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "good")
-        s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng")
-        s2_g = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "good")
-        s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng")
-        s1_y8h.append({"hour": label, "yield": compute_yield(s1_g, s1_n),
-                       "start": h_start.isoformat(), "end": h_end.isoformat()})
-        s2_y8h.append({"hour": label, "yield": compute_yield(s2_g, s2_n),
-                       "start": h_start.isoformat(), "end": h_end.isoformat()})
+        last_8h_throughput.append({
+            "hour": label,
+            "start": h_start.isoformat(),
+            "end": h_end.isoformat(),
+            "total": tot,
+            "ng": ng
+        })
+
+        # YIELDS PER STATION
+
+        s1_g = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "good") or 0
+        s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
+        s2_g = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "good") or 0
+        s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
+
+        s1_y8h.append({
+            "hour": label,
+            "yield": compute_yield(s1_g, s1_n),
+            "start": h_start.isoformat(),
+            "end": h_end.isoformat()
+        })
+
+        s2_y8h.append({
+            "hour": label,
+            "yield": compute_yield(s2_g, s2_n),
+            "start": h_start.isoformat(),
+            "end": h_end.isoformat()
+        })
+
 
     return {
         "station_1_in": s1_in,

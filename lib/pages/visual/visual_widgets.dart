@@ -155,7 +155,16 @@ class TrafficLightCircle extends StatelessWidget {
 }
 
 class TrafficLightWithBackground extends StatelessWidget {
-  const TrafficLightWithBackground({super.key});
+  final int shiftManagerCount;
+  final int headOfProductionCount;
+  final int closedCount;
+
+  const TrafficLightWithBackground({
+    super.key,
+    required this.shiftManagerCount,
+    required this.headOfProductionCount,
+    required this.closedCount,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -526,10 +535,10 @@ class ThroughputBarChart extends StatelessWidget {
 
                               final barCenterX = (2 * index + 1) * groupSpace;
                               final okHeight = chartHeight * (ok / maxY);
-                              final topOffset = chartHeight - okHeight - 40;
+                              final topOffset = chartHeight - okHeight;
 
                               return Positioned(
-                                left: barCenterX - 4,
+                                left: barCenterX - 12,
                                 top: topOffset,
                                 child: Text(
                                   '$ok',
@@ -988,6 +997,29 @@ class YieldLineChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final length = hourlyData1.length; // assume same length for both
 
+    final line1 = LineChartBarData(
+      isCurved: false,
+      show: true,
+      spots: List.generate(
+        hourlyData1.length,
+        (i) => FlSpot(i.toDouble(), (hourlyData1[i]['yield'] ?? 0).toDouble()),
+      ),
+      color: Colors.blue,
+      barWidth: 2,
+      dotData: FlDotData(show: true),
+    );
+
+    final line2 = LineChartBarData(
+      isCurved: false,
+      spots: List.generate(
+        hourlyData2.length,
+        (i) => FlSpot(i.toDouble(), (hourlyData2[i]['yield'] ?? 0).toDouble()),
+      ),
+      color: Colors.lightBlue.shade300,
+      barWidth: 2,
+      dotData: FlDotData(show: false),
+    );
+
     return Expanded(
       child: Card(
         color: Colors.white,
@@ -1022,7 +1054,47 @@ class YieldLineChart extends StatelessWidget {
                   LineChartData(
                     minY: 0,
                     maxY: 110,
-                    lineTouchData: LineTouchData(enabled: false),
+                    lineTouchData: LineTouchData(
+                      enabled: true,
+                      handleBuiltInTouches: false,
+                      touchTooltipData: LineTouchTooltipData(
+                        getTooltipColor: (_) =>
+                            Colors.transparent, // transparent background
+                        tooltipRoundedRadius: 0, // no border radius (optional)
+                        tooltipPadding: EdgeInsets
+                            .zero, // remove internal padding (optional, cleaner)
+                        tooltipMargin: 8,
+                        getTooltipItems: (spots) {
+                          return spots.map((spot) {
+                            Color textColor;
+
+                            // Example logic based on barIndex
+                            switch (spot.barIndex) {
+                              case 0:
+                                textColor = Colors.blue;
+                                break;
+                              case 1:
+                                textColor = Colors.lightBlue.shade300;
+                                break;
+                              case 2:
+                                textColor = Colors.orange;
+                                break;
+                              default:
+                                textColor = Colors.black;
+                            }
+
+                            return LineTooltipItem(
+                              '${spot.barIndex == 0 ? '  ' : ''}${spot.y.toInt()}%${spot.barIndex == 1 ? '  ' : ''}',
+                              TextStyle(
+                                color: textColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            );
+                          }).toList();
+                        },
+                      ),
+                    ),
                     titlesData: FlTitlesData(
                       leftTitles: AxisTitles(
                         sideTitles: SideTitles(showTitles: false),
@@ -1068,6 +1140,38 @@ class YieldLineChart extends StatelessWidget {
                         bottom: BorderSide(),
                       ),
                     ),
+                    showingTooltipIndicators: [
+                      ...List.generate(
+                        hourlyData1.length,
+                        (index) {
+                          return ShowingTooltipIndicators([
+                            LineBarSpot(
+                              line1,
+                              0,
+                              FlSpot(
+                                index.toDouble(),
+                                (hourlyData1[index]['yield'] ?? 0).toDouble(),
+                              ),
+                            ),
+                          ]);
+                        },
+                      ),
+                      ...List.generate(
+                        hourlyData2.length,
+                        (index) {
+                          return ShowingTooltipIndicators([
+                            LineBarSpot(
+                              line2,
+                              1,
+                              FlSpot(
+                                index.toDouble(),
+                                (hourlyData2[index]['yield'] ?? 0).toDouble(),
+                              ),
+                            ),
+                          ]);
+                        },
+                      ),
+                    ],
                     lineBarsData: [
                       LineChartBarData(
                         isCurved: false,
@@ -1078,10 +1182,11 @@ class YieldLineChart extends StatelessWidget {
                         ),
                         color: Colors.blue,
                         barWidth: 2,
-                        dotData: FlDotData(show: false),
+                        dotData: FlDotData(show: true),
                       ),
                       LineChartBarData(
                         isCurved: false,
+                        show: true,
                         spots: List.generate(
                           hourlyData2.length,
                           (i) => FlSpot(i.toDouble(),

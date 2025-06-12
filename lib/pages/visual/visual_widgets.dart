@@ -1,8 +1,10 @@
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'dart:async';
+import 'package:intl/intl.dart';
 
-class HeaderBox extends StatelessWidget {
+class HeaderBox extends StatefulWidget {
   final String title, target;
   final IconData icon;
 
@@ -13,26 +15,79 @@ class HeaderBox extends StatelessWidget {
       required this.icon});
 
   @override
+  _HeaderBoxState createState() => _HeaderBoxState();
+}
+
+class _HeaderBoxState extends State<HeaderBox> {
+  late Timer _timer;
+  late DateTime _currentTime;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentTime = DateTime.now();
+    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      setState(() {
+        _currentTime = DateTime.now();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    String formattedDate = DateFormat('dd/MM/yyyy').format(_currentTime);
+    String formattedTime = DateFormat('HH:mm').format(_currentTime);
+
     return Container(
-      constraints:
-          const BoxConstraints(minHeight: 50), // Adjust height as needed
+      constraints: const BoxConstraints(minHeight: 50),
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       margin: const EdgeInsets.only(right: 6),
       decoration: BoxDecoration(
         color: const Color.fromRGBO(33, 95, 154, 1),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Stack(
-        alignment: Alignment.center,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // LEFT: Date/Time only for Produzione Shift
+          if (widget.title == 'Produzione Shift')
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  formattedDate,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  formattedTime,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold),
+                ),
+              ],
+            )
+          else
+            const SizedBox(width: 0), // occupy no space if not Produzione Shift
+
+          // CENTER: Main title & target
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (title != 'UPTIME/DOWNTIME Shift')
+              if (widget.title != 'UPTIME/DOWNTIME Shift')
                 Text(
-                  title,
+                  widget.title,
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -44,40 +99,34 @@ class HeaderBox extends StatelessWidget {
                   TextSpan(
                     style: const TextStyle(fontSize: 32),
                     children: [
-                      TextSpan(
+                      const TextSpan(
                         text: 'UP',
-                        style: const TextStyle(
-                          color: Color.fromRGBO(229, 217, 57, 1),
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(
+                            color: Color.fromRGBO(229, 217, 57, 1),
+                            fontWeight: FontWeight.bold),
                       ),
                       const TextSpan(
                         text: 'TIME/',
                         style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            color: Colors.white, fontWeight: FontWeight.bold),
                       ),
-                      TextSpan(
+                      const TextSpan(
                         text: 'DOWN',
-                        style: const TextStyle(
-                          color: Color.fromRGBO(229, 217, 57, 1),
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: TextStyle(
+                            color: Color.fromRGBO(229, 217, 57, 1),
+                            fontWeight: FontWeight.bold),
                       ),
                       const TextSpan(
                         text: 'TIME Shift',
                         style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                            color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                   textAlign: TextAlign.center,
                 ),
               const SizedBox(width: 8),
-              if (target.isNotEmpty)
+              if (widget.target.isNotEmpty)
                 RichText(
                   text: TextSpan(
                     style: const TextStyle(fontSize: 32),
@@ -87,7 +136,7 @@ class HeaderBox extends StatelessWidget {
                         style: TextStyle(color: Colors.white),
                       ),
                       TextSpan(
-                        text: target,
+                        text: widget.target,
                         style: const TextStyle(
                           color: Color.fromRGBO(229, 217, 57, 1),
                           fontWeight: FontWeight.bold,
@@ -106,13 +155,12 @@ class HeaderBox extends StatelessWidget {
                 ),
             ],
           ),
-          Positioned(
-            right: 0,
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 50,
-            ),
+
+          // RIGHT: Icon
+          Icon(
+            widget.icon,
+            color: Colors.white,
+            size: 50,
           ),
         ],
       ),

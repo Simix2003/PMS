@@ -152,7 +152,7 @@ async def search_results(request: Request):
                         group_clauses.append("s.name = %s")
                         group_params.append(value)
                     elif filter_type == "Stringatrice":
-                        stringatrice_map = {"1": "Str1", "2": "Str2", "3": "Str3", "4": "Str4", "5": "Str5"}
+                        stringatrice_map = {"1": "STR01", "2": "STR02", "3": "STR03", "4": "STR04", "5": "STR05"}
                         if value in stringatrice_map:
                             #join_clauses.append("LEFT JOIN stations ls ON p.last_station_id = ls.id")
                             group_clauses.append("ls.name = %s")

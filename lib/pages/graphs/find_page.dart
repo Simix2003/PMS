@@ -710,11 +710,11 @@ class _FindPageState extends State<FindPage> {
           onChanged: (val) => setState(() => filterValue = val ?? ''),
         );
       // STATIONS //Should get from MySQL : stations
-      case 'Stazione':
+      case 'Stazione': //
         return _buildStyledDropdown(
           hint: 'Stazione',
           value: filterValue.isNotEmpty ? filterValue : null,
-          items: ['MIN01', 'MIN02', 'RMI01', 'ELL01'],
+          items: availableStations,
           onChanged: (val) => setState(() => filterValue = val ?? ''),
         );
 

@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.config.settings import load_settings, save_settings, AllSettings
 from service.connections.mysql import get_mysql_connection
+from service.config.config import CHANNELS
 
 router = APIRouter()
 
@@ -56,5 +57,29 @@ def get_production_lines():
     with conn.cursor() as cursor:
         cursor.execute("SELECT name, display_name FROM production_lines ORDER BY id")
         lines = cursor.fetchall()
+        print(lines)
 
-    return lines
+    # Corrected version: include everything except invalid dummy rows
+    lines_list = []
+    for row in lines:
+        name = row['name']
+        display_name = row['display_name']
+
+        if name.lower() == 'name' and display_name.lower() == 'display_name':
+            print(f"⚠️ Skipping invalid entry from DB: name={name}, display_name={display_name}")
+            continue
+
+        lines_list.append({"name": name, "display_name": display_name})
+
+    if not lines_list:
+        print("⚠️ No valid production lines found, check database content.")
+
+    # Build stations from channels map (unchanged)
+    station_names = []
+    for line, stations in CHANNELS.items():
+        station_names.extend(stations)
+
+    return {
+        "lines": lines_list,
+        "stations": station_names
+    }

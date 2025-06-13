@@ -170,33 +170,6 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                           color: Colors.black87,
                         ),
                       ),
-                      if (maybeMBJ) ...[
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade600.withOpacity(0.2),
-                            border: Border.all(color: Colors.red, width: 1.2),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: const [
-                              Icon(Icons.warning_amber_rounded,
-                                  color: Colors.red, size: 16),
-                              SizedBox(width: 4),
-                              Text(
-                                "Il modulo potrebbe essere NG dall'MBJ",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.red,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ],
@@ -227,6 +200,39 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
               ),
             ],
           ),
+          if (maybeMBJ) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade600.withOpacity(0.2),
+                  border: Border.all(color: Colors.red, width: 1.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize
+                      .min, // <-- THIS prevents Row from expanding horizontally
+                  children: const [
+                    Icon(Icons.warning_amber_rounded,
+                        color: Colors.red, size: 16),
+                    SizedBox(width: 4),
+                    Text(
+                      "Il modulo potrebbe essere NG dall'MBJ",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red,
+                      ),
+                      softWrap: true,
+                      overflow: TextOverflow.fade,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
 
           const SizedBox(height: 16),
 

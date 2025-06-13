@@ -255,7 +255,6 @@ class _VisualPageState extends State<VisualPage> {
 
   @override
   Widget build(BuildContext context) {
-    print("🔴 VisualPage.build() called for zone ${widget.zone}");
     final counts = calculateEscalationCounts(escalations);
     return Scaffold(
       backgroundColor: Colors.white,
@@ -689,7 +688,7 @@ class _VisualPageState extends State<VisualPage> {
                                                       Expanded(
                                                         child: Center(
                                                           child: Text(
-                                                            'Yield media (turno)',
+                                                            'Yield media (Shift)',
                                                             style: TextStyle(
                                                               fontWeight:
                                                                   FontWeight
@@ -896,14 +895,14 @@ class _VisualPageState extends State<VisualPage> {
                                         const SizedBox(height: 8),
                                         (last_n_shifts > 0)
                                             ? Text(
-                                                'Ultimi $last_n_shifts Turni',
+                                                'Ultimi $last_n_shifts Shift',
                                                 style: TextStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.bold,
                                                 ),
                                               )
                                             : Text(
-                                                'Ultimo Turno',
+                                                'Ultimo Shift',
                                                 style: TextStyle(
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.bold,

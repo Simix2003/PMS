@@ -179,7 +179,7 @@ async def insert_initial_production_data(data, station_name, connection, esito):
             str_flags = data.get("Lavorazione_Eseguita_Su_Stringatrice", [])
             if any(str_flags):
                 stringatrice_index = str_flags.index(True) + 1
-                stringatrice_name = f"Str{stringatrice_index}"
+                stringatrice_name = f"STR{stringatrice_index:02d}"  # <-- pad with leading zero
                 cursor.execute(
                     "SELECT id FROM stations WHERE name = %s AND line_id = %s",
                     (stringatrice_name, line_id)

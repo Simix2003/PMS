@@ -590,13 +590,20 @@ class ApiService {
       final response = await http.get(Uri.parse('$baseUrl/api/lines'));
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
+        final Map<String, dynamic> data = jsonDecode(response.body);
+
+        final List<dynamic> linesData = data['lines'];
+        final List<dynamic> stationsData = data['stations'];
+
+        debugPrint(
+            "✅ Fetched ${linesData.length} lines and ${stationsData.length} stations");
 
         availableLines.clear();
         lineDisplayNames.clear();
         lineOptions.clear();
+        availableStations.clear();
 
-        for (final item in data) {
+        for (final item in linesData) {
           final name = item['name'];
           final displayName = item['display_name'];
 
@@ -605,7 +612,26 @@ class ApiService {
           lineOptions.add(displayName);
         }
 
-        selectedLine = availableLines.isNotEmpty ? availableLines[0] : null;
+        debugPrint("✅ availableLines after parsing: $availableLines");
+        debugPrint("✅ selectedLine before validation: $selectedLine");
+
+        // Validate selectedLine
+        if (!availableLines.contains(selectedLine)) {
+          debugPrint(
+              "⚠️ selectedLine '$selectedLine' is no longer valid. Resetting.");
+          selectedLine = availableLines.isNotEmpty ? availableLines[0] : null;
+        } else {
+          debugPrint("✅ selectedLine '$selectedLine' still valid.");
+        }
+
+        for (final station in stationsData) {
+          availableStations.add(station);
+        }
+
+        // ⚠️ This line is redundant (overwrites the validated selection)
+        // selectedLine = availableLines.isNotEmpty ? availableLines[0] : null;
+
+        debugPrint("✅ Final selectedLine: $selectedLine");
       } else {
         throw Exception('❌ Failed to load lines from server');
       }

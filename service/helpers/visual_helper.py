@@ -94,8 +94,8 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     """
     if now is None:
         now = datetime.now()
-        #fake_now = now - timedelta(days=4)
-        #now = fake_now
+        fake_now = now - timedelta(days=6)
+        now = fake_now
 
     cfg = ZONE_SOURCES[zone]
     shift_start, shift_end = get_shift_window(now)
@@ -328,6 +328,3 @@ def update_visual_data_on_new_module(
 
         except Exception as e:
             logger.warning(f"⚠️ Could not schedule WebSocket update for {zone}: {e}")
-
-
-

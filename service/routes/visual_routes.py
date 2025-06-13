@@ -13,7 +13,6 @@ router = APIRouter()
 def initialize_visual_cache():
     for zone in ZONE_SOURCES:
         global_state.visual_data[zone] = compute_zone_snapshot(zone)
-    print(f"Visual cache: {global_state.visual_data}")
 
 # ──────────────────────────────────────────────────
 @router.get("/api/visual_data")

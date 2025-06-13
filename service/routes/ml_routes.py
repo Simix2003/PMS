@@ -115,6 +115,18 @@ class DefectHistory:
 def time_to_seconds(t):
     return t.total_seconds() if t else None
 
+def filter_outliers(values, factor=1.5):
+    if not values:
+        return values
+    values_sorted = sorted(values)
+    n = len(values_sorted)
+    q1 = values_sorted[n // 4]
+    q3 = values_sorted[3 * n // 4]
+    iqr = q3 - q1
+    lower_bound = q1 - factor * iqr
+    upper_bound = q3 + factor * iqr
+    return [v for v in values if lower_bound <= v <= upper_bound]
+
 # ------------------- MAIN LOGIC -------------------
 
 async def run_eta_prediction(production_id: int):
@@ -185,9 +197,20 @@ async def run_eta_prediction(production_id: int):
             }
 
         # Step 5: Weighted average
-        total_weight = sum(score for score, _ in matches)
-        prediction = sum(score * ct for score, ct in matches) / total_weight
-        avg_sec = sum(ct for _, ct in matches) / sample_size
+        raw_cycle_times = [ct for _, ct in matches]
+        filtered_cycle_times = filter_outliers(raw_cycle_times)
+
+        # Safety fallback if all filtered out
+        if not filtered_cycle_times:
+            filtered_cycle_times = raw_cycle_times
+
+        # Recalculate weighted average using filtered data
+        filtered_matches = [(score, ct) for (score, ct) in matches if ct in filtered_cycle_times]
+
+        total_weight = sum(score for score, _ in filtered_matches)
+        prediction = sum(score * ct for score, ct in filtered_matches) / total_weight
+        avg_sec = sum(ct for _, ct in filtered_matches) / len(filtered_cycle_times)
+
 
         reasoning = f"{sample_size} similar rework cases matched using >=50% defect frequency similarity."
 

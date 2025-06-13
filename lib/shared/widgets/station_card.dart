@@ -45,10 +45,10 @@ class _StationCardState extends State<StationCard> {
     "Macchie ECA",
     "Celle Rotte",
     "Bad Soldering",
-    "Lunghezza\nString Ribbon",
+    "Lunghezza String Ribbon",
     "Graffio su Cella",
     "Altro",
-    "Generico",
+    "Senza Causale",
   ];
 
   static const Map<String, Color> defectColors = {
@@ -63,7 +63,7 @@ class _StationCardState extends State<StationCard> {
     "Lunghezza String Ribbon": Color(0xFFA2845E), // iOS Brown
     "Graffio su Cella": Color(0xFF5AC8FA), // iOS Light Blue
     "Altro": Color(0xFF8E8E93), // iOS Gray
-    "Generico": Color(0xFFFF3B30), // iOS Red
+    "Senza Causale": Color(0xFFFF3B30), // iOS Red
   };
 
   String percentageBase = 'NG'; // or 'FULL'

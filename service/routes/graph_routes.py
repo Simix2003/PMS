@@ -457,7 +457,7 @@ async def productions_summary(
                 total_defects = sum(defects.values())
                 generic = bad_count_val - total_defects
                 if generic > 0:
-                    stations[station].setdefault("defects", {})["Generico"] = generic
+                    stations[station].setdefault("defects", {})["Senza Causale"] = generic
 
             query_last = f"""
                 SELECT s.name as station, o.id_modulo, p.esito, p.cycle_time, p.start_time, p.end_time

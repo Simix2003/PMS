@@ -33,7 +33,7 @@ EXCEL_DEFECT_COLUMNS = {
 }
 
 SHEET_NAMES = [
-    "Metadata", "Risolutivo", "Eventi", #"MBJ", 
+    "Metadata", "Risolutivo", "Eventi", #"MBJ", "Rework",
     "NG Generali", "NG Saldature", "NG Disall. Ribbon",
     "NG Disall. Stringa", "NG Mancanza Ribbon", "NG I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Graffio su Cella", "NG Bad Soldering", "NG Altro"
 ]
@@ -228,13 +228,22 @@ def _append_dataframe(
     ws.append(df.columns.tolist())
 
     columns = list(df.columns)
-    zebra_idx = df.columns.get_loc(zebra_key)
+
+    # 🩺 Check if zebra_key exists, else disable zebra logic
+    if zebra_key in df.columns:
+        zebra_idx = df.columns.get_loc(zebra_key)
+    else:
+        zebra_idx = None  # disable zebra striping
 
     for row_tuple in df.itertuples(index=False, name=None):
-        key_value = row_tuple[zebra_idx]
-        if key_value != current_key:
-            current_fill = FILL_BLUE if current_fill == FILL_WHITE else FILL_WHITE
-            current_key = key_value
+        if zebra_idx is not None:
+            key_value = row_tuple[zebra_idx]
+            if key_value != current_key:
+                current_fill = FILL_BLUE if current_fill == FILL_WHITE else FILL_WHITE
+                current_key = key_value
+        else:
+            # If zebra_idx is None, just always keep current_fill
+            pass
 
         row_values: List[Any] = []
         for idx, val in enumerate(row_tuple):
@@ -497,88 +506,169 @@ def eventi_sheet(ws, data: dict):
         "Linea", "Stazione", "Stringatrice", "ID Modulo", "Numero Eventi"
     ])
 
-    #ws.append(df.columns.tolist())
-    
-    #for idx, row in df.iterrows():
-    #    row_values = [row[col] for col in df.columns]
-    #    ws.append(row_values)
-
     _append_dataframe(ws, df)
     autofit_columns(ws, align_center_for={"Esito", "Numero Eventi"})
 
-def reWork_sheet(ws, data: dict):
+def rework_sheet(ws: Worksheet, data: Dict[str, Any]):
+    from collections import defaultdict
+
     objects = data.get("objects", [])
     productions = data.get("productions", [])
     stations = data.get("stations", [])
     production_lines = data.get("production_lines", [])
+    object_defects = data.get("object_defects", [])
 
-    objects_by_id = {obj["id"]: obj for obj in objects}
-    stations_by_id = {station["id"]: station for station in stations}
-    production_lines_by_id = {line["id"]: line for line in production_lines}
+    objects_by_id = {o["id"]: o for o in objects}
+    stations_by_id = {s["id"]: s for s in stations}
+    lines_by_id = {l["id"]: l for l in production_lines}
 
-    # Count how many times each modulo passes through each station
-    modulo_station_counts = defaultdict(int)
+    defects_by_production = defaultdict(list)
+    for d in object_defects:
+        pid = d.get("production_id")
+        defects_by_production[pid].append(d)
+
+    def extract_causale(defects):
+        ng_labels = set()
+        for d in defects:
+            cat = d.get("category")
+            if cat == "Disallineamento":
+                if d.get("stringa") is not None:
+                    ng_labels.add("NG Disall. Stringa")
+                elif d.get("i_ribbon") is not None:
+                    ng_labels.add("NG Disall. Ribbon")
+            elif cat == "Generali":
+                defect_type = d.get("defect_type")
+                ng_labels.add(f"NG {defect_type}" if defect_type else "NG Generali")
+            elif cat == "Saldatura":
+                ng_labels.add("NG Saldatura")
+            elif cat == "Mancanza Ribbon":
+                ng_labels.add("NG Mancanza I_Ribbon")
+            elif cat == "I_Ribbon Leadwire":
+                ng_labels.add("NG I_Ribbon Leadwire")
+            elif cat == "Macchie ECA":
+                ng_labels.add("NG Macchie ECA")
+            elif cat == "Celle Rotte":
+                ng_labels.add("NG Celle Rotte")
+            elif cat == "Lunghezza String Ribbon":
+                ng_labels.add("NG Lunghezza String Ribbon")
+            elif cat == "Graffio su Cella":
+                ng_labels.add("NG Graffio su Cella")
+            elif cat == "Bad Soldering":
+                ng_labels.add("NG Bad Soldering")
+            elif cat == "Altro":
+                ng_labels.add("NG Altro")
+        
+        if not ng_labels:
+            return ""
+        if len(ng_labels) > 1:
+            return "NG MIX"
+        return next(iter(ng_labels))
+
+    # 🔧 First collect all modules that went through ReWork
+    modules_in_rework = set()
     for prod in productions:
+        station = stations_by_id.get(prod.get("station_id"))
+        if not station or station.get("type") != "rework":
+            continue
+
         obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
-        id_modulo = obj.get("id_modulo")
-        station_id = prod.get("station_id")
-        if id_modulo and station_id:
-            modulo_station_counts[(id_modulo, station_id)] += 1
 
-    # Keep track of which (modulo, station) pairs we've already written
-    seen_pairs = set()
-    rows = []
+        id_modulo = obj.get("id_modulo")
+        if id_modulo:
+            modules_in_rework.add(id_modulo)
+
+    # 1️⃣ Build QG2 causale map per module only for modules that entered ReWork
+    module_to_qg_causale = {}
 
     for prod in productions:
-        object_id = prod.get("object_id")
-        obj = objects_by_id.get(object_id)
+        station = stations_by_id.get(prod.get("station_id"))
+        if not station or station.get("type") != "qc":
+            continue
+
+        obj = objects_by_id.get(prod.get("object_id"))
         if not obj:
             continue
 
         id_modulo = obj.get("id_modulo")
-        station_id = prod.get("station_id")
-        if not id_modulo or not station_id:
+        if not id_modulo or id_modulo not in modules_in_rework:
             continue
 
-        pair = (id_modulo, station_id)
-        if pair in seen_pairs:
-            continue  # Skip duplicates
+        defects = defects_by_production.get(prod.get("id"), [])
+        causale = extract_causale(defects)
+        module_to_qg_causale[id_modulo] = causale
 
-        seen_pairs.add(pair)
+    # 2️⃣ Process only rework productions
+    rows = []
 
-        modulo_event_count = modulo_station_counts.get(pair, 0)
+    for prod in productions:
+        station = stations_by_id.get(prod.get("station_id"))
+        if not station or station.get("type") != "rework":
+            continue
 
-        station = stations_by_id.get(station_id)
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_display_name = production_lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown") if station else "Unknown"
+        obj = objects_by_id.get(prod.get("object_id"))
+        if not obj:
+            continue
 
-        last_station_id = prod.get("last_station_id")
-        last_station_name = stations_by_id.get(last_station_id, {}).get("display_name", "N/A") if last_station_id else "N/A"
+        id_modulo = obj.get("id_modulo")
+        if not id_modulo:
+            continue
 
-        row = {
-            "Linea": line_display_name,
-            "Stazione": station_name,
-            "Stringatrice": last_station_name,
+        qg_causale = module_to_qg_causale.get(id_modulo, "")
+        if not qg_causale:
+            # fallback: extract from rework defects
+            defects_rework = defects_by_production.get(prod.get("id"), [])
+            qg_causale = extract_causale(defects_rework)
+
+        if not qg_causale:
+            qg_causale = "BLANKS"
+
+        rows.append({
             "ID Modulo": id_modulo,
-            "Numero Eventi": modulo_event_count
-        }
-        rows.append(row)
+            "Causale NG": qg_causale
+        })
 
-    df = pd.DataFrame(rows, columns=[
-        "Linea", "Stazione", "Stringatrice", "ID Modulo", "Numero Eventi"
-    ])
+    # 3️⃣ Aggregate
 
-    #ws.append(df.columns.tolist())
-    
-    #for idx, row in df.iterrows():
-    #    row_values = [row[col] for col in df.columns]
-    #    ws.append(row_values)
+    # Count Matrici al QG2 (from module_to_qg_causale)
+    qg2_counts = defaultdict(int)
+    for id_modulo in modules_in_rework:
+        causale = module_to_qg_causale.get(id_modulo, "")
+        label = causale if causale else "BLANKS"
+        qg2_counts[label] += 1
 
-    _append_dataframe(ws, df)
-    autofit_columns(ws, align_center_for={"Esito", "Numero Eventi"})
+    # Count Passaggi al RWK (from rework rows)
+    rwk_counts = defaultdict(int)
+    for row in rows:
+        causale = row['Causale NG']
+        rwk_counts[causale] += 1
 
+    all_causali = set(qg2_counts.keys()).union(set(rwk_counts.keys()))
+    total_rwk = sum(rwk_counts.values())
+
+    export_rows = []
+    for causale in sorted(all_causali):
+        qg2 = qg2_counts.get(causale, 0)
+        rwk = rwk_counts.get(causale, 0)
+        perc = (rwk / total_rwk * 100) if total_rwk > 0 else 0
+        export_rows.append({
+            'Causale NG': causale,
+            'Matrici al QG2': qg2,
+            'Passaggi al RWK': rwk,
+            '%': f"{perc:.1f}%"
+        })
+
+    export_rows.append({
+        'Causale NG': 'Grand Total',
+        'Matrici al QG2': sum(qg2_counts.values()),
+        'Passaggi al RWK': total_rwk,
+        '%': "100%"
+    })
+
+    summary_df = pd.DataFrame(export_rows, columns=['Causale NG', 'Matrici al QG2', 'Passaggi al RWK', '%'])
+    _append_dataframe(ws, summary_df)
+    autofit_columns(ws, align_center_for={'%', 'Passaggi al RWK'})
 
 def mbj_sheet(ws: Worksheet, data: Dict[str, Any]):
     objects = data.get("objects", [])
@@ -2477,6 +2567,7 @@ SHEET_FUNCTIONS = {
     "Metadata": metadata_sheet,
     "Risolutivo": risolutivo_sheet,
     "Eventi": eventi_sheet,
+    #"Rework": rework_sheet,
     #"MBJ": mbj_sheet,
     "NG Generali": ng_generali_sheet,
     "NG Saldature": ng_saldature_sheet,

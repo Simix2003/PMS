@@ -366,7 +366,7 @@ class _DataViewPageState extends State<DataViewPage> {
     "Lunghezza String Ribbon",
     "Graffio su Cella",
     "Altro",
-    "Generico",
+    "Senza Causale",
   ];
 
   static const Map<String, Color> defectColors = {
@@ -381,7 +381,7 @@ class _DataViewPageState extends State<DataViewPage> {
     "Lunghezza String Ribbon": Color(0xFFA2845E), // iOS Brown
     "Graffio su Cella": Color(0xFF5AC8FA), // iOS Light Blue
     "Altro": Color(0xFF8E8E93), // iOS Gray
-    "Generico": Color(0xFFFF3B30), // iOS Red
+    "Senza Causale": Color(0xFFFF3B30), // iOS Red
   };
 
   String selectedZone = 'Zona Bussing'; // Default selected zone

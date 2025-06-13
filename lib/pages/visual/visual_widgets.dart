@@ -979,27 +979,52 @@ class YieldComparisonBarChart extends StatelessWidget {
                       borderData: FlBorderData(show: false),
                       barGroups: List.generate(orderedData.length, (index) {
                         final item = orderedData[index];
-                        return BarChartGroupData(
-                          showingTooltipIndicators: [0, 1],
-                          x: index,
-                          barRods: [
-                            BarChartRodData(
-                              fromY: 0,
-                              toY: item['bussing1'].toDouble(),
-                              width: 40,
-                              color: Colors.blue,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            BarChartRodData(
-                              fromY: 0,
-                              toY: item['bussing2'].toDouble(),
-                              width: 40,
-                              color: Colors.lightBlue.shade300,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ],
-                          barsSpace: 6,
-                        );
+                        if (item['bussing1'] == null ||
+                            item['bussing2'] == null) {
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: 0,
+                                width: 40,
+                                color: Colors.blue,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: 0,
+                                width: 40,
+                                color: Colors.lightBlue.shade300,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 6,
+                          );
+                        } else {
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: item['bussing1'],
+                                width: 40,
+                                color: Colors.blue,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: item['bussing2'],
+                                width: 40,
+                                color: Colors.lightBlue.shade300,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 6,
+                          );
+                        }
                       }),
                       extraLinesData: ExtraLinesData(horizontalLines: [
                         HorizontalLine(

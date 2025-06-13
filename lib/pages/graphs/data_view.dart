@@ -363,7 +363,7 @@ class _DataViewPageState extends State<DataViewPage> {
     "Macchie ECA",
     "Celle Rotte",
     "Bad Soldering",
-    "Lunghezza\nString Ribbon",
+    "Lunghezza String Ribbon",
     "Graffio su Cella",
     "Altro",
     "Generico",
@@ -617,7 +617,6 @@ class _DataViewPageState extends State<DataViewPage> {
                               (counts['bad_count'] as int);
                         }).fold(0, (a, b) => a > b ? a : b) +
                         20.toDouble();
-
 
                     return SingleChildScrollView(
                       padding: const EdgeInsets.all(20),

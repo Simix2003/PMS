@@ -506,6 +506,80 @@ def eventi_sheet(ws, data: dict):
     _append_dataframe(ws, df)
     autofit_columns(ws, align_center_for={"Esito", "Numero Eventi"})
 
+def reWork_sheet(ws, data: dict):
+    objects = data.get("objects", [])
+    productions = data.get("productions", [])
+    stations = data.get("stations", [])
+    production_lines = data.get("production_lines", [])
+
+    objects_by_id = {obj["id"]: obj for obj in objects}
+    stations_by_id = {station["id"]: station for station in stations}
+    production_lines_by_id = {line["id"]: line for line in production_lines}
+
+    # Count how many times each modulo passes through each station
+    modulo_station_counts = defaultdict(int)
+    for prod in productions:
+        obj = objects_by_id.get(prod.get("object_id"))
+        if not obj:
+            continue
+        id_modulo = obj.get("id_modulo")
+        station_id = prod.get("station_id")
+        if id_modulo and station_id:
+            modulo_station_counts[(id_modulo, station_id)] += 1
+
+    # Keep track of which (modulo, station) pairs we've already written
+    seen_pairs = set()
+    rows = []
+
+    for prod in productions:
+        object_id = prod.get("object_id")
+        obj = objects_by_id.get(object_id)
+        if not obj:
+            continue
+
+        id_modulo = obj.get("id_modulo")
+        station_id = prod.get("station_id")
+        if not id_modulo or not station_id:
+            continue
+
+        pair = (id_modulo, station_id)
+        if pair in seen_pairs:
+            continue  # Skip duplicates
+
+        seen_pairs.add(pair)
+
+        modulo_event_count = modulo_station_counts.get(pair, 0)
+
+        station = stations_by_id.get(station_id)
+        station_name = station.get("display_name", "Unknown") if station else "Unknown"
+        line_display_name = production_lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown") if station else "Unknown"
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = stations_by_id.get(last_station_id, {}).get("display_name", "N/A") if last_station_id else "N/A"
+
+        row = {
+            "Linea": line_display_name,
+            "Stazione": station_name,
+            "Stringatrice": last_station_name,
+            "ID Modulo": id_modulo,
+            "Numero Eventi": modulo_event_count
+        }
+        rows.append(row)
+
+    df = pd.DataFrame(rows, columns=[
+        "Linea", "Stazione", "Stringatrice", "ID Modulo", "Numero Eventi"
+    ])
+
+    #ws.append(df.columns.tolist())
+    
+    #for idx, row in df.iterrows():
+    #    row_values = [row[col] for col in df.columns]
+    #    ws.append(row_values)
+
+    _append_dataframe(ws, df)
+    autofit_columns(ws, align_center_for={"Esito", "Numero Eventi"})
+
+
 def mbj_sheet(ws: Worksheet, data: Dict[str, Any]):
     objects = data.get("objects", [])
     productions = data.get("productions", [])

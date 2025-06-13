@@ -48,8 +48,7 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
             )
         ###############################################################################################################################
 
-        # 🔁 FIX THIS LINE – it was still accessing CHANNELS by only channel_id!
-        str_conf = paths["stringatrice"]  # ✅ Use `paths` here
+        str_conf = paths["stringatrice"]
         values = [
             await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
             for i in range(str_conf["length"])

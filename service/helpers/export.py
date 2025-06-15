@@ -313,19 +313,25 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_display_name = (
-            lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown")
-            if station
-            else "Unknown"
-        )
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_display_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_display_name = line_display_name.removeprefix("Linea ")
+        else:
+            line_display_name = "Unknown"
+
+        station_name = f"{station_name}{line_display_name}"
+
 
         last_station_id = prod.get("last_station_id")
         last_station_name = (
-            stations_by_id.get(last_station_id, {}).get("display_name", "N/A")
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
             if last_station_id
             else "N/A"
         )
+        last_station_name = f"{last_station_name}{line_display_name}"
 
         # build NG Causale from this production
         prod_defects = defects_by_production.get(production_id, [])
@@ -411,7 +417,7 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
         rows.append(
             {
                 "Linea": line_display_name,
-                "Stazione": station_name,
+                "EQ - PMS": station_name,
                 "Stringatrice": last_station_name,
                 "ID Modulo": id_modulo,
                 "Data Ingresso": start_time,
@@ -427,7 +433,7 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
         rows,
         columns=[
             "Linea",
-            "Stazione",
+            "EQ - PMS",
             "Stringatrice",
             "ID Modulo",
             "Data Ingresso",
@@ -486,12 +492,26 @@ def eventi_sheet(ws, data: dict):
 
         modulo_event_count = modulo_station_counts.get(pair, 0)
 
-        station = stations_by_id.get(station_id)
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_display_name = production_lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown") if station else "Unknown"
+        station = stations_by_id.get(prod.get("station_id"))
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_display_name = production_lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_display_name = line_display_name.removeprefix("Linea ")
+        else:
+            line_display_name = "Unknown"
+
+        station_name = f"{station_name}{line_display_name}"
+
 
         last_station_id = prod.get("last_station_id")
-        last_station_name = stations_by_id.get(last_station_id, {}).get("display_name", "N/A") if last_station_id else "N/A"
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_display_name}"
 
         row = {
             "Linea": line_display_name,
@@ -715,17 +735,25 @@ def mbj_sheet(ws: Worksheet, data: Dict[str, Any]):
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_display_name = (
-            lines_by_id.get(station["line_id"], {}).get("display_name", "Unknown")
-            if station else "Unknown"
-        )
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_display_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_display_name = line_display_name.removeprefix("Linea ")
+        else:
+            line_display_name = "Unknown"
+
+        station_name = f"{station_name}{line_display_name}"
+
 
         last_station_id = prod.get("last_station_id")
         last_station_name = (
-            stations_by_id.get(last_station_id, {}).get("display_name", "N/A")
-            if last_station_id else "N/A"
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
         )
+        last_station_name = f"{last_station_name}{line_display_name}"
 
         base_row = {
             "Linea": line_display_name,
@@ -873,18 +901,25 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_display_name = (
-            lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
-            if station else "Unknown"
-        )
 
-        last_station_name = "N/A"
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_display_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_display_name = line_display_name.removeprefix("Linea ")
+        else:
+            line_display_name = "Unknown"
+
+        station_name = f"{station_name}{line_display_name}"
+
+
         last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_station = stations_by_id.get(last_station_id)
-            if last_station:
-                last_station_name = last_station.get("display_name", "N/A")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_display_name}"
 
         # 3) Collect ReWork defects for "Generali"
         rework_defects_dict = {
@@ -1026,21 +1061,26 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station["display_name"] if station else "Unknown"
         is_rework = (station.get("type") == "rework") if station else False
 
-        line_name = "Unknown"
-        if station and station.get("line_id"):
-            line = lines_by_id.get(station["line_id"])
-            if line:
-                line_name = line.get("display_name", "Unknown")
+        station_name = station.get("name", "Unknown") if station else "Unknown"
 
-        last_station_name = "N/A"
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
         last_station_id = prod.get("last_station_id")
-        if last_station_id:
-            last_stat = stations_by_id.get(last_station_id)
-            if last_stat:
-                last_station_name = last_stat.get("display_name", "N/A")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         # 3) Collect all Saldatura defects at ReWork station
         prod_defects = [
@@ -1217,10 +1257,26 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
-        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
-        is_rework = station.get("type") == "rework" if station else False
+        is_rework = (station.get("type") == "rework") if station else False
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         # Local defects
         prod_defects = [
@@ -1367,10 +1423,26 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
-        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
-        is_rework = station.get("type") == "rework" if station else False
+        is_rework = (station.get("type") == "rework") if station else False
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         # Get local defects
         prod_defects = [
@@ -1518,10 +1590,26 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
-        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
-        is_rework = station.get("type") == "rework" if station else False
+        is_rework = (station.get("type") == "rework") if station else False
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         prod_defects = [
             d for d in object_defects
@@ -1675,10 +1763,26 @@ def ng_iribbon_leadwire_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
-        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
-        is_rework = station.get("type") == "rework" if station else False
+        is_rework = (station.get("type") == "rework") if station else False
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         prod_defects = [
             d for d in object_defects
@@ -1825,10 +1929,26 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
-        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
-        is_rework = station.get("type") == "rework" if station else False
+        is_rework = (station.get("type") == "rework") if station else False
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         prod_defects = [
             d for d in object_defects
@@ -1958,10 +2078,26 @@ def ng_bad_soldering_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
-        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
-        is_rework = station.get("type") == "rework" if station else False
+        is_rework = (station.get("type") == "rework") if station else False
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         prod_defects = [
             d for d in object_defects
@@ -2091,10 +2227,26 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
-        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
-        is_rework = station.get("type") == "rework" if station else False
+        is_rework = (station.get("type") == "rework") if station else False
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         prod_defects = [
             d for d in object_defects
@@ -2221,10 +2373,26 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
-        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
-        is_rework = station.get("type") == "rework" if station else False
+        is_rework = (station.get("type") == "rework") if station else False
+
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         prod_defects = [
             d for d in object_defects
@@ -2348,11 +2516,26 @@ def ng_graffio_su_cella_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
-        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
+        is_rework = (station.get("type") == "rework") if station else False
 
-        is_rework = station.get("type") == "rework" if station else False
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         prod_defects = [
             d for d in object_defects
@@ -2491,11 +2674,26 @@ def ng_altro_sheet(ws, data: dict) -> bool:
         esito = map_esito(prod.get("esito"), cycle_seconds, min_cycle_threshold)
 
         station = stations_by_id.get(prod.get("station_id"))
-        station_name = station.get("display_name", "Unknown") if station else "Unknown"
-        line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown") if station else "Unknown"
-        last_station_name = stations_by_id.get(prod.get("last_station_id"), {}).get("display_name", "N/A")
+        is_rework = (station.get("type") == "rework") if station else False
 
-        is_rework = station.get("type") == "rework" if station else False
+        station_name = station.get("name", "Unknown") if station else "Unknown"
+
+        if station:
+            line_name = lines_by_id.get(station.get("line_id"), {}).get("display_name", "Unknown")
+            line_name = line_name.removeprefix("Linea ")
+        else:
+            line_name = "Unknown"
+
+        station_name = f"{station_name}{line_name}"
+
+
+        last_station_id = prod.get("last_station_id")
+        last_station_name = (
+            stations_by_id.get(last_station_id, {}).get("name", "N/A")
+            if last_station_id
+            else "N/A"
+        )
+        last_station_name = f"{last_station_name}{line_name}"
 
         # Fetch ReWork defects first
         prod_defects = [

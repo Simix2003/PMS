@@ -5,7 +5,6 @@ import logging
 import os
 import sys
 
-
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection, insert_initial_production_data, update_production_final
@@ -97,8 +96,6 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 fine_buona = extract_bool(buffer, fb_conf["byte"], fb_conf["bit"], start_byte)
                 fine_scarto = extract_bool(buffer, fs_conf["byte"], fs_conf["bit"], start_byte)
 
-
-
             if fine_buona is None or fine_scarto is None:
                 raise Exception("Outcome read returned None")
 
@@ -145,12 +142,6 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                 zone = "AIN"  # TODO: derive dynamically from MySQL if needed
                                 assert end_time and final_esito is not None
 
-                                print(f"Preparing to update visual data for:")
-                                print(f"  • zone         = {zone}")
-                                print(f"  • station_name = {channel_id}")
-                                print(f"  • esito        = {final_esito}")
-                                print(f"  • end_time     = {end_time}")
-
                                 timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
 
                                 update_visual_data_on_new_module(
@@ -166,6 +157,17 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                 logging.warning(f"⚠️ Could not update visual_data for {channel_id}: {vis_err}")
 
                             incomplete_productions.pop(full_station_id)
+
+                            esito_conf = paths.get("esito_scarto_compilato")
+                            pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
+                            
+                            await asyncio.to_thread(plc_connection.write_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"], False)
+                            await asyncio.to_thread(plc_connection.write_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"], False)
+                            await asyncio.to_thread(plc_connection.write_bool, trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"], False)
+                            await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False)
+                            if esito_conf:
+                                await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
+                            
                         else:
                             print(f"❌ Failed to update production in DB, skipping visual update.")
                     else:

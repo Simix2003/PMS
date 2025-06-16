@@ -8,6 +8,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import PatternFill
 import pandas as pd
 from collections import defaultdict
+from typing import Dict, Any, List
 
 import os
 import sys
@@ -20,8 +21,8 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 
 EXCEL_DEFECT_COLUMNS = {
     "NG Generali": "Generali",
-    "NG Disall. Stringa": "Disallineamento",  # specific to stringa
-    "NG Disall. Ribbon": "Disallineamento",   # specific to ribbon
+    "NG Disall. Stringa": "Disallineamento",
+    "NG Disall. Ribbon": "Disallineamento",
     "NG Saldatura": "Saldatura",
     "NG Mancanza I_Ribbon": "Mancanza Ribbon",
     "NG I_Ribbon Leadwire": "I_Ribbon Leadwire",
@@ -197,13 +198,6 @@ def metadata_sheet(ws, data: dict):
         col_letter = get_column_letter(col_idx)
         ws.column_dimensions[col_letter].width = max_len + 4
 
-from collections import defaultdict
-from typing import Dict, Any, List
-
-import pandas as pd
-from openpyxl.styles import PatternFill
-from openpyxl.worksheet.worksheet import Worksheet
-
 # ---------------------------------------------------------------------------
 # Helper utilities -----------------------------------------------------------
 # ---------------------------------------------------------------------------
@@ -218,7 +212,7 @@ FILL_QG = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid
 def _append_dataframe(
     ws: Worksheet,
     df: pd.DataFrame,
-    zebra_key: str = "ID Modulo",
+    zebra_key: str = "Module Id",
 ):
     """Write *df* to *ws* with a blue/white zebra pattern keyed on *zebra_key*."""
     current_key = None
@@ -248,9 +242,9 @@ def _append_dataframe(
         row_values: List[Any] = []
         for idx, val in enumerate(row_tuple):
             col = columns[idx]
-            if col in {"Data Ingresso", "Data Uscita"} and val:
+            if col in {"Checkin - PMS", "Checkout - PMS"} and val:
                 try:
-                    row_values.append(val.strftime("%Y-%m-%d %H:%M:%S"))
+                    row_values.append(val.strftime("%d.%m.%y %H:%M:%S"))
                 except Exception:
                     row_values.append(val)
             else:
@@ -286,6 +280,8 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
         defects_by_production[pid].append(d)
 
     rows: List[Dict[str, Any]] = []
+    # Initialize rework counter per (module_id, station_id)
+    rework_counters = defaultdict(int)
 
     for prod in productions:
         obj = objects_by_id.get(prod.get("object_id"))
@@ -294,6 +290,10 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
 
         id_modulo = obj.get("id_modulo")
         if not id_modulo:
+            continue
+
+        station_id = prod.get("station_id")
+        if not station_id:
             continue
 
         production_id = prod.get("id")
@@ -332,6 +332,11 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
             else "N/A"
         )
         last_station_name = f"{last_station_name}{line_display_name}"
+
+        # Compute current rework count
+        pair = (id_modulo, station_id)
+        current_rework = rework_counters[pair]
+        rework_counters[pair] += 1
 
         # build NG Causale from this production
         prod_defects = defects_by_production.get(production_id, [])
@@ -416,12 +421,13 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
 
         rows.append(
             {
-                "Linea": line_display_name,
-                "EQ - PMS": station_name,
+                "Line": line_display_name,
+                "Eq - PMS": station_name,
                 "Stringatrice": last_station_name,
-                "ID Modulo": id_modulo,
-                "Data Ingresso": start_time,
-                "Data Uscita": end_time,
+                "Module Id": id_modulo,
+                "Checkin - PMS": start_time,
+                "Checkout - PMS": end_time,
+                "Rework": current_rework,
                 "Esito": esito,
                 "Tempo Ciclo": cycle_time_str,
                 "NG Causale": ";".join(sorted(ng_labels)) if ng_labels else "",
@@ -432,12 +438,13 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any]):
     df = pd.DataFrame(
         rows,
         columns=[
-            "Linea",
-            "EQ - PMS",
+            "Line",
+            "Eq - PMS",
             "Stringatrice",
-            "ID Modulo",
-            "Data Ingresso",
-            "Data Uscita",
+            "Module Id",
+            "Checkin - PMS",
+            "Checkout - PMS",
+            "Rework",
             "Esito",
             "Tempo Ciclo",
             "NG Causale",
@@ -514,16 +521,16 @@ def eventi_sheet(ws, data: dict):
         last_station_name = f"{last_station_name}{line_display_name}"
 
         row = {
-            "Linea": line_display_name,
-            "Stazione": station_name,
+            "Line": line_display_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
+            "Module Id": id_modulo,
             "Numero Eventi": modulo_event_count
         }
         rows.append(row)
 
     df = pd.DataFrame(rows, columns=[
-        "Linea", "Stazione", "Stringatrice", "ID Modulo", "Numero Eventi"
+        "Line", "Eq - PMS", "Stringatrice", "Module Id", "Numero Eventi"
     ])
 
     _append_dataframe(ws, df)
@@ -645,7 +652,7 @@ def rework_sheet(ws: Worksheet, data: Dict[str, Any]):
             qg_causale = "BLANKS"
 
         rows.append({
-            "ID Modulo": id_modulo,
+            "Module Id": id_modulo,
             "Causale NG": qg_causale
         })
 
@@ -756,12 +763,12 @@ def mbj_sheet(ws: Worksheet, data: Dict[str, Any]):
         last_station_name = f"{last_station_name}{line_display_name}"
 
         base_row = {
-            "Linea": line_display_name,
-            "Stazione": station_name,
+            "Line": line_display_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str,
         }
@@ -868,8 +875,8 @@ def ng_generali_sheet(ws, data: dict) -> bool:
         "Molteplici Bus Bar", "Test"
     ]
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo"
     ] + defect_columns
 
     all_rows = []
@@ -939,12 +946,12 @@ def ng_generali_sheet(ws, data: dict) -> bool:
 
         # 6) Build row dictionary
         row = {
-            "Linea": line_display_name,
-            "Stazione": station_name,
+            "Line": line_display_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str,
         }
@@ -966,7 +973,7 @@ def ng_generali_sheet(ws, data: dict) -> bool:
     if rows_written > 0:
         import pandas as pd
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Map header name → column index
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1027,8 +1034,8 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
 
     # 2) Build the exact header order
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo",
     ] + [f"Stringa {i}" for i in range(1, 13)] + [f"Stringa {i}M" for i in range(1, 13)]
 
     all_rows = []
@@ -1145,12 +1152,12 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
 
         # 8) Build our row dict exactly in header order
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str,
         }
@@ -1172,7 +1179,7 @@ def ng_saldature_sheet(ws, data: dict) -> bool:
     if rows_written > 0:
         import pandas as pd
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Map header cell → column index
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1214,8 +1221,8 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
                 qg_disall_by_modulo.setdefault(obj["id_modulo"], []).append(d)
 
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo",
         "Ribbon 1 F", "Ribbon 2 F", "Ribbon 3 F",
         "Ribbon 1 M", "Ribbon 2 M", "Ribbon 3 M", "Ribbon 4 M",
         "Ribbon 1 B", "Ribbon 2 B", "Ribbon 3 B"
@@ -1322,12 +1329,12 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
                 continue
 
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str,
         }
@@ -1348,7 +1355,7 @@ def ng_disall_ribbon_sheet(ws, data: dict) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Apply gray background to QG-only defects
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1389,8 +1396,8 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
             qg_disall_by_modulo.setdefault(obj["id_modulo"], []).append(d)
 
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
 
     all_rows = []
@@ -1485,12 +1492,12 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
                 continue
 
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str
         }
@@ -1505,7 +1512,7 @@ def ng_disall_stringa_sheet(ws, data: dict) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Apply gray background to QG-inherited defects
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1548,8 +1555,8 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
             qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo",
         "Ribbon 1 F", "Ribbon 2 F", "Ribbon 3 F",
         "Ribbon 1 M", "Ribbon 2 M", "Ribbon 3 M", "Ribbon 4 M",
         "Ribbon 1 B", "Ribbon 2 B", "Ribbon 3 B"
@@ -1653,12 +1660,12 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
                 continue
 
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str,
             "Ribbon 1 F": ribbon_cols[0],
@@ -1682,7 +1689,7 @@ def ng_mancanza_ribbon_sheet(ws, data: dict) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Apply grey background to QG-inherited defects
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1729,8 +1736,8 @@ def ng_iribbon_leadwire_sheet(ws, data: dict) -> bool:
             qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo",
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo",
         "Ribbon 1 M", "Ribbon 2 M", "Ribbon 3 M", "Ribbon 4 M"
     ]
 
@@ -1828,12 +1835,12 @@ def ng_iribbon_leadwire_sheet(ws, data: dict) -> bool:
                     continue
 
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Ribbon 1 M": ribbon_cols[0],
             "Ribbon 2 M": ribbon_cols[1],
@@ -1849,7 +1856,7 @@ def ng_iribbon_leadwire_sheet(ws, data: dict) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Apply grey background to QG-inherited defects
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1896,8 +1903,8 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
             qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
 
     all_rows = []
@@ -1975,12 +1982,12 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
                 found_stringa[idx] = "CURRENT"
 
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str
         }
@@ -1998,7 +2005,7 @@ def ng_macchie_eca_sheet(ws, data: dict) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Highlight QG-inherited NG cells
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -2045,8 +2052,8 @@ def ng_bad_soldering_sheet(ws, data: dict) -> bool:
             qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
 
     all_rows = []
@@ -2124,12 +2131,12 @@ def ng_bad_soldering_sheet(ws, data: dict) -> bool:
                 found_stringa[idx] = "CURRENT"
 
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str
         }
@@ -2147,7 +2154,7 @@ def ng_bad_soldering_sheet(ws, data: dict) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Highlight QG-inherited NG cells
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -2194,8 +2201,8 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
             qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
 
     all_rows = []
@@ -2273,12 +2280,12 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
                 found_stringa[idx] = "CURRENT"
 
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str
         }
@@ -2296,7 +2303,7 @@ def ng_celle_rotte_sheet(ws, data: dict) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Gray background for QG defects
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -2339,8 +2346,8 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
             qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
 
     all_rows = []
@@ -2419,12 +2426,12 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
                 found_stringa[idx] = "CURRENT"
 
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str,
         }
@@ -2442,7 +2449,7 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Gray background for QG cells
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -2486,8 +2493,8 @@ def ng_graffio_su_cella_sheet(ws, data: dict) -> bool:
             qg_defects_by_modulo.setdefault(obj["id_modulo"], []).append(defect)
 
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo"
     ] + [f"Stringa {i}" for i in range(1, 13)]
 
     rows = []
@@ -2568,12 +2575,12 @@ def ng_graffio_su_cella_sheet(ws, data: dict) -> bool:
             except: continue
 
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str,
         }
@@ -2592,7 +2599,7 @@ def ng_graffio_su_cella_sheet(ws, data: dict) -> bool:
         return False
 
     # Zebra append
-    _append_dataframe(ws, pd.DataFrame(rows, columns=header), zebra_key="ID Modulo")
+    _append_dataframe(ws, pd.DataFrame(rows, columns=header), zebra_key="Module Id")
 
     # Apply grey fill
     header_map = {cell.value: cell.column for cell in ws[1]}  # Column name to index
@@ -2641,8 +2648,8 @@ def ng_altro_sheet(ws, data: dict) -> bool:
 
     # Step 3: Build rows and track grey cells
     header = [
-        "Linea", "Stazione", "Stringatrice", "ID Modulo",
-        "Data Ingresso", "Data Uscita", "Esito", "Tempo Ciclo"
+        "Line", "Eq - PMS", "Stringatrice", "Module Id",
+        "Checkin - PMS", "Checkout - PMS", "Esito", "Tempo Ciclo"
     ] + unique_altro_descriptions
 
     all_rows = []
@@ -2712,12 +2719,12 @@ def ng_altro_sheet(ws, data: dict) -> bool:
             continue
 
         row = {
-            "Linea": line_name,
-            "Stazione": station_name,
+            "Line": line_name,
+            "Eq - PMS": station_name,
             "Stringatrice": last_station_name,
-            "ID Modulo": id_modulo,
-            "Data Ingresso": start_time,
-            "Data Uscita": end_time,
+            "Module Id": id_modulo,
+            "Checkin - PMS": start_time,
+            "Checkout - PMS": end_time,
             "Esito": esito,
             "Tempo Ciclo": cycle_time_str,
         }
@@ -2747,7 +2754,7 @@ def ng_altro_sheet(ws, data: dict) -> bool:
     # Step 4: Export + Zebra + Grey
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="ID Modulo")
+        _append_dataframe(ws, df, zebra_key="Module Id")
 
         # Grey fill inherited QG cells
         header_map = {cell.value: cell.column for cell in ws[1]}

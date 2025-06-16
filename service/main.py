@@ -24,7 +24,8 @@ from service.controllers.debug_plc import FakePLCConnection
 from service.config.config import CHANNELS, IMAGES_DIR, PLC_DB_RANGES, debug
 from service.connections.mysql import get_mysql_connection, load_channels_from_db
 from service.connections.xml_watcher import watch_folder_for_new_xml
-from service.tasks.main_task import background_task, make_status_callback
+from service.tasks.main_esito_task import background_task, make_status_callback
+from service.tasks.main_fermi_task import fermi_task
 from service.state.global_state import plc_connections, stop_threads, passato_flags
 from service.routes.plc_routes import router as plc_router
 from service.routes.issue_routes import router as issue_router
@@ -104,6 +105,7 @@ async def start_background_tasks():
 
             plc_connections[key] = plc
             asyncio.create_task(background_task(plc, key))
+            asyncio.create_task(fermi_task(plc, key))
     logger.info("✅ All PLC background tasks launched")
 
 # ---------------- LIFESPAN ----------------

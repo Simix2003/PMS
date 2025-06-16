@@ -632,14 +632,7 @@ def create_stop(
     cursor.close()
     return stop_id
 
-
 def update_stop_status(stop_id, new_status, changed_at, operator_id, conn):
-    print(f"🚩 update_stop_status called with:")
-    print(f"    stop_id={stop_id}")
-    print(f"    new_status={new_status}")
-    print(f"    changed_at={changed_at}")
-    print(f"    operator_id={operator_id}")
-
     with conn.cursor() as cursor:
         print("➡ Updating main stops table...")
 
@@ -649,33 +642,24 @@ def update_stop_status(stop_id, new_status, changed_at, operator_id, conn):
             WHERE id=%s
         """
         cursor.execute(sql, (new_status, operator_id, stop_id))
-        print("✅ Main table updated.")
 
         # Insert new status change row into history table
         insert_level = """
             INSERT INTO stop_status_changes (stop_id, status, changed_at, operator_id)
             VALUES (%s, %s, %s, %s)
         """
-        print("➡ Inserting into stop_status_changes...")
-        print(f"    stop_id={stop_id}, new_status={new_status}, changed_at={changed_at}, operator_id={operator_id}")
         cursor.execute(insert_level, (stop_id, new_status, changed_at, operator_id))
-        print("✅ Insert into stop_status_changes done.")
 
         if new_status == "CLOSED":
-            print("➡ Closing stop...")
             cursor.execute("SELECT start_time FROM stops WHERE id=%s", (stop_id,))
             row = cursor.fetchone()
-            print(f"    Row fetched: {row}")
 
             if not row or not row['start_time']:
                 raise Exception(f"Start time not found for stop_id={stop_id}")
 
             start_time = row['start_time']
-            print(f"    start_time={start_time} (type: {type(start_time)})")
 
             end_time = datetime.now()
-
-            print(f"    Calculated end_time: {end_time}")
 
             # Only update end_time — stop_time is auto-generated
             cursor.execute("""
@@ -683,10 +667,8 @@ def update_stop_status(stop_id, new_status, changed_at, operator_id, conn):
                 SET end_time=%s
                 WHERE id=%s
             """, (end_time, stop_id))
-            print("✅ end_time updated.")
 
     conn.commit()
-    print("✅ Transaction committed successfully.")
 
 # Get stops for a station
 def get_stops_for_station(station_id: int, conn, limit: int = 100):

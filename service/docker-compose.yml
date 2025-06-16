@@ -1,1 +1,32 @@
-# Compose file for DB, backend, and other services
+version: "3.9"
+
+services:
+  db:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-Master36!}
+      MYSQL_DATABASE: ${MYSQL_DB:-ix_monitor}
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  backend:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-Master36!}
+      MYSQL_DB: ${MYSQL_DB:-ix_monitor}
+      BASE_DIR: /data
+    volumes:
+      - ./data:/data
+    depends_on:
+      - db
+
+volumes:
+  db_data:

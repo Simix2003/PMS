@@ -256,12 +256,16 @@ def update_visual_data_on_new_module(
             "S3"
         )
 
-        # Update shift_throughput
+        is_in_station = station_name in cfg["station_1_in"] or station_name in cfg["station_2_in"]
+        is_qc_station = station_name in cfg["station_1_out_ng"] or station_name in cfg["station_2_out_ng"]
+
+        # Update shift_throughput  ➜ count IN once, NG only when QC marks the part as NG
         for shift in data["shift_throughput"]:
             if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-                shift["total"] += 1
-                if esito == 6:
-                    shift["ng"] += 1
+                if is_in_station:
+                    shift["total"] += 1         # real-throughput
+                if esito == 6 and is_qc_station:
+                    shift["ng"] += 1            # rejections
                 break
 
         # Update station yield shifts
@@ -307,7 +311,8 @@ def update_visual_data_on_new_module(
                 entry["yield"] = compute_yield(good, ng)
 
         # Throughput list
-        _touch_hourly("last_8h_throughput", False)
+        if is_in_station or (esito == 6 and is_qc_station):
+            _touch_hourly("last_8h_throughput", False)
 
         # Yield per station lists
         if station_name in cfg["station_1_out_ng"]:

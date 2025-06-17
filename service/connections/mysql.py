@@ -109,10 +109,22 @@ def load_channels_from_db() -> tuple[dict, dict]:
                 db = field["db"]
                 byte = field["byte"]
 
+                # Compute extra bytes safely
+                if "length" in field:
+                    extra_bytes = field["length"] + 2
+                elif key in ["inizio_fermo", "fine_fermo"]:
+                    extra_bytes = 8  # datetime size
+                elif key in ["evento_fermo", "stazione_fermo"]:
+                    extra_bytes = 2  # int size
+                else:
+                    extra_bytes = 1  # bool
+
                 db_range = plc_db_ranges.setdefault(plc_key, {}).setdefault(db, {"min": byte, "max": byte})
                 db_range["min"] = min(db_range["min"], byte)
-                db_range["max"] = max(db_range["max"], byte)
-                
+                db_range["max"] = max(db_range["max"], byte + extra_bytes)
+
+    print(f"PLC_DB_RANGES: {plc_db_ranges}")
+
     return channels, plc_db_ranges
 
 async def insert_initial_production_data(data, station_name, connection, esito):

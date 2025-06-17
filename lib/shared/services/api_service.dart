@@ -750,7 +750,6 @@ class ApiService {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
 
-      // Optional: ensure no null fields crash your UI
       return {
         ...data,
         'station_1_in': data['station_1_in'] ?? 0,
@@ -765,6 +764,7 @@ class ApiService {
         'station_2_yield_last_8h': data['station_2_yield_last_8h'] ?? [],
         'shift_throughput': data['shift_throughput'] ?? [],
         'last_8h_throughput': data['last_8h_throughput'] ?? [],
+        'fermi_data': data['fermi_data'] ?? [],
       };
     } else {
       throw Exception('Failed to load zone data');

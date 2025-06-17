@@ -10,3 +10,4 @@ Versions:
 "2.2.0" - Visual Management
 "2.1.1" - Visual Management added Date and Time Visualization
 "2.2.2" - Fixed "MaybeMBJ" visual bug and Fixed Stringatrice last STATION bug
+"2.2.3" - Added Fermi Data to Visual page

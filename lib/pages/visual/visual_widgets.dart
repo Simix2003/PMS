@@ -402,14 +402,8 @@ class TopDefectsPieChart extends StatelessWidget {
   }
 }
 
-List<TableRow> buildCustomRows() {
-  final sampleData = [
-    ["Mancato Carico", "AIN1", "3", "126"],
-    ["Mancata Saldatura", "AIN2", "1", "294"],
-    ["Driver Bruciato", "AIN1", "1", "180"]
-  ];
-
-  return sampleData.map((row) {
+List<TableRow> buildCustomRows(List<List<String>> data) {
+  return data.map((row) {
     return TableRow(
       decoration: const BoxDecoration(color: Colors.white),
       children: row.map((cell) {

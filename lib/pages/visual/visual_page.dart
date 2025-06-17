@@ -51,7 +51,8 @@ class _VisualPageState extends State<VisualPage> {
 
   int shift_target = 366;
 
-  int availableTime = 62;
+  int availableTime_1 = 0;
+  int availableTime_2 = 0;
 
   List<Map<String, dynamic>> yieldLast8h_1 = [];
   List<Map<String, dynamic>> yieldLast8h_2 = [];
@@ -167,14 +168,25 @@ class _VisualPageState extends State<VisualPage> {
         // Parse fermi data
         final fermiRaw =
             List<Map<String, dynamic>>.from(response['fermi_data'] ?? []);
-        dataFermi = fermiRaw.map((entry) {
-          return [
-            entry['causale']?.toString() ?? '',
-            entry['station']?.toString() ?? '',
-            entry['count']?.toString() ?? '0',
-            entry['time']?.toString() ?? '0'
-          ];
-        }).toList();
+
+        dataFermi = []; // clear previous data
+
+        for (final entry in fermiRaw) {
+          if (entry.containsKey("Available_Time_1")) {
+            availableTime_1 =
+                int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
+          } else if (entry.containsKey("Available_Time_2")) {
+            availableTime_2 =
+                int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
+          } else {
+            dataFermi.add([
+              entry['causale']?.toString() ?? '',
+              entry['station']?.toString() ?? '',
+              entry['count']?.toString() ?? '0',
+              entry['time']?.toString() ?? '0'
+            ]);
+          }
+        }
 
         isLoading = false;
       });
@@ -240,17 +252,28 @@ class _VisualPageState extends State<VisualPage> {
 
           hourLabels =
               hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
-
+          // Parse fermi data also from WebSocket payload
           final fermiRaw =
               List<Map<String, dynamic>>.from(data['fermi_data'] ?? []);
-          dataFermi = fermiRaw.map((entry) {
-            return [
-              entry['causale']?.toString() ?? '',
-              entry['station']?.toString() ?? '',
-              entry['count']?.toString() ?? '0',
-              entry['time']?.toString() ?? '0'
-            ];
-          }).toList();
+
+          dataFermi = []; // clear previous data
+
+          for (final entry in fermiRaw) {
+            if (entry.containsKey("Available_Time_1")) {
+              availableTime_1 =
+                  int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
+            } else if (entry.containsKey("Available_Time_2")) {
+              availableTime_2 =
+                  int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
+            } else {
+              dataFermi.add([
+                entry['causale']?.toString() ?? '',
+                entry['station']?.toString() ?? '',
+                entry['count']?.toString() ?? '0',
+                entry['time']?.toString() ?? '0'
+              ]);
+            }
+          }
         });
       },
       onDone: () => print("🛑 Visual WebSocket closed"),
@@ -1046,7 +1069,7 @@ class _VisualPageState extends State<VisualPage> {
                                                 MainAxisAlignment.center,
                                             children: [
                                               const Text(
-                                                'Available\nTime',
+                                                'Available \nTime\nAIN1',
                                                 style: TextStyle(
                                                   fontSize: 28,
                                                   fontWeight: FontWeight.bold,
@@ -1067,7 +1090,7 @@ class _VisualPageState extends State<VisualPage> {
                                                                       800),
                                                           curve:
                                                               Curves.easeInOut,
-                                                          value: availableTime
+                                                          value: availableTime_1
                                                               .toDouble(),
                                                           radius: 100,
                                                           axis: GaugeAxis(
@@ -1084,11 +1107,11 @@ class _VisualPageState extends State<VisualPage> {
                                                             progressBar:
                                                                 GaugeRoundedProgressBar(
                                                               color: () {
-                                                                if (availableTime <=
+                                                                if (availableTime_1 <=
                                                                     50) {
                                                                   return errorColor;
                                                                 }
-                                                                if (availableTime <=
+                                                                if (availableTime_1 <=
                                                                     75) {
                                                                   return warningColor;
                                                                 }
@@ -1139,7 +1162,106 @@ class _VisualPageState extends State<VisualPage> {
                                         ),
                                       ),
                                     ),
-                                    const TopDefectsPieChart(),
+                                    //const TopDefectsPieChart(),
+                                    Card(
+                                      color: Colors.white,
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(8),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const Text(
+                                              'Available \nTime\nAIN1',
+                                              style: TextStyle(
+                                                fontSize: 28,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.black87,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            Column(
+                                              children: [
+                                                SizedBox(
+                                                  width: 200, // radius * 2
+                                                  child: Column(
+                                                    children: [
+                                                      AnimatedRadialGauge(
+                                                        duration:
+                                                            const Duration(
+                                                                milliseconds:
+                                                                    800),
+                                                        curve: Curves.easeInOut,
+                                                        value: availableTime_2
+                                                            .toDouble(),
+                                                        radius: 100,
+                                                        axis: GaugeAxis(
+                                                          min: 0,
+                                                          max: 100,
+                                                          degrees: 180,
+                                                          style:
+                                                              const GaugeAxisStyle(
+                                                            thickness: 16,
+                                                            background: Color(
+                                                                0xFFDDDDDD),
+                                                            segmentSpacing: 0,
+                                                          ),
+                                                          progressBar:
+                                                              GaugeRoundedProgressBar(
+                                                            color: () {
+                                                              if (availableTime_2 <=
+                                                                  50) {
+                                                                return errorColor;
+                                                              }
+                                                              if (availableTime_2 <=
+                                                                  75) {
+                                                                return warningColor;
+                                                              }
+                                                              return okColor;
+                                                            }(),
+                                                          ),
+                                                        ),
+                                                        builder: (context,
+                                                            child, value) {
+                                                          return Center(
+                                                            child: Text(
+                                                              '${value.toInt()}%',
+                                                              style:
+                                                                  const TextStyle(
+                                                                fontSize: 32,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      const Row(
+                                                        mainAxisAlignment:
+                                                            MainAxisAlignment
+                                                                .spaceBetween,
+                                                        children: [
+                                                          Text('0%',
+                                                              style: TextStyle(
+                                                                  fontSize:
+                                                                      14)),
+                                                          Text('100%',
+                                                              style: TextStyle(
+                                                                  fontSize:
+                                                                      14)),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),

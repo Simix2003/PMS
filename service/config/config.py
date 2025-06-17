@@ -31,7 +31,8 @@ ISSUE_TREE = {
                         "Solo Vetro": {},
                         "Matrice Incompleta": {},
                         "Molteplici Bus Bar": {},
-                        "Test": {}
+                        "Test": {},
+                        "Controllato Good": {},
                     },
                     "Saldatura": {
                         f"Stringa[{i}]": {
@@ -103,6 +104,7 @@ KNOWN_DEFECTS = [
     "Matrice Incompleta",
     "Molteplici Bus Bar",
     "Test",
+    "Controllato Good",
     "Saldatura",
     "Disallineamento Ribbon",
     "Disallineamento Stringa",

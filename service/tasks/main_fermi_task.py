@@ -5,6 +5,8 @@ import logging
 import os
 import sys
 
+
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import create_stop, get_mysql_connection
@@ -12,6 +14,7 @@ from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
 from service.config.config import CHANNELS, PLC_DB_RANGES, debug
 from service.helpers.buffer_plc_extract import extract_bool, extract_string, extract_int, extract_DT
+from service.helpers.visual_helper import refresh_fermi_data
 
 async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
     print(f"[{ip}:{slot}] Starting fermi task.")
@@ -130,14 +133,9 @@ async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, ch
 
         try:
             zone = "AIN"  # TODO: derive dynamically from MySQL if needed
-            #update_fermi_visual_data(
-            #    zone=zone,
-            #    station_name=channel_id,
-            #    esito=final_esito,
-            #    ts=timestamp
-            #    )
-            
-            #print(f"📡 Called update_fermi_visual_data ✅")
+
+            timestamp = data["DataInizio"] if data and data.get("DataInizio") else datetime.now()
+            refresh_fermi_data(zone, timestamp)
 
         except Exception as vis_err:
             logging.warning(f"⚠️ Could not update FERMI_visual_data for {channel_id}: {vis_err}")

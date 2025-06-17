@@ -78,6 +78,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     "Matrice Incompleta": "Generali.Matrice Incompleta",
     "Molteplici Bus Bar": "Generali.Molteplici Bus Bar",
     "Test": "Generali.Test",
+    "Transitato per Controllo": "Generali.Transitato per Controllo",
     "Saldatura": "Saldatura",
     "Disallineamento Ribbon": "Disallineamento",
     "Disallineamento Stringa": "Disallineamento",

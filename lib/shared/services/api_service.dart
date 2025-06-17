@@ -765,6 +765,7 @@ class ApiService {
         'shift_throughput': data['shift_throughput'] ?? [],
         'last_8h_throughput': data['last_8h_throughput'] ?? [],
         'fermi_data': data['fermi_data'] ?? [],
+        'top_defects_qg2': data['top_defects_qg2'] ?? [],
       };
     } else {
       throw Exception('Failed to load zone data');
@@ -848,8 +849,10 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>?> getStopsForStation(int stationId) async {
-    final url = Uri.parse('$baseUrl/api/escalation/get_stops/$stationId');
+  Future<Map<String, dynamic>?> getStopsForStation(int stationId,
+      {int shiftsBack = 3}) async {
+    final url = Uri.parse(
+        '$baseUrl/api/escalation/get_stops/$stationId?shifts_back=$shiftsBack');
     final response = await http.get(url);
     if (response.statusCode == 200) {
       return jsonDecode(response.body);

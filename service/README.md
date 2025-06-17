@@ -20,7 +20,7 @@ them is recommended for production deployments.
 Build and run the backend together with a MySQL database using Docker Compose:
 
 ```bash
-cd service
+cd D:\Imix\Lavori\2025\3SUN\IX-Monitor\ix_monitor\service
 docker compose up --build
 ```
 

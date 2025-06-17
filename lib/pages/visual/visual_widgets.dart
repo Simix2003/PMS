@@ -1038,9 +1038,8 @@ class YieldComparisonBarChart extends StatelessWidget {
               alignment: WrapAlignment.center,
               spacing: 20,
               children: [
-                LegendItem(color: Colors.blue, label: 'Bussing 1'),
-                LegendItem(
-                    color: Colors.lightBlue.shade300, label: 'Bussing 2'),
+                LegendItem(color: Colors.blue, label: 'AIN 1'),
+                LegendItem(color: Colors.lightBlue.shade300, label: 'AIN 2'),
                 LegendItem(
                     color: Colors.orange, label: 'Target', isDashed: true),
               ],
@@ -1288,9 +1287,8 @@ class YieldLineChart extends StatelessWidget {
                 alignment: WrapAlignment.center,
                 spacing: 20,
                 children: [
-                  LegendItem(color: Colors.blue, label: 'Stazione 1'),
-                  LegendItem(
-                      color: Colors.lightBlue.shade300, label: 'Stazione 2'),
+                  LegendItem(color: Colors.blue, label: 'AIN 1'),
+                  LegendItem(color: Colors.lightBlue.shade300, label: 'AIN 2'),
                   LegendItem(
                       color: Colors.orange, label: 'Target', isDashed: true),
                 ],
@@ -1304,18 +1302,16 @@ class YieldLineChart extends StatelessWidget {
 }
 
 class TopDefectsHorizontalBarChart extends StatelessWidget {
-  final List<String> defectLabels = [
-    'NG Macchie ECA',
-    'NG Saldatura',
-    'NG Bad Soldering',
-    'NG Mancanza l_Ribbon',
-    'NG Celle Rotte',
-  ];
+  final List<String> defectLabels;
+  final List<int> ain1Counts;
+  final List<int> ain2Counts;
 
-  final List<int> ain1Counts = [17, 8, 9, 7, 3];
-  final List<int> ain2Counts = [4, 5, 0, 1, 2];
-
-  TopDefectsHorizontalBarChart({super.key});
+  const TopDefectsHorizontalBarChart({
+    super.key,
+    required this.defectLabels,
+    required this.ain1Counts,
+    required this.ain2Counts,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1325,136 +1321,136 @@ class TopDefectsHorizontalBarChart extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: AspectRatio(
-          aspectRatio: 1.4,
-          child: Stack(
-            children: [
-              RotatedBox(
-                quarterTurns: 1, // Rotate chart 90° clockwise
-                child: BarChart(
-                  BarChartData(
-                    maxY: 20,
-                    alignment: BarChartAlignment.center,
-                    barGroups: List.generate(defectLabels.length, (index) {
-                      final ain1 = ain1Counts[index].toDouble();
-                      final ain2 = ain2Counts[index].toDouble();
-                      return BarChartGroupData(
-                        x: index,
-                        barRods: [
-                          BarChartRodData(
-                            toY: ain1,
-                            width: 12,
-                            color: Colors.blue,
-                            borderRadius: BorderRadius.circular(4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ✅ Title
+            const Text(
+              "Difetti QG2",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ✅ Legends
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                LegendItem(color: Colors.blue, label: 'AIN 1'),
+                const SizedBox(width: 20),
+                LegendItem(color: Colors.lightBlue, label: 'AIN 2'),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // ✅ Chart
+            Expanded(
+              child: AspectRatio(
+                aspectRatio: 1.4,
+                child: Stack(
+                  children: [
+                    RotatedBox(
+                      quarterTurns: 1,
+                      child: BarChart(
+                        BarChartData(
+                          barTouchData: BarTouchData(
+                            touchTooltipData: BarTouchTooltipData(
+                              getTooltipColor: (_) =>
+                                  Colors.transparent, // transparent bg
+                              rotateAngle: -90, // rotate tooltip content
+                              tooltipPadding:
+                                  EdgeInsets.zero, // no extra padding
+                              tooltipMargin: 8, // close to bar
+                              tooltipRoundedRadius: 0, // square box
+                              tooltipBorder: BorderSide.none, // no border
+                              getTooltipItem:
+                                  (group, groupIndex, rod, rodIndex) {
+                                return BarTooltipItem(
+                                  '${rod.toY.toInt()}',
+                                  TextStyle(
+                                    color: rod.color, // same as bar color
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                );
+                              },
+                            ),
                           ),
-                          BarChartRodData(
-                            toY: ain2,
-                            width: 12,
-                            color: Colors.lightBlue.shade300,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ],
-                        barsSpace: 6,
-                      );
-                    }),
-                    titlesData: FlTitlesData(
-                      leftTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 80,
-                          getTitlesWidget: (value, meta) {
-                            final i = value.toInt();
-                            if (i < defectLabels.length) {
-                              return RotatedBox(
-                                quarterTurns: -1,
-                                child: Text(
-                                  defectLabels[i],
-                                  style: const TextStyle(fontSize: 12),
+                          maxY: 20,
+                          alignment: BarChartAlignment.center,
+                          barGroups:
+                              List.generate(defectLabels.length, (index) {
+                            final ain1 = ain1Counts[index].toDouble();
+                            final ain2 = ain2Counts[index].toDouble();
+                            return BarChartGroupData(
+                              showingTooltipIndicators: [0, 1],
+                              x: index,
+                              barRods: [
+                                BarChartRodData(
+                                  toY: ain1,
+                                  width: 24,
+                                  color: Colors.blue,
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
+                                BarChartRodData(
+                                  toY: ain2,
+                                  width: 24,
+                                  color: Colors.lightBlue.shade300,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ],
+                              barsSpace: 6,
+                            );
+                          }),
+                          titlesData: FlTitlesData(
+                            leftTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false),
+                            ),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 80,
+                                getTitlesWidget: (value, meta) {
+                                  final i = value.toInt();
+                                  if (i < defectLabels.length) {
+                                    return RotatedBox(
+                                      quarterTurns: -1,
+                                      child: Text(
+                                        defectLabels[i],
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                },
+                              ),
+                            ),
+                          ),
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: false,
+                            getDrawingHorizontalLine: (value) => FlLine(
+                              color: Colors.grey.withOpacity(0.2),
+                              strokeWidth: 1,
+                            ),
+                          ),
+                          borderData: FlBorderData(show: false),
                         ),
                       ),
                     ),
-                    gridData: FlGridData(
-                      show: true,
-                      drawVerticalLine: false,
-                      getDrawingHorizontalLine: (value) => FlLine(
-                        color: Colors.grey.withOpacity(0.2),
-                        strokeWidth: 1,
-                      ),
-                    ),
-                    borderData: FlBorderData(show: false),
-                  ),
+                  ],
                 ),
               ),
-
-              // ✅ Value labels
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final barHeight =
-                          constraints.maxHeight / defectLabels.length;
-                      return Column(
-                        children: List.generate(defectLabels.length, (index) {
-                          final ain1 = ain1Counts[index];
-                          final ain2 = ain2Counts[index];
-                          return SizedBox(
-                            height: barHeight,
-                            child: Row(
-                              children: [
-                                const Spacer(),
-                                Text(
-                                  '$ain1',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '$ain2',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.lightBlue.shade300,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 20,
-                children: [
-                  LegendItem(color: Colors.blue, label: 'Bussing 1'),
-                  LegendItem(
-                      color: Colors.lightBlue.shade300, label: 'Bussing 2'),
-                ],
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -12,14 +12,11 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy wheels and requirements.txt first (leverages Docker layer cache)
-COPY wheels/ ./wheels/
-COPY requirements.txt ./requirements.txt
+# Copy requirements and install Python deps from PyPI
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies from wheels cache
-RUN pip install --no-cache-dir --no-index --find-links=./wheels -r requirements.txt
-
-# Copy the rest of the application
+# Copy the rest of the source code
 COPY . .
 
 EXPOSE 8001

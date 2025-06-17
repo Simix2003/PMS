@@ -44,10 +44,21 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# In .gitignore
+# Python build artifacts
+*.pyc
+__pycache__/
+
+# PyInstaller output
+*.exe
+*.spec
 /service/build/
 /service/dist/
+
+# Virtual environments
 **/venv/
-*.exe
+venv/
+
+# Wheel cache
+/service/wheels/
+*.whl
 *.pkg
-*./wheels/

@@ -91,7 +91,7 @@ async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
                     )
 
             # 🔧 WRITE CLOCK once per PLC cycle
-            if clock_conf:
+            if clock_conf and not debug:
                 new_clock = not clock
                 clock = new_clock
                 await asyncio.to_thread(
@@ -123,11 +123,9 @@ async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, ch
         print(f"🟢 Dati Pronti FERMI on {full_id} TRUE ...")
         # leggere i dati:
         data = await read_fermi_data(plc_connection, line_name, channel_id)
-        print('Data read for Fermi: %s' % data)
         
         # Salvare i dati su MySQL
         conn = get_mysql_connection()
-        print('Saving in database')
         await insert_fermo_data(data, conn)
 
         try:
@@ -139,7 +137,6 @@ async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, ch
             #    ts=timestamp
             #    )
             
-            print('Will update visual Data')
             #print(f"📡 Called update_fermi_visual_data ✅")
 
         except Exception as vis_err:
@@ -259,11 +256,11 @@ async def insert_fermo_data(data, conn):
     elif data["Evento_Fermo"] == 6:
         reason = "Fuori Tempo Ciclo"
     elif data["Evento_Fermo"] == 7:
-        reason = "Mancato Carico"
+        reason = "Mancato Carico Particolari"
     elif data["Evento_Fermo"] == 8:
         reason = "Mancato Scarico"
     elif data["Evento_Fermo"] == 9:
-        reason = "Carico Materiali"
+        reason = "Mancato Carico"
 
     stop_id = create_stop(
             station_id = data["Stazione_Fermo"],

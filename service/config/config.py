@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-debug = False
+debug = True
 
 CHANNELS: dict = {}
 #TODO
@@ -120,7 +120,7 @@ SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
 # In-memory cache
 REFRESHED_SETTINGS = {}
 
-XML_FOLDER_PATH = r"D:\Imix\Lavori\2025\3SUN\MBJ\xml"
+XML_FOLDER_PATH = r"C:\PMS\xml"
 #XML_FOLDER_PATH = r"\\Desktop-ofbalr8\xml"
 IMAGES_DIR = BASE_DIR / "images"
 

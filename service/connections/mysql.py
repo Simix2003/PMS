@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 import pymysql
 from pymysql.cursors import DictCursor
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
 import os
 import sys
@@ -17,8 +17,12 @@ from service.routes.broadcast import broadcast_stringatrice_warning
 from service.state import global_state
 
 # ---------------- MYSQL ----------------
-load_dotenv()
-MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+load_dotenv(find_dotenv())
+
+if os.getenv("ENV_MODE") == "docker":
+    MYSQL_HOST = os.getenv("MYSQL_HOST", "db")
+else:
+    MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
 MYSQL_USER = os.getenv("MYSQL_USER", "root")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "Master36!")
 MYSQL_DB = os.getenv("MYSQL_DB", "ix_monitor")

@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv, find_dotenv
 
-debug = True
+debug = False
 
 CHANNELS: dict = {}
 
@@ -86,7 +87,15 @@ ISSUE_TREE = {
     }
 }
 
-BASE_DIR = Path(os.getenv("BASE_DIR", "C:/PMS"))
+load_dotenv(find_dotenv())
+
+env_mode = os.getenv("ENV_MODE", "local")  # fallback to 'local' if not set
+
+if env_mode == "docker":
+    BASE_DIR = Path(os.getenv("BASE_DIR", "/data"))
+else:
+    BASE_DIR = Path(os.getenv("BASE_DIR", "C:/PMS"))
+
 ML_MODELS_DIR = BASE_DIR / "models"
 DEFECT_SIMILARITY_MODEL_PATH = ML_MODELS_DIR / "fine-tuned-defects_V2"
 TEMP_STORAGE_PATH = BASE_DIR / "temp_data.json"

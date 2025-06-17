@@ -193,12 +193,42 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     # -------- fermi_data calculation --------
     # get top 4 stops in current shift
 
+    # Query total stop time for station 29
+    sql_total_29 = """
+        SELECT SUM(st.stop_time) AS total_time
+        FROM stops st
+        WHERE st.type = 'STOP'
+        AND st.station_id = 29
+        AND st.start_time BETWEEN %s AND %s
+    """
+    cursor.execute(sql_total_29, (shift_start, shift_end))
+    row29 = cursor.fetchone() or {}
+    total_stop_time_29 = row29.get("total_time") or 0
+    total_stop_time_minutes_29 = total_stop_time_29 / 60
+    available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
+
+    # Query total stop time for station 30
+    sql_total_30 = """
+        SELECT SUM(st.stop_time) AS total_time
+        FROM stops st
+        WHERE st.type = 'STOP'
+        AND st.station_id = 30
+        AND st.start_time BETWEEN %s AND %s
+    """
+    cursor.execute(sql_total_30, (shift_start, shift_end))
+    row30 = cursor.fetchone() or {}
+    total_stop_time_30 = row30.get("total_time") or 0
+    total_stop_time_minutes_30 = total_stop_time_30 / 60
+    available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
+
+    # Query top 4 stops for both stations
     sql = """
         SELECT s.name AS station_name, st.reason, COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
         FROM stops st
         JOIN stations s ON st.station_id = s.id
         WHERE st.type = 'STOP'
-          AND st.start_time BETWEEN %s AND %s
+        AND st.station_id IN (29, 30)
+        AND st.start_time BETWEEN %s AND %s
         GROUP BY st.station_id, st.reason
         ORDER BY total_time DESC
         LIMIT 4
@@ -213,6 +243,10 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
             "count": row["n_occurrences"],
             "time": total_minutes
         })
+
+    # Append both available times at the end
+    fermi_data.append({"Available_Time_1": f"{available_time_29}"})
+    fermi_data.append({"Available_Time_2": f"{available_time_30}"})
 
     return {
         "station_1_in": s1_in,
@@ -255,36 +289,6 @@ def update_visual_data_on_new_module(
             global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
             return
         
-                # Update fermi_data after each new module
-        try:
-            conn = get_mysql_connection()
-            cursor = conn.cursor()
-
-            sql = """
-                SELECT s.name AS station_name, st.reason, COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
-                FROM stops st
-                JOIN stations s ON st.station_id = s.id
-                WHERE st.type = 'STOP'
-                  AND st.start_time BETWEEN %s AND %s
-                GROUP BY st.station_id, st.reason
-                ORDER BY total_time DESC
-                LIMIT 4
-            """
-            cursor.execute(sql, (current_shift_start, current_shift_end))
-            fermi_data = []
-            for row in cursor.fetchall():
-                total_minutes = round(row["total_time"] / 60)
-                fermi_data.append({
-                    "causale": row["reason"],
-                    "station": row["station_name"],
-                    "count": row["n_occurrences"],
-                    "time": total_minutes
-                })
-            data["fermi_data"] = fermi_data
-
-        except Exception as e:
-            logger.warning(f"⚠️ Error while refreshing fermi_data: {e}")
-
         # 2. Update station counters
         if station_name in cfg["station_1_in"]:
             data["station_1_in"] += 1
@@ -387,3 +391,86 @@ def update_visual_data_on_new_module(
 
         except Exception as e:
             logger.warning(f"⚠️ Could not schedule WebSocket update for {zone}: {e}")
+
+def refresh_fermi_data(zone: str, ts: datetime) -> None:
+    """
+    Refresh fermi_data for the zone (to be called after stop insert/update).
+    """
+    with _update_lock:
+        if zone not in global_state.visual_data:
+            logger.warning(f"⚠️ Cannot refresh fermi_data for unknown zone: {zone}")
+            return
+
+        data = global_state.visual_data[zone]
+        shift_start, shift_end = get_shift_window(ts)
+        conn = get_mysql_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Total stop time for station 29
+            sql_total_29 = """
+                SELECT SUM(st.stop_time) AS total_time
+                FROM stops st
+                WHERE st.type = 'STOP'
+                  AND st.station_id = 29
+                  AND st.start_time BETWEEN %s AND %s
+            """
+            cursor.execute(sql_total_29, (shift_start, shift_end))
+            row29 = cursor.fetchone() or {}
+            total_stop_time_29 = row29.get("total_time") or 0
+            total_stop_time_minutes_29 = total_stop_time_29 / 60
+            available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
+
+            # Total stop time for station 30
+            sql_total_30 = """
+                SELECT SUM(st.stop_time) AS total_time
+                FROM stops st
+                WHERE st.type = 'STOP'
+                  AND st.station_id = 30
+                  AND st.start_time BETWEEN %s AND %s
+            """
+            cursor.execute(sql_total_30, (shift_start, shift_end))
+            row30 = cursor.fetchone() or {}
+            total_stop_time_30 = row30.get("total_time") or 0
+            total_stop_time_minutes_30 = total_stop_time_30 / 60
+            available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
+
+            # Top 4 stops
+            sql = """
+                SELECT s.name AS station_name, st.reason, COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
+                FROM stops st
+                JOIN stations s ON st.station_id = s.id
+                WHERE st.type = 'STOP'
+                  AND st.station_id IN (29, 30)
+                  AND st.start_time BETWEEN %s AND %s
+                GROUP BY st.station_id, st.reason
+                ORDER BY total_time DESC
+                LIMIT 4
+            """
+            cursor.execute(sql, (shift_start, shift_end))
+            fermi_data = []
+            for row in cursor.fetchall():
+                total_minutes = round(row["total_time"] / 60)
+                fermi_data.append({
+                    "causale": row["reason"],
+                    "station": row["station_name"],
+                    "count": row["n_occurrences"],
+                    "time": total_minutes
+                })
+
+            fermi_data.append({"Available_Time_1": f"{available_time_29}"})
+            fermi_data.append({"Available_Time_2": f"{available_time_30}"})
+
+            data["fermi_data"] = fermi_data
+
+            # Also broadcast update to frontend immediately
+            loop = asyncio.get_running_loop()
+            payload = copy.deepcopy(data)
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                )
+            )
+
+        except Exception as e:
+            logger.warning(f"⚠️ Error refreshing fermi_data for {zone}: {e}")

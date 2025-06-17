@@ -153,6 +153,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Start other background jobs (non-blocking)
     asyncio.create_task(start_background_tasks())
 
+    #try:
+    #    asyncio.create_task(watch_folder_for_new_xml())
+    #    logger.info("✅ XML watcher task started")
+    #except Exception as e:
+    #    logger.error(f"❌ XML watcher task failed: {e}")
+
     app.state.plc_connections = plc_connections
     try:
         logger.info("✅ STARTUP complete")

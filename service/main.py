@@ -117,7 +117,7 @@ async def start_background_tasks():
 
             plc_connections[key] = plc
             asyncio.create_task(background_task(plc, key))
-            logger.info(f"✅ Background task not started for station {key}")
+            logger.info(f"✅ Background task started for station {key}")
 
     logger.info("✅ All PLC and background tasks launched")
 

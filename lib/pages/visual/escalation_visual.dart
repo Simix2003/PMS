@@ -1,5 +1,5 @@
 // escalation_visual_page.dart
-// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+// ignore_for_file: use_build_context_synchronously, deprecated_member_use, non_constant_identifier_names
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -9,11 +9,13 @@ import '../../shared/services/api_service.dart';
 
 class EscalationButton extends StatelessWidget {
   final int? linkedProductionId;
+  final int last_n_shifts;
   final VoidCallback? onEscalationsUpdated;
 
   const EscalationButton({
     super.key,
     this.linkedProductionId,
+    required this.last_n_shifts,
     required this.onEscalationsUpdated,
   });
 
@@ -36,6 +38,7 @@ class EscalationButton extends StatelessWidget {
         showDialog<void>(
           context: context,
           builder: (_) => _EscalationDialog(
+            last_n_shifts: last_n_shifts,
             linkedProductionId: linkedProductionId,
             onEscalationsUpdated: onEscalationsUpdated,
           ),
@@ -46,10 +49,14 @@ class EscalationButton extends StatelessWidget {
 }
 
 class _EscalationDialog extends StatefulWidget {
+  final int last_n_shifts;
   final int? linkedProductionId;
   final VoidCallback? onEscalationsUpdated;
 
-  const _EscalationDialog({this.linkedProductionId, this.onEscalationsUpdated});
+  const _EscalationDialog(
+      {required this.last_n_shifts,
+      this.linkedProductionId,
+      this.onEscalationsUpdated});
 
   @override
   State<_EscalationDialog> createState() => _EscalationDialogState();
@@ -70,7 +77,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     "AIN02": 30,
   };
 
-  final stopTypes = ["ESCALATION", "STOP", "MAINTENANCE", "QUALITY"];
+  final stopTypes = ["ESCALATION", "STOP", "MAINTENANCE"];
   static const List<String> statusCreation = [
     "OPEN",
     "SHIFT_MANAGER",
@@ -101,7 +108,8 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     setState(() => _busy = true);
     escalations.clear();
     for (final entry in stationNameToId.entries) {
-      final res = await _api.getStopsForStation(entry.value);
+      final res = await _api.getStopsForStation(entry.value,
+          shiftsBack: widget.last_n_shifts);
       if (res != null && res['status'] == 'ok' && res['stops'] != null) {
         for (final stop in res['stops']) {
           escalations.add({

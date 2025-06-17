@@ -5,14 +5,15 @@ import logging
 import os
 import sys
 import copy
+from collections import defaultdict
+from threading import Lock
 
-from service.routes.broadcast import broadcast_zone_update
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection
 from service.config.config import ZONE_SOURCES
-from threading import Lock
 from service.state import global_state
+from service.routes.broadcast import broadcast_zone_update
 
 _update_lock = Lock()
 
@@ -94,7 +95,7 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     """
     if now is None:
         now = datetime.now()
-        #fake_now = now - timedelta(days=6)
+        #fake_now = now - timedelta(hours=4)
         #now = fake_now
 
     cfg = ZONE_SOURCES[zone]
@@ -248,22 +249,85 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     fermi_data.append({"Available_Time_1": f"{available_time_29}"})
     fermi_data.append({"Available_Time_2": f"{available_time_30}"})
 
+    # -------- top_defects_qg2 calculation from productions + object_defects --------
+    # 1️⃣ Query productions table for esito 6 on stations 1+2
+    sql_productions = """
+        SELECT id, station_id
+        FROM productions
+        WHERE esito = 6
+        AND station_id IN (1, 2)
+        AND start_time BETWEEN %s AND %s
+    """
+    cursor.execute(sql_productions, (shift_start, shift_end))
+    rows = cursor.fetchall()
+
+    # Split production IDs by station
+    production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
+    production_ids_2= [row['id'] for row in rows if row['station_id'] == 2]
+
+    all_production_ids = tuple(production_ids_1 + production_ids_2)
+    if not all_production_ids:
+        all_production_ids = (0,)
+
+    # 2️⃣ Query object_defects JOIN defects
+    sql_defects = """
+        SELECT od.production_id, od.defect_id, d.category
+        FROM object_defects od
+        JOIN defects d ON od.defect_id = d.id
+        WHERE od.production_id IN %s
+    """
+    cursor.execute(sql_defects, (all_production_ids,))
+    rows = cursor.fetchall()
+
+    # Build mapping production_id → station_id
+    production_station_map = {pid: 1 for pid in production_ids_1}
+    production_station_map.update({pid: 2 for pid in production_ids_2})
+
+    defect_counter = defaultdict(lambda: {1: set(), 2: set()})
+
+    for row in rows:
+        prod_id = row['production_id']
+        category = row['category']
+        station_id = production_station_map.get(prod_id)
+        if station_id:
+            defect_counter[category][station_id].add(prod_id)
+
+    # Aggregate counts
+    results = []
+    for category, stations in defect_counter.items():
+        ain1_count = len(stations[1])
+        ain2_count = len(stations[2])
+        total = ain1_count + ain2_count
+        results.append({
+            "label": category,
+            "ain1": ain1_count,
+            "ain2": ain2_count,
+            "total": total
+        })
+
+    # Sort and limit to top 5
+    results = sorted(results, key=lambda x: x['total'], reverse=True)[:5]
+
+    top_defects_qg2 = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in results]
+
+
     return {
-        "station_1_in": s1_in,
-        "station_2_in": s2_in,
-        "station_1_out_ng": s1_ng,
-        "station_2_out_ng": s2_ng,
-        "station_1_yield": s1_y,
-        "station_2_yield": s2_y,
-        "station_1_yield_shifts": s1_yield_shifts,
-        "station_2_yield_shifts": s2_yield_shifts,
-        "station_1_yield_last_8h": s1_y8h,
-        "station_2_yield_last_8h": s2_y8h,
-        "shift_throughput": shift_throughput,
-        "last_8h_throughput": last_8h_throughput,
-        "__shift_start": shift_start.isoformat(),
-        "fermi_data": fermi_data,
-    }
+    "station_1_in": s1_in,
+    "station_2_in": s2_in,
+    "station_1_out_ng": s1_ng,
+    "station_2_out_ng": s2_ng,
+    "station_1_yield": s1_y,
+    "station_2_yield": s2_y,
+    "station_1_yield_shifts": s1_yield_shifts,
+    "station_2_yield_shifts": s2_yield_shifts,
+    "station_1_yield_last_8h": s1_y8h,
+    "station_2_yield_last_8h": s2_y8h,
+    "shift_throughput": shift_throughput,
+    "last_8h_throughput": last_8h_throughput,
+    "__shift_start": shift_start.isoformat(),
+    "fermi_data": fermi_data,
+    "top_defects_qg2": top_defects_qg2,
+}
 
 # --------------------------------------------------------------------------- #
 def update_visual_data_on_new_module(

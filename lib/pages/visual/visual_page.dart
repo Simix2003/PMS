@@ -68,6 +68,13 @@ class _VisualPageState extends State<VisualPage> {
   List<Map<String, int>> hourlyData = [];
   List<String> hourLabels = [];
 
+  //final List<String> defectLabels = ['NG Macchie ECA', 'NG Saldatura', 'NG Bad Soldering', 'NG Mancanza l_Ribbon', 'NG Celle Rotte'];
+  List<String> defectLabels = [];
+  //final List<int> ain1Counts = [17, 8, 9, 7, 3];
+  List<int> ain1Counts = [];
+  //final List<int> ain2Counts = [4, 5, 0, 1, 2];
+  List<int> ain2Counts = [];
+
   Color getYieldColor(int value, int target, int threshold) {
     if (value > target) {
       return okColor;
@@ -164,6 +171,20 @@ class _VisualPageState extends State<VisualPage> {
 
         hourLabels =
             hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
+        // Parse Top Defects QG2
+        final topDefectsRaw =
+            List<Map<String, dynamic>>.from(response['top_defects_qg2'] ?? []);
+
+        defectLabels = [];
+        ain1Counts = [];
+        ain2Counts = [];
+
+        for (final defect in topDefectsRaw) {
+          defectLabels.add(defect['label']?.toString() ?? '');
+          ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+          ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+        }
 
         // Parse fermi data
         final fermiRaw =
@@ -948,6 +969,7 @@ class _VisualPageState extends State<VisualPage> {
 
                                   // Right side: Escalation button
                                   EscalationButton(
+                                    last_n_shifts: last_n_shifts,
                                     onEscalationsUpdated:
                                         _refreshEscalationTrafficLight,
                                   ),
@@ -1045,7 +1067,7 @@ class _VisualPageState extends State<VisualPage> {
                       Flexible(
                         flex: 3,
                         child: Container(
-                          height: 325,
+                          height: 400,
                           margin: const EdgeInsets.only(right: 6, bottom: 16),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -1061,6 +1083,7 @@ class _VisualPageState extends State<VisualPage> {
                                   children: [
                                     Flexible(
                                       child: Card(
+                                        elevation: 10,
                                         color: Colors.white,
                                         child: Padding(
                                           padding: const EdgeInsets.all(8),
@@ -1163,102 +1186,107 @@ class _VisualPageState extends State<VisualPage> {
                                       ),
                                     ),
                                     //const TopDefectsPieChart(),
-                                    Card(
-                                      color: Colors.white,
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(8),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            const Text(
-                                              'Available \nTime\nAIN1',
-                                              style: TextStyle(
-                                                fontSize: 28,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.black87,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 16),
-                                            Column(
-                                              children: [
-                                                SizedBox(
-                                                  width: 200, // radius * 2
-                                                  child: Column(
-                                                    children: [
-                                                      AnimatedRadialGauge(
-                                                        duration:
-                                                            const Duration(
-                                                                milliseconds:
-                                                                    800),
-                                                        curve: Curves.easeInOut,
-                                                        value: availableTime_2
-                                                            .toDouble(),
-                                                        radius: 100,
-                                                        axis: GaugeAxis(
-                                                          min: 0,
-                                                          max: 100,
-                                                          degrees: 180,
-                                                          style:
-                                                              const GaugeAxisStyle(
-                                                            thickness: 16,
-                                                            background: Color(
-                                                                0xFFDDDDDD),
-                                                            segmentSpacing: 0,
-                                                          ),
-                                                          progressBar:
-                                                              GaugeRoundedProgressBar(
-                                                            color: () {
-                                                              if (availableTime_2 <=
-                                                                  50) {
-                                                                return errorColor;
-                                                              }
-                                                              if (availableTime_2 <=
-                                                                  75) {
-                                                                return warningColor;
-                                                              }
-                                                              return okColor;
-                                                            }(),
-                                                          ),
-                                                        ),
-                                                        builder: (context,
-                                                            child, value) {
-                                                          return Center(
-                                                            child: Text(
-                                                              '${value.toInt()}%',
-                                                              style:
-                                                                  const TextStyle(
-                                                                fontSize: 32,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                              ),
-                                                            ),
-                                                          );
-                                                        },
-                                                      ),
-                                                      const SizedBox(height: 6),
-                                                      const Row(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .spaceBetween,
-                                                        children: [
-                                                          Text('0%',
-                                                              style: TextStyle(
-                                                                  fontSize:
-                                                                      14)),
-                                                          Text('100%',
-                                                              style: TextStyle(
-                                                                  fontSize:
-                                                                      14)),
-                                                        ],
-                                                      ),
-                                                    ],
-                                                  ),
+                                    Flexible(
+                                      child: Card(
+                                        elevation: 10,
+                                        color: Colors.white,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(8),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              const Text(
+                                                'Available \nTime\nAIN2',
+                                                style: TextStyle(
+                                                  fontSize: 28,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.black87,
                                                 ),
-                                              ],
-                                            )
-                                          ],
+                                              ),
+                                              const SizedBox(width: 16),
+                                              Column(
+                                                children: [
+                                                  SizedBox(
+                                                    width: 200, // radius * 2
+                                                    child: Column(
+                                                      children: [
+                                                        AnimatedRadialGauge(
+                                                          duration:
+                                                              const Duration(
+                                                                  milliseconds:
+                                                                      800),
+                                                          curve:
+                                                              Curves.easeInOut,
+                                                          value: availableTime_2
+                                                              .toDouble(),
+                                                          radius: 100,
+                                                          axis: GaugeAxis(
+                                                            min: 0,
+                                                            max: 100,
+                                                            degrees: 180,
+                                                            style:
+                                                                const GaugeAxisStyle(
+                                                              thickness: 16,
+                                                              background: Color(
+                                                                  0xFFDDDDDD),
+                                                              segmentSpacing: 0,
+                                                            ),
+                                                            progressBar:
+                                                                GaugeRoundedProgressBar(
+                                                              color: () {
+                                                                if (availableTime_2 <=
+                                                                    50) {
+                                                                  return errorColor;
+                                                                }
+                                                                if (availableTime_2 <=
+                                                                    75) {
+                                                                  return warningColor;
+                                                                }
+                                                                return okColor;
+                                                              }(),
+                                                            ),
+                                                          ),
+                                                          builder: (context,
+                                                              child, value) {
+                                                            return Center(
+                                                              child: Text(
+                                                                '${value.toInt()}%',
+                                                                style:
+                                                                    const TextStyle(
+                                                                  fontSize: 32,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                ),
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
+                                                        const SizedBox(
+                                                            height: 6),
+                                                        const Row(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .spaceBetween,
+                                                          children: [
+                                                            Text('0%',
+                                                                style: TextStyle(
+                                                                    fontSize:
+                                                                        14)),
+                                                            Text('100%',
+                                                                style: TextStyle(
+                                                                    fontSize:
+                                                                        14)),
+                                                          ],
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              )
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -1274,8 +1302,7 @@ class _VisualPageState extends State<VisualPage> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                      SizedBox(
-                                        height: 275,
+                                      Expanded(
                                         child: Container(
                                           decoration: BoxDecoration(
                                             color: Colors.white,
@@ -1359,30 +1386,35 @@ class _VisualPageState extends State<VisualPage> {
                       ),
                       Flexible(
                         flex: 3,
-                        child: Container(
-                          height: 325,
-                          margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: 400, // ← set your maximum height here
                           ),
-                          child: Row(
-                            children: [
-                              // LEFT COLUMN (1 card)
-                              Flexible(
-                                flex: 3,
-                                child: TopDefectsHorizontalBarChart(),
-                              ),
-
-                              const SizedBox(width: 8),
-
-                              // RIGHT COLUMN (1 full-height card)
-                              Flexible(
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  flex: 3,
+                                  child: TopDefectsHorizontalBarChart(
+                                    defectLabels: defectLabels,
+                                    ain1Counts: ain1Counts,
+                                    ain2Counts: ain2Counts,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // RIGHT COLUMN (1 full-height card)
+                                /*Flexible(
                                 flex: 2,
                                 child: VPFDefectsHorizontalBarChart(),
-                              ),
-                            ],
+                              ),*/
+                              ],
+                            ),
                           ),
                         ),
                       ),

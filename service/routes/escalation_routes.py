@@ -68,10 +68,10 @@ async def api_update_status(payload: Dict[str, Any]):
 # Get stops for a station
 # -------------------------
 @router.get("/api/escalation/get_stops/{station_id}")
-async def api_get_stops(station_id: int, limit: int = 100):
+async def api_get_stops(station_id: int, shifts_back: int = 3):
     try:
         conn = get_mysql_connection()
-        stops = get_stops_for_station(station_id, conn, limit)
+        stops = get_stops_for_station(station_id, conn, shifts_back)
         return {"status": "ok", "stops": stops}
     except Exception as e:
         logging.error(f"Error fetching stops: {e}")

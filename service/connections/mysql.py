@@ -682,18 +682,39 @@ def update_stop_status(stop_id, new_status, changed_at, operator_id, conn):
 
     conn.commit()
 
-# Get stops for a station
-def get_stops_for_station(station_id: int, conn, limit: int = 100):
-    """Get recent stops for a given station."""
+from datetime import datetime, timedelta
+
+# Example shift configuration
+SHIFT_DURATION_HOURS = 8
+SHIFT_START_TIMES = ["06:00", "14:00", "22:00"]
+
+def get_shift_start(now: datetime):
+    date = now.date()
+    for shift_time in reversed(SHIFT_START_TIMES):
+        shift_hour, shift_minute = map(int, shift_time.split(":"))
+        shift_start = datetime(date.year, date.month, date.day, shift_hour, shift_minute)
+        if now >= shift_start:
+            return shift_start
+    # if now before first shift of day
+    yesterday = date - timedelta(days=1)
+    shift_hour, shift_minute = map(int, SHIFT_START_TIMES[-1].split(":"))
+    return datetime(yesterday.year, yesterday.month, yesterday.day, shift_hour, shift_minute)
+
+def get_stops_for_station(station_id: int, conn, shifts_back: int = 3):
+    """Get stops for a station within last N shifts."""
+    now = datetime.now()
+    current_shift_start = get_shift_start(now)
+    target_start_time = current_shift_start - timedelta(hours=SHIFT_DURATION_HOURS * (shifts_back-1))
+
     cursor = conn.cursor()
     query = """
-        SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
-        FROM stops
-        WHERE station_id = %s
-        ORDER BY start_time DESC
-        LIMIT %s
+    SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
+    FROM stops
+    WHERE station_id = %s AND type = %s AND start_time >= %s
+    ORDER BY start_time DESC
     """
-    cursor.execute(query, (station_id, limit))
+    params = (station_id, "ESCALATION", target_start_time)
+    cursor.execute(query, params)
     results = cursor.fetchall()
     cursor.close()
     return results

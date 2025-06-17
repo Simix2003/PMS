@@ -4,6 +4,7 @@ from pathlib import Path
 debug = True
 
 CHANNELS: dict = {}
+
 #TODO
 ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
     "AIN": {
@@ -85,13 +86,13 @@ ISSUE_TREE = {
     }
 }
 
-BASE_DIR = Path("C:/PMS")
-
-# Directory for all saved ML models
-ML_MODELS_DIR = os.path.join(BASE_DIR, "models")
-
-# Specific models
-DEFECT_SIMILARITY_MODEL_PATH = os.path.join(ML_MODELS_DIR, "fine-tuned-defects_V2")
+BASE_DIR = Path(os.getenv("BASE_DIR", "C:/PMS"))
+ML_MODELS_DIR = BASE_DIR / "models"
+DEFECT_SIMILARITY_MODEL_PATH = ML_MODELS_DIR / "fine-tuned-defects_V2"
+TEMP_STORAGE_PATH = BASE_DIR / "temp_data.json"
+SETTINGS_PATH = BASE_DIR / "settings.json"
+IMAGES_DIR = BASE_DIR / "images"
+XML_FOLDER_PATH = BASE_DIR / "xml"
 
 KNOWN_DEFECTS = [
     "Non Lavorato Poe Scaduto", 
@@ -117,14 +118,9 @@ KNOWN_DEFECTS = [
     "Graffio su Cella",
 ]
 
-TEMP_STORAGE_PATH = os.path.join(BASE_DIR, "temp_data.json")
-SETTINGS_PATH = os.path.join(BASE_DIR, "settings.json")
+
 # In-memory cache
 REFRESHED_SETTINGS = {}
-
-XML_FOLDER_PATH = r"C:\PMS\xml"
-#XML_FOLDER_PATH = r"\\Desktop-ofbalr8\xml"
-IMAGES_DIR = BASE_DIR / "images"
 
 COLUMN_MAP = {
     "ID Modulo": "o.id_modulo",

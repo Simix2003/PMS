@@ -1,27 +1,50 @@
 # PMS Backend
 
-This folder contains the FastAPI backend for the Production Monitoring System.
+This folder contains the FastAPI backend for the **Production Monitoring System (PMS)**.
 
-## Environment variables
+---
 
-The application reads configuration from the following variables:
+## 📁 Folder Contents
 
-- `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DB` – MySQL connection settings.
-- `BASE_DIR` – directory used to store persistent data (models, images, settings...).
-- `XML_FOLDER_PATH` – location of incoming XML files.
-- `PUBLIC_BASE_URL` – public URL used when returning image paths.
-- `DEBUG` – set to `true` to enable debug mode.
+- `main.py` — Main application entry point
+- `Dockerfile` — Optimized image build using wheel caching
+- `docker-compose.yml` — Orchestrates backend and MySQL
+- `requirements.txt` — Locked Python dependencies
+- `.env` — Runtime configuration variables
+- `wheels/` — Prebuilt Python wheels to speed up Docker builds
 
-Defaults are provided so the app can run without setting them, but overriding
-them is recommended for production deployments.
+---
 
-## Docker usage
+## ⚙️ Environment Variables
 
-Build and run the backend together with a MySQL database using Docker Compose:
+The app loads the following from `.env`:
+
+| Variable | Description |
+|----------|-------------|
+| `BASE_DIR` | Root folder for images, models, temp files (in container: `/data`) |
+| `MYSQL_HOST` | MySQL hostname (in Docker: `db`) |
+| `MYSQL_PORT` | MySQL port (`3306`) |
+| `MYSQL_USER` | MySQL username (`root`) |
+| `MYSQL_PASSWORD` | MySQL password |
+| `MYSQL_DB` | MySQL database name (`ix_monitor`) |
+
+> These are automatically injected by `docker-compose.yml`.
+
+---
+
+## 🐳 Run with Docker Compose
+
+Build and start PMS backend + MySQL:
 
 ```bash
 cd D:\Imix\Lavori\2025\3SUN\IX-Monitor\ix_monitor\service
-docker compose up --build
-```
 
-The service will be exposed on port `8001` and MySQL on `3306`.
+#TO BUILD IT
+docker compose up --build
+
+# TO RUN IT
+docker compose up
+
+
+# We should have 1 Container for the Python Backend ( port 8001 )
+# We should then have 1 Container for Frontend ( NGINX, Port 8050 to 8055 )

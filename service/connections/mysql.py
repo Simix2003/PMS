@@ -5,6 +5,7 @@ import logging
 from typing import Optional
 import pymysql
 from pymysql.cursors import DictCursor
+from dotenv import load_dotenv
 
 import os
 import sys
@@ -16,6 +17,12 @@ from service.routes.broadcast import broadcast_stringatrice_warning
 from service.state import global_state
 
 # ---------------- MYSQL ----------------
+load_dotenv()
+MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+MYSQL_USER = os.getenv("MYSQL_USER", "root")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "Master36!")
+MYSQL_DB = os.getenv("MYSQL_DB", "ix_monitor")
+MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
 
 def get_mysql_connection():
     """
@@ -27,22 +34,20 @@ def get_mysql_connection():
     try:
         conn = global_state.mysql_connection
 
-        # First use or explicitly closed
         if conn is None or not conn.open:
             raise RuntimeError("No active MySQL connection")
 
-        # Reconnect if socket was dropped (e.g. idle too long)
         conn.ping(reconnect=True)
         return conn
 
     except Exception as e:
         logging.warning(f"MySQL connection lost or not available. Reconnecting… ({e})")
         conn = pymysql.connect(
-            host="localhost",
-            user="root",
-            password="Master36!",
-            database="ix_monitor",
-            port=3306,
+            host=MYSQL_HOST,
+            user=MYSQL_USER,
+            password=MYSQL_PASSWORD,
+            database=MYSQL_DB,
+            port=MYSQL_PORT,
             cursorclass=DictCursor,
             autocommit=False,
             charset="utf8mb4"

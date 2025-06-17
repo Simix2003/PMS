@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.idea/
+.vscode/
+.git/
+*.log
+*.db
+
+# Only exclude wheels if you don't want to cache them
+# For now: allow them (do NOT exclude!)
+# wheels/

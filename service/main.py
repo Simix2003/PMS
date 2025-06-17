@@ -71,14 +71,36 @@ async def start_background_tasks():
     except Exception as e:
         logger.error(f"❌ visual_data cache init failed: {e}")
 
-    #try:
-    #    asyncio.create_task(watch_folder_for_new_xml())
-    #    logger.info("✅ XML watcher task started")
-    #except Exception as e:
-    #    logger.error(f"❌ XML watcher task failed: {e}")
+    logger.info("🔄 Starting PLC background tasks and Fermi tasks")
 
-    logger.info("🔄 Starting PLC background tasks")
     shared_conns: dict[tuple[str, int], PLCConnection] = {}
+
+    # STEP 1 — Build unique PLC list first
+    unique_plcs = set()
+
+    for line, stations in CHANNELS.items():
+        for station, config in stations.items():
+            plc_info = config.get("plc")
+            if not plc_info:
+                continue
+
+            ip, slot = plc_info.get("ip"), plc_info.get("slot", 0)
+            unique_plcs.add((ip, slot))
+
+    # STEP 2 — Create 1 connection and fermi_task per PLC
+    for ip, slot in unique_plcs:
+        try:
+            if debug:
+                plc = FakePLCConnection(f"{ip}:{slot}")
+            else:
+                plc = PLCConnection(ip_address=ip, slot=slot, status_callback=None)
+            shared_conns[(ip, slot)] = plc
+            asyncio.create_task(fermi_task(plc, ip, slot))
+            logger.info(f"✅ Fermi task started for PLC {ip}:{slot}")
+        except Exception as e:
+            logger.error(f"❌ PLC connect failed for {ip}:{slot}: {e}")
+
+    # STEP 3 — Now create background tasks per station
     for line, stations in CHANNELS.items():
         for station, config in stations.items():
             key = f"{line}.{station}"
@@ -88,30 +110,21 @@ async def start_background_tasks():
                 continue
 
             ip, slot = plc_info.get("ip"), plc_info.get("slot", 0)
-            pkey = (ip, slot)
-
-            if debug:
-                plc = FakePLCConnection(station)
-            else:
-                try:
-                    if pkey in shared_conns:
-                        plc = shared_conns[pkey]
-                    else:
-                        plc = PLCConnection(ip_address=ip, slot=slot, status_callback=make_status_callback(station))
-                        shared_conns[pkey] = plc
-                except Exception as e:
-                    logger.error(f"❌ PLC connect failed for {key}: {e}")
-                    continue
+            plc = shared_conns.get((ip, slot))
+            if not plc:
+                logger.warning(f"⚠️ No PLC connection for station {key}")
+                continue
 
             plc_connections[key] = plc
             asyncio.create_task(background_task(plc, key))
-            asyncio.create_task(fermi_task(plc, key))
-    logger.info("✅ All PLC background tasks launched")
+            logger.info(f"✅ Background task not started for station {key}")
+
+    logger.info("✅ All PLC and background tasks launched")
 
 # ---------------- LIFESPAN ----------------
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    logger.info("🚀 FastAPI lifespan STARTUP")
+    logger.info("FastAPI lifespan STARTUP")
 
     # Fast connect check
     try:

@@ -10,86 +10,102 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.connections.mysql import create_stop, get_mysql_connection
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
-from service.config.config import PLC_DB_RANGES, debug
+from service.config.config import CHANNELS, PLC_DB_RANGES, debug
 from service.helpers.buffer_plc_extract import extract_bool, extract_string, extract_int, extract_DT
 
-async def fermi_task(plc_connection: PLCConnection, full_station_id: str):
-    print(f"[{full_station_id}] Starting fermi task.")
-    prev_trigger = False
-    clock = False
+async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
+    print(f"[{ip}:{slot}] Starting fermi task.")
 
-    line_name, channel_id = full_station_id.split(".")
+    # Find all stations connected to this PLC
+    stations_to_monitor = []
+    for line_name, stations in CHANNELS.items():
+        for channel_id, config in stations.items():
+            plc_info = config.get("plc")
+            if not plc_info:
+                continue
+
+            if plc_info.get("ip") == ip and plc_info.get("slot", 0) == slot:
+                stations_to_monitor.append((line_name, channel_id, config))
+
+    if not stations_to_monitor:
+        logging.warning(f"⚠️ No stations found for PLC {ip}:{slot}")
+        return
+
+    # Extract the unique clock_conf from first valid station
+    clock_conf = None
+    for _, _, paths in stations_to_monitor:
+        clock_conf_candidate = paths.get("keepLive_fermi_PC")
+        if clock_conf_candidate:
+            clock_conf = clock_conf_candidate
+            break
+
+    if not clock_conf:
+        logging.warning(f"⚠️ No keepLive_fermi_PC config found for PLC {ip}:{slot}")
+
+    # Create state tracking per station
+    prev_triggers = { (line, channel): False for (line, channel, _) in stations_to_monitor }
+
+    # Create single PLC-wide clock state
+    clock = False
 
     while True:
         try:
-            # Ensure connection is alive or try reconnect
             if not plc_connection.connected or not plc_connection.is_connected():
-                print(f"⚠️ PLC disconnected for {full_station_id} in Fermi_task, attempting reconnect...")
+                print(f"⚠️ PLC disconnected for {ip}:{slot} in Fermi_task, attempting reconnect...")
                 await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
                 await asyncio.sleep(10)
                 continue
 
-            paths = get_channel_config(line_name, channel_id)
-            if not paths:
-                logging.error(f"❌ FERMI Invalid line/channel: {line_name}.{channel_id}")
-                await asyncio.sleep(1)
-                continue
+            for line_name, channel_id, paths in stations_to_monitor:
+                trigger_conf = paths.get("dati_pronti_fermi")
+                if not trigger_conf:
+                    continue
 
-            trigger_conf = paths.get("dati_pronti_fermi")
-            if not trigger_conf:
-                logging.warning(f"⚠️ Missing 'dati_pronti_fermi' config for {full_station_id}")
-                await asyncio.sleep(1)
-                continue
+                plc_key = (plc_connection.ip_address, plc_connection.slot)
+                db = trigger_conf["db"]
 
-            # Get full DB buffer once for this PLC
-            plc_key = (plc_connection.ip_address, plc_connection.slot)
-            db = trigger_conf["db"]
+                db_range = PLC_DB_RANGES.get(plc_key, {}).get(db)
+                if not db_range:
+                    logging.error(f"❌ No DB range defined for {plc_key} DB{db}")
+                    continue
 
-            db_range = PLC_DB_RANGES.get(plc_key, {}).get(db)
-            if not db_range:
-                logging.error(f"❌ No DB range defined for {plc_key} DB{db}")
-                await asyncio.sleep(1)
-                continue
+                start_byte = db_range["min"]
+                size = db_range["max"] - db_range["min"] + 1
 
-            start_byte = db_range["min"]
-            size = db_range["max"] - db_range["min"] + 1
+                buffer = await asyncio.to_thread(plc_connection.db_read, db, start_byte, size)
 
-            # Read full DB buffer
-            buffer = await asyncio.to_thread(plc_connection.db_read, db, start_byte, size)
+                trigger_value = extract_bool(buffer, trigger_conf["byte"], trigger_conf["bit"], start_byte)
 
-            # Validate if trigger exists
-            trigger_value = extract_bool(buffer, trigger_conf["byte"], trigger_conf["bit"], start_byte)
+                if trigger_value is None:
+                    raise Exception("Trigger read returned None")
 
-            if trigger_value is None:
-                raise Exception("Trigger read returned None")
+                if trigger_value != prev_triggers[(line_name, channel_id)]:
+                    prev_triggers[(line_name, channel_id)] = trigger_value
+                    await fermi_trigger_change(
+                        plc_connection,
+                        line_name,
+                        channel_id,
+                        trigger_value,
+                        buffer,
+                        start_byte
+                    )
 
-            if trigger_value != prev_trigger:
-                prev_trigger = trigger_value
-                await fermi_trigger_change(
-                    plc_connection,
-                    line_name,
-                    channel_id,
-                    trigger_value,
-                    buffer,
-                    start_byte
+            # 🔧 WRITE CLOCK once per PLC cycle
+            if clock_conf:
+                new_clock = not clock
+                clock = new_clock
+                await asyncio.to_thread(
+                    plc_connection.write_bool, 
+                    clock_conf["db"], 
+                    clock_conf["byte"], 
+                    clock_conf["bit"], 
+                    new_clock
                 )
 
-            if not paths:
-                logging.error(f"❌ Missing config for {line_name}.{channel_id}")
-                await asyncio.sleep(1)
-                continue  # Or return / skip, depending on context
-
-            #WRITE CLOCK
-            clock_conf = paths.get("keepLive_fermi_PC")
-            if clock_conf:
-                newClock = not clock
-                clock = newClock
-                await asyncio.to_thread(plc_connection.write_bool, clock_conf["db"], clock_conf["byte"], clock_conf["bit"], newClock)
-            
             await asyncio.sleep(1)
 
         except Exception as e:
-            logging.error(f"[{full_station_id}] 🔴 Error in FERMI task: {str(e)}")
+            logging.error(f"[{ip}:{slot}] 🔴 Error in FERMI task: {str(e)}")
             await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
             await asyncio.sleep(5)
 
@@ -106,12 +122,12 @@ async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, ch
     if val:
         print(f"🟢 Dati Pronti FERMI on {full_id} TRUE ...")
         # leggere i dati:
-        data = await read_fermi_data(plc_connection, line_name, channel_id, buffer=buffer, start_byte=start_byte)
+        data = await read_fermi_data(plc_connection, line_name, channel_id)
         print('Data read for Fermi: %s' % data)
         
         # Salvare i dati su MySQL
         conn = get_mysql_connection()
-        print('will save in database')
+        print('Saving in database')
         await insert_fermo_data(data, conn)
 
         try:
@@ -144,54 +160,84 @@ async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, ch
 async def read_fermi_data(
     plc_connection: PLCConnection,
     line_name: str,
-    channel_id: str,
-    buffer: bytes | None = None,
-    start_byte: int | None = None
+    channel_id: str
 ):
     full_id = f"{line_name}.{channel_id}"
 
     try:
-        # Step 1: Validate buffer and start_byte
-        if buffer is None or start_byte is None:
-            logging.error(f"[{full_id}] ❌ Cannot proceed: buffer or start_byte is None")
-            return None
-
-        # Step 2: Load config
         config = get_channel_config(line_name, channel_id)
         if config is None:
             logging.error(f"[{full_id}] ❌ Missing config for line/channel")
             return None
 
+        # 1️⃣ Collect all DBs we need to read
+        dbs_needed = set()
+        fields = ["id_utente_fermi", "inizio_fermo", "fine_fermo", "evento_fermo", "stazione_fermo"]
+
+        for field in fields:
+            conf = config.get(field)
+            if conf and "db" in conf:
+                dbs_needed.add(conf["db"])
+
+        # 2️⃣ Read all needed DBs
+        buffers = {}
+        for db in dbs_needed:
+            plc_key = (plc_connection.ip_address, plc_connection.slot)
+            db_range = PLC_DB_RANGES.get(plc_key, {}).get(db)
+            if not db_range:
+                logging.error(f"❌ No DB range defined for {plc_key} DB{db}")
+                return None
+
+            start_byte = db_range["min"]
+            size = db_range["max"] - db_range["min"] + 1
+            buffer = await asyncio.to_thread(plc_connection.db_read, db, start_byte, size)
+            buffers[db] = (buffer, start_byte)
+
+        # 3️⃣ Parse data from correct buffers
         data = {}
 
-        # Read Id_Utente
+        # Id Utente
         id_utente_conf = config.get("id_utente_fermi")
         if id_utente_conf:
-            data["Id_Utente"] = extract_string(buffer, id_utente_conf["byte"], id_utente_conf["length"], start_byte) or ""
+            buf, start = buffers[id_utente_conf["db"]]
+            relative_byte = id_utente_conf["byte"] - start
+            data["Id_Utente"] = extract_string(buf, relative_byte, id_utente_conf["length"], 0) or ""
         else:
             data["Id_Utente"] = ""
 
+        # Data Inizio
         data_inizio_conf = config.get("inizio_fermo")
         if data_inizio_conf:
-            data["DataInizio"] = extract_DT(buffer, data_inizio_conf["byte"], start_byte)
+            buf, start = buffers[data_inizio_conf["db"]]
+            relative_byte = data_inizio_conf["byte"] - start
+            data["DataInizio"] = extract_DT(buf, relative_byte, 0)
         else:
             data["DataInizio"] = None
 
+        # Data Fine
         data_fine_conf = config.get("fine_fermo")
         if data_fine_conf:
-            data["DataFine"] = extract_DT(buffer, data_fine_conf["byte"], start_byte)
+            buf, start = buffers[data_fine_conf["db"]]
+            relative_byte = data_fine_conf["byte"] - start
+            data["DataFine"] = extract_DT(buf, relative_byte, 0)
         else:
             data["DataFine"] = None
 
+        # Evento Fermo
         evento_conf = config.get("evento_fermo")
         if evento_conf:
-            data["Evento_Fermo"] = extract_int(buffer, evento_conf["byte"], start_byte)
+            buf, start = buffers[evento_conf["db"]]
+            relative_byte = evento_conf["byte"] - start
+            data["Evento_Fermo"] = extract_int(buf, relative_byte, 0)
         else:
             data["Evento_Fermo"] = 0
 
+        # Stazione Fermo
         stazione_conf = config.get("stazione_fermo")
         if stazione_conf:
-            data["Stazione_Fermo"] = extract_int(buffer, stazione_conf["byte"], start_byte)
+            buf, start = buffers[stazione_conf["db"]]
+            relative_byte = stazione_conf["byte"] - start
+            data["Stazione_Fermo"] = extract_int(buf, relative_byte, 0)
         else:
             data["Stazione_Fermo"] = 0
 

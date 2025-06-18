@@ -46,12 +46,9 @@ $ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout key.pem -out cert.
 
 In modo da creare i due certificati necessari per HTTPS.
 
-i file saranno sotto : C:\Users\papar
 
-Bisogna spostarli sotto : C:\IX-Monitor\ssl
+git add .
+git commit -m "
 
-OS: Windows ( In modo da avere possibilità di far girare EXE o Container Linux)
-CPU: 8 vCPU o superiore
-RAM: 16 GB o superiore
-SSD: 256 GB o superiore ( DATABASE MYSQL IN LOCALE OPPURE NOOO???)
-IP statico + porte aperte 8001 e 8050–>8055
+git push github DEV   # Push to GitHub
+git push origin DEV   # Push to GitLab

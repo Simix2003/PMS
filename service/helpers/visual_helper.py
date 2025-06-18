@@ -310,7 +310,6 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
 
     top_defects_qg2 = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in results]
 
-
     return {
     "station_1_in": s1_in,
     "station_2_in": s2_in,

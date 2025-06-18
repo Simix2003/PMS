@@ -11,3 +11,4 @@ Versions:
 "2.1.1" - Visual Management added Date and Time Visualization
 "2.2.2" - Fixed "MaybeMBJ" visual bug and Fixed Stringatrice last STATION bug
 "2.2.3" - Added Fermi Data to Visual page
+"2.2.4" - Fixed Fermi task to iterate thru PLC and not each Station

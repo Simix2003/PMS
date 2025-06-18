@@ -3,6 +3,7 @@ from datetime import datetime
 from doctest import debug
 import logging
 from fastapi import APIRouter, Body, HTTPException
+import pymysql
 from pymysql.cursors import DictCursor
 
 import sys
@@ -98,7 +99,7 @@ async def suppress_with_photo(data: dict = Body(...)):
         with conn.cursor() as cursor:
             photo_id = None
             if image_blob:
-                cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (image_blob,))
+                cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (pymysql.Binary(image_blob),))
                 photo_id = cursor.lastrowid
 
             cursor.execute("""

@@ -65,14 +65,14 @@ class _HeaderBoxState extends State<HeaderBox> {
                   formattedDate,
                   style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold),
                 ),
                 Text(
                   formattedTime,
                   style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold),
                 ),
               ],
@@ -413,7 +413,7 @@ List<TableRow> buildCustomRows(List<List<String>> data) {
             child: Text(
               cell,
               style: const TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
+              textAlign: TextAlign.start,
             ),
           ),
         );
@@ -1347,107 +1347,101 @@ class TopDefectsHorizontalBarChart extends StatelessWidget {
 
             // ✅ Chart
             Expanded(
-              child: AspectRatio(
-                aspectRatio: 1.4,
-                child: Stack(
-                  children: [
-                    RotatedBox(
-                      quarterTurns: 1,
-                      child: BarChart(
-                        BarChartData(
-                          barTouchData: BarTouchData(
-                            touchTooltipData: BarTouchTooltipData(
-                              getTooltipColor: (_) =>
-                                  Colors.transparent, // transparent bg
-                              rotateAngle: -90, // rotate tooltip content
-                              tooltipPadding:
-                                  EdgeInsets.zero, // no extra padding
-                              tooltipMargin: 8, // close to bar
-                              tooltipRoundedRadius: 0, // square box
-                              tooltipBorder: BorderSide.none, // no border
-                              getTooltipItem:
-                                  (group, groupIndex, rod, rodIndex) {
-                                return BarTooltipItem(
-                                  '${rod.toY.toInt()}',
-                                  TextStyle(
-                                    color: rod.color, // same as bar color
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                );
+              child: Stack(
+                children: [
+                  RotatedBox(
+                    quarterTurns: 1,
+                    child: BarChart(
+                      BarChartData(
+                        barTouchData: BarTouchData(
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) =>
+                                Colors.transparent, // transparent bg
+                            rotateAngle: -90, // rotate tooltip content
+                            tooltipPadding: EdgeInsets.zero, // no extra padding
+                            tooltipMargin: 8, // close to bar
+                            tooltipRoundedRadius: 0, // square box
+                            tooltipBorder: BorderSide.none, // no border
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              return BarTooltipItem(
+                                '${rod.toY.toInt()}',
+                                TextStyle(
+                                  color: rod.color, // same as bar color
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        maxY: 20,
+                        alignment: BarChartAlignment.spaceBetween,
+                        barGroups: List.generate(defectLabels.length, (index) {
+                          final ain1 = ain1Counts[index].toDouble();
+                          final ain2 = ain2Counts[index].toDouble();
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                toY: ain1,
+                                width: 16,
+                                color: Colors.blue,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                toY: ain2,
+                                width: 16,
+                                color: Colors.lightBlue.shade300,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 0,
+                          );
+                        }),
+                        titlesData: FlTitlesData(
+                          leftTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 100,
+                              getTitlesWidget: (value, meta) {
+                                final i = value.toInt();
+                                if (i < defectLabels.length) {
+                                  return RotatedBox(
+                                    quarterTurns: -1,
+                                    child: Text(
+                                      defectLabels[i],
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
                               },
                             ),
                           ),
-                          maxY: 20,
-                          alignment: BarChartAlignment.center,
-                          barGroups:
-                              List.generate(defectLabels.length, (index) {
-                            final ain1 = ain1Counts[index].toDouble();
-                            final ain2 = ain2Counts[index].toDouble();
-                            return BarChartGroupData(
-                              showingTooltipIndicators: [0, 1],
-                              x: index,
-                              barRods: [
-                                BarChartRodData(
-                                  toY: ain1,
-                                  width: 24,
-                                  color: Colors.blue,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                BarChartRodData(
-                                  toY: ain2,
-                                  width: 24,
-                                  color: Colors.lightBlue.shade300,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ],
-                              barsSpace: 6,
-                            );
-                          }),
-                          titlesData: FlTitlesData(
-                            leftTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            topTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            rightTitles: const AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 80,
-                                getTitlesWidget: (value, meta) {
-                                  final i = value.toInt();
-                                  if (i < defectLabels.length) {
-                                    return RotatedBox(
-                                      quarterTurns: -1,
-                                      child: Text(
-                                        defectLabels[i],
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    );
-                                  }
-                                  return const SizedBox.shrink();
-                                },
-                              ),
-                            ),
-                          ),
-                          gridData: FlGridData(
-                            show: true,
-                            drawVerticalLine: false,
-                            getDrawingHorizontalLine: (value) => FlLine(
-                              color: Colors.grey.withOpacity(0.2),
-                              strokeWidth: 1,
-                            ),
-                          ),
-                          borderData: FlBorderData(show: false),
                         ),
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          getDrawingHorizontalLine: (value) => FlLine(
+                            color: Colors.grey.withOpacity(0.2),
+                            strokeWidth: 1,
+                          ),
+                        ),
+                        borderData: FlBorderData(show: false),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],

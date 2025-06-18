@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
-debug = True
+debug = False
 
 CHANNELS: dict = {}
 
@@ -101,7 +101,10 @@ DEFECT_SIMILARITY_MODEL_PATH = ML_MODELS_DIR / "fine-tuned-defects_V2"
 TEMP_STORAGE_PATH = BASE_DIR / "temp_data.json"
 SETTINGS_PATH = BASE_DIR / "settings.json"
 IMAGES_DIR = BASE_DIR / "images"
-XML_FOLDER_PATH = BASE_DIR / "xml"
+if debug:
+    XML_FOLDER_PATH = BASE_DIR / "xml"
+else:
+    XML_FOLDER_PATH = Path(r"\\192.168.32.205\ell01b\XML")
 
 KNOWN_DEFECTS = [
     "Non Lavorato Poe Scaduto", 

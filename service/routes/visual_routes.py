@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
+from datetime import datetime
 
 import os
 import sys
@@ -19,5 +20,17 @@ def initialize_visual_cache():
 async def get_visual_data(zone: str = Query(...)):
     if zone not in global_state.visual_data:
         raise HTTPException(status_code=404, detail="Unknown zone")
-    # Return a shallow copy so callers can't mutate your cache
-    return dict(global_state.visual_data[zone])
+
+    now = datetime.now()
+    current_hour = now.strftime("%Y-%m-%d %H")
+    cached_data = global_state.visual_data[zone]
+    last_hour = cached_data.get("__last_hour")
+
+    # Force recompute if the hour has changed
+    if last_hour != current_hour:
+        print(f"🕒 Hour changed: recomputing snapshot for {zone}")
+        cached_data = compute_zone_snapshot(zone, now=now)
+        cached_data["__last_hour"] = current_hour
+        global_state.visual_data[zone] = cached_data
+
+    return dict(cached_data)

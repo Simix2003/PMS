@@ -95,8 +95,9 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     """
     if now is None:
         now = datetime.now()
-        #fake_now = now - timedelta(hours=4)
+        #fake_now = now - timedelta(hours=1)
         #now = fake_now
+    hour_start = now.replace(minute=0, second=0, microsecond=0)
 
     cfg = ZONE_SOURCES[zone]
     shift_start, shift_end = get_shift_window(now)
@@ -201,6 +202,13 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
         WHERE st.type = 'STOP'
         AND st.station_id = 29
         AND st.start_time BETWEEN %s AND %s
+        AND reason IN (
+        'Fermo Generico',
+        'Cancelli Aperti',
+        'Anomalia',
+        'Ciclo non Automatico',
+        'Fuori Tempo Ciclo'
+        )
     """
     cursor.execute(sql_total_29, (shift_start, shift_end))
     row29 = cursor.fetchone() or {}
@@ -215,6 +223,13 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
         WHERE st.type = 'STOP'
         AND st.station_id = 30
         AND st.start_time BETWEEN %s AND %s
+        AND reason IN (
+        'Fermo Generico',
+        'Cancelli Aperti',
+        'Anomalia',
+        'Ciclo non Automatico',
+        'Fuori Tempo Ciclo'
+        )
     """
     cursor.execute(sql_total_30, (shift_start, shift_end))
     row30 = cursor.fetchone() or {}
@@ -324,6 +339,7 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     "shift_throughput": shift_throughput,
     "last_8h_throughput": last_8h_throughput,
     "__shift_start": shift_start.isoformat(),
+    "__last_hour": hour_start.isoformat(),
     "fermi_data": fermi_data,
     "top_defects_qg2": top_defects_qg2,
 }
@@ -346,7 +362,9 @@ def update_visual_data_on_new_module(
 
         # 1. SHIFT rollover check
         current_shift_start, current_shift_end = get_shift_window(ts)
+        print(f"🔄 Current shift: {current_shift_start}")
         cached_shift_start = data.get("__shift_start")
+        print(f"🔄 Cached shift: {cached_shift_start}")
 
         if cached_shift_start != current_shift_start.isoformat():
             global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
@@ -475,8 +493,15 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                 SELECT SUM(st.stop_time) AS total_time
                 FROM stops st
                 WHERE st.type = 'STOP'
-                  AND st.station_id = 29
-                  AND st.start_time BETWEEN %s AND %s
+                AND st.station_id = 29
+                AND st.start_time BETWEEN %s AND %s
+                AND reason IN (
+                'Fermo Generico',
+                'Cancelli Aperti',
+                'Anomalia',
+                'Ciclo non Automatico',
+                'Fuori Tempo Ciclo'
+                )
             """
             cursor.execute(sql_total_29, (shift_start, shift_end))
             row29 = cursor.fetchone() or {}
@@ -489,8 +514,15 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                 SELECT SUM(st.stop_time) AS total_time
                 FROM stops st
                 WHERE st.type = 'STOP'
-                  AND st.station_id = 30
-                  AND st.start_time BETWEEN %s AND %s
+                AND st.station_id = 30
+                AND st.start_time BETWEEN %s AND %s
+                AND reason IN (
+                'Fermo Generico',
+                'Cancelli Aperti',
+                'Anomalia',
+                'Ciclo non Automatico',
+                'Fuori Tempo Ciclo'
+                )
             """
             cursor.execute(sql_total_30, (shift_start, shift_end))
             row30 = cursor.fetchone() or {}

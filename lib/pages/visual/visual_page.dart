@@ -1,5 +1,7 @@
 // ignore_for_file: library_private_types_in_public_api, non_constant_identifier_names, avoid_print
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
@@ -21,6 +23,7 @@ class _VisualPageState extends State<VisualPage> {
   final WebSocketService _webSocketService = WebSocketService();
   bool _isWebSocketConnected = false;
   Color errorColor = Colors.amber.shade700;
+  Color redColor = Colors.red;
   Color warningColor = Colors.yellow.shade400;
   Color okColor = Colors.green.shade400;
   Color textColor = Colors.black;
@@ -37,16 +40,8 @@ class _VisualPageState extends State<VisualPage> {
   int currentYield_1 = 100;
   int currentYield_2 = 100;
 
-  int ng_target_1 = 10;
-  int ng_threshold_1 = 5;
-  int ng_target_2 = 10;
-  int ng_threshold_2 = 5;
-
   int yield_target_1 = 90;
-  int yield_threshold_1 = 25;
   int yield_target_2 = 90;
-  int yield_threshold_2 = 25;
-
   int last_n_shifts = 3;
 
   int shift_target = 366;
@@ -75,23 +70,29 @@ class _VisualPageState extends State<VisualPage> {
   //final List<int> ain2Counts = [4, 5, 0, 1, 2];
   List<int> ain2Counts = [];
 
-  Color getYieldColor(int value, int target, int threshold) {
-    if (value > target) {
-      return okColor;
-    } else if (value < target - threshold) {
-      return warningColor;
+  Timer? _hourlyRefreshTimer;
+
+  Color getYieldColor(int value, int target) {
+    if (value >= target) {
+      return okColor; // GREEN
+    } else if (value >= target - 5) {
+      return warningColor; // ORANGE
     } else {
-      return errorColor;
+      return errorColor; // RED
     }
   }
 
-  Color getNgColor(int value, int target, int threshold) {
-    if (value > target) {
-      return okColor;
-    } else if (value < target - threshold) {
-      return warningColor;
+  Color getNgColor(int ngCount, int inCount) {
+    if (inCount == 0) return redColor; // fallback to red if division by zero
+
+    final percent = (ngCount / inCount) * 100;
+
+    if (percent > 5) {
+      return redColor; // RED
+    } else if (percent >= 2) {
+      return errorColor; // ORANGE
     } else {
-      return errorColor;
+      return okColor; // GREEN
     }
   }
 
@@ -308,11 +309,32 @@ class _VisualPageState extends State<VisualPage> {
     super.initState();
     fetchZoneData(); // initial REST fetch
     _initializeWebSocket(); // listen to updates after
+    _startHourlyRefreshScheduler(); // Will wait for the next Hour change
+  }
+
+  void _startHourlyRefreshScheduler() {
+    final now = DateTime.now();
+    final nextHour = DateTime(now.year, now.month, now.day, now.hour + 1);
+    final initialDelay = nextHour.difference(now);
+
+    print("⏳ Scheduling first refresh in ${initialDelay.inSeconds} seconds");
+
+    Future.delayed(initialDelay, () {
+      print("🔁 Hourly refresh triggered");
+      fetchZoneData();
+
+      // Start regular hourly timer
+      _hourlyRefreshTimer = Timer.periodic(Duration(hours: 1), (_) {
+        print("🔁 Hourly refresh triggered (loop)");
+        fetchZoneData();
+      });
+    });
   }
 
   @override
   void dispose() {
-    _webSocketService.close(); // clean up WebSocket
+    _hourlyRefreshTimer?.cancel();
+    _webSocketService.close();
     super.dispose();
   }
 
@@ -507,9 +529,9 @@ class _VisualPageState extends State<VisualPage> {
                                                         decoration:
                                                             BoxDecoration(
                                                           color: getNgColor(
-                                                              ng_bussingOut_1,
-                                                              ng_target_1,
-                                                              ng_threshold_1),
+                                                            ng_bussingOut_1,
+                                                            bussingIn_1,
+                                                          ),
                                                           shape:
                                                               BoxShape.circle,
                                                         ),
@@ -637,9 +659,9 @@ class _VisualPageState extends State<VisualPage> {
                                                         decoration:
                                                             BoxDecoration(
                                                           color: getNgColor(
-                                                              ng_bussingOut_2,
-                                                              ng_target_2,
-                                                              ng_threshold_2),
+                                                            ng_bussingOut_2,
+                                                            bussingIn_2,
+                                                          ),
                                                           shape:
                                                               BoxShape.circle,
                                                         ),
@@ -769,9 +791,9 @@ class _VisualPageState extends State<VisualPage> {
                                                         decoration:
                                                             BoxDecoration(
                                                           color: getYieldColor(
-                                                              currentYield_1,
-                                                              yield_target_1,
-                                                              yield_threshold_1),
+                                                            currentYield_1,
+                                                            yield_target_1,
+                                                          ),
                                                           shape:
                                                               BoxShape.circle,
                                                         ),
@@ -835,9 +857,9 @@ class _VisualPageState extends State<VisualPage> {
                                                         decoration:
                                                             BoxDecoration(
                                                           color: getYieldColor(
-                                                              currentYield_2,
-                                                              yield_target_2,
-                                                              yield_threshold_2),
+                                                            currentYield_2,
+                                                            yield_target_2,
+                                                          ),
                                                           shape:
                                                               BoxShape.circle,
                                                         ),
@@ -1022,7 +1044,7 @@ class _VisualPageState extends State<VisualPage> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            SizedBox(
+                            /*SizedBox(
                               height: 65,
                               child: Card(
                                 elevation: 2,
@@ -1045,7 +1067,7 @@ class _VisualPageState extends State<VisualPage> {
                                   ),
                                 ),
                               ),
-                            ),
+                            ),*/
                             const Flexible(
                               child: HeaderBox(
                                 title: 'Pareto Shift',
@@ -1320,10 +1342,9 @@ class _VisualPageState extends State<VisualPage> {
                                                   width: 0.5),
                                               columnWidths: const {
                                                 0: FlexColumnWidth(2),
-                                                1: FlexColumnWidth(2),
-                                                2: FlexColumnWidth(2),
-                                                3: FlexColumnWidth(2),
-                                                4: FlexColumnWidth(2),
+                                                1: FlexColumnWidth(1),
+                                                2: FlexColumnWidth(1),
+                                                3: FlexColumnWidth(1),
                                               },
                                               children: [
                                                 const TableRow(
@@ -1351,7 +1372,7 @@ class _VisualPageState extends State<VisualPage> {
                                                     ),
                                                     Padding(
                                                       padding:
-                                                          EdgeInsets.all(8),
+                                                          EdgeInsets.all(4),
                                                       child: Text("Frequenza",
                                                           style: TextStyle(
                                                               fontWeight:
@@ -1410,9 +1431,9 @@ class _VisualPageState extends State<VisualPage> {
                                 const SizedBox(width: 8),
                                 // RIGHT COLUMN (1 full-height card)
                                 /*Flexible(
-                                flex: 2,
-                                child: VPFDefectsHorizontalBarChart(),
-                              ),*/
+                                  flex: 2,
+                                  child: VPFDefectsHorizontalBarChart(),
+                                ),*/
                               ],
                             ),
                           ),

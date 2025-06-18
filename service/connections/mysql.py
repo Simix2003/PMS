@@ -300,7 +300,7 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
                 raise ValueError(f"Invalid image for defect path: {path}")
 
             # Insert into photos and get the ID
-            cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (image_blob,))
+            cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (pymysql.Binary(image_blob),))
             photo_id = cursor.lastrowid
 
         # Insert into object_defects
@@ -356,7 +356,7 @@ def save_warning_on_mysql(
             # Insert image if present
             photo_id = None
             if image_blob:
-                cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (image_blob,))
+                cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (pymysql.Binary(image_blob),))
                 photo_id = cursor.lastrowid
 
             # Insert warning with photo_id

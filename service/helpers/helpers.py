@@ -13,7 +13,16 @@ from service.config.config import CHANNELS
 
 
 def compress_base64_to_jpeg_blob(base64_str: str, quality: int = 70) -> Optional[bytes]:
+    """Return JPEG bytes from a base64 string.
+
+    The input may optionally include a ``data:image/...;base64,`` prefix. Any
+    image format supported by Pillow is accepted. If decoding fails ``None`` is
+    returned.
+    """
     try:
+        if base64_str.startswith("data:image"):
+            base64_str = base64_str.split(",", 1)[1]
+
         raw = base64.b64decode(base64_str)
         with Image.open(io.BytesIO(raw)) as img:
             if img.mode in ("RGBA", "P"):

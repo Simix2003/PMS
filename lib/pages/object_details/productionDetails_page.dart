@@ -30,9 +30,15 @@ class _ProductionDetailPageState extends State<ProductionDetailPage> {
   Future<void> _fetchDefects() async {
     final idModulo = widget.data['id_modulo'];
     final productionId = widget.data['production_id'];
+    final lineName = widget
+        .data['line_display_name']; // NOT CORRECT, I WON'T USE THAT IN Backend
+    final stationName = widget.data['station_name'];
 
     final result = await ApiService.fetchInitialIssuesForObject(
+      lineName,
+      stationName,
       idModulo,
+      false,
       productionId: productionId.toString(),
     );
 

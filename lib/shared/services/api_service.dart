@@ -448,13 +448,19 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> fetchInitialIssuesForObject(
-    String idModulo, {
+    String lineName,
+    String channelId,
+    String idModulo,
+    bool write_to_plc, {
     String? productionId,
   }) async {
     try {
       final uri =
           Uri.parse('$baseUrl/api/issues/for_object').replace(queryParameters: {
+        'line_name': lineName,
+        'channel_id': channelId,
         'id_modulo': idModulo,
+        'write_to_plc': write_to_plc.toString(),
         if (productionId != null) 'production_id': productionId,
       });
 

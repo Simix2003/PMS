@@ -136,8 +136,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
           if (selectedChannel == "RMI01" && newObjectId.isNotEmpty) {
             try {
-              final result =
-                  await ApiService.fetchInitialIssuesForObject(newObjectId);
+              final result = await ApiService.fetchInitialIssuesForObject(
+                  selectedLine, selectedChannel, newObjectId, true);
               final previouslySelected = result['issue_paths'] as List<String>;
               final preloadedPictures =
                   result['pictures'] as List<Map<String, String>>;

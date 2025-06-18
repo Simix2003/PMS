@@ -15,7 +15,7 @@ from service.connections.mysql import get_mysql_connection, insert_defects, upda
 from service.helpers.helpers import get_channel_config
 from service.state.global_state import plc_connections, incomplete_productions
 from service.config.settings import load_settings
-from service.config.config import ISSUE_TREE
+from service.config.config import ISSUE_TREE, debug
 
 router = APIRouter()
 
@@ -134,8 +134,17 @@ async def get_issue_tree(
     return {"items": items}
 
 @router.get("/api/issues/for_object")
-async def get_issues_for_object(id_modulo: str, production_id: int = Query(None)):
+async def get_issues_for_object(line_name: str, channel_id: str, id_modulo: str, production_id: int = Query(None), write_to_plc: bool = False):
     try:
+        if write_to_plc:
+            full_id = f"{line_name}.{channel_id}"
+
+            paths = get_channel_config(line_name, channel_id)
+            if not paths or "esito_scarto_compilato" not in paths:
+                return JSONResponse(status_code=404, content={"error": "esito_scarto_compilato not found in mapping"})
+        
+            target = paths["esito_scarto_compilato"]
+
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
             # 1. Trova l'object_id
@@ -144,23 +153,44 @@ async def get_issues_for_object(id_modulo: str, production_id: int = Query(None)
             if not obj:
                 raise HTTPException(status_code=404, detail="Oggetto non trovato.")
             object_id = obj["id"]
-            print('ObjectId: %s' % object_id)
 
-            # 2. Se non c'è un production_id, trova il più recente
+            # 2. Se non c'è un production_id, trova il più recente da una stazione QC
             if production_id is None:
+                # Step 1: Get most recent production
                 cursor.execute("""
-                    SELECT id FROM productions 
-                    WHERE object_id = %s 
-                    ORDER BY end_time DESC 
+                    SELECT p.id, s.type AS station_type
+                    FROM productions p
+                    JOIN stations s ON p.station_id = s.id
+                    WHERE p.object_id = %s
+                    ORDER BY p.end_time DESC
                     LIMIT 1
                 """, (object_id,))
-                prod = cursor.fetchone()
-                if not prod:
+                latest_prod = cursor.fetchone()
+
+                if not latest_prod:
                     return {"issue_paths": [], "pictures": []}
-                production_id = prod["id"]
-                print('Fetched latest ProductionId: %s' % production_id)
+
+                if latest_prod["station_type"] == "rework":
+                    print("⚠️ Latest production is rework → skipping defect extraction.")
+                    return {"issue_paths": [], "pictures": []}
+
+                # Step 2: Get latest QC production instead
+                cursor.execute("""
+                    SELECT p.id
+                    FROM productions p
+                    JOIN stations s ON p.station_id = s.id
+                    WHERE p.object_id = %s AND s.type = 'qc'
+                    ORDER BY p.end_time DESC
+                    LIMIT 1
+                """, (object_id,))
+                qc_prod = cursor.fetchone()
+
+                if not qc_prod:
+                    return {"issue_paths": [], "pictures": []}
+
+                production_id = qc_prod["id"]
             else:
-                print('Using provided ProductionId: %s' % production_id)
+                print('Using provided ProductionId:', production_id)
 
             # 3. Estrai i difetti associati con join alle foto
             cursor.execute("""
@@ -175,6 +205,11 @@ async def get_issues_for_object(id_modulo: str, production_id: int = Query(None)
             defects = cursor.fetchall()
             issue_paths = []
             pictures = []
+
+            if write_to_plc:
+                plc_connection = plc_connections.get(full_id)
+                if not plc_connection:
+                    return JSONResponse(status_code=404, content={"error": f"No PLC connection for {full_id}."})
 
             for row in defects:
                 cat = row["category"]
@@ -228,6 +263,12 @@ async def get_issues_for_object(id_modulo: str, production_id: int = Query(None)
                     issue_paths.append(path)
                     if base64_photo:
                         pictures.append({"defect": path, "image": base64_photo})
+            
+            if defects and write_to_plc:
+                if debug: 
+                    print(f"🔁 Writing to PLC for {full_id}")
+                else:
+                    await asyncio.to_thread(plc_connection.write_bool, target["db"], target["byte"], target["bit"], True)
 
             return {"issue_paths": issue_paths, "pictures": pictures}
 

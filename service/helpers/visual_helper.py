@@ -362,9 +362,7 @@ def update_visual_data_on_new_module(
 
         # 1. SHIFT rollover check
         current_shift_start, current_shift_end = get_shift_window(ts)
-        print(f"🔄 Current shift: {current_shift_start}")
         cached_shift_start = data.get("__shift_start")
-        print(f"🔄 Cached shift: {cached_shift_start}")
 
         if cached_shift_start != current_shift_start.isoformat():
             global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
@@ -381,6 +379,9 @@ def update_visual_data_on_new_module(
                 data["station_1_out_ng"] += 1
             elif station_name in cfg["station_2_out_ng"]:
                 data["station_2_out_ng"] += 1
+
+            # Refresh top 5 defects if a new NG module was detected
+            refresh_top_defects_qg2(zone, ts)
 
         # 3. Recompute shift yield
         s1_good = data["station_1_in"] - data["station_1_out_ng"]
@@ -569,3 +570,84 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
 
         except Exception as e:
             logger.warning(f"⚠️ Error refreshing fermi_data for {zone}: {e}")
+
+def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
+    """
+    Refresh top_defects_qg2 for the zone (based on esito=6 in current shift).
+    """
+    with _update_lock:
+        if zone not in global_state.visual_data:
+            logger.warning(f"⚠️ Cannot refresh top_defects_qg2 for unknown zone: {zone}")
+            return
+
+        data = global_state.visual_data[zone]
+        shift_start, shift_end = get_shift_window(ts)
+        conn = get_mysql_connection()
+        cursor = conn.cursor()
+
+        try:
+            # 1️⃣ Get NG productions for stations 1 + 2
+            sql_productions = """
+                SELECT id, station_id
+                FROM productions
+                WHERE esito = 6
+                AND station_id IN (1, 2)
+                AND start_time BETWEEN %s AND %s
+            """
+            cursor.execute(sql_productions, (shift_start, shift_end))
+            rows = cursor.fetchall()
+
+            production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
+            production_ids_2 = [row['id'] for row in rows if row['station_id'] == 2]
+            all_production_ids = tuple(production_ids_1 + production_ids_2) or (0,)
+
+            # 2️⃣ Join with object_defects + defects
+            sql_defects = """
+                SELECT od.production_id, d.category
+                FROM object_defects od
+                JOIN defects d ON od.defect_id = d.id
+                WHERE od.production_id IN %s
+            """
+            cursor.execute(sql_defects, (all_production_ids,))
+            rows = cursor.fetchall()
+
+            # Map production_id → station_id
+            production_station_map = {pid: 1 for pid in production_ids_1}
+            production_station_map.update({pid: 2 for pid in production_ids_2})
+
+            # Count defects by category per station
+            defect_counter = defaultdict(lambda: {1: set(), 2: set()})
+            for row in rows:
+                pid = row['production_id']
+                cat = row['category']
+                station_id = production_station_map.get(pid)
+                if station_id:
+                    defect_counter[cat][station_id].add(pid)
+
+            # Sort by total, limit to top 5
+            results = []
+            for category, stations in defect_counter.items():
+                ain1 = len(stations[1])
+                ain2 = len(stations[2])
+                total = ain1 + ain2
+                results.append({
+                    "label": category,
+                    "ain1": ain1,
+                    "ain2": ain2,
+                    "total": total
+                })
+
+            top5 = sorted(results, key=lambda r: r["total"], reverse=True)[:5]
+            data["top_defects_qg2"] = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in top5]
+
+            # Optionally broadcast
+            loop = asyncio.get_running_loop()
+            payload = copy.deepcopy(data)
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                )
+            )
+
+        except Exception as e:
+            logger.warning(f"⚠️ Error refreshing top_defects_qg2 for {zone}: {e}")

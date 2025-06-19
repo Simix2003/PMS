@@ -127,11 +127,25 @@ class _ProductionDetailPageState extends State<ProductionDetailPage> {
     int esito = widget.data['esito'] as int? ?? 0;
     final cycleTime = widget.data['cycle_time'] as int?;
 
-    // If esito is G (1) and cycle time is below the threshold, change to NC (7)
-    if (esito == 1 &&
-        cycleTime != null &&
-        cycleTime < widget.minCycleTimeThreshold) {
-      esito = 7;
+    // Define stations where short cycle time → esito 7 (NC)
+    const shortCycleCheckStations = {
+      'MIN01',
+      'MIN02',
+      'RMI01',
+      'RWS01',
+      'VPF01',
+      'FUG01',
+      'FUG02',
+      'VIM01'
+    };
+
+    // Apply condition only for those stations
+    if (shortCycleCheckStations.contains(widget.data['station_name'])) {
+      if (esito == 1 &&
+          cycleTime != null &&
+          cycleTime < widget.minCycleTimeThreshold) {
+        esito = 7;
+      }
     }
     final statusColor = getStatusColor(esito);
 

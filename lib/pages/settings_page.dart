@@ -202,7 +202,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       size: 20, color: CupertinoColors.systemGrey),
                   SizedBox(width: 8),
                   Text(
-                    'TEMPO CICLO',
+                    'TEMPO CICLO QUALITY GATE',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -220,7 +220,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Tempo Ciclo Minimo',
+                          'Tempo Ciclo Minimo al Quality Gate',
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w600,

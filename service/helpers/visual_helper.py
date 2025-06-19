@@ -599,16 +599,21 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
 
             production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
             production_ids_2 = [row['id'] for row in rows if row['station_id'] == 2]
-            all_production_ids = tuple(production_ids_1 + production_ids_2) or (0,)
+            all_production_ids = production_ids_1 + production_ids_2
 
-            # 2️⃣ Join with object_defects + defects
-            sql_defects = """
+            if not all_production_ids:
+                data["top_defects_qg2"] = []
+                return
+
+            # 2️⃣ Join with object_defects + defects using safe IN clause
+            placeholders = ','.join(['%s'] * len(all_production_ids))
+            sql_defects = f"""
                 SELECT od.production_id, d.category
                 FROM object_defects od
                 JOIN defects d ON od.defect_id = d.id
-                WHERE od.production_id IN %s
+                WHERE od.production_id IN ({placeholders})
             """
-            cursor.execute(sql_defects, (all_production_ids,))
+            cursor.execute(sql_defects, all_production_ids)
             rows = cursor.fetchall()
 
             # Map production_id → station_id
@@ -650,4 +655,7 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
             )
 
         except Exception as e:
-            logger.warning(f"⚠️ Error refreshing top_defects_qg2 for {zone}: {e}")
+            logger.exception(f"⚠️ Error refreshing top_defects_qg2 for {zone}: {e}")
+
+        finally:
+            cursor.close()

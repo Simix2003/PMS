@@ -88,24 +88,22 @@ class _LoadingScreenState extends State<LoadingScreen>
   }
 
   Future<void> _simulateLoading() async {
-    const duration = Duration(seconds: 2);
-    final start = DateTime.now();
+    var progress = 0.0;
+    bool done = false;
 
-    // Start line loading early
-    final lineLoadFuture = ApiService.fetchLinesAndInitializeGlobals();
+    final lineLoadFuture = ApiService.fetchLinesAndInitializeGlobals()
+      ..whenComplete(() => done = true);
 
-    // Animate progress
-    while (DateTime.now().difference(start) < duration) {
-      final elapsed = DateTime.now().difference(start).inMilliseconds;
+    while (!done) {
       if (mounted) {
         setState(() {
-          _loadingProgress = elapsed / duration.inMilliseconds;
+          progress = (progress + 0.01).clamp(0.0, 0.9);
+          _loadingProgress = progress;
         });
       }
-      await Future.delayed(const Duration(milliseconds: 16)); // ~60 FPS
+      await Future.delayed(const Duration(milliseconds: 16));
     }
 
-    // Ensure line data is ready before continuing
     await lineLoadFuture;
 
     if (mounted) {

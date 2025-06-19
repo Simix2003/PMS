@@ -1,6 +1,6 @@
 import base64
 from datetime import datetime
-from doctest import debug
+from service.config.config import debug
 import logging
 from fastapi import APIRouter, Body, HTTPException
 import pymysql

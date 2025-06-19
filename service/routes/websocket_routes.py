@@ -60,6 +60,23 @@ async def websocket_warnings(websocket: WebSocket, line_name: str):
         subscriptions[key].remove(websocket)
 
 
+@router.websocket("/ws/export/{progress_id}")
+async def websocket_export_progress(websocket: WebSocket, progress_id: str):
+    """WebSocket endpoint for Excel export progress updates."""
+    await websocket.accept()
+    key = f"export.{progress_id}"
+    print(f"📦 Export progress client connected for {progress_id}")
+
+    subscriptions.setdefault(key, set()).add(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()  # keep-alive
+    except WebSocketDisconnect:
+        print(f"❌ Export progress client for {progress_id} disconnected")
+        subscriptions[key].remove(websocket)
+
+
 @router.websocket("/ws/{line_name}/{channel_id}")
 async def websocket_endpoint(websocket: WebSocket, line_name: str, channel_id: str):
     full_id = f"{line_name}.{channel_id}"

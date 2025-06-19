@@ -143,3 +143,16 @@ async def broadcast_stringatrice_warning(line_name: str, warning: dict):
             await ws.send_json(warning)
         except Exception:
             subscriptions[key].discard(ws)
+
+async def broadcast_export_progress(progress_id: str, payload: dict):
+    """Broadcast export progress updates to subscribers."""
+    key = f"export.{progress_id}"
+    websockets = subscriptions.get(key, set()).copy()
+    for ws in websockets:
+        try:
+            if getattr(ws, "client_state", None) and ws.client_state.name != "CONNECTED":
+                raise ConnectionError("WebSocket not connected")
+            await ws.send_json(payload)
+        except Exception as e:
+            logger.warning(f"❌ WebSocket broadcast failed ({key}): {e}")
+            subscriptions[key].discard(ws)

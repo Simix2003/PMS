@@ -1,11 +1,12 @@
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from typing import List, Dict
-import logging, os, sys
+import logging, os, sys, asyncio
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.helpers.export import EXPORT_DIR, clean_old_exports, export_full_excel
+from service.routes.broadcast import broadcast_export_progress
 from service.config.settings import load_settings
 from service.connections.mysql import get_mysql_connection
 
@@ -23,6 +24,20 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
     object_ids:  List[str] = data.get("modulo_ids", [])        # sempre passati
     production_ids_raw       = data.get("production_ids", [])  # solo se full_history=False
     full_history: bool       = data.get("fullHistory", False)
+    progress_id: str | None  = data.get("progressId")
+
+    def send_progress(step: str):
+        if not progress_id:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    broadcast_export_progress(progress_id, {"step": step})
+                )
+            )
+        except Exception as e:
+            logging.warning(f"⚠️ Could not broadcast export progress: {e}")
 
     # elimina stringhe vuote e deduplica
     object_ids   = [oid for oid in object_ids if str(oid).strip()]
@@ -36,6 +51,8 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
         return {"status": "ok", "filename": None}
     if not full_history and not production_ids:
         return {"status": "ok", "filename": None}
+
+    send_progress("db_connect")
 
     # ----------- 2. DB CONNECTION --------------------------------------------------
     conn = get_mysql_connection()
@@ -92,6 +109,8 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
             if not objects:
                 return {"status": "ok", "filename": None}
 
+            send_progress("objects")
+
             export_data["objects"]   = objects
             export_data["id_moduli"] = [o["id_modulo"] for o in objects]
             object_pk_ids            = [o["id"] for o in objects]
@@ -141,6 +160,8 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
 
             export_data["productions"] = productions
 
+            send_progress("productions")
+
             # -------- 5. DEFECTS -----------------------------------------------------
             production_pk_ids = [p["id"] for p in productions]
             if production_pk_ids:
@@ -166,13 +187,18 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
 
             export_data["object_defects"] = defects
 
+            send_progress("defects")
+
     except Exception as e:
         logging.error(f"❌ Error during export: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
     # -------- 7. GENERA EXCEL & PULIZIA -------------------------------------------
-    filename = export_full_excel(export_data)
+    send_progress("excel")
+    filename = export_full_excel(export_data, progress_callback=send_progress)
     background_tasks.add_task(clean_old_exports, max_age_hours=2)
+
+    send_progress("done")
 
     return {"status": "ok", "filename": filename}
 

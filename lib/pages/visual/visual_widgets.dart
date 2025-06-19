@@ -1134,14 +1134,70 @@ class YieldLineChart extends StatelessWidget {
                         getTooltipColor: (_) =>
                             Colors.transparent, // transparent background
                         tooltipRoundedRadius: 0, // no border radius (optional)
-                        tooltipPadding: EdgeInsets
-                            .zero, // remove internal padding (optional, cleaner)
+                        tooltipPadding: EdgeInsets.zero,
                         tooltipMargin: 8,
                         getTooltipItems: (spots) {
+                          if (spots.length == 2) {
+                            final first = spots[0];
+                            final second = spots[1];
+
+                            // If the values are basically the same, show one value
+                            if ((first.y - second.y).abs() < 0.1) {
+                              final color = first.barIndex == 0
+                                  ? Colors.blue
+                                  : Colors.lightBlue.shade300;
+                              return [
+                                LineTooltipItem(
+                                  '${first.y.toInt()}%',
+                                  TextStyle(
+                                    color: color,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
+                                )
+                              ];
+                            }
+
+                            // Sort so the higher value is on top
+                            final above = first.y >= second.y ? first : second;
+                            final below = first.y >= second.y ? second : first;
+
+                            Color getColor(LineBarSpot s) {
+                              switch (s.barIndex) {
+                                case 0:
+                                  return Colors.blue;
+                                case 1:
+                                  return Colors.lightBlue.shade300;
+                                case 2:
+                                  return Colors.orange;
+                                default:
+                                  return Colors.black;
+                              }
+                            }
+
+                            return [
+                              LineTooltipItem(
+                                '${above.y.toInt()}%',
+                                TextStyle(
+                                  color: getColor(above),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                              ),
+                              LineTooltipItem(
+                                '${below.y.toInt()}%',
+                                TextStyle(
+                                  color: getColor(below),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ];
+                          }
+
+                          // Fallback for any other case
                           return spots.map((spot) {
                             Color textColor;
-
-                            // Example logic based on barIndex
                             switch (spot.barIndex) {
                               case 0:
                                 textColor = Colors.blue;
@@ -1157,7 +1213,7 @@ class YieldLineChart extends StatelessWidget {
                             }
 
                             return LineTooltipItem(
-                              '${spot.barIndex == 0 ? '  ' : ''}${spot.y.toInt()}%${spot.barIndex == 1 ? '  ' : ''}',
+                              '${spot.y.toInt()}%',
                               TextStyle(
                                 color: textColor,
                                 fontWeight: FontWeight.bold,
@@ -1214,36 +1270,26 @@ class YieldLineChart extends StatelessWidget {
                       ),
                     ),
                     showingTooltipIndicators: [
-                      ...List.generate(
-                        hourlyData1.length,
-                        (index) {
-                          return ShowingTooltipIndicators([
-                            LineBarSpot(
-                              line1,
-                              0,
-                              FlSpot(
-                                index.toDouble(),
-                                (hourlyData1[index]['yield'] ?? 0).toDouble(),
-                              ),
+                      ...List.generate(length, (index) {
+                        return ShowingTooltipIndicators([
+                          LineBarSpot(
+                            line1,
+                            0,
+                            FlSpot(
+                              index.toDouble(),
+                              (hourlyData1[index]['yield'] ?? 0).toDouble(),
                             ),
-                          ]);
-                        },
-                      ),
-                      ...List.generate(
-                        hourlyData2.length,
-                        (index) {
-                          return ShowingTooltipIndicators([
-                            LineBarSpot(
-                              line2,
-                              1,
-                              FlSpot(
-                                index.toDouble(),
-                                (hourlyData2[index]['yield'] ?? 0).toDouble(),
-                              ),
+                          ),
+                          LineBarSpot(
+                            line2,
+                            1,
+                            FlSpot(
+                              index.toDouble(),
+                              (hourlyData2[index]['yield'] ?? 0).toDouble(),
                             ),
-                          ]);
-                        },
-                      ),
+                          ),
+                        ]);
+                      }),
                     ],
                     lineBarsData: [
                       LineChartBarData(

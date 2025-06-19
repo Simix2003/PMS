@@ -59,9 +59,13 @@ def clean_old_exports(max_age_hours: int = 2):
                 print(f"🗑️ Deleting old file: {filename}")
                 os.remove(path)
 
-def export_full_excel(data: dict) -> str:
+def export_full_excel(data: dict, progress_callback=None) -> str:
+    """Generate the Excel file and optionally report progress."""
     filename = f"Esportazione_PMS_{datetime.now().strftime('%d-%m-%Y.%H-%M')}.xlsx"
     filepath = os.path.join(EXPORT_DIR, filename)
+
+    if progress_callback:
+        progress_callback("init")
 
     wb = Workbook()
 
@@ -70,18 +74,34 @@ def export_full_excel(data: dict) -> str:
     if isinstance(default_sheet, Worksheet):
         wb.remove(default_sheet)
 
+    if progress_callback:
+        progress_callback("start_sheets")
+
     for sheet_name in SHEET_NAMES:
         func = SHEET_FUNCTIONS.get(sheet_name)
         assert func is not None, f"Sheet function not found for sheet '{sheet_name}'"
 
+        if progress_callback:
+            progress_callback(f"creating:{sheet_name}")
+
         ws = wb.create_sheet(title=sheet_name)
         result = func(ws, data)
+
+        if progress_callback:
+            progress_callback(f"finished:{sheet_name}")
 
         # Only keep sheet if result is True or function is not boolean-returning (e.g., Metadata)
         if result is False:
             wb.remove(ws)
 
+    if progress_callback:
+        progress_callback("saving")
+
     wb.save(filepath)
+
+    if progress_callback:
+        progress_callback("done")
+
     return filename
 
 def autofit_columns(ws, align_center_for: Optional[Set[str]] = None):

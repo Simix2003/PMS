@@ -6,7 +6,14 @@ import logging
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import get_mysql_connection, create_stop, update_stop_status, get_stops_for_station, get_stop_with_levels
+from service.connections.mysql import (
+    get_mysql_connection,
+    create_stop,
+    update_stop_status,
+    get_stops_for_station,
+    get_stop_with_levels,
+    update_stop_reason,
+)
 
 router = APIRouter()
 
@@ -62,6 +69,24 @@ async def api_update_status(payload: Dict[str, Any]):
         return {"status": "ok"}
     except Exception as e:
         logging.error(f"Error updating stop status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# -------------------------
+# Update reason/title of a stop
+# -------------------------
+@router.post("/api/escalation/update_reason")
+async def api_update_reason(payload: Dict[str, Any]):
+    """Update reason/title text for an existing stop."""
+    try:
+        conn = get_mysql_connection()
+        update_stop_reason(
+            stop_id=payload["stop_id"],
+            reason=payload["reason"],
+            conn=conn,
+        )
+        return {"status": "ok"}
+    except Exception as e:
+        logging.error(f"Error updating stop reason: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------------

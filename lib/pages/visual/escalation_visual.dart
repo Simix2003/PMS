@@ -91,6 +91,9 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   String? _newStatus;
   TextEditingController _reasonCtrl = TextEditingController();
 
+  bool _editingReason = false;
+  TextEditingController _editReasonCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -101,6 +104,8 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   @override
   void dispose() {
     _timer?.cancel();
+    _editReasonCtrl.dispose();
+    _reasonCtrl.dispose();
     super.dispose();
   }
 
@@ -184,6 +189,25 @@ class _EscalationDialogState extends State<_EscalationDialog> {
           .showSnackBar(SnackBar(content: Text('Update failed')));
     }
     setState(() => _busy = false);
+  }
+
+  Future<void> _updateReason(int id) async {
+    if (_editReasonCtrl.text.isEmpty) return;
+    setState(() => _busy = true);
+    final res = await _api.updateStopReason(
+      stopId: id,
+      reason: _editReasonCtrl.text,
+    );
+    if (res != null) {
+      await _fetchExistingStops(keepSelectedId: id);
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Update failed')));
+    }
+    setState(() {
+      _busy = false;
+      _editingReason = false;
+    });
   }
 
   String _formatDuration(Duration duration) {
@@ -535,13 +559,41 @@ class _EscalationDialogState extends State<_EscalationDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Title
-            Text(
-              esc['title'],
-              style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87),
+            // Title with edit
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _editingReason
+                      ? TextField(
+                          controller: _editReasonCtrl,
+                          maxLines: 2,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                              border: OutlineInputBorder(), hintText: 'Motivo'),
+                        )
+                      : Text(
+                          esc['title'],
+                          style: const TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87),
+                        ),
+                ),
+                IconButton(
+                  icon: Icon(_editingReason ? Icons.check : Icons.edit),
+                  onPressed: () {
+                    if (_editingReason) {
+                      _updateReason(esc['id']);
+                    } else {
+                      setState(() {
+                        _editingReason = true;
+                        _editReasonCtrl.text = esc['title'];
+                      });
+                    }
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: 24),
 

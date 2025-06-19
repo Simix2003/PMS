@@ -732,6 +732,19 @@ def update_stop_status(stop_id, new_status, changed_at, operator_id, conn):
 
     conn.commit()
 
+def update_stop_reason(stop_id: int, reason: str, conn):
+    """Update the reason/title of a stop."""
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE stops
+            SET reason=%s
+            WHERE id=%s
+            """,
+            (reason, stop_id),
+        )
+    conn.commit()
+
 # Example shift configuration
 SHIFT_DURATION_HOURS = 8
 SHIFT_START_TIMES = ["06:00", "14:00", "22:00"]

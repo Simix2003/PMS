@@ -6,7 +6,7 @@ import os
 import sys
 import copy
 from collections import defaultdict
-from threading import Lock
+from threading import RLock 
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -15,7 +15,7 @@ from service.config.config import ZONE_SOURCES
 from service.state import global_state
 from service.routes.broadcast import broadcast_zone_update
 
-_update_lock = Lock()
+_update_lock = RLock()
 
 logger = logging.getLogger("PMS")
 
@@ -89,241 +89,243 @@ def compute_yield(good: int, ng: int):
 
 # ─────────────────────────────────────────────────────────────────────────────
 def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
-    """
-    Heavy calculation → called only at startup or if you need a full refresh.
-    Returns the full metric dictionary for one zone.
-    """
-    if now is None:
-        now = datetime.now()
-        #fake_now = now - timedelta(hours=1)
-        #now = fake_now
-    hour_start = now.replace(minute=0, second=0, microsecond=0)
+    try:
+        if now is None:
+            now = datetime.now()
 
-    cfg = ZONE_SOURCES[zone]
-    shift_start, shift_end = get_shift_window(now)
-    conn = get_mysql_connection()
-    cursor = conn.cursor()
+        hour_start = now.replace(minute=0, second=0, microsecond=0)
+        cfg = ZONE_SOURCES[zone]
 
-    # -------- current shift totals / yield ----------
-    s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
-    s2_in  = count_unique_objects(cursor, cfg["station_2_in"],  shift_start, shift_end, "all")
-    s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
-    s2_ng  = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "ng")
-    s1_g   = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "good")
-    s2_g   = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "good")
-    s1_y   = compute_yield(s1_g, s1_ng)
-    s2_y   = compute_yield(s2_g, s2_ng)
+        shift_start, shift_end = get_shift_window(now)
 
-    # -------- last 3 shifts yield + throughput -------
-    s1_yield_shifts, s2_yield_shifts, shift_throughput = [], [], []
-    qc_stations = cfg["station_1_out_ng"] + cfg["station_2_out_ng"]
-    for label, start, end in get_previous_shifts(now):
-        # yields
-        s1_g = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "good")
-        s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "ng")
-        s2_g = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "good")
-        s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
+        conn = get_mysql_connection()
 
-        s1_yield_shifts.append({
-            "label": label,
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "yield": compute_yield(s1_g, s1_n),
-            "good": s1_g,
-            "ng": s1_n
-        })
+        cursor = conn.cursor()
 
-        s2_yield_shifts.append({
-            "label": label,
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "yield": compute_yield(s2_g, s2_n),
-            "good": s2_g,
-            "ng": s2_n
-        })
+        # -------- current shift totals / yield ----------
+        s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
+        s2_in  = count_unique_objects(cursor, cfg["station_2_in"],  shift_start, shift_end, "all")
+        s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
+        s2_ng  = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "ng")
+        s1_g   = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "good")
+        s2_g   = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "good")
+        s1_y   = compute_yield(s1_g, s1_ng)
+        s2_y   = compute_yield(s2_g, s2_ng)
 
-        # throughput
-        tot = (count_unique_objects(cursor, cfg["station_1_in"], start, end, "all") +
-            count_unique_objects(cursor, cfg["station_2_in"], start, end, "all"))
-        ng = s1_n + s2_n
-        shift_throughput.append({
-            "label": label,
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "total": tot,
-            "ng": ng
-        })
+        # -------- last 3 shifts yield + throughput -------
+        s1_yield_shifts, s2_yield_shifts, shift_throughput = [], [], []
+        qc_stations = cfg["station_1_out_ng"] + cfg["station_2_out_ng"]
+        for label, start, end in get_previous_shifts(now):
+            # yields
+            s1_g = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "good")
+            s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "ng")
+            s2_g = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "good")
+            s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
 
-    # -------- last 8 h bins (yield + throughput) -----
-    last_8h_throughput, s1_y8h, s2_y8h = [], [], []
-    for label, h_start, h_end in get_last_8h_bins(now):
-        # THROUGHPUT
-        tot  = (count_unique_objects(cursor, cfg["station_1_in"], h_start, h_end, "all") +
-                count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all")) or 0
-        ng   = (count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") +
-                count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng")) or 0
+            s1_yield_shifts.append({
+                "label": label,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "yield": compute_yield(s1_g, s1_n),
+                "good": s1_g,
+                "ng": s1_n
+            })
 
-        last_8h_throughput.append({
-            "hour": label,
-            "start": h_start.isoformat(),
-            "end": h_end.isoformat(),
-            "total": tot,
-            "ng": ng
-        })
+            s2_yield_shifts.append({
+                "label": label,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "yield": compute_yield(s2_g, s2_n),
+                "good": s2_g,
+                "ng": s2_n
+            })
 
-        # YIELDS PER STATION
+            # throughput
+            tot = (count_unique_objects(cursor, cfg["station_1_in"], start, end, "all") +
+                count_unique_objects(cursor, cfg["station_2_in"], start, end, "all"))
+            ng = s1_n + s2_n
+            shift_throughput.append({
+                "label": label,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "total": tot,
+                "ng": ng
+            })
 
-        s1_g = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "good") or 0
-        s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
-        s2_g = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "good") or 0
-        s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
+        # -------- last 8 h bins (yield + throughput) -----
+        last_8h_throughput, s1_y8h, s2_y8h = [], [], []
+        for label, h_start, h_end in get_last_8h_bins(now):
+            # THROUGHPUT
+            tot  = (count_unique_objects(cursor, cfg["station_1_in"], h_start, h_end, "all") +
+                    count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all")) or 0
+            ng   = (count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") +
+                    count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng")) or 0
 
-        s1_y8h.append({
-            "hour": label,
-            "yield": compute_yield(s1_g, s1_n),
-            "start": h_start.isoformat(),
-            "end": h_end.isoformat()
-        })
+            last_8h_throughput.append({
+                "hour": label,
+                "start": h_start.isoformat(),
+                "end": h_end.isoformat(),
+                "total": tot,
+                "ng": ng
+            })
 
-        s2_y8h.append({
-            "hour": label,
-            "yield": compute_yield(s2_g, s2_n),
-            "start": h_start.isoformat(),
-            "end": h_end.isoformat()
-        })
+            # YIELDS PER STATION
 
-    # -------- fermi_data calculation --------
-    # get top 4 stops in current shift
+            s1_g = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "good") or 0
+            s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
+            s2_g = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "good") or 0
+            s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
 
-    # Query total stop time for station 29
-    sql_total_29 = """
-        SELECT SUM(st.stop_time) AS total_time
-        FROM stops st
-        WHERE st.type = 'STOP'
-        AND st.station_id = 29
-        AND st.start_time BETWEEN %s AND %s
-        AND reason IN (
-        'Fermo Generico',
-        'Cancelli Aperti',
-        'Anomalia',
-        'Ciclo non Automatico',
-        'Fuori Tempo Ciclo'
-        )
-    """
-    cursor.execute(sql_total_29, (shift_start, shift_end))
-    row29 = cursor.fetchone() or {}
-    total_stop_time_29 = row29.get("total_time") or 0
-    total_stop_time_minutes_29 = total_stop_time_29 / 60
-    available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
+            s1_y8h.append({
+                "hour": label,
+                "yield": compute_yield(s1_g, s1_n),
+                "start": h_start.isoformat(),
+                "end": h_end.isoformat()
+            })
 
-    # Query total stop time for station 30
-    sql_total_30 = """
-        SELECT SUM(st.stop_time) AS total_time
-        FROM stops st
-        WHERE st.type = 'STOP'
-        AND st.station_id = 30
-        AND st.start_time BETWEEN %s AND %s
-        AND reason IN (
-        'Fermo Generico',
-        'Cancelli Aperti',
-        'Anomalia',
-        'Ciclo non Automatico',
-        'Fuori Tempo Ciclo'
-        )
-    """
-    cursor.execute(sql_total_30, (shift_start, shift_end))
-    row30 = cursor.fetchone() or {}
-    total_stop_time_30 = row30.get("total_time") or 0
-    total_stop_time_minutes_30 = total_stop_time_30 / 60
-    available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
+            s2_y8h.append({
+                "hour": label,
+                "yield": compute_yield(s2_g, s2_n),
+                "start": h_start.isoformat(),
+                "end": h_end.isoformat()
+            })
 
-    # Query top 4 stops for both stations
-    sql = """
-        SELECT s.name AS station_name, st.reason, COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
-        FROM stops st
-        JOIN stations s ON st.station_id = s.id
-        WHERE st.type = 'STOP'
-        AND st.station_id IN (29, 30)
-        AND st.start_time BETWEEN %s AND %s
-        GROUP BY st.station_id, st.reason
-        ORDER BY total_time DESC
-        LIMIT 4
-    """
-    cursor.execute(sql, (shift_start, shift_end))
-    fermi_data = []
-    for row in cursor.fetchall():
-        total_minutes = round(row["total_time"] / 60)
-        fermi_data.append({
-            "causale": row["reason"],
-            "station": row["station_name"],
-            "count": row["n_occurrences"],
-            "time": total_minutes
-        })
+        # -------- fermi_data calculation --------
+        # get top 4 stops in current shift
 
-    # Append both available times at the end
-    fermi_data.append({"Available_Time_1": f"{available_time_29}"})
-    fermi_data.append({"Available_Time_2": f"{available_time_30}"})
+        # Query total stop time for station 29
+        sql_total_29 = """
+            SELECT SUM(st.stop_time) AS total_time
+            FROM stops st
+            WHERE st.type = 'STOP'
+            AND st.station_id = 29
+            AND st.start_time BETWEEN %s AND %s
+            AND reason IN (
+            'Fermo Generico',
+            'Cancelli Aperti',
+            'Anomalia',
+            'Ciclo non Automatico',
+            'Fuori Tempo Ciclo'
+            )
+        """
+        cursor.execute(sql_total_29, (shift_start, shift_end))
+        row29 = cursor.fetchone() or {}
+        total_stop_time_29 = row29.get("total_time") or 0
+        total_stop_time_minutes_29 = total_stop_time_29 / 60
+        available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
 
-    # -------- top_defects_qg2 calculation from productions + object_defects --------
-    # 1️⃣ Query productions table for esito 6 on stations 1+2
-    sql_productions = """
-        SELECT id, station_id
-        FROM productions
-        WHERE esito = 6
-        AND station_id IN (1, 2)
-        AND start_time BETWEEN %s AND %s
-    """
-    cursor.execute(sql_productions, (shift_start, shift_end))
-    rows = cursor.fetchall()
+        # Query total stop time for station 30
+        sql_total_30 = """
+            SELECT SUM(st.stop_time) AS total_time
+            FROM stops st
+            WHERE st.type = 'STOP'
+            AND st.station_id = 30
+            AND st.start_time BETWEEN %s AND %s
+            AND reason IN (
+            'Fermo Generico',
+            'Cancelli Aperti',
+            'Anomalia',
+            'Ciclo non Automatico',
+            'Fuori Tempo Ciclo'
+            )
+        """
+        cursor.execute(sql_total_30, (shift_start, shift_end))
+        row30 = cursor.fetchone() or {}
+        total_stop_time_30 = row30.get("total_time") or 0
+        total_stop_time_minutes_30 = total_stop_time_30 / 60
+        available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
 
-    # Split production IDs by station
-    production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
-    production_ids_2= [row['id'] for row in rows if row['station_id'] == 2]
+        # Query top 4 stops for both stations
+        sql = """
+            SELECT s.name AS station_name, st.reason, COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
+            FROM stops st
+            JOIN stations s ON st.station_id = s.id
+            WHERE st.type = 'STOP'
+            AND st.station_id IN (29, 30)
+            AND st.start_time BETWEEN %s AND %s
+            GROUP BY st.station_id, st.reason
+            ORDER BY total_time DESC
+            LIMIT 4
+        """
+        cursor.execute(sql, (shift_start, shift_end))
+        fermi_data = []
+        for row in cursor.fetchall():
+            total_minutes = round(row["total_time"] / 60)
+            fermi_data.append({
+                "causale": row["reason"],
+                "station": row["station_name"],
+                "count": row["n_occurrences"],
+                "time": total_minutes
+            })
 
-    all_production_ids = tuple(production_ids_1 + production_ids_2)
-    if not all_production_ids:
-        all_production_ids = (0,)
+        # Append both available times at the end
+        fermi_data.append({"Available_Time_1": f"{available_time_29}"})
+        fermi_data.append({"Available_Time_2": f"{available_time_30}"})
 
-    # 2️⃣ Query object_defects JOIN defects
-    sql_defects = """
-        SELECT od.production_id, od.defect_id, d.category
-        FROM object_defects od
-        JOIN defects d ON od.defect_id = d.id
-        WHERE od.production_id IN %s
-    """
-    cursor.execute(sql_defects, (all_production_ids,))
-    rows = cursor.fetchall()
+        # -------- top_defects_qg2 calculation from productions + object_defects --------
+        # 1️⃣ Query productions table for esito 6 on stations 1+2
+        sql_productions = """
+            SELECT id, station_id
+            FROM productions
+            WHERE esito = 6
+            AND station_id IN (1, 2)
+            AND start_time BETWEEN %s AND %s
+        """
+        cursor.execute(sql_productions, (shift_start, shift_end))
+        rows = cursor.fetchall()
 
-    # Build mapping production_id → station_id
-    production_station_map = {pid: 1 for pid in production_ids_1}
-    production_station_map.update({pid: 2 for pid in production_ids_2})
+        # Split production IDs by station
+        production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
+        production_ids_2= [row['id'] for row in rows if row['station_id'] == 2]
 
-    defect_counter = defaultdict(lambda: {1: set(), 2: set()})
+        all_production_ids = tuple(production_ids_1 + production_ids_2)
+        if not all_production_ids:
+            all_production_ids = (0,)
 
-    for row in rows:
-        prod_id = row['production_id']
-        category = row['category']
-        station_id = production_station_map.get(prod_id)
-        if station_id:
-            defect_counter[category][station_id].add(prod_id)
+        # 2️⃣ Query object_defects JOIN defects
+        sql_defects = """
+            SELECT od.production_id, od.defect_id, d.category
+            FROM object_defects od
+            JOIN defects d ON od.defect_id = d.id
+            WHERE od.production_id IN %s
+        """
+        cursor.execute(sql_defects, (all_production_ids,))
+        rows = cursor.fetchall()
 
-    # Aggregate counts
-    results = []
-    for category, stations in defect_counter.items():
-        ain1_count = len(stations[1])
-        ain2_count = len(stations[2])
-        total = ain1_count + ain2_count
-        results.append({
-            "label": category,
-            "ain1": ain1_count,
-            "ain2": ain2_count,
-            "total": total
-        })
+        # Build mapping production_id → station_id
+        production_station_map = {pid: 1 for pid in production_ids_1}
+        production_station_map.update({pid: 2 for pid in production_ids_2})
 
-    # Sort and limit to top 5
-    results = sorted(results, key=lambda x: x['total'], reverse=True)[:5]
+        defect_counter = defaultdict(lambda: {1: set(), 2: set()})
 
-    top_defects_qg2 = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in results]
+        for row in rows:
+            prod_id = row['production_id']
+            category = row['category']
+            station_id = production_station_map.get(prod_id)
+            if station_id:
+                defect_counter[category][station_id].add(prod_id)
+
+        # Aggregate counts
+        results = []
+        for category, stations in defect_counter.items():
+            ain1_count = len(stations[1])
+            ain2_count = len(stations[2])
+            total = ain1_count + ain2_count
+            results.append({
+                "label": category,
+                "ain1": ain1_count,
+                "ain2": ain2_count,
+                "total": total
+            })
+
+        # Sort and limit to top 5
+        results = sorted(results, key=lambda x: x['total'], reverse=True)[:5]
+
+        top_defects_qg2 = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in results]
+    
+    except Exception as e:
+        logger.exception(f"❌ compute_zone_snapshot() FAILED for zone={zone}: {e}")
+        raise
 
     return {
     "station_1_in": s1_in,
@@ -344,7 +346,6 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     "top_defects_qg2": top_defects_qg2,
 }
 
-# --------------------------------------------------------------------------- #
 def update_visual_data_on_new_module(
         zone: str,
         station_name: str,
@@ -358,17 +359,16 @@ def update_visual_data_on_new_module(
 
     with _update_lock:
         data = global_state.visual_data[zone]
-        cfg  = ZONE_SOURCES[zone]
+        cfg = ZONE_SOURCES[zone]
 
-        # 1. SHIFT rollover check
         current_shift_start, current_shift_end = get_shift_window(ts)
         cached_shift_start = data.get("__shift_start")
 
         if cached_shift_start != current_shift_start.isoformat():
             global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
             return
-        
-        # 2. Update station counters
+
+        # 2. Update counters
         if station_name in cfg["station_1_in"]:
             data["station_1_in"] += 1
         elif station_name in cfg["station_2_in"]:
@@ -380,7 +380,7 @@ def update_visual_data_on_new_module(
             elif station_name in cfg["station_2_out_ng"]:
                 data["station_2_out_ng"] += 1
 
-            # Refresh top 5 defects if a new NG module was detected
+            # Refresh top defects
             refresh_top_defects_qg2(zone, ts)
 
         # 3. Recompute shift yield
@@ -389,7 +389,7 @@ def update_visual_data_on_new_module(
         data["station_1_yield"] = compute_yield(s1_good, data["station_1_out_ng"])
         data["station_2_yield"] = compute_yield(s2_good, data["station_2_out_ng"])
 
-        # 3-bis. Incremental update for shifts
+        # 3-bis. Shift throughput
         current_shift_label = (
             "S1" if 6 <= current_shift_start.hour < 14 else
             "S2" if 14 <= current_shift_start.hour < 22 else
@@ -399,16 +399,15 @@ def update_visual_data_on_new_module(
         is_in_station = station_name in cfg["station_1_in"] or station_name in cfg["station_2_in"]
         is_qc_station = station_name in cfg["station_1_out_ng"] or station_name in cfg["station_2_out_ng"]
 
-        # Update shift_throughput  ➜ count IN once, NG only when QC marks the part as NG
         for shift in data["shift_throughput"]:
             if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
                 if is_in_station:
-                    shift["total"] += 1         # real-throughput
+                    shift["total"] += 1
                 if esito == 6 and is_qc_station:
-                    shift["ng"] += 1            # rejections
+                    shift["ng"] += 1
                 break
 
-        # Update station yield shifts
+        # 4. Update yield shifts
         def update_shift_yield(station_yield_shifts, is_relevant_station):
             if not is_relevant_station:
                 return
@@ -424,7 +423,7 @@ def update_visual_data_on_new_module(
         update_shift_yield(data["station_1_yield_shifts"], station_name in cfg["station_1_out_ng"])
         update_shift_yield(data["station_2_yield_shifts"], station_name in cfg["station_2_out_ng"])
 
-        # 4. Update hourly bins
+        # 5. Update hourly bins
         hour_start = ts.replace(minute=0, second=0, microsecond=0)
         hour_label = hour_start.strftime("%H:%M")
 
@@ -432,36 +431,36 @@ def update_visual_data_on_new_module(
             lst = data[list_key]
             if not lst or lst[-1]["hour"] != hour_label:
                 lst[:] = lst[-7:]
-                lst.append({"hour": hour_label, "start": ts.isoformat(),
-                            "end": (ts + timedelta(hours=1)).isoformat(),
-                            "total": 0, "ng": 0, "yield": 100})
+                lst.append({
+                    "hour": hour_label,
+                    "start": ts.isoformat(),
+                    "end": (ts + timedelta(hours=1)).isoformat(),
+                    "total": 0, "ng": 0, "yield": 100
+                })
 
             entry = lst[-1]
-            if "total" in entry:                       # throughput list
+            if "total" in entry:
                 entry["total"] += 1
                 if esito == 6:
                     entry["ng"] += 1
-            else:                                      # yield list entry
+            else:
                 if esito == 6:
                     entry["ng"] = entry.get("ng", 0) + 1
                 else:
                     entry["good"] = entry.get("good", 0) + 1
                 good = entry.get("good", 0)
-                ng   = entry.get("ng", 0)
+                ng = entry.get("ng", 0)
                 entry["yield"] = compute_yield(good, ng)
 
-        # Throughput list
         if is_in_station or (esito == 6 and is_qc_station):
             _touch_hourly("last_8h_throughput", False)
 
-        # Yield per station lists
         if station_name in cfg["station_1_out_ng"]:
             _touch_hourly("station_1_yield_last_8h", True)
         elif station_name in cfg["station_2_out_ng"]:
             _touch_hourly("station_2_yield_last_8h", True)
 
-        # 5.  Optionally push over WebSocket
-       
+        # 6. WebSocket push
         try:
             loop = asyncio.get_running_loop()
             payload = copy.deepcopy(data)
@@ -497,11 +496,11 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                 AND st.station_id = 29
                 AND st.start_time BETWEEN %s AND %s
                 AND reason IN (
-                'Fermo Generico',
-                'Cancelli Aperti',
-                'Anomalia',
-                'Ciclo non Automatico',
-                'Fuori Tempo Ciclo'
+                    'Fermo Generico',
+                    'Cancelli Aperti',
+                    'Anomalia',
+                    'Ciclo non Automatico',
+                    'Fuori Tempo Ciclo'
                 )
             """
             cursor.execute(sql_total_29, (shift_start, shift_end))
@@ -518,11 +517,11 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                 AND st.station_id = 30
                 AND st.start_time BETWEEN %s AND %s
                 AND reason IN (
-                'Fermo Generico',
-                'Cancelli Aperti',
-                'Anomalia',
-                'Ciclo non Automatico',
-                'Fuori Tempo Ciclo'
+                    'Fermo Generico',
+                    'Cancelli Aperti',
+                    'Anomalia',
+                    'Ciclo non Automatico',
+                    'Fuori Tempo Ciclo'
                 )
             """
             cursor.execute(sql_total_30, (shift_start, shift_end))
@@ -531,7 +530,7 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
             total_stop_time_minutes_30 = total_stop_time_30 / 60
             available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
 
-            # Top 4 stops
+            # Top 4 stop reasons
             sql = """
                 SELECT s.name AS station_name, st.reason, COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
                 FROM stops st
@@ -554,12 +553,13 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                     "time": total_minutes
                 })
 
+            # Add availability values
             fermi_data.append({"Available_Time_1": f"{available_time_29}"})
             fermi_data.append({"Available_Time_2": f"{available_time_30}"})
 
+            # Save and broadcast
             data["fermi_data"] = fermi_data
 
-            # Also broadcast update to frontend immediately
             loop = asyncio.get_running_loop()
             payload = copy.deepcopy(data)
             loop.call_soon_threadsafe(
@@ -569,24 +569,27 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
             )
 
         except Exception as e:
-            logger.warning(f"⚠️ Error refreshing fermi_data for {zone}: {e}")
+            logger.exception(f"❌ Error refreshing fermi_data for zone={zone}: {e}")
+
 
 def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
     """
     Refresh top_defects_qg2 for the zone (based on esito=6 in current shift).
     """
-    with _update_lock:
-        if zone not in global_state.visual_data:
-            logger.warning(f"⚠️ Cannot refresh top_defects_qg2 for unknown zone: {zone}")
-            return
 
-        data = global_state.visual_data[zone]
-        shift_start, shift_end = get_shift_window(ts)
-        conn = get_mysql_connection()
-        cursor = conn.cursor()
+    try:
+        with _update_lock:
+            if zone not in global_state.visual_data:
+                logger.warning(f"⚠️ Cannot refresh top_defects_qg2 for unknown zone: {zone}")
+                return
 
-        try:
-            # 1️⃣ Get NG productions for stations 1 + 2
+            data = global_state.visual_data[zone]
+            shift_start, shift_end = get_shift_window(ts)
+
+            conn = get_mysql_connection()
+            cursor = conn.cursor()
+
+            # 1️⃣ NG productions
             sql_productions = """
                 SELECT id, station_id
                 FROM productions
@@ -605,7 +608,7 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
                 data["top_defects_qg2"] = []
                 return
 
-            # 2️⃣ Join with object_defects + defects using safe IN clause
+            # 2️⃣ Join with object_defects
             placeholders = ','.join(['%s'] * len(all_production_ids))
             sql_defects = f"""
                 SELECT od.production_id, d.category
@@ -616,11 +619,9 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
             cursor.execute(sql_defects, all_production_ids)
             rows = cursor.fetchall()
 
-            # Map production_id → station_id
             production_station_map = {pid: 1 for pid in production_ids_1}
             production_station_map.update({pid: 2 for pid in production_ids_2})
 
-            # Count defects by category per station
             defect_counter = defaultdict(lambda: {1: set(), 2: set()})
             for row in rows:
                 pid = row['production_id']
@@ -629,7 +630,6 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
                 if station_id:
                     defect_counter[cat][station_id].add(pid)
 
-            # Sort by total, limit to top 5
             results = []
             for category, stations in defect_counter.items():
                 ain1 = len(stations[1])
@@ -645,7 +645,6 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
             top5 = sorted(results, key=lambda r: r["total"], reverse=True)[:5]
             data["top_defects_qg2"] = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in top5]
 
-            # Optionally broadcast
             loop = asyncio.get_running_loop()
             payload = copy.deepcopy(data)
             loop.call_soon_threadsafe(
@@ -654,8 +653,5 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
                 )
             )
 
-        except Exception as e:
-            logger.exception(f"⚠️ Error refreshing top_defects_qg2 for {zone}: {e}")
-
-        finally:
-            cursor.close()
+    except Exception as e:
+        logger.exception(f"❌ Exception in refresh_top_defects_qg2: {e}")

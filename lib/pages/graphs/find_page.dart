@@ -52,6 +52,7 @@ class _FindPageState extends State<FindPage> {
   final Set<String> selectedObjectIds = {}; // Main selection for 'Difetto'
   String? selectedDifettoGroup;
   bool isExporting = false;
+  String exportStatus = '';
   bool searching = false;
   bool showFilters = true;
   bool isShowingAllEvents = false;
@@ -1149,6 +1150,29 @@ class _FindPageState extends State<FindPage> {
     );
   }
 
+  String _translateExportStep(String step) {
+    if (step.startsWith('creating:')) {
+      final sheet = step.split(':').last;
+      return 'Creazione foglio $sheet...';
+    }
+    if (step.startsWith('finished:')) {
+      final sheet = step.split(':').last;
+      return 'Completato foglio $sheet';
+    }
+    const mapping = {
+      'init': 'Preparazione...',
+      'start_sheets': 'Inizio creazione fogli...',
+      'db_connect': 'Connessione al database...',
+      'objects': 'Caricamento oggetti...',
+      'productions': 'Caricamento produzioni...',
+      'defects': 'Caricamento difetti...',
+      'excel': 'Generazione Excel...',
+      'saving': 'Salvataggio file...',
+      'done': 'Completato.'
+    };
+    return mapping[step] ?? step;
+  }
+
   Future<DateSelectionResult?> _showCustomCalendarPicker(
       BuildContext context, DateTime firstDate, DateTime lastDate) async {
     final Color backgroundColor = Colors.white.withOpacity(0.9);
@@ -1640,7 +1664,10 @@ class _FindPageState extends State<FindPage> {
                                 allProductionIds.addAll(productionIds);
                               }
 
-                              setState(() => isExporting = true);
+                              setState(() {
+                                isExporting = true;
+                                exportStatus = 'Preparazione...';
+                              });
 
                               final downloadUrl = await ApiService
                                   .exportSelectedObjectsAndGetDownloadUrl(
@@ -1648,6 +1675,11 @@ class _FindPageState extends State<FindPage> {
                                 moduloIds: selectedIds,
                                 filters: activeFilters,
                                 fullHistory: exportFullHistory,
+                                onProgress: (step) {
+                                  setState(() {
+                                    exportStatus = _translateExportStep(step);
+                                  });
+                                },
                               );
 
                               if (downloadUrl != null) {
@@ -1671,7 +1703,10 @@ class _FindPageState extends State<FindPage> {
                                           "Errore durante l'esportazione")),
                                 );
                               }
-                              isExporting = false;
+                              setState(() {
+                                isExporting = false;
+                                exportStatus = '';
+                              });
                             },
                           );
                         },
@@ -1724,7 +1759,7 @@ class _FindPageState extends State<FindPage> {
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
+                      children: [
                         SizedBox(
                           width: 48,
                           height: 48,
@@ -1744,8 +1779,10 @@ class _FindPageState extends State<FindPage> {
                         ),
                         SizedBox(height: 8),
                         Text(
-                          "Attendere qualche secondo...",
-                          style: TextStyle(
+                          exportStatus.isEmpty
+                              ? 'Preparazione...'
+                              : exportStatus,
+                          style: const TextStyle(
                             fontSize: 16,
                             color: Colors.black54,
                           ),

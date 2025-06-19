@@ -132,6 +132,7 @@ async def broadcast_zone_update(line_name: str, zone: str, payload: dict):
             logger.warning(f"❌ WebSocket broadcast failed ({key}): {e}")
             subscriptions[key].discard(ws)
 
+
 async def broadcast_stringatrice_warning(line_name: str, warning: dict):
     """
     Send a warning packet to every subscriber of /ws/warnings/{line_name}

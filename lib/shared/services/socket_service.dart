@@ -125,6 +125,26 @@ class WebSocketService {
     );
   }
 
+  // ----------------- EXPORT PROGRESS -----------------
+  void connectToExportProgress({
+    required String progressId,
+    required void Function(Map<String, dynamic>) onMessage,
+    void Function()? onDone,
+    void Function(dynamic)? onError,
+  }) {
+    close();
+
+    final uri = Uri.parse('$baseUrl/ws/export/$progressId');
+    _channel = WebSocketChannel.connect(uri);
+
+    _handleStream(
+      stream: _channel!.stream,
+      onMessage: (msg) => onMessage(jsonDecode(msg)),
+      onDone: onDone,
+      onError: onError,
+    );
+  }
+
   // ----------------- CLOSE -----------------
   void close() {
     isConnected = false;

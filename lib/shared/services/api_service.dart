@@ -7,8 +7,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:html' as html;
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/globals.dart';
+import 'socket_service.dart';
 
 class ApiService {
   static String get baseUrl {
@@ -338,8 +340,29 @@ class ApiService {
     required List<String> moduloIds, // <-- id_modulo strings (for full history)
     required List<Map<String, String>> filters,
     required bool fullHistory,
+    void Function(String step)? onProgress,
   }) async {
     final url = Uri.parse('$baseUrl/api/export_objects');
+
+    final progressId = DateTime.now().millisecondsSinceEpoch.toString();
+
+    StreamSubscription? sub;
+    WebSocketChannel? channel;
+    if (onProgress != null) {
+      final wsUri = Uri.parse('${WebSocketService.baseUrl}/ws/export/$progressId');
+      channel = WebSocketChannel.connect(wsUri);
+      sub = channel.stream.listen(
+        (message) {
+          try {
+            final data = jsonDecode(message);
+            final step = data['step'];
+            if (step is String) {
+              onProgress(step);
+            }
+          } catch (_) {}
+        },
+      );
+    }
 
     final response = await http.post(
       url,
@@ -349,8 +372,12 @@ class ApiService {
         "production_ids": productionIds,
         "filters": filters,
         "fullHistory": fullHistory, // 👈 Include it in the request body
+        "progressId": progressId,
       }),
     );
+
+    await sub?.cancel();
+    await channel?.sink.close();
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);

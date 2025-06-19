@@ -18,6 +18,9 @@ logger = logging.getLogger("PMS")
 # Extend Python path for module resolution
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 # Local imports
 from controllers.plc import PLCConnection
 from service.controllers.debug_plc import FakePLCConnection

@@ -12,3 +12,5 @@ Versions:
 "2.2.2" - Fixed "MaybeMBJ" visual bug and Fixed Stringatrice last STATION bug
 "2.2.3" - Added Fermi Data to Visual page
 "2.2.4" - Fixed Fermi task to iterate thru PLC and not each Station
+"2.2.5" - Fixed bugs and LOCK problem
+"2.2.6" - Added Export visuals and VPF

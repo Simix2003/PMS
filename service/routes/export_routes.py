@@ -30,12 +30,16 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
         if not progress_id:
             return
         try:
-            loop = asyncio.get_running_loop()
-            loop.call_soon_threadsafe(
-                lambda: asyncio.create_task(
-                    broadcast_export_progress(progress_id, {"step": step})
-                )
-            )
+            coro = broadcast_export_progress(progress_id, {"step": step})
+            try:
+                loop = asyncio.get_running_loop()
+                asyncio.run_coroutine_threadsafe(coro, loop)
+            except RuntimeError:
+                # No running loop, so we create one manually
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(coro)
+                loop.close()
         except Exception as e:
             logging.warning(f"⚠️ Could not broadcast export progress: {e}")
 

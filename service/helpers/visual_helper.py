@@ -381,7 +381,7 @@ def update_visual_data_on_new_module(
                 data["station_2_out_ng"] += 1
 
             # Refresh top defects
-            refresh_top_defects_qg2(zone, ts)
+            #refresh_top_defects_qg2(zone, ts)
 
         # 3. Recompute shift yield
         s1_good = data["station_1_in"] - data["station_1_out_ng"]

@@ -7,7 +7,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import get_mysql_connection, insert_initial_production_data, update_production_final
+from service.connections.mysql import get_mysql_connection, insert_defects, insert_initial_production_data, update_production_final
 from service.connections.temp_data import remove_temp_issues
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
@@ -16,7 +16,7 @@ from service.routes.broadcast import broadcast
 from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_string
-from service.helpers.visual_helper import update_visual_data_on_new_module
+from service.helpers.visual_helper import refresh_top_defects_qg2, update_visual_data_on_new_module
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
     print(f"[{full_station_id}] Starting background task.")
@@ -137,6 +137,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                         success, final_esito, end_time = await update_production_final(
                             production_id, result, channel_id, conn, fine_buona, fine_scarto
                         )
+                        if success and channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
+                            await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_vpf=True)
                         if success:
                             try:
                                 zone = "AIN"  # TODO: derive dynamically from MySQL if needed
@@ -150,6 +152,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                     esito=final_esito,
                                     ts=timestamp
                                 )
+
+                                refresh_top_defects_qg2(zone, timestamp)
 
                                 print(f"📡 Called update_visual_data_on_new_module ✅")
 
@@ -351,7 +355,19 @@ async def read_data(
             values[0] = True  # Default fallback
         data["Lavorazione_Eseguita_Su_Stringatrice"] = values
 
-        # Step 9: Set KO flag
+        # Step 9: Read Defect NG for VPF
+        vpf_conf = config.get("difetti_vpf")
+        if vpf_conf and richiesta_ko and channel_id == "VPF01":
+            vpf_values = [
+                extract_bool(buffer, vpf_conf["byte"], i, start_byte)
+                for i in range(vpf_conf["length"])
+            ]
+            if not any(vpf_values):
+                vpf_values[0] = True  # Default fallback
+            data["Tipo_NG_VPF"] = vpf_values
+            logging.debug(f"[{full_id}] ✅ VPF Defect flags: {vpf_values}")
+
+        # Step 10: Set NG flag
         data["Compilato_Su_Ipad_Scarto_Presente"] = richiesta_ko
 
         return data

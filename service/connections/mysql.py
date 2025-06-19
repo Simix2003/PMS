@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime, date
+from datetime import datetime, timedelta
 import json
 import logging
 from typing import Optional
@@ -27,6 +27,23 @@ MYSQL_USER = os.getenv("MYSQL_USER", "root")
 MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "Master36!")
 MYSQL_DB = os.getenv("MYSQL_DB", "ix_monitor")
 MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+
+VPF_DEFECT_ID_MAP = {
+        0: 11,  # NG1
+        1: 12,  # NG1.1
+        2: 13,  # NG2
+        3: 14,  # NG2.1
+        4: 15,  # NG3
+        5: 16,  # NG3.1
+        6: 17,  # NG4
+        7: 18,  # NG5
+        8: 19,  # NG 7
+        9: 20,  # NG7.1
+        10: 21, # NG8
+        11: 22, # NG8.1
+        12: 23, # NG9
+        13: 24, # NG10
+    }
 
 def get_mysql_connection():
     """
@@ -280,56 +297,80 @@ async def update_production_final(production_id, data, station_name, connection,
         logging.error(f"Error updating production {production_id}: {e}")
         return False, None, None
 
-async def insert_defects(data, production_id, channel_id, line_name, cursor):
+async def insert_defects(data, production_id, channel_id, line_name, cursor, from_vpf: bool = False):
     # 1. Get defects mapping from DB.
     cursor.execute("SELECT id, category FROM defects")
     cat_map = {row["category"]: row["id"] for row in cursor.fetchall()}
 
-    # 2. Load the issues from temporary storage using the proper line name.
-    issues = get_latest_issues(line_name, channel_id)
-    data["issues"] = issues  # Inject into data if needed later.
+    if from_vpf:
+        flags = data.get("Tipo_NG_VPF", [])
+        if not flags:
+            return
 
-    # 3. Insert each defect
-    for issue in issues:
-        path = issue.get("path")
-        image_base64 = issue.get("image_base64")
+        for idx, flag in enumerate(flags):
+            if not flag or idx not in VPF_DEFECT_ID_MAP:
+                continue
 
-        if not path:
-            continue  # skip invalid
+            defect_id = VPF_DEFECT_ID_MAP[idx]
 
-        category = detect_category(path)
-        defect_id = cat_map.get(category, cat_map["Altro"])
-        parsed = parse_issue_path(path, category)
+            cursor.execute("""
+                INSERT INTO object_defects (
+                    production_id, defect_id, defect_type, stringa,
+                    s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                production_id,
+                defect_id,
+                f"VPF_NG_{idx+1}",
+                None, None, None, None, None, None
+            ))
+        return
+    else:
+        # 2. Load the issues from temporary storage using the proper line name.
+        issues = get_latest_issues(line_name, channel_id)
+        data["issues"] = issues  # Inject into data if needed later.
 
-        # Decode image if present
-        photo_id = None
-        if image_base64:
-            image_blob = compress_base64_to_jpeg_blob(image_base64, quality=70)
-            if image_blob is None:
-                raise ValueError(f"Invalid image for defect path: {path}")
+        # 3. Insert each defect
+        for issue in issues:
+            path = issue.get("path")
+            image_base64 = issue.get("image_base64")
 
-            # Insert into photos and get the ID
-            cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (pymysql.Binary(image_blob),))
-            photo_id = cursor.lastrowid
+            if not path:
+                continue  # skip invalid
 
-        # Insert into object_defects
-        sql = """
-            INSERT INTO object_defects (
-                production_id, defect_id, defect_type, stringa,
-                s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(sql, (
-            production_id,
-            defect_id,
-            parsed["defect_type"],
-            parsed["stringa"],
-            parsed["s_ribbon"],
-            parsed["i_ribbon"],
-            parsed["ribbon_lato"],
-            parsed["extra_data"],
-            photo_id
-        ))
+            category = detect_category(path)
+            defect_id = cat_map.get(category, cat_map["Altro"])
+            parsed = parse_issue_path(path, category)
+
+            # Decode image if present
+            photo_id = None
+            if image_base64:
+                image_blob = compress_base64_to_jpeg_blob(image_base64, quality=70)
+                if image_blob is None:
+                    raise ValueError(f"Invalid image for defect path: {path}")
+
+                # Insert into photos and get the ID
+                cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (pymysql.Binary(image_blob),))
+                photo_id = cursor.lastrowid
+
+            # Insert into object_defects
+            sql = """
+                INSERT INTO object_defects (
+                    production_id, defect_id, defect_type, stringa,
+                    s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                production_id,
+                defect_id,
+                parsed["defect_type"],
+                parsed["stringa"],
+                parsed["s_ribbon"],
+                parsed["i_ribbon"],
+                parsed["ribbon_lato"],
+                parsed["extra_data"],
+                photo_id
+            ))
 
 async def update_esito(esito: int, production_id: int, cursor, connection):
     """
@@ -690,8 +731,6 @@ def update_stop_status(stop_id, new_status, changed_at, operator_id, conn):
             """, (end_time, stop_id))
 
     conn.commit()
-
-from datetime import datetime, timedelta
 
 # Example shift configuration
 SHIFT_DURATION_HOURS = 8

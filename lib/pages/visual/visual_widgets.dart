@@ -77,10 +77,15 @@ class _HeaderBoxState extends State<HeaderBox> {
                 ),
               ],
             )
+          else if (widget.title == 'UPTIME/DOWNTIME Shift')
+            Image.asset(
+              'logo.png',
+              height: 36,
+              fit: BoxFit.contain,
+            )
           else
             const SizedBox(width: 0), // occupy no space if not Produzione Shift
 
-          // CENTER: Main title & target
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
@@ -94,7 +99,8 @@ class _HeaderBoxState extends State<HeaderBox> {
                     fontSize: 32,
                   ),
                 )
-              else
+              else ...[
+                const SizedBox(width: 12),
                 Text.rich(
                   TextSpan(
                     style: const TextStyle(fontSize: 32),
@@ -125,6 +131,7 @@ class _HeaderBoxState extends State<HeaderBox> {
                   ),
                   textAlign: TextAlign.center,
                 ),
+              ],
               const SizedBox(width: 8),
               if (widget.target.isNotEmpty)
                 RichText(
@@ -140,15 +147,11 @@ class _HeaderBoxState extends State<HeaderBox> {
                         style: const TextStyle(
                           color: Color.fromRGBO(229, 217, 57, 1),
                           fontWeight: FontWeight.bold,
-                          fontSize: 32,
                         ),
                       ),
                       const TextSpan(
                         text: ')',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                        ),
+                        style: TextStyle(color: Colors.white),
                       ),
                     ],
                   ),

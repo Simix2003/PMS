@@ -1029,7 +1029,7 @@ class _VisualPageState extends State<VisualPage> {
                   Row(
                     children: [
                       // LEFT SIDE – UPTIME/DOWNTIME
-                      const Flexible(
+                      Flexible(
                         flex: 3,
                         child: HeaderBox(
                           title: 'UPTIME/DOWNTIME Shift',

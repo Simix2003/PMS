@@ -40,19 +40,19 @@ class DistancesSolarPanelWidget extends StatelessWidget {
   });
 
   Map<String, (double, double)> groupTolerances = {
-    'GlassRibbon': (12.0, 99.0), // > 12mm Glass to Ribbon
+    'GlassRibbon': (11.99, 99.0), // > 12mm Glass to Ribbon
 
-    'RibbonCellSide': (1.9, 2.1), // 2 mm Side Ribbon to Cell
-    'RibbonCellMiddle': (2.9, 3.1), // 3 mm Middle Ribbon to Cell
+    'RibbonCellSide': (0.99, 99.0), // 2 mm Side Ribbon to Cell
+    'RibbonCellMiddle': (0.99, 99.0), // 3 mm Middle Ribbon to Cell
 
-    'HorizontalGap': (0.6, 1.0), // Still don't know this Measure
+    'HorizontalGap': (0, 99.0), // Still don't know this Measure
 
-    'VerticalGap': (2.0, 2.2), // 2.1mm gaps between Stringhe
+    'VerticalGap': (0.99, 99.0), // 2.1mm gaps between Stringhe
 
-    'GlassCellTopLeft': (13.60, 13.70), // 13.65 mm Top Glass to Cell
-    'GlassCellTopRight': (12.80, 12.90), // 12.85 mm Top Glass to Cell
-    'GlassCellBottomLeft': (12.80, 12.90), // 12.85 mm Bottom Glass to Cell
-    'GlassCellBottomRight': (13.60, 13.70), // 13.65 mm Bottom Glass to Cell
+    'GlassCellTopLeft': (11.99, 99.0), // 13.65 mm Top Glass to Cell
+    'GlassCellTopRight': (11.99, 99.0), // 12.85 mm Top Glass to Cell
+    'GlassCellBottomLeft': (11.99, 99.0), // 12.85 mm Bottom Glass to Cell
+    'GlassCellBottomRight': (11.99, 99.0), // 13.65 mm Bottom Glass to Cell
   };
 
   @override

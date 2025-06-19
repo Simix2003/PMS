@@ -47,6 +47,8 @@ def extract_InterconnectionGlassDistance(root):
                 "bottom": mean(right[-2:]) if len(right) >= 2 else None,
             },
         }
+    #TODO
+    #AVG Di tutti i valori non solo gli ultimi 6
     
     return {"interconnection_ribbon": result}
 
@@ -91,6 +93,9 @@ def extract_InterconnectionCellDistance(root: Element) -> dict:
                 "bottom": round(mean(vals[-2:]), 3) if len(vals) >= 2 else None,
             }
         result[str(row)] = row_dict
+    
+    #TODO
+    #Fare AVG tra tutti i valori non solo gli ultimi 3
 
     return {"interconnection_cell": result}
 
@@ -129,6 +134,11 @@ def extract_RelativeCellPosition(root: ET.Element) -> dict:
     def mean_first_last(vals):
         selected = vals[:2] + vals[-2:] if len(vals) >= 2 else []
         return round(mean(selected), 3) if selected else None
+    
+    #TODO
+    #AVG Prima cella (X,0) 
+    #AVG Ultima cella (X,19)
+    #AVG Cella In mezzo (X,4) ( lato destro sarà (X,14))
 
     horiz_result = {}
     for row in range(6):
@@ -189,6 +199,8 @@ def extract_GlassCellDistance(root: ET.Element) -> dict:
 
     def avg(vals: list[float]) -> float | None:
         return round(mean(vals[:2] + vals[-2:]), 3) if len(vals) >= 2 else None
+    #TODO
+    # Fare AVG di tutti i valori della Cella (5,0) e po (5,19)
 
     top_row    = [avg(raw_top[c])    for c in range(20)]
     bottom_row = [avg(raw_bottom[c]) for c in range(20)]

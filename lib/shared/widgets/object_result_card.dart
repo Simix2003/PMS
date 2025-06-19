@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:ix_monitor/shared/utils/helpers.dart';
 
+import '../services/api_service.dart';
+
 class ObjectResultCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final bool isSelectable;
@@ -269,6 +271,63 @@ class ObjectResultCard extends StatelessWidget {
                       );
                     },
                   ),
+                if (data['station_name'] == 'ELL01')
+                  FutureBuilder(
+                    future: ApiService.fetchMBJDetails(data['id_modulo']),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData || snapshot.data == null) {
+                        return const SizedBox.shrink(); // or a placeholder
+                      }
+
+                      final mbjData = snapshot.data as Map<String, dynamic>;
+                      final hasBacklight = mbjData['NG PMS Backlight'] == true;
+                      final hasEL =
+                          mbjData['NG PMS Elettroluminescenza'] == true;
+
+                      final tags = <String>[];
+                      if (hasBacklight) tags.add('Backlight');
+                      if (hasEL) tags.add('Elettroluminescenza');
+
+                      if (tags.isEmpty) return const SizedBox.shrink();
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            tags.length > 1 ? 'MBJ Difetti:' : 'MBJ Difetto:',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: tags
+                                .map((label) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Text(
+                                        label,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+
                 // Always visible bottom-right counter
                 Align(
                   alignment: Alignment.bottomRight,

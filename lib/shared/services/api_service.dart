@@ -340,7 +340,7 @@ class ApiService {
     required List<String> moduloIds, // <-- id_modulo strings (for full history)
     required List<Map<String, String>> filters,
     required bool fullHistory,
-    void Function(String step)? onProgress,
+    void Function(String step, int? current, int? total)? onProgress,
   }) async {
     final url = Uri.parse('$baseUrl/api/export_objects');
 
@@ -357,8 +357,14 @@ class ApiService {
           try {
             final data = jsonDecode(message);
             final step = data['step'];
+            final current = data['current'];
+            final total = data['total'];
             if (step is String) {
-              onProgress(step);
+              onProgress(
+                step,
+                current is int ? current : null,
+                total is int ? total : null,
+              );
             }
           } catch (_) {}
         },

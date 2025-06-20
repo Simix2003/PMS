@@ -1149,14 +1149,22 @@ class _FindPageState extends State<FindPage> {
     );
   }
 
-  String _translateExportStep(String step) {
+  String _translateExportStep(String step, int? current, int? total) {
     if (step.startsWith('creating:')) {
       final sheet = step.split(':').last;
-      return 'Creazione foglio $sheet...';
+      final base = 'Creazione foglio $sheet...';
+      if (current != null && total != null) {
+        return '${current}/${total} - $base';
+      }
+      return base;
     }
     if (step.startsWith('finished:')) {
       final sheet = step.split(':').last;
-      return 'Completato foglio $sheet';
+      final base = 'Completato foglio $sheet';
+      if (current != null && total != null) {
+        return '${current}/${total} - $base';
+      }
+      return base;
     }
     const mapping = {
       'init': 'Preparazione...',
@@ -1169,7 +1177,11 @@ class _FindPageState extends State<FindPage> {
       'saving': 'Salvataggio file...',
       'done': 'Completato.'
     };
-    return mapping[step] ?? step;
+    final base = mapping[step] ?? step;
+    if (current != null && total != null) {
+      return '${current}/${total} - $base';
+    }
+    return base;
   }
 
   Future<DateSelectionResult?> _showCustomCalendarPicker(
@@ -1674,9 +1686,10 @@ class _FindPageState extends State<FindPage> {
                                 moduloIds: selectedIds,
                                 filters: activeFilters,
                                 fullHistory: exportFullHistory,
-                                onProgress: (step) {
+                                onProgress: (step, current, total) {
                                   setState(() {
-                                    exportStatus = _translateExportStep(step);
+                                    exportStatus =
+                                        _translateExportStep(step, current, total);
                                   });
                                 },
                               );

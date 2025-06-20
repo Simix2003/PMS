@@ -1,6 +1,6 @@
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
-
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../shared/services/api_service.dart';
@@ -11,7 +11,7 @@ class _ChatMessage {
   final String role;
   final String content;
   final bool shimmer;
-  final String? downloadUrl; // <-- add this
+  final String? downloadUrl;
 
   _ChatMessage({
     required this.role,
@@ -36,6 +36,7 @@ class _AIHelperChatState extends State<AIHelperChat> {
   final List<_ChatMessage> messages = [];
 
   bool _showButtons = false;
+  bool _disposed = false;
 
   @override
   void initState() {
@@ -44,6 +45,8 @@ class _AIHelperChatState extends State<AIHelperChat> {
     messages.add(_ChatMessage(role: 'ai', content: '', shimmer: true));
 
     Future.delayed(const Duration(milliseconds: 1000), () {
+      if (!mounted || _disposed) return;
+
       setState(() {
         messages.removeWhere((m) => m.shimmer);
         messages.add(_ChatMessage(
@@ -55,7 +58,16 @@ class _AIHelperChatState extends State<AIHelperChat> {
     });
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   void _handleResponse(bool accepted) async {
+    if (!mounted) return;
+
     setState(() {
       _showButtons = false;
     });
@@ -63,10 +75,11 @@ class _AIHelperChatState extends State<AIHelperChat> {
     await Future.delayed(const Duration(milliseconds: 600));
 
     if (!accepted) {
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       messages.add(_ChatMessage(
         role: 'ai',
@@ -76,9 +89,9 @@ class _AIHelperChatState extends State<AIHelperChat> {
 
     await Future.delayed(const Duration(milliseconds: 800));
 
-    // 1. Add shimmer message FIRST and remember its index
     int progressIndex = -1;
 
+    if (!mounted) return;
     setState(() {
       messages.add(_ChatMessage(
         role: 'ai',
@@ -89,27 +102,31 @@ class _AIHelperChatState extends State<AIHelperChat> {
     });
 
     final downloadUrl = await ApiService.exportDailyAndGetDownloadUrl(
-        onProgress: (step, current, total) {
-      final translated = _translateExportStep(step, current, total);
-      final isFinal = translated.trim().toLowerCase().contains("completato");
+      onProgress: (step, current, total) {
+        if (!mounted) return;
 
-      if (progressIndex != -1) {
-        setState(() {
-          messages[progressIndex] = _ChatMessage(
-            role: 'ai',
-            content: translated,
-            shimmer: !isFinal,
+        final translated = _translateExportStep(step, current, total);
+        final isFinal = translated.trim().toLowerCase().contains("completato");
+
+        if (progressIndex != -1 && mounted) {
+          setState(() {
+            messages[progressIndex] = _ChatMessage(
+              role: 'ai',
+              content: translated,
+              shimmer: !isFinal,
+            );
+          });
+
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
           );
-        });
+        }
+      },
+    );
 
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-
+    if (!mounted) return;
     setState(() {
       if (downloadUrl != null) {
         final fileName = downloadUrl.split('/').last;
@@ -125,116 +142,101 @@ class _AIHelperChatState extends State<AIHelperChat> {
     });
   }
 
+  Widget _buildMessageContent(_ChatMessage msg, Color textColor) {
+    if (msg.downloadUrl != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.insert_drive_file, size: 18, color: textColor),
+          const SizedBox(width: 8),
+          Text(
+            msg.content,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton.icon(
+            onPressed: () {
+              if (kIsWeb && msg.downloadUrl != null) {
+                final anchor = html.AnchorElement(href: msg.downloadUrl!)
+                  ..target = '_blank'
+                  ..download = msg.content;
+                anchor.click();
+              }
+            },
+            icon: const Icon(Icons.download, size: 16, color: Colors.white),
+            label: const Text("Scarica"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              textStyle: const TextStyle(fontSize: 13),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 0,
+            ),
+          ),
+        ],
+      );
+    } else {
+      return Text(
+        msg.content,
+        style: TextStyle(color: textColor, fontSize: 15),
+      );
+    }
+  }
+
   Widget _buildMessageBubble(_ChatMessage msg) {
     final isUser = msg.role == 'user';
     final bubbleColor =
-        isUser ? const Color(0xFF0A84FF) : Colors.white.withOpacity(0.15);
-    final textColor = Colors.white;
+        isUser ? const Color(0xFF2563EB) : const Color(0xFFF8FAFC);
+    final textColor = isUser ? Colors.white : const Color(0xFF1E293B);
     final align = isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final radius = BorderRadius.circular(20);
+    final radius = BorderRadius.circular(16);
     final margin = isUser
-        ? const EdgeInsets.only(left: 40, right: 12, top: 6, bottom: 6)
-        : const EdgeInsets.only(left: 12, right: 40, top: 6, bottom: 6);
+        ? const EdgeInsets.only(left: 40, right: 16, top: 6, bottom: 6)
+        : const EdgeInsets.only(left: 16, right: 40, top: 6, bottom: 6);
 
     return Column(
       crossAxisAlignment: align,
       children: [
         Container(
           margin: margin,
-          child: isUser
-              ? Material(
-                  color: bubbleColor,
-                  borderRadius: radius,
-                  elevation: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: bubbleColor,
+            borderRadius: radius,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+            border: isUser
+                ? null
+                : Border.all(color: const Color(0xFFE2E8F0), width: 1),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: (msg.shimmer && mounted && !_disposed)
+                ? Shimmer.fromColors(
+                    baseColor: const Color(0xFF94A3B8),
+                    highlightColor: const Color(0xFF64748B),
                     child: Text(
-                      msg.content,
-                      style: TextStyle(color: textColor, fontSize: 15),
+                      "  ${msg.content}",
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                )
-              : ClipRRect(
-                  borderRadius: radius,
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: radius,
-                          color: bubbleColor,
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
-                            width: 1.0,
-                          ),
-                        ),
-                        child: msg.shimmer
-                            ? Shimmer.fromColors(
-                                baseColor: Colors.white.withOpacity(0.4),
-                                highlightColor: Colors.white.withOpacity(0.9),
-                                child: Text(
-                                  "  ${msg.content}",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              )
-                            : msg.downloadUrl != null
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.insert_drive_file,
-                                          size: 18, color: Colors.white),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        msg.content,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      ElevatedButton.icon(
-                                        onPressed: () {
-                                          if (kIsWeb) {
-                                            final anchor = html.AnchorElement(
-                                                href: msg.downloadUrl!)
-                                              ..target = '_blank'
-                                              ..download = msg.content;
-                                            anchor.click();
-                                          }
-                                        },
-                                        icon: const Icon(Icons.download,
-                                            size: 16),
-                                        label: const Text("Scarica"),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              Colors.white.withOpacity(0.2),
-                                          foregroundColor: Colors.white,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 6),
-                                          textStyle:
-                                              const TextStyle(fontSize: 13),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                        ),
-                                      )
-                                    ],
-                                  )
-                                : Text(
-                                    msg.content,
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 15,
-                                    ),
-                                  )),
-                  ),
-                ),
+                  )
+                : _buildMessageContent(msg, textColor),
+          ),
         ),
       ],
     );
@@ -249,18 +251,18 @@ class _AIHelperChatState extends State<AIHelperChat> {
         children: [
           ElevatedButton(
             onPressed: () => _handleExportOption("daily"),
-            style: _buttonStyle(Colors.green),
-            child: const Text("📅 Dati di ieri"),
+            style: _buttonStyle(const Color(0xFF059669)),
+            child: const Text("Esporta i dati di ieri"),
           ),
           ElevatedButton(
             onPressed: () => _handleExportOption("weekly"),
-            style: _buttonStyle(Colors.orange),
-            child: const Text("📆 Settimana scorsa"),
+            style: _buttonStyle(const Color(0xFFEA580C)),
+            child: const Text("Esporta i dati della settimana scorsa"),
           ),
           ElevatedButton(
             onPressed: () => _handleExportOption("monthly"),
-            style: _buttonStyle(Colors.purple),
-            child: const Text("🗓️ Ultimo mese"),
+            style: _buttonStyle(const Color(0xFF7C3AED)),
+            child: const Text("Esporta i dati del mese scorso"),
           ),
         ],
       ),
@@ -276,11 +278,28 @@ class _AIHelperChatState extends State<AIHelperChat> {
     if (type == "daily") {
       _handleResponse(true); // existing logic
     } else {
-      setState(() {
-        messages.add(_ChatMessage(
-          role: 'ai',
-          content: '❌ Questo tipo di esportazione non è ancora disponibile.',
-        ));
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted || _disposed) return;
+
+        setState(() {
+          messages.add(_ChatMessage(
+            role: 'ai',
+            content:
+                '😔 Scusami, non sono ancora in grado di eseguire questa esportazione',
+          ));
+        });
+
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (!mounted || _disposed) return;
+
+          setState(() {
+            messages.add(_ChatMessage(
+              role: 'ai',
+              content: 'Posso aiutarti in qualche altro modo?',
+            ));
+            _showButtons = true;
+          });
+        });
       });
     }
   }
@@ -292,7 +311,7 @@ class _AIHelperChatState extends State<AIHelperChat> {
       case "weekly":
         return "Esporta la settimana scorsa";
       case "monthly":
-        return "Esporta l’ultimo mese";
+        return "Esporta l'ultimo mese";
       default:
         return "Esporta dati";
     }
@@ -302,9 +321,11 @@ class _AIHelperChatState extends State<AIHelperChat> {
     return ElevatedButton.styleFrom(
       backgroundColor: color,
       foregroundColor: Colors.white,
-      minimumSize: const Size(220, 60),
+      minimumSize: const Size(220, 54),
       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 0,
+      shadowColor: Colors.transparent,
     );
   }
 
@@ -346,7 +367,6 @@ class _AIHelperChatState extends State<AIHelperChat> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(20),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
@@ -372,11 +392,15 @@ class _AIHelperChatState extends State<AIHelperChat> {
               children: [
                 // ── HEADER ──────────────────────────────
                 Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
+                  padding: const EdgeInsets.all(20),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
                     border: Border(
-                      bottom: BorderSide(
-                          color: Colors.white.withOpacity(0.1), width: 1),
+                      bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
                     ),
                   ),
                   child: Row(
@@ -385,21 +409,21 @@ class _AIHelperChatState extends State<AIHelperChat> {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(8),
+                            padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
+                              color: Color(0xFF3B82F6).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(Icons.auto_awesome,
-                                color: Colors.white, size: 20),
+                                color: Color(0xFF3B82F6), size: 20),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
                           const Text(
                             'Mini Bro (Beta)',
                             style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 16,
+                              color: Color(0xFF1E293B),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 18,
                             ),
                           ),
                         ],
@@ -407,13 +431,13 @@ class _AIHelperChatState extends State<AIHelperChat> {
                       IconButton(
                         onPressed: () => Navigator.pop(context),
                         icon: Container(
-                          padding: const EdgeInsets.all(4),
+                          padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
+                            color: Color(0xFF64748B).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(Icons.close,
-                              color: Colors.white, size: 18),
+                              color: Color(0xFF64748B), size: 18),
                         ),
                       ),
                     ],
@@ -423,16 +447,7 @@ class _AIHelperChatState extends State<AIHelperChat> {
                 // ── CHAT ───────────────────────────────
                 Expanded(
                   child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.blue.withOpacity(0.05),
-                          Colors.purple.withOpacity(0.05),
-                        ],
-                      ),
-                    ),
+                    color: Colors.transparent,
                     child: ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -444,7 +459,11 @@ class _AIHelperChatState extends State<AIHelperChat> {
                 ),
 
                 // ── BUTTONS or EMPTY ─────────────────────
-                _showButtons ? _buildExportButtons() : const SizedBox.shrink()
+                _showButtons
+                    ? Container(
+                        child: _buildExportButtons(),
+                      )
+                    : const SizedBox.shrink()
               ],
             ),
           ),

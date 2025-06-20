@@ -22,9 +22,9 @@ router = APIRouter()
 process_start_time = time.time()
 
 # Lettura variabili build-time
-build_date = os.getenv("BUILD_DATE", "19/06/2025")
-app_version = os.getenv("APP_VERSION", "2.2.6")
-git_commit = os.getenv("GIT_COMMIT", "unknown")
+build_date = os.getenv("BUILD_DATE", "20/06/2025")
+app_version = os.getenv("APP_VERSION", "2.3.0")
+git_commit = os.getenv("GIT_COMMIT", "DEV/4b7eaeb")
 
 # --- Utility ---
 

@@ -104,12 +104,19 @@ class _LoadingScreenState extends State<LoadingScreen>
       await Future.delayed(const Duration(milliseconds: 16));
     }
 
+    // 🕓 FAKE SOME EXTRA TIME TO FEEL SMOOTHER
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // Ensure actual data is complete
     await lineLoadFuture;
 
+    // Final animation to 100%
     if (mounted) {
       setState(() {
         _loadingProgress = 1.0;
       });
+
+      await Future.delayed(const Duration(milliseconds: 750));
 
       switch (widget.targetPage) {
         case 'Home':

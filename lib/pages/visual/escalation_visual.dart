@@ -71,18 +71,15 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   int? _selectedIndex;
 
   final stationNameToId = {
-    "MIN01": 1,
-    "MIN02": 2,
     "AIN01": 29,
     "AIN02": 30,
   };
 
-  final stopTypes = ["ESCALATION", "STOP", "MAINTENANCE"];
+  final stopTypes = ["ESCALATION", "STOP"];
   static const List<String> statusCreation = [
     "OPEN",
     "SHIFT_MANAGER",
     "HEAD_OF_PRODUCTION",
-    "MAINTENANCE_TEAM"
   ];
   static const List<String> statusFull = [...statusCreation, "CLOSED"];
 

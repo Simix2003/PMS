@@ -362,8 +362,6 @@ async def read_data(
                 extract_bool(buffer, vpf_conf["byte"], i, start_byte)
                 for i in range(vpf_conf["length"])
             ]
-            if not any(vpf_values):
-                vpf_values[0] = True  # Default fallback
             data["Tipo_NG_VPF"] = vpf_values
             logging.debug(f"[{full_id}] ✅ VPF Defect flags: {vpf_values}")
 

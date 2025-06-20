@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from typing import List, Dict
 import logging, os, sys, asyncio
+from datetime import datetime, timedelta, time as dt_time
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -209,6 +210,52 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
     send_progress("done")
 
     return {"status": "ok", "filename": filename}
+
+
+# ---------------------------------------------------------------------------
+#  Daily Export API (yesterday 06:00 -> today 05:59)
+# ---------------------------------------------------------------------------
+@router.post("/api/daily_export")
+def daily_export(background_tasks: BackgroundTasks, data: dict = Body(...)):
+    progress_id: str | None = data.get("progressId")
+
+    now = datetime.now()
+    current_day_6 = datetime.combine(now.date(), dt_time(hour=6))
+    start_dt = current_day_6 - timedelta(days=1)
+    end_dt = current_day_6 - timedelta(seconds=1)
+
+    conn = get_mysql_connection()
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT p.id AS production_id, o.id_modulo
+            FROM productions p
+            JOIN objects o ON p.object_id = o.id
+            WHERE p.end_time >= %s AND p.end_time <= %s
+            """,
+            (start_dt, end_dt),
+        )
+        rows = cursor.fetchall()
+
+    if not rows:
+        logging.info("Daily export: no data found for %s - %s", start_dt, end_dt)
+        return {"status": "ok", "filename": None}
+
+    production_ids = [row["production_id"] for row in rows]
+    modulo_ids = [row["id_modulo"] for row in rows]
+
+    settings = load_settings()
+    full_history = settings.get("always_export_history", False)
+
+    payload = {
+        "filters": [],
+        "production_ids": production_ids,
+        "modulo_ids": modulo_ids,
+        "fullHistory": full_history,
+        "progressId": progress_id,
+    }
+
+    return export_objects(background_tasks, payload)
 
 
 # ---------------------------------------------------------------------------

@@ -398,6 +398,61 @@ class ApiService {
     return null;
   }
 
+  static Future<String?> exportDailyAndGetDownloadUrl({
+    void Function(String step, int? current, int? total)? onProgress,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/daily_export');
+
+    final progressId = DateTime.now().millisecondsSinceEpoch.toString();
+
+    StreamSubscription? sub;
+    WebSocketChannel? channel;
+    if (onProgress != null) {
+      final wsUri =
+          Uri.parse('${WebSocketService.baseUrl}/ws/export/$progressId');
+      channel = WebSocketChannel.connect(wsUri);
+      sub = channel.stream.listen(
+        (message) {
+          try {
+            final data = jsonDecode(message);
+            final step = data['step'];
+            final current = data['current'];
+            final total = data['total'];
+            if (step is String) {
+              onProgress(
+                step,
+                current is int ? current : null,
+                total is int ? total : null,
+              );
+            }
+          } catch (_) {}
+        },
+      );
+    }
+
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        "progressId": progressId,
+      }),
+    );
+
+    await sub?.cancel();
+    await channel?.sink.close();
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final filename = data["filename"];
+      if (filename != null) {
+        return "$baseUrl/api/download_export/$filename";
+      }
+    } else {
+      print("❌ Daily export failed: ${response.statusCode} - ${response.body}");
+    }
+    return null;
+  }
+
   static Future<List<Map<String, dynamic>>> fetchSearchResults({
     required List<Map<String, String>> filters,
     required String? orderBy,

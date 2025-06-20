@@ -349,7 +349,8 @@ class ApiService {
     StreamSubscription? sub;
     WebSocketChannel? channel;
     if (onProgress != null) {
-      final wsUri = Uri.parse('${WebSocketService.baseUrl}/ws/export/$progressId');
+      final wsUri =
+          Uri.parse('${WebSocketService.baseUrl}/ws/export/$progressId');
       channel = WebSocketChannel.connect(wsUri);
       sub = channel.stream.listen(
         (message) {
@@ -681,7 +682,6 @@ class ApiService {
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      debugPrint('Failed to load MBJ details: ${response.statusCode}');
       return null;
     }
   }
@@ -799,6 +799,7 @@ class ApiService {
         'last_8h_throughput': data['last_8h_throughput'] ?? [],
         'fermi_data': data['fermi_data'] ?? [],
         'top_defects_qg2': data['top_defects_qg2'] ?? [],
+        'total_defects_qg2': data['total_defects_qg2'] ?? 0,
       };
     } else {
       throw Exception('Failed to load zone data');

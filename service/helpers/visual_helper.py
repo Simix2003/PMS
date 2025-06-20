@@ -107,8 +107,8 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
         s2_in  = count_unique_objects(cursor, cfg["station_2_in"],  shift_start, shift_end, "all")
         s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
         s2_ng  = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "ng")
-        s1_g   = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "good")
-        s2_g   = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "good")
+        s1_g   = s1_in - s1_ng
+        s2_g   = s2_in - s2_ng
         s1_y   = compute_yield(s1_g, s1_ng)
         s2_y   = compute_yield(s2_g, s2_ng)
 
@@ -117,10 +117,12 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
         qc_stations = cfg["station_1_out_ng"] + cfg["station_2_out_ng"]
         for label, start, end in get_previous_shifts(now):
             # yields
-            s1_g = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "good")
+            s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  start, end, "all")
+            s2_in_  = count_unique_objects(cursor, cfg["station_2_in"],  start, end, "all")
             s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "ng")
-            s2_g = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "good")
+            s1_g = s1_in_ - s1_n
             s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
+            s2_g = s2_in_ - s2_n
 
             s1_yield_shifts.append({
                 "label": label,
@@ -170,11 +172,12 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
             })
 
             # YIELDS PER STATION
-
-            s1_g = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "good") or 0
+            s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  h_start, h_end, "all") or 0
+            s2_in_  = count_unique_objects(cursor, cfg["station_2_in"],  h_start, h_end, "all") or 0
             s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
-            s2_g = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "good") or 0
+            s1_g = s1_in_ - s1_n
             s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
+            s2_g = s2_in_ - s2_n
 
             s1_y8h.append({
                 "hour": label,
@@ -306,21 +309,23 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
                 defect_counter[category][station_id].add(prod_id)
 
         # Aggregate counts
-        results = []
+        full_results = []
         for category, stations in defect_counter.items():
             ain1_count = len(stations[1])
             ain2_count = len(stations[2])
             total = ain1_count + ain2_count
-            results.append({
+            full_results.append({
                 "label": category,
                 "ain1": ain1_count,
                 "ain2": ain2_count,
                 "total": total
             })
 
-        # Sort and limit to top 5
-        results = sorted(results, key=lambda x: x['total'], reverse=True)[:5]
+        # Compute total over all categories ✅
+        total_defects_qg2 = sum(r["total"] for r in full_results)
 
+        # Then get top 5
+        results = sorted(full_results, key=lambda x: x['total'], reverse=True)[:5]
         top_defects_qg2 = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in results]
     
     except Exception as e:
@@ -344,6 +349,7 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     "__last_hour": hour_start.isoformat(),
     "fermi_data": fermi_data,
     "top_defects_qg2": top_defects_qg2,
+    "total_defects_qg2": total_defects_qg2,
 }
 
 def update_visual_data_on_new_module(
@@ -630,19 +636,22 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
                 if station_id:
                     defect_counter[cat][station_id].add(pid)
 
-            results = []
+            full_results = []
             for category, stations in defect_counter.items():
                 ain1 = len(stations[1])
                 ain2 = len(stations[2])
                 total = ain1 + ain2
-                results.append({
+                full_results.append({
                     "label": category,
                     "ain1": ain1,
                     "ain2": ain2,
                     "total": total
                 })
 
-            top5 = sorted(results, key=lambda r: r["total"], reverse=True)[:5]
+            # Compute total over all categories ✅
+            data['total_defects_qg2'] = sum(r["total"] for r in full_results)
+
+            top5 = sorted(full_results, key=lambda r: r["total"], reverse=True)[:5]
             data["top_defects_qg2"] = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in top5]
 
             loop = asyncio.get_running_loop()

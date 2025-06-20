@@ -49,6 +49,8 @@ class _VisualPageState extends State<VisualPage> {
   int availableTime_1 = 0;
   int availableTime_2 = 0;
 
+  int qg2_defects_value = 0;
+
   List<Map<String, dynamic>> yieldLast8h_1 = [];
   List<Map<String, dynamic>> yieldLast8h_2 = [];
   List<Map<String, dynamic>> shiftThroughput = [];
@@ -186,6 +188,8 @@ class _VisualPageState extends State<VisualPage> {
           ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
           ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
         }
+
+        qg2_defects_value = response['total_defects_qg2'];
 
         // Parse fermi data
         final fermiRaw =
@@ -1044,35 +1048,12 @@ class _VisualPageState extends State<VisualPage> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            /*SizedBox(
-                              height: 65,
-                              child: Card(
-                                elevation: 2,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                color: warningColor,
-                                margin:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 8, horizontal: 12),
-                                  child: Text(
-                                    '23',
-                                    style: TextStyle(
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.bold,
-                                      color: textColor,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),*/
-                            const Flexible(
+                            Flexible(
                               child: HeaderBox(
                                 title: 'Pareto Shift',
                                 target: '',
                                 icon: Icons.bar_chart_rounded,
+                                qg2_defects_value: qg2_defects_value.toString(),
                               ),
                             ),
                           ],
@@ -1430,10 +1411,14 @@ class _VisualPageState extends State<VisualPage> {
                                 ),
                                 const SizedBox(width: 8),
                                 // RIGHT COLUMN (1 full-height card)
-                                /*Flexible(
+                                Flexible(
                                   flex: 2,
-                                  child: VPFDefectsHorizontalBarChart(),
-                                ),*/
+                                  child: VPFDefectsHorizontalBarChart(
+                                    defectLabels: defectLabels,
+                                    ain1Counts: ain1Counts,
+                                    ain2Counts: ain2Counts,
+                                  ),
+                                ),
                               ],
                             ),
                           ),

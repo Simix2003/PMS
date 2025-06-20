@@ -458,9 +458,6 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     // Call your API when the card is clicked
     final res = await ApiService().getStopDetails(esc['id']);
 
-    print("➡ Stop details loaded for ${esc['title']}");
-    print(res);
-
     if (res == null || res['status'] != 'ok') {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Errore durante il caricamento dei dettagli')));

@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use, use_build_context_synchronously
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously, non_constant_identifier_names, library_private_types_in_public_api
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:async';
@@ -7,12 +7,15 @@ import 'package:intl/intl.dart';
 class HeaderBox extends StatefulWidget {
   final String title, target;
   final IconData icon;
+  final String qg2_defects_value;
 
-  const HeaderBox(
-      {super.key,
-      required this.title,
-      required this.target,
-      required this.icon});
+  const HeaderBox({
+    super.key,
+    required this.title,
+    required this.target,
+    required this.icon,
+    this.qg2_defects_value = '',
+  });
 
   @override
   _HeaderBoxState createState() => _HeaderBoxState();
@@ -21,6 +24,11 @@ class HeaderBox extends StatefulWidget {
 class _HeaderBoxState extends State<HeaderBox> {
   late Timer _timer;
   late DateTime _currentTime;
+  Color textColor = Colors.white;
+  Color errorColor = Colors.amber.shade700;
+  Color redColor = Colors.red;
+  Color warningColor = Colors.yellow.shade400;
+  Color okColor = Colors.green.shade400;
 
   @override
   void initState() {
@@ -57,7 +65,7 @@ class _HeaderBoxState extends State<HeaderBox> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // LEFT: Date/Time only for Produzione Shift
-          if (widget.title == 'Produzione Shift')
+          if (widget.title == 'UPTIME/DOWNTIME Shift')
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -77,11 +85,35 @@ class _HeaderBoxState extends State<HeaderBox> {
                 ),
               ],
             )
-          else if (widget.title == 'UPTIME/DOWNTIME Shift')
+          else if (widget.title == 'Produzione Shift')
             Image.asset(
               'logo.png',
               height: 36,
               fit: BoxFit.contain,
+            )
+          else if (widget.title == 'Pareto Shift')
+            SizedBox(
+              height: 50,
+              width: 75,
+              child: Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                color: redColor,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                child: Center(
+                  // 👈 Center content both vertically & horizontally
+                  child: Text(
+                    widget.qg2_defects_value.toString(),
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ),
             )
           else
             const SizedBox(width: 0), // occupy no space if not Produzione Shift
@@ -986,14 +1018,14 @@ class YieldComparisonBarChart extends StatelessWidget {
                                 fromY: 0,
                                 toY: 0,
                                 width: 40,
-                                color: Colors.blue,
+                                color: Colors.blue.shade900,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               BarChartRodData(
                                 fromY: 0,
                                 toY: 0,
                                 width: 40,
-                                color: Colors.lightBlue.shade300,
+                                color: Colors.lightBlue.shade200,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ],
@@ -1008,14 +1040,14 @@ class YieldComparisonBarChart extends StatelessWidget {
                                 fromY: 0,
                                 toY: item['bussing1'],
                                 width: 40,
-                                color: Colors.blue,
+                                color: Colors.blue.shade900,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               BarChartRodData(
                                 fromY: 0,
                                 toY: item['bussing2'],
                                 width: 40,
-                                color: Colors.lightBlue.shade300,
+                                color: Colors.lightBlue.shade200,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ],
@@ -1041,8 +1073,8 @@ class YieldComparisonBarChart extends StatelessWidget {
               alignment: WrapAlignment.center,
               spacing: 20,
               children: [
-                LegendItem(color: Colors.blue, label: 'AIN 1'),
-                LegendItem(color: Colors.lightBlue.shade300, label: 'AIN 2'),
+                LegendItem(color: Colors.blue.shade900, label: 'AIN 1'),
+                LegendItem(color: Colors.lightBlue.shade200, label: 'AIN 2'),
                 LegendItem(
                     color: Colors.orange, label: 'Target', isDashed: true),
               ],
@@ -1077,7 +1109,7 @@ class YieldLineChart extends StatelessWidget {
         hourlyData1.length,
         (i) => FlSpot(i.toDouble(), (hourlyData1[i]['yield'] ?? 0).toDouble()),
       ),
-      color: Colors.blue,
+      color: Colors.blue.shade900,
       barWidth: 2,
       dotData: FlDotData(show: true),
     );
@@ -1088,7 +1120,7 @@ class YieldLineChart extends StatelessWidget {
         hourlyData2.length,
         (i) => FlSpot(i.toDouble(), (hourlyData2[i]['yield'] ?? 0).toDouble()),
       ),
-      color: Colors.lightBlue.shade300,
+      color: Colors.lightBlue.shade200,
       barWidth: 2,
       dotData: FlDotData(show: false),
     );
@@ -1126,7 +1158,7 @@ class YieldLineChart extends StatelessWidget {
                 child: LineChart(
                   LineChartData(
                     minY: 0,
-                    maxY: 110,
+                    maxY: 140,
                     lineTouchData: LineTouchData(
                       enabled: true,
                       handleBuiltInTouches: false,
@@ -1137,85 +1169,28 @@ class YieldLineChart extends StatelessWidget {
                         tooltipPadding: EdgeInsets.zero,
                         tooltipMargin: 8,
                         getTooltipItems: (spots) {
-                          if (spots.length == 2) {
-                            final first = spots[0];
-                            final second = spots[1];
-
-                            // If the values are basically the same, show one value
-                            if ((first.y - second.y).abs() < 0.1) {
-                              final color = first.barIndex == 0
-                                  ? Colors.blue
-                                  : Colors.lightBlue.shade300;
-                              return [
-                                LineTooltipItem(
-                                  '${first.y.toInt()}%',
-                                  TextStyle(
-                                    color: color,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10,
-                                  ),
-                                )
-                              ];
-                            }
-
-                            // Sort so the higher value is on top
-                            final above = first.y >= second.y ? first : second;
-                            final below = first.y >= second.y ? second : first;
-
-                            Color getColor(LineBarSpot s) {
-                              switch (s.barIndex) {
-                                case 0:
-                                  return Colors.blue;
-                                case 1:
-                                  return Colors.lightBlue.shade300;
-                                case 2:
-                                  return Colors.orange;
-                                default:
-                                  return Colors.black;
-                              }
-                            }
-
-                            return [
-                              LineTooltipItem(
-                                '${above.y.toInt()}%',
-                                TextStyle(
-                                  color: getColor(above),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 10,
-                                ),
-                              ),
-                              LineTooltipItem(
-                                '${below.y.toInt()}%',
-                                TextStyle(
-                                  color: getColor(below),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ];
-                          }
-
-                          // Fallback for any other case
                           return spots.map((spot) {
-                            Color textColor;
+                            if (spot.barIndex == 2) {
+                              // Skip the target line
+                              return null;
+                            }
+
+                            Color color;
                             switch (spot.barIndex) {
                               case 0:
-                                textColor = Colors.blue;
+                                color = Colors.blue.shade900;
                                 break;
                               case 1:
-                                textColor = Colors.lightBlue.shade300;
-                                break;
-                              case 2:
-                                textColor = Colors.orange;
+                                color = Colors.lightBlue.shade200;
                                 break;
                               default:
-                                textColor = Colors.black;
+                                color = Colors.black;
                             }
 
                             return LineTooltipItem(
                               '${spot.y.toInt()}%',
                               TextStyle(
-                                color: textColor,
+                                color: color,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 10,
                               ),
@@ -1299,7 +1274,7 @@ class YieldLineChart extends StatelessWidget {
                           (i) => FlSpot(i.toDouble(),
                               (hourlyData1[i]['yield'] ?? 0).toDouble()),
                         ),
-                        color: Colors.blue,
+                        color: Colors.blue.shade900,
                         barWidth: 2,
                         dotData: FlDotData(show: true),
                       ),
@@ -1311,7 +1286,7 @@ class YieldLineChart extends StatelessWidget {
                           (i) => FlSpot(i.toDouble(),
                               (hourlyData2[i]['yield'] ?? 0).toDouble()),
                         ),
-                        color: Colors.lightBlue.shade300,
+                        color: Colors.lightBlue.shade200,
                         barWidth: 2,
                         dotData: FlDotData(show: false),
                       ),
@@ -1332,16 +1307,16 @@ class YieldLineChart extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Wrap(
+              /*Wrap(
                 alignment: WrapAlignment.center,
                 spacing: 20,
                 children: [
-                  LegendItem(color: Colors.blue, label: 'AIN 1'),
-                  LegendItem(color: Colors.lightBlue.shade300, label: 'AIN 2'),
+                  LegendItem(color: Colors.blue.shade900, label: 'AIN 1'),
+                  LegendItem(color: Colors.lightBlue.shade200, label: 'AIN 2'),
                   LegendItem(
                       color: Colors.orange, label: 'Target', isDashed: true),
                 ],
-              ),
+              ),*/
             ],
           ),
         ),
@@ -1387,7 +1362,7 @@ class TopDefectsHorizontalBarChart extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                LegendItem(color: Colors.blue, label: 'AIN 1'),
+                LegendItem(color: Colors.blue.shade900, label: 'AIN 1'),
                 const SizedBox(width: 20),
                 LegendItem(color: Colors.lightBlue, label: 'AIN 2'),
               ],
@@ -1435,17 +1410,17 @@ class TopDefectsHorizontalBarChart extends StatelessWidget {
                               BarChartRodData(
                                 toY: ain1,
                                 width: 16,
-                                color: Colors.blue,
+                                color: Colors.blue.shade900,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               BarChartRodData(
                                 toY: ain2,
                                 width: 16,
-                                color: Colors.lightBlue.shade300,
+                                color: Colors.lightBlue.shade200,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ],
-                            barsSpace: 0,
+                            barsSpace: 1,
                           );
                         }),
                         titlesData: FlTitlesData(
@@ -1501,16 +1476,16 @@ class TopDefectsHorizontalBarChart extends StatelessWidget {
 }
 
 class VPFDefectsHorizontalBarChart extends StatelessWidget {
-  final List<String> defectLabels = [
-    'NG Macchie ECA',
-    'NG Saldatura',
-    'NG Bad Soldering',
-  ];
+  final List<String> defectLabels;
+  final List<int> ain1Counts;
+  final List<int> ain2Counts;
 
-  final List<int> ain1Counts = [17, 8, 9];
-  final List<int> ain2Counts = [4, 5, 0];
-
-  VPFDefectsHorizontalBarChart({super.key});
+  const VPFDefectsHorizontalBarChart({
+    super.key,
+    required this.defectLabels,
+    required this.ain1Counts,
+    required this.ain2Counts,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1520,135 +1495,130 @@ class VPFDefectsHorizontalBarChart extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: Stack(
-            children: [
-              RotatedBox(
-                quarterTurns: 1, // Rotate chart 90° clockwise
-                child: BarChart(
-                  BarChartData(
-                    maxY: 20,
-                    alignment: BarChartAlignment.center,
-                    barGroups: List.generate(defectLabels.length, (index) {
-                      final ain1 = ain1Counts[index].toDouble();
-                      final ain2 = ain2Counts[index].toDouble();
-                      return BarChartGroupData(
-                        x: index,
-                        barRods: [
-                          BarChartRodData(
-                            toY: ain1,
-                            width: 12,
-                            color: Colors.purple,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          BarChartRodData(
-                            toY: ain2,
-                            width: 12,
-                            color: Colors.grey,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ],
-                        barsSpace: 6,
-                      );
-                    }),
-                    titlesData: FlTitlesData(
-                      leftTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 80,
-                          getTitlesWidget: (value, meta) {
-                            final i = value.toInt();
-                            if (i < defectLabels.length) {
-                              return RotatedBox(
-                                quarterTurns: -1,
-                                child: Text(
-                                  defectLabels[i],
-                                  style: const TextStyle(fontSize: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ✅ Title
+            const Text(
+              "Difetti VPF",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ✅ Legends
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                LegendItem(color: Colors.blue.shade900, label: 'AIN 1'),
+                const SizedBox(width: 20),
+                LegendItem(color: Colors.lightBlue, label: 'AIN 2'),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // ✅ Chart
+            Expanded(
+              child: Stack(
+                children: [
+                  RotatedBox(
+                    quarterTurns: 1,
+                    child: BarChart(
+                      BarChartData(
+                        barTouchData: BarTouchData(
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) =>
+                                Colors.transparent, // transparent bg
+                            rotateAngle: -90, // rotate tooltip content
+                            tooltipPadding: EdgeInsets.zero, // no extra padding
+                            tooltipMargin: 8, // close to bar
+                            tooltipRoundedRadius: 0, // square box
+                            tooltipBorder: BorderSide.none, // no border
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              return BarTooltipItem(
+                                '${rod.toY.toInt()}',
+                                TextStyle(
+                                  color: rod.color, // same as bar color
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
                                 ),
                               );
-                            }
-                            return const SizedBox.shrink();
-                          },
+                            },
+                          ),
                         ),
-                      ),
-                    ),
-                    gridData: FlGridData(
-                      show: true,
-                      drawVerticalLine: false,
-                      getDrawingHorizontalLine: (value) => FlLine(
-                        color: Colors.grey.withOpacity(0.2),
-                        strokeWidth: 1,
-                      ),
-                    ),
-                    borderData: FlBorderData(show: false),
-                  ),
-                ),
-              ),
-
-              // ✅ Value labels
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final barHeight =
-                          constraints.maxHeight / defectLabels.length;
-                      return Column(
-                        children: List.generate(defectLabels.length, (index) {
-                          final ain1 = ain1Counts[index];
-                          final ain2 = ain2Counts[index];
-                          return SizedBox(
-                            height: barHeight,
-                            child: Row(
-                              children: [
-                                const Spacer(),
-                                Text(
-                                  '$ain1',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.purple,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '$ain2',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
+                        maxY: 20,
+                        alignment: BarChartAlignment.spaceBetween,
+                        barGroups: List.generate(defectLabels.length, (index) {
+                          final ain1 = ain1Counts[index].toDouble();
+                          final ain2 = ain2Counts[index].toDouble();
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                toY: ain1,
+                                width: 16,
+                                color: Colors.blue.shade900,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                toY: ain2,
+                                width: 16,
+                                color: Colors.lightBlue.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 1,
                           );
                         }),
-                      );
-                    },
+                        titlesData: FlTitlesData(
+                          leftTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 100,
+                              getTitlesWidget: (value, meta) {
+                                final i = value.toInt();
+                                if (i < defectLabels.length) {
+                                  return RotatedBox(
+                                    quarterTurns: -1,
+                                    child: Text(
+                                      defectLabels[i],
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ),
+                        ),
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          getDrawingHorizontalLine: (value) => FlLine(
+                            color: Colors.grey.withOpacity(0.2),
+                            strokeWidth: 1,
+                          ),
+                        ),
+                        borderData: FlBorderData(show: false),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 20,
-                children: const [
-                  LegendItem(color: Colors.purple, label: 'M308'),
-                  LegendItem(color: Colors.grey, label: 'M309'),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

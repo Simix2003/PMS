@@ -83,8 +83,6 @@ Widget buildShimmerPlaceholder() {
               flex: 3,
               child: Row(
                 children: [
-                  buildShimmerBox(
-                      height: 65, width: 65, margin: EdgeInsets.all(4)),
                   Expanded(
                       child: buildShimmerBox(
                           height: 65, margin: EdgeInsets.all(4))),

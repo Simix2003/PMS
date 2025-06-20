@@ -67,10 +67,13 @@ class _VisualPageState extends State<VisualPage> {
 
   //final List<String> defectLabels = ['NG Macchie ECA', 'NG Saldatura', 'NG Bad Soldering', 'NG Mancanza l_Ribbon', 'NG Celle Rotte'];
   List<String> defectLabels = [];
+  List<String> defectVPFLabels = [];
   //final List<int> ain1Counts = [17, 8, 9, 7, 3];
   List<int> ain1Counts = [];
+  List<int> ain1VPFCounts = [];
   //final List<int> ain2Counts = [4, 5, 0, 1, 2];
   List<int> ain2Counts = [];
+  List<int> ain2VPFCounts = [];
 
   Timer? _hourlyRefreshTimer;
 
@@ -191,6 +194,23 @@ class _VisualPageState extends State<VisualPage> {
 
         qg2_defects_value = response['total_defects_qg2'];
 
+        // Parse Top Defects VPF
+        final topDefectsVPF =
+            List<Map<String, dynamic>>.from(response['top_defects_vpf'] ?? []);
+
+        defectVPFLabels = [];
+        ain1VPFCounts = [];
+        ain2VPFCounts = [];
+
+        for (final defect in topDefectsVPF) {
+          defectVPFLabels.add(defect['label']?.toString() ?? '');
+          ain1VPFCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+          ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+        }
+
+        // Optional: total count if needed
+        // vpf_defects_value = response['total_defects_vpf'];
+
         // Parse fermi data
         final fermiRaw =
             List<Map<String, dynamic>>.from(response['fermi_data'] ?? []);
@@ -226,6 +246,7 @@ class _VisualPageState extends State<VisualPage> {
 
   void _initializeWebSocket() {
     if (_isWebSocketConnected) return;
+
     _webSocketService.connectToVisual(
       line: 'Linea2',
       zone: widget.zone,
@@ -233,6 +254,7 @@ class _VisualPageState extends State<VisualPage> {
         if (!mounted) return;
 
         setState(() {
+          // ─── Main station metrics ─────────────────────
           bussingIn_1 = data['station_1_in'] ?? 0;
           bussingIn_2 = data['station_2_in'] ?? 0;
           ng_bussingOut_1 = data['station_1_out_ng'] ?? 0;
@@ -240,6 +262,7 @@ class _VisualPageState extends State<VisualPage> {
           currentYield_1 = data['station_1_yield'] ?? 100;
           currentYield_2 = data['station_2_yield'] ?? 100;
 
+          // ─── Yield + Throughput 8h & shift ────────────
           yieldLast8h_1 = List<Map<String, dynamic>>.from(
               data['station_1_yield_last_8h'] ?? []);
           yieldLast8h_2 = List<Map<String, dynamic>>.from(
@@ -278,11 +301,11 @@ class _VisualPageState extends State<VisualPage> {
 
           hourLabels =
               hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
-          // Parse fermi data also from WebSocket payload
+
+          // ─── Fermi Data ───────────────────────────────
           final fermiRaw =
               List<Map<String, dynamic>>.from(data['fermi_data'] ?? []);
-
-          dataFermi = []; // clear previous data
+          dataFermi = [];
 
           for (final entry in fermiRaw) {
             if (entry.containsKey("Available_Time_1")) {
@@ -300,11 +323,40 @@ class _VisualPageState extends State<VisualPage> {
               ]);
             }
           }
+
+          // ─── QG2 Defects ──────────────────────────────
+          final topDefectsQG2 =
+              List<Map<String, dynamic>>.from(data['top_defects_qg2'] ?? []);
+          defectLabels = [];
+          ain1Counts = [];
+          ain2Counts = [];
+
+          for (final defect in topDefectsQG2) {
+            defectLabels.add(defect['label']?.toString() ?? '');
+            ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+            ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+          }
+
+          qg2_defects_value = data['total_defects_qg2'] ?? 0;
+
+          // ─── VPF Defects ───────────────────────────────
+          final topDefectsVPF =
+              List<Map<String, dynamic>>.from(data['top_defects_vpf'] ?? []);
+          defectVPFLabels = [];
+          ain1VPFCounts = [];
+          ain2VPFCounts = [];
+
+          for (final defect in topDefectsVPF) {
+            defectVPFLabels.add(defect['label']?.toString() ?? '');
+            ain1VPFCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+            ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+          }
         });
       },
       onDone: () => print("🛑 Visual WebSocket closed"),
       onError: (err) => print("❌ WebSocket error: $err"),
     );
+
     _isWebSocketConnected = true;
   }
 
@@ -1414,9 +1466,9 @@ class _VisualPageState extends State<VisualPage> {
                                 Flexible(
                                   flex: 2,
                                   child: VPFDefectsHorizontalBarChart(
-                                    defectLabels: defectLabels,
-                                    ain1Counts: ain1Counts,
-                                    ain2Counts: ain2Counts,
+                                    defectLabels: defectVPFLabels,
+                                    ain1Counts: ain1VPFCounts,
+                                    ain2Counts: ain2VPFCounts,
                                   ),
                                 ),
                               ],

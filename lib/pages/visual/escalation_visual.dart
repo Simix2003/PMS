@@ -75,7 +75,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     "AIN02": 30,
   };
 
-  final stopTypes = ["ESCALATION", "STOP"];
+  final stopTypes = ["ESCALATION"];
   static const List<String> statusCreation = [
     "OPEN",
     "SHIFT_MANAGER",
@@ -86,10 +86,10 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   String? _newStation;
   String? _newType;
   String? _newStatus;
-  TextEditingController _reasonCtrl = TextEditingController();
+  final TextEditingController _reasonCtrl = TextEditingController();
 
   bool _editingReason = false;
-  TextEditingController _editReasonCtrl = TextEditingController();
+  final TextEditingController _editReasonCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -436,6 +436,11 @@ class _EscalationDialogState extends State<_EscalationDialog> {
                         subtitle: Text(
                           "${DateFormat('HH:mm').format(e['start_time'])} - ${DateFormat('HH:mm').format(e['end_time'])}  (${_formatDuration(duration)})",
                         ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () =>
+                              _handleDelete(e), // <-- implement this
+                        ),
                         onTap: () => _showClosedDetail(e),
                       ),
                     );
@@ -451,6 +456,41 @@ class _EscalationDialogState extends State<_EscalationDialog> {
           ),
         ),
       ],
+    );
+  }
+
+  void _handleDelete(Map<String, dynamic> item) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Sei sicuro?"),
+        content: Text("Vuoi eliminare: '${item['title']}'?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("Annulla"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              setState(() => _busy = true);
+
+              final res = await ApiService().deleteStop(item['id']);
+              if (res != null && res['status'] == 'ok') {
+                await _fetchExistingStops();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text("Errore durante l'eliminazione")),
+                );
+              }
+
+              setState(() => _busy = false);
+            },
+            child: const Text("Elimina", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 

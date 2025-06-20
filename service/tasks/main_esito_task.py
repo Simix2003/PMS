@@ -16,7 +16,7 @@ from service.routes.broadcast import broadcast
 from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_string
-from service.helpers.visual_helper import refresh_top_defects_qg2, update_visual_data_on_new_module
+from service.helpers.visual_helper import refresh_top_defects_qg2, refresh_top_defects_vpf, update_visual_data_on_new_module
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
     print(f"[{full_station_id}] Starting background task.")
@@ -111,23 +111,6 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 
                 # 🔍 Read current Id_Modulo again directly from PLC
                 id_mod_conf = paths["id_modulo"]
-                #current_id_modulo = global_state.debug_moduli.get(full_station_id) if debug else await asyncio.to_thread(
-                #    plc_connection.read_string,
-                #    id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
-                #)
-                current_id_modulo = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
-
-                expected_id = global_state.expected_moduli.get(full_station_id)
-
-                # 📝 Se c'è una discrepanza tra gli ID Modulo, salvala su file
-                if expected_id and current_id_modulo and expected_id != current_id_modulo:
-                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    with open("plc_mismatches.txt", "a") as f:
-                        f.write(f"[{now}] {full_station_id}\n")
-                        f.write(f" DISCREPANZA! Atteso: {expected_id}, Letto: {current_id_modulo}\n")
-                        f.write(f"  Inizio Ciclo: {data_inizio}, Fine Ciclo: {datetime.now()}\n")
-                        f.write(f"  fine_buona: {fine_buona}, fine_scarto: {fine_scarto}\n")
-                        f.write("-" * 60 + "\n")
 
                 if result:
                     passato_flags[full_station_id] = True
@@ -139,6 +122,12 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                         )
                         if success and channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
                             await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_vpf=True)
+                            zone = "AIN"  # TODO: derive dynamically from MySQL if needed
+                            assert end_time and final_esito is not None
+                            timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
+                            
+                            refresh_top_defects_vpf(zone, timestamp)
+
                         if success:
                             try:
                                 zone = "AIN"  # TODO: derive dynamically from MySQL if needed
@@ -152,8 +141,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                     esito=final_esito,
                                     ts=timestamp
                                 )
-
-                                refresh_top_defects_qg2(zone, timestamp)
+                                if fine_scarto:
+                                    refresh_top_defects_qg2(zone, timestamp)
 
                                 print(f"📡 Called update_visual_data_on_new_module ✅")
 

@@ -92,28 +92,39 @@ class _HeaderBoxState extends State<HeaderBox> {
               fit: BoxFit.contain,
             )
           else if (widget.title == 'Pareto Shift')
-            SizedBox(
-              height: 50,
-              width: 75,
-              child: Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                color: redColor,
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                child: Center(
-                  // 👈 Center content both vertically & horizontally
-                  child: Text(
-                    widget.qg2_defects_value.toString(),
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: textColor,
-                    ),
+            Row(
+              children: [
+                Text(
+                  "Difetti \nTot. QG2",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: textColor,
                   ),
                 ),
-              ),
+                SizedBox(
+                  height: 50,
+                  width: 75,
+                  child: Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    color: warningColor,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Center(
+                      // 👈 Center content both vertically & horizontally
+                      child: Text(
+                        widget.qg2_defects_value.toString(),
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              ],
             )
           else
             const SizedBox(width: 0), // occupy no space if not Produzione Shift
@@ -1350,7 +1361,7 @@ class TopDefectsHorizontalBarChart extends StatelessWidget {
           children: [
             // ✅ Title
             const Text(
-              "Difetti QG2",
+              "Top 5 Difetti QG2",
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -1500,7 +1511,7 @@ class VPFDefectsHorizontalBarChart extends StatelessWidget {
           children: [
             // ✅ Title
             const Text(
-              "Difetti VPF",
+              "Difetti VPF riconducibili ad AIN",
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,

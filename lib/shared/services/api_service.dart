@@ -920,4 +920,17 @@ class ApiService {
       return null;
     }
   }
+
+  Future<Map<String, dynamic>?> deleteStop(int stopId) async {
+    final url = Uri.parse('$baseUrl/api/escalation/delete_stop/$stopId');
+
+    final response = await http.delete(url);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to delete stop: ${response.body}");
+      return null;
+    }
+  }
 }

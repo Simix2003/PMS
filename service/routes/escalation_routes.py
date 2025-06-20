@@ -114,3 +114,21 @@ async def api_get_stop_details(stop_id: int):
     except Exception as e:
         logging.error(f"Error fetching stop details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/api/escalation/delete_stop/{stop_id}")
+async def api_delete_stop(stop_id: int):
+    try:
+        conn = get_mysql_connection()
+        with conn.cursor() as cursor:
+            # 1️⃣ First delete related status change records
+            cursor.execute("DELETE FROM stop_status_changes WHERE stop_id = %s", (stop_id,))
+
+            # 2️⃣ Then delete the main stop entry
+            cursor.execute("DELETE FROM stops WHERE id = %s", (stop_id,))
+        
+        conn.commit()
+        return {"status": "ok"}
+    except Exception as e:
+        logging.error(f"Error deleting stop {stop_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

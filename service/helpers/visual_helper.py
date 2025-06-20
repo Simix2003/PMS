@@ -7,6 +7,7 @@ import sys
 import copy
 from collections import defaultdict
 from threading import RLock 
+from typing import Dict, DefaultDict
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -327,7 +328,64 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
         # Then get top 5
         results = sorted(full_results, key=lambda x: x['total'], reverse=True)[:5]
         top_defects_qg2 = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in results]
-    
+
+        # -------- top_defects_vpf (defects 12,14,15 from station 56, grouped by source station 29/30) ------
+        sql_vpf_productions = """
+            SELECT p56.id, origin.station_id AS origin_station
+            FROM productions p56
+            JOIN productions origin ON p56.object_id = origin.object_id
+            WHERE p56.esito = 6
+            AND p56.station_id = 56
+            AND p56.start_time BETWEEN %s AND %s
+            AND origin.station_id IN (29, 30)
+        """
+        cursor.execute(sql_vpf_productions, (shift_start, shift_end))
+        vpf_rows = cursor.fetchall()
+
+        vpf_prod_ids = [row['id'] for row in vpf_rows]
+        vpf_prod_map = {row['id']: row['origin_station'] for row in vpf_rows}
+
+        if not vpf_prod_ids:
+            top_defects_vpf = []
+        else:
+            placeholders = ','.join(['%s'] * len(vpf_prod_ids))
+            sql_vpf_defects = f"""
+                SELECT od.production_id, d.category
+                FROM object_defects od
+                JOIN defects d ON od.defect_id = d.id
+                WHERE od.production_id IN ({placeholders})
+                AND od.defect_id IN (12, 14, 15)
+            """
+            cursor.execute(sql_vpf_defects, vpf_prod_ids)
+            defect_rows = cursor.fetchall()
+
+            vpf_counter: Dict[str, Dict[int, int]] = defaultdict(lambda: {29: 0, 30: 0})
+            for row in defect_rows:
+                pid = row["production_id"]
+                category = row["category"]
+                if pid in vpf_prod_map:
+                    station = vpf_prod_map[pid]
+                    if station in (29, 30):
+                        vpf_counter[category][station] += 1
+
+            vpf_results = []
+            for category, stations in vpf_counter.items():
+                c29 = stations[29]
+                c30 = stations[30]
+                total = c29 + c30
+                vpf_results.append({
+                    "label": category,
+                    "ain1": c29,  # AIN1 = 29
+                    "ain2": c30,  # AIN2 = 30
+                    "total": total
+                })
+
+            top5_vpf = sorted(vpf_results, key=lambda r: r["total"], reverse=True)[:5]
+            top_defects_vpf = [
+                {"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]}
+                for r in top5_vpf
+            ]
+
     except Exception as e:
         logger.exception(f"❌ compute_zone_snapshot() FAILED for zone={zone}: {e}")
         raise
@@ -349,6 +407,7 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     "__last_hour": hour_start.isoformat(),
     "fermi_data": fermi_data,
     "top_defects_qg2": top_defects_qg2,
+    "top_defects_vpf": top_defects_vpf,
     "total_defects_qg2": total_defects_qg2,
 }
 
@@ -577,7 +636,6 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
         except Exception as e:
             logger.exception(f"❌ Error refreshing fermi_data for zone={zone}: {e}")
 
-
 def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
     """
     Refresh top_defects_qg2 for the zone (based on esito=6 in current shift).
@@ -664,3 +722,92 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
 
     except Exception as e:
         logger.exception(f"❌ Exception in refresh_top_defects_qg2: {e}")
+
+def refresh_top_defects_vpf(zone: str, ts: datetime) -> None:
+    """
+    Refresh top_defects_vpf for the zone (based on esito=6 at station_id=56 in current shift,
+    and only defects with defect_id in (12, 14, 15)), split by original station_id (29 or 30 → ain1/ain2).
+    """
+    try:
+        with _update_lock:
+            if zone not in global_state.visual_data:
+                logger.warning(f"⚠️ Cannot refresh top_defects_vpf for unknown zone: {zone}")
+                return
+
+            data = global_state.visual_data[zone]
+            shift_start, shift_end = get_shift_window(ts)
+
+            conn = get_mysql_connection()
+            cursor = conn.cursor()
+
+            # 1️⃣ Get NG productions at station 56, with origin station 29 or 30
+            sql_productions = """
+                SELECT p56.id, origin.station_id AS origin_station
+                FROM productions p56
+                JOIN productions origin ON p56.object_id = origin.object_id
+                WHERE p56.esito = 6
+                  AND p56.station_id = 56
+                  AND p56.start_time BETWEEN %s AND %s
+                  AND origin.station_id IN (29, 30)
+            """
+            cursor.execute(sql_productions, (shift_start, shift_end))
+            rows = cursor.fetchall()
+            production_ids = [row['id'] for row in rows]
+            production_station_map = {row['id']: row['origin_station'] for row in rows}
+
+            if not production_ids:
+                data["top_defects_vpf"] = []
+                return
+
+            # 2️⃣ Filter by defect_id IN (12, 14, 15)
+            placeholders = ','.join(['%s'] * len(production_ids))
+            sql_defects = f"""
+                SELECT od.production_id, d.category
+                FROM object_defects od
+                JOIN defects d ON od.defect_id = d.id
+                WHERE od.production_id IN ({placeholders})
+                  AND od.defect_id IN (12, 14, 15)
+            """
+            cursor.execute(sql_defects, production_ids)
+            rows = cursor.fetchall()
+
+            # 3️⃣ Count by category and origin station (29 → ain1, 30 → ain2)
+            defect_counter: DefaultDict[str, Dict[int, int]] = defaultdict(lambda: {29: 0, 30: 0})
+            for row in rows:
+                pid = row["production_id"]
+                category = row["category"]
+                origin_station = production_station_map.get(pid)
+                if isinstance(origin_station, int) and origin_station in (29, 30):
+                    defect_counter[category][origin_station] += 1
+
+
+            # 4️⃣ Aggregate + top 5 by total
+            full_results = []
+            for category, stations in defect_counter.items():
+                c29 = stations[29]
+                c30 = stations[30]
+                total = c29 + c30
+                full_results.append({
+                    "label": category,
+                    "ain1": c29,  # 29
+                    "ain2": c30,  # 30
+                    "total": total
+                })
+
+            top5 = sorted(full_results, key=lambda r: r["total"], reverse=True)[:5]
+            data["top_defects_vpf"] = [
+                {"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]}
+                for r in top5
+            ]
+
+            # 5️⃣ WebSocket push
+            loop = asyncio.get_running_loop()
+            payload = copy.deepcopy(data)
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                )
+            )
+
+    except Exception as e:
+        logger.exception(f"❌ Exception in refresh_top_defects_vpf: {e}")

@@ -204,13 +204,6 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
             WHERE st.type = 'STOP'
             AND st.station_id = 29
             AND st.start_time BETWEEN %s AND %s
-            AND reason IN (
-            'Fermo Generico',
-            'Cancelli Aperti',
-            'Anomalia',
-            'Ciclo non Automatico',
-            'Fuori Tempo Ciclo'
-            )
         """
         cursor.execute(sql_total_29, (shift_start, shift_end))
         row29 = cursor.fetchone() or {}
@@ -225,13 +218,6 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
             WHERE st.type = 'STOP'
             AND st.station_id = 30
             AND st.start_time BETWEEN %s AND %s
-            AND reason IN (
-            'Fermo Generico',
-            'Cancelli Aperti',
-            'Anomalia',
-            'Ciclo non Automatico',
-            'Fuori Tempo Ciclo'
-            )
         """
         cursor.execute(sql_total_30, (shift_start, shift_end))
         row30 = cursor.fetchone() or {}
@@ -560,13 +546,6 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                 WHERE st.type = 'STOP'
                 AND st.station_id = 29
                 AND st.start_time BETWEEN %s AND %s
-                AND reason IN (
-                    'Fermo Generico',
-                    'Cancelli Aperti',
-                    'Anomalia',
-                    'Ciclo non Automatico',
-                    'Fuori Tempo Ciclo'
-                )
             """
             cursor.execute(sql_total_29, (shift_start, shift_end))
             row29 = cursor.fetchone() or {}
@@ -581,13 +560,6 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                 WHERE st.type = 'STOP'
                 AND st.station_id = 30
                 AND st.start_time BETWEEN %s AND %s
-                AND reason IN (
-                    'Fermo Generico',
-                    'Cancelli Aperti',
-                    'Anomalia',
-                    'Ciclo non Automatico',
-                    'Fuori Tempo Ciclo'
-                )
             """
             cursor.execute(sql_total_30, (shift_start, shift_end))
             row30 = cursor.fetchone() or {}

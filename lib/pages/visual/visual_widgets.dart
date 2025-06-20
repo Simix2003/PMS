@@ -87,7 +87,7 @@ class _HeaderBoxState extends State<HeaderBox> {
             )
           else if (widget.title == 'Produzione Shift')
             Image.asset(
-              'logo.png',
+              'assets/logo.png',
               height: 36,
               fit: BoxFit.contain,
             )

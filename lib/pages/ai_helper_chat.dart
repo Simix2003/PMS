@@ -1,9 +1,20 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:ui';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
+
+class _ChatMessage {
+  final String role;
+  final String content;
+  final bool shimmer;
+
+  _ChatMessage({
+    required this.role,
+    required this.content,
+    this.shimmer = false,
+  });
+}
 
 class AIHelperChat extends StatefulWidget {
   final void Function(String sqlQuery)? onQueryGenerated;
@@ -15,98 +26,68 @@ class AIHelperChat extends StatefulWidget {
 }
 
 class _AIHelperChatState extends State<AIHelperChat> {
-  final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   final List<_ChatMessage> messages = [
     _ChatMessage(role: 'ai', content: 'Ciao, come posso aiutarti?'),
   ];
 
-  void _sendMessage() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
+  bool _loading = true;
+  bool _showButtons = false;
+  bool _showShimmerExport = false;
 
-    setState(() {
-      messages.add(_ChatMessage(role: 'user', content: text));
-      messages.add(_ChatMessage(role: 'ai', content: 'Sto elaborando...'));
+  @override
+  void initState() {
+    super.initState();
+
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      setState(() {
+        messages.add(_ChatMessage(
+          role: 'ai',
+          content: 'Vuoi esportare i dati di ieri dalle 6 alle 5:59?',
+        ));
+        _loading = false;
+        _showButtons = true;
+      });
     });
-
-    _controller.clear();
-    _scrollToBottom();
-
-    try {
-      final history = messages
-          .where((m) => m.role != 'ai' || m.content != 'Sto elaborando...')
-          .take(6) // limit to last 6 entries (optional)
-          .map((m) => {
-                'role': m.role == 'ai' ? 'assistant' : 'user',
-                'content': m.content,
-              })
-          .toList();
-
-      final response = await http.post(
-        Uri.parse('http://localhost:8001/api/chat_query'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'message': text,
-          'history': history,
-        }),
-      );
-
-      final data = jsonDecode(response.body);
-      final answer =
-          data['response']?.toString() ?? 'Errore nella risposta AI.';
-
-      setState(() {
-        messages.removeLast(); // remove "Sto elaborando..."
-        messages.add(_ChatMessage(role: 'ai', content: answer));
-      });
-
-      _scrollToBottom();
-
-      final regex = RegExp(r'```sql\s*([\s\S]*?)```');
-      final match = regex.firstMatch(answer);
-
-      if (match != null) {
-        final sqlQuery = match.group(1)?.trim();
-
-        if (sqlQuery != null && sqlQuery.toLowerCase().startsWith('select')) {
-          widget.onQueryGenerated?.call(sqlQuery); // ✅ Send clean query back
-          Navigator.of(context).pop(); // ✅ Close the dialog
-        }
-      }
-    } catch (e) {
-      setState(() {
-        messages.removeLast();
-        messages.add(_ChatMessage(role: 'ai', content: 'Errore: $e'));
-      });
-    }
   }
 
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent + 100,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
+  void _handleResponse(bool accepted) async {
+    setState(() {
+      _showButtons = false;
+      messages.add(_ChatMessage(role: 'user', content: accepted ? 'Sì' : 'No'));
+    });
+
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    if (!accepted) {
+      Navigator.pop(context);
+      return;
+    }
+
+    setState(() {
+      messages.add(_ChatMessage(
+        role: 'ai',
+        content: 'Va bene, faccio partire l\'esportazione!',
+      ));
+    });
+
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    setState(() {
+      messages.add(_ChatMessage(
+        role: 'ai',
+        content: 'Esportazione...',
+        shimmer: true,
+      ));
     });
   }
 
   Widget _buildMessageBubble(_ChatMessage msg) {
     final isUser = msg.role == 'user';
-
-    // Apple Intelligence style - glass effect for AI responses, solid for user
-    final bubbleColor = isUser
-        ? const Color(0xFF0A84FF) // Apple blue for user messages
-        : Colors.white.withOpacity(0.15); // Translucent white for AI
-
-    final textColor = isUser
-        ? Colors.white // White text for user messages
-        : Colors.white; // White text for AI messages
-
+    final bubbleColor =
+        isUser ? const Color(0xFF0A84FF) : Colors.white.withOpacity(0.15);
+    final textColor = Colors.white;
     final align = isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final radius = BorderRadius.circular(20);
     final margin = isUser
@@ -127,10 +108,7 @@ class _AIHelperChatState extends State<AIHelperChat> {
                     padding: const EdgeInsets.all(12),
                     child: Text(
                       msg.content,
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 15,
-                      ),
+                      style: TextStyle(color: textColor, fontSize: 15),
                     ),
                   ),
                 )
@@ -148,18 +126,100 @@ class _AIHelperChatState extends State<AIHelperChat> {
                           width: 1.0,
                         ),
                       ),
-                      child: Text(
-                        msg.content,
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 15,
-                        ),
-                      ),
+                      child: msg.shimmer
+                          ? Shimmer.fromColors(
+                              baseColor: Colors.white.withOpacity(0.4),
+                              highlightColor: Colors.white.withOpacity(0.9),
+                              child: Text(
+                                msg.content,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            )
+                          : Text(
+                              msg.content,
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 15,
+                              ),
+                            ),
                     ),
                   ),
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _buildShimmerBubble({String? text}) {
+    final child = text != null
+        ? Text(
+            text,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.5),
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
+          )
+        : const SizedBox(height: 20, width: 250);
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, right: 40, top: 6, bottom: 6),
+      child: Shimmer.fromColors(
+        baseColor: Colors.white.withOpacity(0.15),
+        highlightColor: Colors.white.withOpacity(0.3),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildYesNoButtons() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green.shade400,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(160, 60), // Bigger button
+              textStyle:
+                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            onPressed: () => _handleResponse(true),
+            child: const Text("Sì"),
+          ),
+          const SizedBox(width: 24),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade400,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(160, 60),
+              textStyle:
+                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            onPressed: () => _handleResponse(false),
+            child: const Text("No"),
+          ),
+        ],
+      ),
     );
   }
 
@@ -185,22 +245,18 @@ class _AIHelperChatState extends State<AIHelperChat> {
                 ],
               ),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.2),
-                width: 1.5,
-              ),
+              border:
+                  Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
             ),
             child: Column(
               children: [
-                // Glassmorphism Header
+                // ── HEADER ──────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
-                        color: Colors.white.withOpacity(0.1),
-                        width: 1,
-                      ),
+                          color: Colors.white.withOpacity(0.1), width: 1),
                     ),
                   ),
                   child: Row(
@@ -214,11 +270,8 @@ class _AIHelperChatState extends State<AIHelperChat> {
                               color: Colors.white.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(
-                              Icons.auto_awesome,
-                              color: Colors.white,
-                              size: 20,
-                            ),
+                            child: const Icon(Icons.auto_awesome,
+                                color: Colors.white, size: 20),
                           ),
                           const SizedBox(width: 10),
                           const Text(
@@ -239,18 +292,15 @@ class _AIHelperChatState extends State<AIHelperChat> {
                             color: Colors.white.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: 18,
-                          ),
+                          child: const Icon(Icons.close,
+                              color: Colors.white, size: 18),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                // Chat area with gradient background
+                // ── CHAT ───────────────────────────────
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
@@ -266,89 +316,25 @@ class _AIHelperChatState extends State<AIHelperChat> {
                     child: ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      itemCount: messages.length,
+                      itemCount: messages.length +
+                          (_loading ? 1 : 0) +
+                          (_showShimmerExport ? 1 : 0),
                       itemBuilder: (context, index) {
-                        return _buildMessageBubble(messages[index]);
+                        if (_loading && index == messages.length) {
+                          return _buildShimmerBubble();
+                        } else if (_showShimmerExport &&
+                            index == messages.length + (_loading ? 1 : 0)) {
+                          return _buildShimmerBubble(text: 'Esportazione...');
+                        } else {
+                          return _buildMessageBubble(messages[index]);
+                        }
                       },
                     ),
                   ),
                 ),
 
-                // Glassmorphism Input area
-                ClipRRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
-                        border: Border(
-                          top: BorderSide(
-                            color: Colors.white.withOpacity(0.1),
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.2),
-                                  width: 1,
-                                ),
-                              ),
-                              child: TextField(
-                                controller: _controller,
-                                style: const TextStyle(color: Colors.white),
-                                decoration: InputDecoration(
-                                  hintText: 'Chiedi qualcosa...',
-                                  hintStyle: TextStyle(
-                                    color: Colors.white.withOpacity(0.6),
-                                  ),
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                ),
-                                onSubmitted: (_) => _sendMessage(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: _sendMessage,
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0A84FF),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: const Icon(
-                                  Icons.arrow_upward_rounded,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                // ── BUTTONS or EMPTY ─────────────────────
+                _showButtons ? _buildYesNoButtons() : const SizedBox.shrink(),
               ],
             ),
           ),
@@ -356,11 +342,4 @@ class _AIHelperChatState extends State<AIHelperChat> {
       ),
     );
   }
-}
-
-class _ChatMessage {
-  final String role; // 'user' or 'ai'
-  final String content;
-
-  _ChatMessage({required this.role, required this.content});
 }

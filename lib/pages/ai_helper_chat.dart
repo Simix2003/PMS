@@ -3,6 +3,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
+import '../shared/services/api_service.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:html' as html;
 
 class _ChatMessage {
   final String role;
@@ -35,6 +38,7 @@ class _AIHelperChatState extends State<AIHelperChat> {
   bool _loading = true;
   bool _showButtons = false;
   bool _showShimmerExport = false;
+  String _exportStatus = '';
 
   @override
   void initState() {
@@ -75,11 +79,26 @@ class _AIHelperChatState extends State<AIHelperChat> {
     await Future.delayed(const Duration(milliseconds: 800));
 
     setState(() {
-      messages.add(_ChatMessage(
-        role: 'ai',
-        content: 'Esportazione...',
-        shimmer: true,
-      ));
+      _showShimmerExport = true;
+      _exportStatus = 'Preparazione...';
+    });
+
+    final downloadUrl = await ApiService.exportDailyAndGetDownloadUrl(
+      onProgress: (step, current, total) {
+        setState(() {
+          _exportStatus = _translateExportStep(step, current, total);
+        });
+      },
+    );
+
+    setState(() {
+      _showShimmerExport = false;
+      if (downloadUrl != null) {
+        messages.add(_ChatMessage(role: 'ai', content: 'Esportazione completata!'));
+        if (kIsWeb) html.window.open(downloadUrl, '_blank');
+      } else {
+        messages.add(_ChatMessage(role: 'ai', content: 'Errore durante l\'esportazione'));
+      }
     });
   }
 
@@ -223,6 +242,41 @@ class _AIHelperChatState extends State<AIHelperChat> {
     );
   }
 
+  String _translateExportStep(String step, int? current, int? total) {
+    if (step.startsWith('creating:')) {
+      final sheet = step.split(':').last;
+      final base = 'Creazione foglio $sheet...';
+      if (current != null && total != null) {
+        return '$current/$total - $base';
+      }
+      return base;
+    }
+    if (step.startsWith('finished:')) {
+      final sheet = step.split(':').last;
+      final base = 'Completato foglio $sheet';
+      if (current != null && total != null) {
+        return '$current/$total - $base';
+      }
+      return base;
+    }
+    const mapping = {
+      'init': 'Preparazione...',
+      'start_sheets': 'Inizio creazione fogli...',
+      'db_connect': 'Connessione al database...',
+      'objects': 'Caricamento oggetti...',
+      'productions': 'Caricamento produzioni...',
+      'defects': 'Caricamento difetti...',
+      'excel': 'Generazione Excel...',
+      'saving': 'Salvataggio file...',
+      'done': 'Completato.'
+    };
+    final base = mapping[step] ?? step;
+    if (current != null && total != null) {
+      return '$current/$total - $base';
+    }
+    return base;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -324,7 +378,7 @@ class _AIHelperChatState extends State<AIHelperChat> {
                           return _buildShimmerBubble();
                         } else if (_showShimmerExport &&
                             index == messages.length + (_loading ? 1 : 0)) {
-                          return _buildShimmerBubble(text: 'Esportazione...');
+                          return _buildShimmerBubble(text: _exportStatus);
                         } else {
                           return _buildMessageBubble(messages[index]);
                         }

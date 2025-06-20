@@ -1,6 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
-from typing import List, Dict
+from typing import Any, List, Dict
 import logging, os, sys, asyncio
 from datetime import datetime, timedelta, time as dt_time
 
@@ -31,7 +31,7 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
         if not progress_id:
             return
         try:
-            payload = {"step": step}
+            payload: dict[str, Any] = {"step": step}
             if current is not None and total is not None:
                 payload["current"] = current
                 payload["total"] = total
@@ -244,11 +244,18 @@ def daily_export(background_tasks: BackgroundTasks, data: dict = Body(...)):
     production_ids = [row["production_id"] for row in rows]
     modulo_ids = [row["id_modulo"] for row in rows]
 
-    settings = load_settings()
-    full_history = settings.get("always_export_history", False)
+    full_history = False
+
+   # Format strings like "03 Jun 2025 – 00:00"
+    date_format = "%d %b %Y – %H:%M"
 
     payload = {
-        "filters": [],
+        "filters": [
+            {
+                "type": "Data",
+                "value": f"{start_dt.strftime(date_format)} → {end_dt.strftime(date_format)}",
+            }
+        ],
         "production_ids": production_ids,
         "modulo_ids": modulo_ids,
         "fullHistory": full_history,

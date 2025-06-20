@@ -14,3 +14,4 @@ Versions:
 "2.2.4" - Fixed Fermi task to iterate thru PLC and not each Station
 "2.2.5" - Fixed bugs and LOCK problem
 "2.2.6" - Added Export visuals and VPF
+"2.3.0" - Added Mini Bro for Daily export

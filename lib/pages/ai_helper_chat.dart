@@ -1,21 +1,23 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../shared/services/api_service.dart';
-import 'package:flutter/foundation.dart';
 import 'dart:html' as html;
+import 'package:flutter/foundation.dart';
 
 class _ChatMessage {
   final String role;
   final String content;
   final bool shimmer;
+  final String? downloadUrl; // <-- add this
 
   _ChatMessage({
     required this.role,
     required this.content,
     this.shimmer = false,
+    this.downloadUrl,
   });
 }
 
@@ -31,26 +33,23 @@ class AIHelperChat extends StatefulWidget {
 class _AIHelperChatState extends State<AIHelperChat> {
   final ScrollController _scrollController = ScrollController();
 
-  final List<_ChatMessage> messages = [
-    _ChatMessage(role: 'ai', content: 'Ciao, come posso aiutarti?'),
-  ];
+  final List<_ChatMessage> messages = [];
 
-  bool _loading = true;
   bool _showButtons = false;
-  bool _showShimmerExport = false;
-  String _exportStatus = '';
 
   @override
   void initState() {
     super.initState();
 
-    Future.delayed(const Duration(milliseconds: 1500), () {
+    messages.add(_ChatMessage(role: 'ai', content: '', shimmer: true));
+
+    Future.delayed(const Duration(milliseconds: 1000), () {
       setState(() {
+        messages.removeWhere((m) => m.shimmer);
         messages.add(_ChatMessage(
           role: 'ai',
-          content: 'Vuoi esportare i dati di ieri dalle 6 alle 5:59?',
+          content: 'Come posso aiutarti? Scegli un\'opzione qui sotto:',
         ));
-        _loading = false;
         _showButtons = true;
       });
     });
@@ -59,7 +58,6 @@ class _AIHelperChatState extends State<AIHelperChat> {
   void _handleResponse(bool accepted) async {
     setState(() {
       _showButtons = false;
-      messages.add(_ChatMessage(role: 'user', content: accepted ? 'Sì' : 'No'));
     });
 
     await Future.delayed(const Duration(milliseconds: 600));
@@ -78,26 +76,51 @@ class _AIHelperChatState extends State<AIHelperChat> {
 
     await Future.delayed(const Duration(milliseconds: 800));
 
+    // 1. Add shimmer message FIRST and remember its index
+    int progressIndex = -1;
+
     setState(() {
-      _showShimmerExport = true;
-      _exportStatus = 'Preparazione...';
+      messages.add(_ChatMessage(
+        role: 'ai',
+        content: '⏳ Inizio esportazione...',
+        shimmer: true,
+      ));
+      progressIndex = messages.length - 1;
     });
 
     final downloadUrl = await ApiService.exportDailyAndGetDownloadUrl(
-      onProgress: (step, current, total) {
+        onProgress: (step, current, total) {
+      final translated = _translateExportStep(step, current, total);
+      final isFinal = translated.trim().toLowerCase().contains("completato");
+
+      if (progressIndex != -1) {
         setState(() {
-          _exportStatus = _translateExportStep(step, current, total);
+          messages[progressIndex] = _ChatMessage(
+            role: 'ai',
+            content: translated,
+            shimmer: !isFinal,
+          );
         });
-      },
-    );
+
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
 
     setState(() {
-      _showShimmerExport = false;
       if (downloadUrl != null) {
-        messages.add(_ChatMessage(role: 'ai', content: 'Esportazione completata!'));
-        if (kIsWeb) html.window.open(downloadUrl, '_blank');
+        final fileName = downloadUrl.split('/').last;
+        messages.add(_ChatMessage(
+          role: 'ai',
+          content: fileName,
+          downloadUrl: downloadUrl,
+        ));
       } else {
-        messages.add(_ChatMessage(role: 'ai', content: 'Errore durante l\'esportazione'));
+        messages.add(_ChatMessage(
+            role: 'ai', content: 'Errore durante l\'esportazione'));
       }
     });
   }
@@ -136,36 +159,80 @@ class _AIHelperChatState extends State<AIHelperChat> {
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        borderRadius: radius,
-                        color: bubbleColor,
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.2),
-                          width: 1.0,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: radius,
+                          color: bubbleColor,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 1.0,
+                          ),
                         ),
-                      ),
-                      child: msg.shimmer
-                          ? Shimmer.fromColors(
-                              baseColor: Colors.white.withOpacity(0.4),
-                              highlightColor: Colors.white.withOpacity(0.9),
-                              child: Text(
-                                msg.content,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
+                        child: msg.shimmer
+                            ? Shimmer.fromColors(
+                                baseColor: Colors.white.withOpacity(0.4),
+                                highlightColor: Colors.white.withOpacity(0.9),
+                                child: Text(
+                                  "  ${msg.content}",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                              ),
-                            )
-                          : Text(
-                              msg.content,
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 15,
-                              ),
-                            ),
-                    ),
+                              )
+                            : msg.downloadUrl != null
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.insert_drive_file,
+                                          size: 18, color: Colors.white),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        msg.content,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      ElevatedButton.icon(
+                                        onPressed: () {
+                                          if (kIsWeb) {
+                                            final anchor = html.AnchorElement(
+                                                href: msg.downloadUrl!)
+                                              ..target = '_blank'
+                                              ..download = msg.content;
+                                            anchor.click();
+                                          }
+                                        },
+                                        icon: const Icon(Icons.download,
+                                            size: 16),
+                                        label: const Text("Scarica"),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              Colors.white.withOpacity(0.2),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 6),
+                                          textStyle:
+                                              const TextStyle(fontSize: 13),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                      )
+                                    ],
+                                  )
+                                : Text(
+                                    msg.content,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 15,
+                                    ),
+                                  )),
                   ),
                 ),
         ),
@@ -173,72 +240,71 @@ class _AIHelperChatState extends State<AIHelperChat> {
     );
   }
 
-  Widget _buildShimmerBubble({String? text}) {
-    final child = text != null
-        ? Text(
-            text,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-            ),
-          )
-        : const SizedBox(height: 20, width: 250);
-
+  Widget _buildExportButtons() {
     return Padding(
-      padding: const EdgeInsets.only(left: 12, right: 40, top: 6, bottom: 6),
-      child: Shimmer.fromColors(
-        baseColor: Colors.white.withOpacity(0.15),
-        highlightColor: Colors.white.withOpacity(0.3),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(20),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 16,
+        children: [
+          ElevatedButton(
+            onPressed: () => _handleExportOption("daily"),
+            style: _buttonStyle(Colors.green),
+            child: const Text("📅 Dati di ieri"),
           ),
-          child: child,
-        ),
+          ElevatedButton(
+            onPressed: () => _handleExportOption("weekly"),
+            style: _buttonStyle(Colors.orange),
+            child: const Text("📆 Settimana scorsa"),
+          ),
+          ElevatedButton(
+            onPressed: () => _handleExportOption("monthly"),
+            style: _buttonStyle(Colors.purple),
+            child: const Text("🗓️ Ultimo mese"),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildYesNoButtons() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green.shade400,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(160, 60), // Bigger button
-              textStyle:
-                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            onPressed: () => _handleResponse(true),
-            child: const Text("Sì"),
-          ),
-          const SizedBox(width: 24),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade400,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(160, 60),
-              textStyle:
-                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            onPressed: () => _handleResponse(false),
-            child: const Text("No"),
-          ),
-        ],
-      ),
+  void _handleExportOption(String type) {
+    setState(() {
+      _showButtons = false;
+      messages.add(_ChatMessage(role: 'user', content: _labelForType(type)));
+    });
+
+    if (type == "daily") {
+      _handleResponse(true); // existing logic
+    } else {
+      setState(() {
+        messages.add(_ChatMessage(
+          role: 'ai',
+          content: '❌ Questo tipo di esportazione non è ancora disponibile.',
+        ));
+      });
+    }
+  }
+
+  String _labelForType(String type) {
+    switch (type) {
+      case "daily":
+        return "Esporta i dati di ieri";
+      case "weekly":
+        return "Esporta la settimana scorsa";
+      case "monthly":
+        return "Esporta l’ultimo mese";
+      default:
+        return "Esporta dati";
+    }
+  }
+
+  ButtonStyle _buttonStyle(Color color) {
+    return ElevatedButton.styleFrom(
+      backgroundColor: color,
+      foregroundColor: Colors.white,
+      minimumSize: const Size(220, 60),
+      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     );
   }
 
@@ -255,7 +321,7 @@ class _AIHelperChatState extends State<AIHelperChat> {
       final sheet = step.split(':').last;
       final base = 'Completato foglio $sheet';
       if (current != null && total != null) {
-        return '$current/$total - $base';
+        return '  $current/$total - $base';
       }
       return base;
     }
@@ -272,7 +338,7 @@ class _AIHelperChatState extends State<AIHelperChat> {
     };
     final base = mapping[step] ?? step;
     if (current != null && total != null) {
-      return '$current/$total - $base';
+      return ' $current/$total - $base';
     }
     return base;
   }
@@ -370,25 +436,15 @@ class _AIHelperChatState extends State<AIHelperChat> {
                     child: ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      itemCount: messages.length +
-                          (_loading ? 1 : 0) +
-                          (_showShimmerExport ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (_loading && index == messages.length) {
-                          return _buildShimmerBubble();
-                        } else if (_showShimmerExport &&
-                            index == messages.length + (_loading ? 1 : 0)) {
-                          return _buildShimmerBubble(text: _exportStatus);
-                        } else {
-                          return _buildMessageBubble(messages[index]);
-                        }
-                      },
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) =>
+                          _buildMessageBubble(messages[index]),
                     ),
                   ),
                 ),
 
                 // ── BUTTONS or EMPTY ─────────────────────
-                _showButtons ? _buildYesNoButtons() : const SizedBox.shrink(),
+                _showButtons ? _buildExportButtons() : const SizedBox.shrink()
               ],
             ),
           ),

@@ -870,6 +870,31 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>?> updateStopReason({
+    required int stopId,
+    required String reason,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/escalation/update_reason');
+
+    final payload = {
+      "stop_id": stopId,
+      "reason": reason,
+    };
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to update stop reason: ${response.body}");
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> getStopDetails(int stopId) async {
     final url = Uri.parse('$baseUrl/api/escalation/get_stop_details/$stopId');
     final response = await http.get(url);

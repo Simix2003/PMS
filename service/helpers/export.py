@@ -90,9 +90,6 @@ def export_full_excel(data: dict, progress_callback=None) -> str:
         func = SHEET_FUNCTIONS.get(sheet_name)
         assert func is not None, f"Sheet function not found for sheet '{sheet_name}'"
 
-        if progress_callback:
-            progress_callback(f"creating:{sheet_name}", progress_state["current"], progress_state["total"])
-
         progress_state["sheet"] = sheet_name
         progress_state["last_key"] = None
 
@@ -261,6 +258,18 @@ def _append_dataframe(
         zebra_idx = df.columns.get_loc(zebra_key)
     else:
         zebra_idx = None  # disable zebra striping
+
+    if progress and zebra_idx is not None:
+        current_sheet = progress.get("sheet")
+        unique_modules = df.iloc[:, zebra_idx].nunique()
+        if progress.get("last_key") != current_sheet:
+            progress["current"] = 0
+            progress["seen"] = set()
+            progress["last_key"] = current_sheet
+        progress["total"] = unique_modules
+        cb = progress.get("callback")
+        if cb:
+            cb(f"creating:{current_sheet}", progress["current"], progress["total"])
 
     for row_tuple in df.itertuples(index=False, name=None):
         if zebra_idx is not None:

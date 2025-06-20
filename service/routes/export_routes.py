@@ -26,11 +26,15 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
     full_history: bool       = data.get("fullHistory", False)
     progress_id: str | None  = data.get("progressId")
 
-    def send_progress(step: str):
+    def send_progress(step: str, current: int | None = None, total: int | None = None):
         if not progress_id:
             return
         try:
-            coro = broadcast_export_progress(progress_id, {"step": step})
+            payload = {"step": step}
+            if current is not None and total is not None:
+                payload["current"] = current
+                payload["total"] = total
+            coro = broadcast_export_progress(progress_id, payload)
             try:
                 loop = asyncio.get_running_loop()
                 asyncio.run_coroutine_threadsafe(coro, loop)

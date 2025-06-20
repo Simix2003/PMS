@@ -7,7 +7,7 @@ L’applicazione espone un endpoint di Health Check conforme ai requisiti richie
 ## Endpoint
 
 **Metodo:** `GET`  
-**URL:** `/api/health_check`
+**URL:** `https://192.168.32.138:8050/api/health_check`
 
 ---
 

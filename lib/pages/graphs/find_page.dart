@@ -1154,7 +1154,7 @@ class _FindPageState extends State<FindPage> {
       final sheet = step.split(':').last;
       final base = 'Creazione foglio $sheet...';
       if (current != null && total != null) {
-        return '${current}/${total} - $base';
+        return '$current/$total - $base';
       }
       return base;
     }
@@ -1162,7 +1162,7 @@ class _FindPageState extends State<FindPage> {
       final sheet = step.split(':').last;
       final base = 'Completato foglio $sheet';
       if (current != null && total != null) {
-        return '${current}/${total} - $base';
+        return '$current/$total - $base';
       }
       return base;
     }
@@ -1179,7 +1179,7 @@ class _FindPageState extends State<FindPage> {
     };
     final base = mapping[step] ?? step;
     if (current != null && total != null) {
-      return '${current}/${total} - $base';
+      return '$current/$total - $base';
     }
     return base;
   }
@@ -1688,8 +1688,8 @@ class _FindPageState extends State<FindPage> {
                                 fullHistory: exportFullHistory,
                                 onProgress: (step, current, total) {
                                   setState(() {
-                                    exportStatus =
-                                        _translateExportStep(step, current, total);
+                                    exportStatus = _translateExportStep(
+                                        step, current, total);
                                   });
                                 },
                               );

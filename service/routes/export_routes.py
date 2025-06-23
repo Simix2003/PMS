@@ -220,9 +220,8 @@ def daily_export(background_tasks: BackgroundTasks, data: dict = Body(...)):
     progress_id: str | None = data.get("progressId")
 
     now = datetime.now()
-    current_day_6 = datetime.combine(now.date(), dt_time(hour=6))
-    start_dt = current_day_6 - timedelta(days=1)
-    end_dt = current_day_6 - timedelta(seconds=1)
+    start_dt = datetime.combine(now.date() - timedelta(days=1), dt_time(hour=6))
+    end_dt = datetime.combine(now.date(), dt_time(hour=5, minute=59, second=59))
 
     conn = get_mysql_connection()
     with conn.cursor() as cursor:

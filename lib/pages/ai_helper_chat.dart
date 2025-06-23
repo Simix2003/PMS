@@ -252,7 +252,17 @@ class _AIHelperChatState extends State<AIHelperChat> {
           ElevatedButton(
             onPressed: () => _handleExportOption("daily"),
             style: _buttonStyle(const Color(0xFF059669)),
-            child: const Text("Esporta i dati di ieri"),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Text("Esporta i dati di ieri"),
+                SizedBox(height: 4),
+                Text(
+                  "dalle 06:00 alle 05:59 del giorno dopo",
+                  style: TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
           ),
           ElevatedButton(
             onPressed: () => _handleExportOption("weekly"),

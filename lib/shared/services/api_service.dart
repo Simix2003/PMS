@@ -994,4 +994,36 @@ class ApiService {
       return null;
     }
   }
+
+  static Future<Map<String, dynamic>?> loadVisualTargets() async {
+    final url = Uri.parse('$baseUrl/api/visual_targets');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("❌ Failed to load visual targets: ${response.body}");
+      return null;
+    }
+  }
+
+  static Future<bool> saveVisualTargets(
+      int shiftTarget, int yieldTarget) async {
+    final url = Uri.parse('$baseUrl/api/visual_targets');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'shift_target': shiftTarget,
+        'yield_target': yieldTarget,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      print("❌ Failed to save visual targets: ${response.body}");
+      return false;
+    }
+  }
 }

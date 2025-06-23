@@ -221,7 +221,7 @@ def daily_export(background_tasks: BackgroundTasks, data: dict = Body(...)):
 
     now = datetime.now()
     current_day_6 = datetime.combine(now.date(), dt_time(hour=6))
-    start_dt = current_day_6 - timedelta(days=1)
+    start_dt = current_day_6 - timedelta(days=5)
     end_dt = current_day_6 - timedelta(seconds=1)
 
     conn = get_mysql_connection()

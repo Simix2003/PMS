@@ -40,11 +40,10 @@ class _VisualPageState extends State<VisualPage> {
   int currentYield_1 = 100;
   int currentYield_2 = 100;
 
-  int yield_target_1 = 90;
-  int yield_target_2 = 90;
   int last_n_shifts = 3;
-
+  int yield_target = 90;
   int shift_target = 366;
+  double hourly_shift_target = 45;
 
   int availableTime_1 = 0;
   int availableTime_2 = 0;
@@ -76,6 +75,45 @@ class _VisualPageState extends State<VisualPage> {
   List<int> ain2VPFCounts = [];
 
   Timer? _hourlyRefreshTimer;
+
+  Future<void> _showTargetEditDialog({
+    required String title,
+    required int currentValue,
+    required void Function(int newValue) onValueSaved,
+  }) async {
+    final controller = TextEditingController(text: currentValue.toString());
+    int? newValue;
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Modifica $title'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(labelText: 'Nuovo valore'),
+          onChanged: (value) {
+            newValue = int.tryParse(value);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Annulla'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (newValue != null) {
+                onValueSaved(newValue!);
+              }
+              Navigator.of(context).pop();
+            },
+            child: const Text('Salva'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Color getYieldColor(int value, int target) {
     if (value >= target) {
@@ -363,9 +401,10 @@ class _VisualPageState extends State<VisualPage> {
   @override
   void initState() {
     super.initState();
-    fetchZoneData(); // initial REST fetch
-    _initializeWebSocket(); // listen to updates after
-    _startHourlyRefreshScheduler(); // Will wait for the next Hour change
+    loadTargets();
+    fetchZoneData();
+    _initializeWebSocket();
+    _startHourlyRefreshScheduler();
   }
 
   void _startHourlyRefreshScheduler() {
@@ -400,6 +439,18 @@ class _VisualPageState extends State<VisualPage> {
     });
   }
 
+  Future<void> loadTargets() async {
+    final targets = await ApiService.loadVisualTargets();
+    if (targets != null) {
+      setState(() {
+        shift_target = targets['shift_target'] ?? 366;
+        yield_target = targets['yield_target'] ?? 90;
+        hourly_shift_target =
+            (targets['hourly_shift_target'] ?? (shift_target ~/ 8)).toDouble();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final counts = calculateEscalationCounts(escalations);
@@ -417,18 +468,49 @@ class _VisualPageState extends State<VisualPage> {
                     children: [
                       Flexible(
                         flex: 4,
-                        child: HeaderBox(
-                          title: 'Produzione Shift',
-                          target: '$shift_target moduli',
-                          icon: Icons.solar_power,
+                        child: // Shift target (moduli)
+                            GestureDetector(
+                          onTap: () {
+                            _showTargetEditDialog(
+                              title: 'Target Produzione Shift',
+                              currentValue: shift_target,
+                              onValueSaved: (newVal) async {
+                                setState(() {
+                                  shift_target = newVal;
+                                  hourly_shift_target =
+                                      (newVal ~/ 8).toDouble();
+                                });
+                                await ApiService.saveVisualTargets(
+                                    shift_target, yield_target);
+                              },
+                            );
+                          },
+                          child: HeaderBox(
+                            title: 'Produzione Shift',
+                            target: '$shift_target moduli',
+                            icon: Icons.solar_power,
+                          ),
                         ),
                       ),
                       Flexible(
                         flex: 3,
-                        child: HeaderBox(
-                          title: 'YIELD',
-                          target: '$yield_target_1 %',
-                          icon: Icons.show_chart,
+                        child: GestureDetector(
+                          onTap: () {
+                            _showTargetEditDialog(
+                              title: 'Target Yield',
+                              currentValue: yield_target,
+                              onValueSaved: (newVal) async {
+                                setState(() => yield_target = newVal);
+                                await ApiService.saveVisualTargets(
+                                    shift_target, yield_target);
+                              },
+                            );
+                          },
+                          child: HeaderBox(
+                            title: 'YIELD',
+                            target: '$yield_target %',
+                            icon: Icons.show_chart,
+                          ),
                         ),
                       ),
                       Flexible(
@@ -787,6 +869,7 @@ class _VisualPageState extends State<VisualPage> {
                                 child: HourlyBarChart(
                                   data: hourlyData,
                                   hourLabels: hourLabels,
+                                  target: hourly_shift_target,
                                 ),
                               ),
                             ],
@@ -848,7 +931,7 @@ class _VisualPageState extends State<VisualPage> {
                                                             BoxDecoration(
                                                           color: getYieldColor(
                                                             currentYield_1,
-                                                            yield_target_1,
+                                                            yield_target,
                                                           ),
                                                           shape:
                                                               BoxShape.circle,
@@ -914,7 +997,7 @@ class _VisualPageState extends State<VisualPage> {
                                                             BoxDecoration(
                                                           color: getYieldColor(
                                                             currentYield_2,
-                                                            yield_target_2,
+                                                            yield_target,
                                                           ),
                                                           shape:
                                                               BoxShape.circle,
@@ -977,7 +1060,7 @@ class _VisualPageState extends State<VisualPage> {
                                       flex: 3,
                                       child: YieldComparisonBarChart(
                                         data: mergedShiftData,
-                                        target: 90,
+                                        target: yield_target as double,
                                       ),
                                     ),
                                   ],
@@ -988,6 +1071,7 @@ class _VisualPageState extends State<VisualPage> {
                               YieldLineChart(
                                 hourlyData1: yieldLast8h_1,
                                 hourlyData2: yieldLast8h_2,
+                                target: yield_target as double,
                               ),
                             ],
                           ),

@@ -2,19 +2,26 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
-debug = True
+debug = False
 
 CHANNELS: dict = {}
 
 #TODO
 ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
     "AIN": {
-        "station_1_in":     ["AIN01"],
-        "station_2_in":     ["AIN02"],
+        "station_1_in":     ["MIN01"],
+        "station_2_in":     ["MIN02"],
         "station_1_out_ng": ["MIN01"], 
         "station_2_out_ng": ["MIN02"]
     },
 }
+
+# Default fallback values
+DEFAULT_TARGETS = {
+    "yield_target": 90,
+    "shift_target": 366
+}
+
 
 PLC_DB_RANGES: dict = {}  # {(ip, slot): {db_number: {"min": x, "max": y}}}
 
@@ -100,6 +107,8 @@ ML_MODELS_DIR = BASE_DIR / "models"
 DEFECT_SIMILARITY_MODEL_PATH = ML_MODELS_DIR / "fine-tuned-defects_V2"
 TEMP_STORAGE_PATH = BASE_DIR / "temp_data.json"
 SETTINGS_PATH = BASE_DIR / "settings.json"
+TARGETS_FILE = BASE_DIR / "visual_targets.json"
+os.makedirs(os.path.dirname(TARGETS_FILE), exist_ok=True)
 IMAGES_DIR = BASE_DIR / "images"
 if debug:
     XML_FOLDER_PATH = BASE_DIR / "xml"

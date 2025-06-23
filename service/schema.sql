@@ -56,7 +56,7 @@ CREATE TABLE `object_defects` (
   CONSTRAINT `fk_object_photos` FOREIGN KEY (`photo_id`) REFERENCES `photos` (`id`) ON DELETE SET NULL,
   CONSTRAINT `object_defects_ibfk_1` FOREIGN KEY (`production_id`) REFERENCES `productions` (`id`),
   CONSTRAINT `object_defects_ibfk_2` FOREIGN KEY (`defect_id`) REFERENCES `defects` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=6117 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=7876 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -74,9 +74,9 @@ CREATE TABLE `objects` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `id_modulo` (`id_modulo`),
   UNIQUE KEY `id_UNIQUE` (`id`),
-  KEY `creator_station_id` (`creator_station_id`),
-  CONSTRAINT `objects_ibfk_1` FOREIGN KEY (`creator_station_id`) REFERENCES `stations` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=37009 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `fk_objects_creator_station` (`creator_station_id`),
+  CONSTRAINT `fk_objects_creator_station` FOREIGN KEY (`creator_station_id`) REFERENCES `stations` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=56967 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -91,7 +91,7 @@ CREATE TABLE `photos` (
   `photo` longblob NOT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=82 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=100 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -130,12 +130,12 @@ CREATE TABLE `productions` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `id_UNIQUE` (`id`) /*!80000 INVISIBLE */,
   KEY `object_id` (`object_id`),
-  KEY `station_id` (`station_id`),
   KEY `idx_prod_time` (`start_time`,`end_time`),
   KEY `idx_prod_obj_last` (`object_id`,`last_station_id`),
-  CONSTRAINT `productions_ibfk_1` FOREIGN KEY (`object_id`) REFERENCES `objects` (`id`),
-  CONSTRAINT `productions_ibfk_2` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=36967 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `fk_productions_station` (`station_id`),
+  CONSTRAINT `fk_productions_station` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`),
+  CONSTRAINT `productions_ibfk_1` FOREIGN KEY (`object_id`) REFERENCES `objects` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=56916 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -150,7 +150,7 @@ CREATE TABLE `station_defects` (
   `defect_id` int NOT NULL,
   PRIMARY KEY (`station_id`,`defect_id`),
   KEY `defect_id` (`defect_id`),
-  CONSTRAINT `station_defects_ibfk_1` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`),
+  CONSTRAINT `fk_station_defects_station` FOREIGN KEY (`station_id`) REFERENCES `stations` (`id`),
   CONSTRAINT `station_defects_ibfk_2` FOREIGN KEY (`defect_id`) REFERENCES `defects` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -174,7 +174,56 @@ CREATE TABLE `stations` (
   PRIMARY KEY (`id`),
   KEY `line_id` (`line_id`) /*!80000 INVISIBLE */,
   CONSTRAINT `stations_ibfk_1` FOREIGN KEY (`line_id`) REFERENCES `production_lines` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=92 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=93 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `stop_status_changes`
+--
+
+DROP TABLE IF EXISTS `stop_status_changes`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `stop_status_changes` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `stop_id` int NOT NULL,
+  `status` enum('OPEN','SHIFT_MANAGER','HEAD_OF_PRODUCTION','MAINTENANCE_TEAM','CLOSED') NOT NULL,
+  `changed_at` datetime NOT NULL,
+  `operator_id` varchar(64) DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_stop_changed_at` (`stop_id`,`changed_at`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `stop_status_changes_ibfk_1` FOREIGN KEY (`stop_id`) REFERENCES `stops` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=7036 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `stops`
+--
+
+DROP TABLE IF EXISTS `stops`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `stops` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `station_id` int NOT NULL,
+  `start_time` datetime NOT NULL,
+  `end_time` datetime DEFAULT NULL,
+  `stop_time` int GENERATED ALWAYS AS (timestampdiff(SECOND,`start_time`,`end_time`)) STORED,
+  `operator_id` varchar(64) DEFAULT NULL,
+  `type` enum('ESCALATION','STOP','MAINTENANCE','QUALITY') NOT NULL,
+  `reason` varchar(256) DEFAULT NULL,
+  `status` enum('OPEN','SHIFT_MANAGER','HEAD_OF_PRODUCTION','MAINTENANCE_TEAM','CLOSED') NOT NULL,
+  `linked_production_id` int DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_station_time` (`station_id`,`start_time`),
+  KEY `idx_type` (`type`),
+  KEY `idx_operator` (`operator_id`),
+  KEY `idx_production` (`linked_production_id`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB AUTO_INCREMENT=7027 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -201,7 +250,7 @@ CREATE TABLE `stringatrice_warnings` (
   PRIMARY KEY (`id`),
   KEY `fk_warning_photo` (`photo_id`),
   CONSTRAINT `fk_warning_photo` FOREIGN KEY (`photo_id`) REFERENCES `photos` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=227 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=228 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -213,4 +262,4 @@ CREATE TABLE `stringatrice_warnings` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-06-10 21:05:32
+-- Dump completed on 2025-06-23 20:08:13

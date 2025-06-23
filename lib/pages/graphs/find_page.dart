@@ -2,7 +2,6 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:ix_monitor/pages/ai_helper_chat.dart';
 import 'package:ix_monitor/pages/settings_page.dart';
@@ -17,7 +16,8 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'dart:ui';
-import 'package:rive/rive.dart';
+import 'dart:math' as math;
+//import 'package:rive/rive.dart';
 
 class FindPage extends StatefulWidget {
   final List<Map<String, String>>? initialFilters;
@@ -100,8 +100,8 @@ class _FindPageState extends State<FindPage> {
 
   final List<Map<String, String>> activeFilters = [];
 
-  Artboard? _riveArtboard;
-  SMIBool? _boolInput;
+  //Artboard? _riveArtboard;
+  //SMIBool? _boolInput;
 
   final List<String> filterOptions = [
     'Data',
@@ -333,13 +333,16 @@ class _FindPageState extends State<FindPage> {
 
     _loadSettings();
 
-    rootBundle.load('rive/logo_interaction.riv').then(
+    /*rootBundle.load('assets/rive/logo_interaction.riv').then(
       (data) async {
         final file = RiveFile.import(data);
         final artboard = file.mainArtboard;
 
-        final controller =
-            StateMachineController.fromArtboard(artboard, 'State Machine 1');
+        final controller = StateMachineController.fromArtboard(
+          artboard,
+          'State Machine 1',
+        );
+
         if (controller != null) {
           artboard.addController(controller);
           _boolInput = controller.findInput<bool>('hvr ic') as SMIBool?;
@@ -347,7 +350,9 @@ class _FindPageState extends State<FindPage> {
 
         setState(() => _riveArtboard = artboard);
       },
-    );
+    ).catchError((e) {
+      print('❌ Error loading Rive asset: $e');
+    });*/
 
     if (widget.initialFilters != null) {
       for (final filter in widget.initialFilters!) {
@@ -2106,31 +2111,30 @@ class _FindPageState extends State<FindPage> {
                 ],
               ),
             ),
-          // B) Rive button in bottom-right
-          Positioned(
-            right: 20,
-            bottom: 20,
-            child: MouseRegion(
-              onEnter: (_) => _boolInput?.value = true,
-              onExit: (_) => _boolInput?.value = false,
-              child: GestureDetector(
-                onTap: () {
-                  showDialog(
-                    context: context,
-                    barrierColor: Colors.black.withOpacity(0.3),
-                    builder: (context) => const AIHelperChat(),
-                  );
-                },
-                child: SizedBox(
-                  height: 100,
-                  width: 100,
-                  child: _riveArtboard != null
-                      ? Rive(artboard: _riveArtboard!)
-                      : const SizedBox.shrink(),
+          /*if (_riveArtboard != null)
+            Positioned(
+              right: 20,
+              bottom: 20,
+              child: MouseRegion(
+                onEnter: (_) => _boolInput?.value = true,
+                onExit: (_) => _boolInput?.value = false,
+                child: GestureDetector(
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      barrierColor: Colors.black.withOpacity(0.3),
+                      builder: (context) => const AIHelperChat(),
+                    );
+                  },
+                  child: SizedBox(
+                    height: 100,
+                    width: 100,
+                    child: Rive(artboard: _riveArtboard!),
+                  ),
                 ),
               ),
-            ),
-          )
+            ),*/
+          const AnimatedAIButton(),
         ],
       ),
     );
@@ -2142,4 +2146,111 @@ class DateSelectionResult {
   final DateTimeRange? range;
 
   const DateSelectionResult({this.singleDate, this.range});
+}
+
+class AnimatedAIButton extends StatefulWidget {
+  const AnimatedAIButton({super.key});
+
+  @override
+  State<AnimatedAIButton> createState() => _AnimatedAIButtonState();
+}
+
+class _AnimatedAIButtonState extends State<AnimatedAIButton>
+    with TickerProviderStateMixin {
+  late AnimationController _gradientController;
+  bool _isHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _gradientController = AnimationController(
+      duration: const Duration(seconds: 6),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _gradientController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 20,
+      bottom: 20,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () {
+            showDialog(
+              context: context,
+              barrierColor: Colors.black.withOpacity(0.3),
+              builder: (context) => const AIHelperChat(),
+            );
+          },
+          child: Tooltip(
+            message: 'Assistente Simix (Beta)',
+            textStyle: const TextStyle(color: Colors.white),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade900,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            waitDuration: const Duration(milliseconds: 300),
+            child: AnimatedBuilder(
+              animation: _gradientController,
+              builder: (context, child) {
+                final t = _gradientController.value;
+                final begin = Alignment(
+                  math.cos(2 * math.pi * t),
+                  math.sin(2 * math.pi * t),
+                );
+                final end = Alignment(
+                  -math.cos(2 * math.pi * t),
+                  -math.sin(2 * math.pi * t),
+                );
+
+                return AnimatedScale(
+                  scale: _isHovered ? 1.12 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    height: 64,
+                    width: 64,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: begin,
+                        end: end,
+                        colors: [
+                          Colors.blue.withOpacity(0.6),
+                          Colors.purple.withOpacity(0.4),
+                        ],
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: const Icon(
+                        Icons.bubble_chart_rounded,
+                        size: 36,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -33,7 +33,6 @@ def save_targets(data: dict):
     with open(TARGETS_FILE, "w") as f:
         json.dump(data, f)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 def get_shift_window(now: datetime):
     hour = now.hour

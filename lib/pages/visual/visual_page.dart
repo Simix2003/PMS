@@ -1549,10 +1549,29 @@ class _VisualPageState extends State<VisualPage> {
                                 // RIGHT COLUMN (1 full-height card)
                                 Flexible(
                                   flex: 2,
-                                  child: VPFDefectsHorizontalBarChart(
-                                    defectLabels: defectVPFLabels,
-                                    ain1Counts: ain1VPFCounts,
-                                    ain2Counts: ain2VPFCounts,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(
+                                        child: VPFDefectsHorizontalBarChart(
+                                          defectLabels: defectVPFLabels,
+                                          ain1Counts: ain1VPFCounts,
+                                          ain2Counts: ain2VPFCounts,
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: EdgeInsets.symmetric(
+                                            horizontal: 4.0),
+                                        child: Text(
+                                          'Sviluppato dal gruppo Process Eng e Capgemini',
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey.shade700),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],

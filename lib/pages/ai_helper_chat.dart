@@ -258,7 +258,7 @@ class _AIHelperChatState extends State<AIHelperChat> {
                 Text("Esporta i dati di ieri"),
                 SizedBox(height: 4),
                 Text(
-                  "dalle 06:00 alle 05:59 del giorno dopo",
+                  "dalle 06:00 alle 05:59",
                   style: TextStyle(fontSize: 12),
                 ),
               ],

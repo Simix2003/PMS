@@ -83,6 +83,9 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   ];
   static const List<String> statusFull = [...statusCreation, "CLOSED"];
 
+  final String _defaultStation = "AIN01";
+  final String _defaultType = "ESCALATION";
+
   String? _newStation;
   String? _newType;
   String? _newStatus;
@@ -143,6 +146,11 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   }
 
   Future<void> _createNewEscalation() async {
+    // FAKING THEM BECAUSE OF RICHARD
+    //ToDo: FIX THIS
+    _newStation = _defaultStation;
+    _newType = _defaultType;
+
     if (_newStation == null ||
         _newType == null ||
         _newStatus == null ||
@@ -366,6 +374,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     );
   }
 
+  // We should fake the station to be always the AIN1 for the moment, also the Type will only be "ESCALATION"
   Widget _buildCreateNewForm() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -373,7 +382,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
         const Text("Nuova Escalation",
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 24),
-        DropdownButtonFormField<String>(
+        /*DropdownButtonFormField<String>(
           value: _newStation,
           hint: const Text("Seleziona Stazione"),
           items: stationNameToId.keys
@@ -389,7 +398,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
               .map((s) => DropdownMenuItem(value: s, child: Text(s)))
               .toList(),
           onChanged: (v) => setState(() => _newType = v),
-        ),
+        ),*/
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           value: _newStatus,
@@ -681,7 +690,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
             const SizedBox(height: 24),
 
             // Additional info fields (station, start, duration)
-            Row(
+            /*Row(
               children: [
                 Icon(Icons.precision_manufacturing, color: Colors.black54),
                 const SizedBox(width: 8),
@@ -689,7 +698,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
                     style: const TextStyle(fontSize: 16)),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 12),*/
             Row(
               children: [
                 Icon(Icons.play_circle, color: Colors.black54),

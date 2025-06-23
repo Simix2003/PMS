@@ -429,7 +429,7 @@ class _AIHelperChatState extends State<AIHelperChat> {
                           ),
                           const SizedBox(width: 12),
                           const Text(
-                            'Mini Bro (Beta)',
+                            'Assistente Simix (Beta)',
                             style: TextStyle(
                               color: Color(0xFF1E293B),
                               fontWeight: FontWeight.w600,

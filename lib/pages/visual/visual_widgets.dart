@@ -86,10 +86,24 @@ class _HeaderBoxState extends State<HeaderBox> {
               ],
             )
           else if (widget.title == 'Produzione Shift')
-            Image.asset(
-              'assets/logo.png',
-              height: 36,
-              fit: BoxFit.contain,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Image.asset(
+                'assets/logo.png',
+                height: 36,
+                fit: BoxFit.contain,
+              ),
             )
           else if (widget.title == 'Pareto Shift')
             Row(
@@ -629,11 +643,18 @@ class ThroughputBarChart extends StatelessWidget {
                               final okHeight = chartHeight * (ok / maxY);
                               final topOffset = chartHeight - okHeight;
 
+                              final text = '$ok';
+                              final offset = text.length == 1
+                                  ? 4
+                                  : text.length == 2
+                                      ? 8
+                                      : 12;
+
                               return Positioned(
-                                left: barCenterX - 12,
+                                left: barCenterX - offset,
                                 top: topOffset,
                                 child: Text(
-                                  '$ok',
+                                  text,
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
@@ -688,11 +709,13 @@ class ThroughputBarChart extends StatelessWidget {
 class HourlyBarChart extends StatelessWidget {
   final List<Map<String, int>> data;
   final List<String> hourLabels;
+  final double target;
 
   const HourlyBarChart({
     super.key,
     required this.data,
     required this.hourLabels,
+    required this.target,
   });
 
   double _calculateMaxY() {
@@ -733,7 +756,6 @@ class HourlyBarChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxY = _calculateMaxY();
-    final double targetLine = 45;
 
     return Card(
       color: Colors.white,
@@ -758,7 +780,7 @@ class HourlyBarChart extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  'Target: $targetLine',
+                  'Target: $target',
                   style: TextStyle(
                     color: Colors.orangeAccent,
                     fontSize: 12,
@@ -824,7 +846,7 @@ class HourlyBarChart extends StatelessWidget {
                       barGroups: _buildBarGroups(maxY),
                       extraLinesData: ExtraLinesData(horizontalLines: [
                         HorizontalLine(
-                          y: targetLine,
+                          y: target,
                           color: Colors.orangeAccent,
                           strokeWidth: 2,
                           dashArray: [8, 4],
@@ -979,18 +1001,20 @@ class YieldComparisonBarChart extends StatelessWidget {
                       barTouchData: BarTouchData(
                         enabled: true,
                         touchTooltipData: BarTouchTooltipData(
-                          getTooltipColor: (_) => Colors.transparent,
-                          tooltipPadding: EdgeInsets.zero, // ← no padding
-                          tooltipMargin: 0, // ← no margin
+                          getTooltipColor: (_) => Colors.grey
+                              .withOpacity(0.8), // 🔹 semi-transparent grey
+                          tooltipPadding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
+                          tooltipMargin: 6,
                           fitInsideHorizontally: true,
                           fitInsideVertically: true,
                           getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                            final value = rod.toY.toString();
+                            final value = rod.toY.toStringAsFixed(0);
+
                             return BarTooltipItem(
                               '$value%',
                               const TextStyle(
-                                color: Colors
-                                    .black, // You can pick the color to match your bar
+                                color: Colors.white, // 🔸 white text
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -1106,7 +1130,7 @@ class YieldLineChart extends StatelessWidget {
     super.key,
     required this.hourlyData1,
     required this.hourlyData2,
-    this.target = 90,
+    required this.target,
   });
 
   @override

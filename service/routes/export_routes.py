@@ -223,6 +223,7 @@ def daily_export(background_tasks: BackgroundTasks, data: dict = Body(...)):
     start_dt = datetime.combine(now.date() - timedelta(days=1), dt_time(hour=6))
     end_dt = datetime.combine(now.date(), dt_time(hour=5, minute=59, second=59))
 
+
     conn = get_mysql_connection()
     with conn.cursor() as cursor:
         cursor.execute(

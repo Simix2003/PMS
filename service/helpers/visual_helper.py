@@ -7,18 +7,32 @@ import sys
 import copy
 from collections import defaultdict
 from threading import RLock 
-from typing import Dict, DefaultDict
+from typing import Dict, DefaultDict, Any
+import json
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection
-from service.config.config import ZONE_SOURCES
+from service.config.config import ZONE_SOURCES, TARGETS_FILE, DEFAULT_TARGETS
 from service.state import global_state
 from service.routes.broadcast import broadcast_zone_update
 
 _update_lock = RLock()
 
 logger = logging.getLogger("PMS")
+
+
+def load_targets():
+    try:
+        with open(TARGETS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return DEFAULT_TARGETS.copy()
+
+def save_targets(data: dict):
+    with open(TARGETS_FILE, "w") as f:
+        json.dump(data, f)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 def get_shift_window(now: datetime):
@@ -182,16 +196,19 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
 
             s1_y8h.append({
                 "hour": label,
+                "good": s1_g,          # ➊ keep counts
+                "ng":   s1_n,
                 "yield": compute_yield(s1_g, s1_n),
                 "start": h_start.isoformat(),
-                "end": h_end.isoformat()
+                "end":   h_end.isoformat(),
             })
-
             s2_y8h.append({
                 "hour": label,
+                "good": s2_g,
+                "ng":   s2_n,
                 "yield": compute_yield(s2_g, s2_n),
                 "start": h_start.isoformat(),
-                "end": h_end.isoformat()
+                "end":   h_end.isoformat(),
             })
 
         # -------- fermi_data calculation --------
@@ -431,9 +448,6 @@ def update_visual_data_on_new_module(
             elif station_name in cfg["station_2_out_ng"]:
                 data["station_2_out_ng"] += 1
 
-            # Refresh top defects
-            #refresh_top_defects_qg2(zone, ts)
-
         # 3. Recompute shift yield
         s1_good = data["station_1_in"] - data["station_1_out_ng"]
         s2_good = data["station_2_in"] - data["station_2_out_ng"]
@@ -478,38 +492,55 @@ def update_visual_data_on_new_module(
         hour_start = ts.replace(minute=0, second=0, microsecond=0)
         hour_label = hour_start.strftime("%H:%M")
 
-        def _touch_hourly(list_key, is_station1: bool):
+        def _touch_hourly(list_key: str):
             lst = data[list_key]
-            if not lst or lst[-1]["hour"] != hour_label:
-                lst[:] = lst[-7:]
-                lst.append({
-                    "hour": hour_label,
-                    "start": ts.isoformat(),
-                    "end": (ts + timedelta(hours=1)).isoformat(),
-                    "total": 0, "ng": 0, "yield": 100
-                })
 
-            entry = lst[-1]
-            if "total" in entry:
-                entry["total"] += 1
-                if esito == 6:
-                    entry["ng"] += 1
-            else:
-                if esito == 6:
-                    entry["ng"] = entry.get("ng", 0) + 1
+            # ➋ look for the bin
+            for entry in lst:
+                if entry["hour"] == hour_label:
+                    # -------- throughput list --------
+                    if list_key == "last_8h_throughput":
+                        entry["total"] += 1
+                        if esito == 6:
+                            entry["ng"] += 1
+                    # -------- yield lists --------
+                    else:
+                        if esito == 6:
+                            entry["ng"] += 1
+                        else:
+                            entry["good"] += 1
+                        entry["yield"] = compute_yield(entry["good"], entry["ng"])
+                    break
+            else:   # ⬅ executed only if the loop didn’t break → new hour
+                new_entry: Dict[str, Any] = {
+                    "hour": hour_label,
+                    "start": hour_start.isoformat(),
+                    "end": (hour_start + timedelta(hours=1)).isoformat(),
+                }
+                if list_key == "last_8h_throughput":
+                    new_entry.update({"total": 1, "ng": 1 if esito == 6 else 0})
                 else:
-                    entry["good"] = entry.get("good", 0) + 1
-                good = entry.get("good", 0)
-                ng = entry.get("ng", 0)
-                entry["yield"] = compute_yield(good, ng)
+                    new_entry.update({
+                        "good": 0 if esito == 6 else 1,
+                        "ng":   1 if esito == 6 else 0,
+                    })
+                    new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"])
+
+                lst.append(new_entry)
+                lst[:] = lst[-8:]           # keep only last 8
+
+
 
         if is_in_station or (esito == 6 and is_qc_station):
-            _touch_hourly("last_8h_throughput", False)
+            _touch_hourly("last_8h_throughput")
 
         if station_name in cfg["station_1_out_ng"]:
-            _touch_hourly("station_1_yield_last_8h", True)
+            _touch_hourly("station_1_yield_last_8h")
         elif station_name in cfg["station_2_out_ng"]:
-            _touch_hourly("station_2_yield_last_8h", True)
+            _touch_hourly("station_2_yield_last_8h")
+
+        print('Live')
+        print(data['last_8h_throughput'])
 
         # 6. WebSocket push
         try:

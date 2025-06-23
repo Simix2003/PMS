@@ -1666,13 +1666,14 @@ class _FindPageState extends State<FindPage> {
 
                               final allProductionIds = <String>[];
 
-                              for (final row in results) {
+                              // 🔗 Collect production IDs only for the
+                              // modules actually selected by the user
+                              for (final id in selectedIds) {
                                 final productionIds =
-                                    (row['production_ids'] as List)
-                                        .map((e) => e.toString())
-                                        .toList();
-
-                                allProductionIds.addAll(productionIds);
+                                    moduloIdToProductionIds[id];
+                                if (productionIds != null) {
+                                  allProductionIds.addAll(productionIds);
+                                }
                               }
 
                               setState(() {

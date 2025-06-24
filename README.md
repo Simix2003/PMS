@@ -15,3 +15,4 @@ Versions:
 "2.2.5" - Fixed bugs and LOCK problem
 "2.2.6" - Added Export visuals and VPF
 "2.3.0" - Added Mini Bro for Daily export
+"2.3.1" - Fixed Mini Bro, Fixed Visual, added Process Eng & Capgemini, Added "Difetto" filter for VPF

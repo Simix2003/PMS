@@ -98,6 +98,9 @@ class _FindPageState extends State<FindPage> {
 // === LUNGHEZZA STRING RIBBON ===
   String? selectedLunghezzaStringa;
 
+  // === VPF ===
+  String? selectedVPF;
+
   final List<Map<String, String>> activeFilters = [];
 
   //Artboard? _riveArtboard;
@@ -136,6 +139,23 @@ class _FindPageState extends State<FindPage> {
     'Matrice Incompleta',
     'Molteplici Bus Bar',
     'Test'
+  ];
+
+  final List<String> vpfOptions = [
+    'NG1',
+    'NG1.1',
+    'NG2',
+    'NG2.1',
+    'NG3',
+    'NG3.1',
+    'NG4',
+    'NG5',
+    'NG7',
+    'NG7.1',
+    'NG8',
+    'NG8.1',
+    'NG9',
+    'NG10',
   ];
 
   final List<String> saldaturaOptions_1 = [
@@ -459,7 +479,11 @@ class _FindPageState extends State<FindPage> {
 
     if (selectedFilterType == 'Difetto') {
       if (selectedDifettoGroup == null) return;
-      compositeValue = selectedDifettoGroup!;
+      if (selectedDifettoGroup == 'VPF') {
+        compositeValue = selectedVPF!;
+      } else {
+        compositeValue = selectedDifettoGroup!;
+      }
 
       switch (selectedDifettoGroup) {
         case 'Generali':
@@ -595,6 +619,7 @@ class _FindPageState extends State<FindPage> {
       filterValue = '';
       selectedDifettoGroup = null;
       selectedGenerali = null;
+      selectedVPF = null;
       selectedSaldaturaStringa = null;
       selectedSaldaturaSide = null;
       selectedSaldaturaPin = null;
@@ -794,17 +819,18 @@ class _FindPageState extends State<FindPage> {
               hint: 'Gruppo Difetto',
               value: selectedDifettoGroup,
               items: [
-                'Generali',
-                'Saldatura',
-                'Disallineamento',
-                'Mancanza Ribbon',
-                'Macchie ECA',
+                'Altro',
+                'Bad Soldering',
                 'Celle Rotte',
+                'Disallineamento',
+                'Generali',
+                'Graffio su Cella',
                 'I Ribbon Leadwire',
                 'Lunghezza String Ribbon',
-                'Graffio su Cella',
-                'Bad Soldering',
-                'Altro',
+                'Macchie ECA',
+                'Mancanza Ribbon',
+                'Saldatura',
+                'VPF',
               ],
               onChanged: (val) {
                 setState(() {
@@ -827,6 +853,7 @@ class _FindPageState extends State<FindPage> {
                   selectedCelleRotteStringa = null;
                   selectedLunghezzaStringa = null;
                   selectedGraffioSuCellaStringa = null;
+                  selectedVPF = null;
                 });
               },
             ),
@@ -839,6 +866,15 @@ class _FindPageState extends State<FindPage> {
                 value: selectedGenerali,
                 items: generaliOptions,
                 onChanged: (val) => setState(() => selectedGenerali = val),
+              ),
+
+            // === VPF ===
+            if (selectedDifettoGroup == 'VPF')
+              _buildStyledDropdown(
+                hint: 'Seleziona difetto VPF',
+                value: selectedVPF,
+                items: vpfOptions,
+                onChanged: (val) => setState(() => selectedVPF = val),
               ),
 
             // === SALDATURA ===

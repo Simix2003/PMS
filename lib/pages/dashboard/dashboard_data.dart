@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/graphs/find_page.dart';
 import '../graphs/data_view.dart';
-import '../graphs/graph_page.dart';
 
 class DashboardData extends StatefulWidget {
   const DashboardData({super.key});
@@ -35,7 +34,6 @@ class _DashboardDataState extends State<DashboardData> {
             });
           },
         ),
-        GraphPage(),
       ];
 
   @override
@@ -62,10 +60,6 @@ class _DashboardDataState extends State<DashboardData> {
           BottomNavigationBarItem(
             icon: Icon(Icons.query_stats),
             label: 'Ricerca Dati',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.auto_graph_rounded),
-            label: 'Grafici',
           ),
         ],
       ),

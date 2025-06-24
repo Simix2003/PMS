@@ -263,6 +263,11 @@ async def get_issues_for_object(line_name: str, channel_id: str, id_modulo: str,
                     issue_paths.append(path)
                     if base64_photo:
                         pictures.append({"defect": path, "image": base64_photo})
+                else:
+                    path = f"Dati.Esito.Esito_Scarto.Difetti.{cat}"
+                    issue_paths.append(path)
+                    if base64_photo:
+                        pictures.append({"defect": path, "image": base64_photo})
             
             if defects and write_to_plc:
                 if debug: 

@@ -1564,10 +1564,10 @@ class _VisualPageState extends State<VisualPage> {
                                         padding: EdgeInsets.symmetric(
                                             horizontal: 4.0),
                                         child: Text(
-                                          'Sviluppato dal gruppo Process Eng e Capgemini',
+                                          'Sviluppato da\n gruppo Process Eng e Capgemini',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
-                                              fontSize: 14,
+                                              fontSize: 18,
                                               color: Colors.grey.shade700),
                                         ),
                                       ),

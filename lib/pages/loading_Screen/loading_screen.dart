@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/dashboard/dashboard_visual.dart';
 import 'dart:ui';
@@ -423,6 +425,19 @@ class _LoadingScreenState extends State<LoadingScreen>
                                                 color: Colors.blueGrey.shade800,
                                               ),
                                             ),
+                                            if (widget.targetPage == "Visual")
+                                              const SizedBox(width: 10),
+                                            if (widget.targetPage == "Visual")
+                                              ShimmerTextGradient(
+                                                text: widget.zone,
+                                                style: TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 2,
+                                                  color:
+                                                      Colors.blueGrey.shade800,
+                                                ),
+                                              ),
                                           ],
                                         ),
                                       ),

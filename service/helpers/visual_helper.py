@@ -101,14 +101,151 @@ def compute_yield(good: int, ng: int):
         return 0  # or return None if you want to hide it from the frontend
     return round((good / total) * 100)
 
-# ─────────────────────────────────────────────────────────────────────────────
 def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     try:
         if now is None:
             now = datetime.now()
 
+        if zone == "VPF":
+            return _compute_snapshot_vpf(now)
+        elif zone == "AIN":
+            return _compute_snapshot_ain(now)
+        else:
+            raise ValueError(f"Unknown zone: {zone}")
+
+    except Exception as e:
+        logger.exception(f"❌ compute_zone_snapshot() FAILED for zone={zone}: {e}")
+        raise
+
+# ─────────────────────────────────────────────────────────────────────────────
+def _compute_snapshot_vpf(now: datetime) -> dict:
+    try:
+        if now is None:
+            now = datetime.now()
+
         hour_start = now.replace(minute=0, second=0, microsecond=0)
-        cfg = ZONE_SOURCES[zone]
+        cfg = ZONE_SOURCES["VPF"]
+
+        shift_start, shift_end = get_shift_window(now)
+
+        conn = get_mysql_connection()
+
+        cursor = conn.cursor()
+
+        # -------- current shift totals / yield ----------
+        s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
+        s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
+        s1_g   = s1_in - s1_ng
+        s1_y   = compute_yield(s1_g, s1_ng)
+
+        # -------- count re-entered modules in VPF (same object_id multiple times) --------
+        sql_reentered = """
+            SELECT COUNT(*) AS re_entered
+            FROM (
+              SELECT object_id
+              FROM productions
+              WHERE station_id = %s
+                AND start_time BETWEEN %s AND %s
+              GROUP BY object_id
+              HAVING COUNT(*) > 1
+            ) sub
+        """
+        cursor.execute(sql_reentered, (56, shift_start, shift_end))  # or cfg["station_1_in_id"] if defined
+        result = cursor.fetchone()
+        s1_reEntered = result["re_entered"] if result and "re_entered" in result else 0
+
+        # -------- last 3 shifts yield + throughput -------
+        s1_yield_shifts = []
+        for label, start, end in get_previous_shifts(now):
+            # yields
+            s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  start, end, "all")
+            s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "ng")
+            s1_g = s1_in_ - s1_n
+
+            s1_yield_shifts.append({
+                "label": label,
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "yield": compute_yield(s1_g, s1_n),
+                "good": s1_g,
+                "ng": s1_n
+            })
+        
+        # -------- last 8 h bins (yield + throughput) -----
+        s1_y8h = []
+        for label, h_start, h_end in get_last_8h_bins(now):
+            # THROUGHPUT
+            # YIELDS PER STATION
+            s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  h_start, h_end, "all") or 0
+            s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
+            s1_g = s1_in_ - s1_n
+
+            s1_y8h.append({
+                "hour": label,
+                "good": s1_g,          # ➊ keep counts
+                "ng":   s1_n,
+                "yield": compute_yield(s1_g, s1_n),
+                "start": h_start.isoformat(),
+                "end":   h_end.isoformat(),
+            })
+
+        # -------- top_defects_vpf (defects from station 56, flat count) ------
+        sql_vpf_productions = """
+            SELECT p56.id
+            FROM productions p56
+            WHERE p56.esito = 6
+            AND p56.station_id = 56
+            AND p56.start_time BETWEEN %s AND %s
+        """
+        cursor.execute(sql_vpf_productions, (shift_start, shift_end))
+        vpf_rows = cursor.fetchall()
+
+        vpf_prod_ids = [row['id'] for row in vpf_rows]
+
+        if not vpf_prod_ids:
+            defects_vpf = []
+        else:
+            placeholders = ','.join(['%s'] * len(vpf_prod_ids))
+            sql_vpf_defects = f"""
+                SELECT d.category, COUNT(*) AS count
+                FROM object_defects od
+                JOIN defects d ON od.defect_id = d.id
+                WHERE od.production_id IN ({placeholders})
+                GROUP BY d.category
+            """
+            cursor.execute(sql_vpf_defects, vpf_prod_ids)
+            defects_vpf = [
+                {"label": row["category"], "count": row["count"]}
+                for row in cursor.fetchall()
+            ]
+
+        eq_defects = None
+
+    except Exception as e:
+        logger.exception(f"❌ compute_zone_snapshot() FAILED for zone=AIN: {e}")
+        raise
+    
+    return {
+    "station_1_in": s1_in,
+    "station_1_out_ng": s1_ng,
+    "station_1_re_entered": s1_reEntered,
+    "speed_ratio": None,
+    "station_1_yield": s1_y,
+    "station_1_shifts": s1_yield_shifts,
+    "station_1_yield_last_8h": s1_y8h,
+    "__shift_start": shift_start.isoformat(),
+    "__last_hour": hour_start.isoformat(),
+    "defects_vpf": defects_vpf,
+    "eq_defects": eq_defects,
+}
+
+def _compute_snapshot_ain(now: datetime) -> dict:
+    try:
+        if now is None:
+            now = datetime.now()
+
+        hour_start = now.replace(minute=0, second=0, microsecond=0)
+        cfg = ZONE_SOURCES["AIN"]
 
         shift_start, shift_end = get_shift_window(now)
 
@@ -389,7 +526,7 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
             ]
 
     except Exception as e:
-        logger.exception(f"❌ compute_zone_snapshot() FAILED for zone={zone}: {e}")
+        logger.exception(f"❌ compute_zone_snapshot() FAILED for zone=AIN: {e}")
         raise
 
     return {
@@ -537,9 +674,6 @@ def update_visual_data_on_new_module(
             _touch_hourly("station_1_yield_last_8h")
         elif station_name in cfg["station_2_out_ng"]:
             _touch_hourly("station_2_yield_last_8h")
-
-        print('Live')
-        print(data['last_8h_throughput'])
 
         # 6. WebSocket push
         try:

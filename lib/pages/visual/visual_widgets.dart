@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use, use_build_context_synchronously, non_constant_identifier_names, library_private_types_in_public_api
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously, non_constant_identifier_names, library_private_types_in_public_api, prefer_typing_uninitialized_variables
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:async';
@@ -8,6 +8,7 @@ class HeaderBox extends StatefulWidget {
   final String title, target;
   final IconData icon;
   final String qg2_defects_value;
+  final String zone;
 
   const HeaderBox({
     super.key,
@@ -15,6 +16,7 @@ class HeaderBox extends StatefulWidget {
     required this.target,
     required this.icon,
     this.qg2_defects_value = '',
+    this.zone = '',
   });
 
   @override
@@ -108,36 +110,58 @@ class _HeaderBoxState extends State<HeaderBox> {
           else if (widget.title == 'Pareto Shift')
             Row(
               children: [
-                Text(
-                  "Difetti \nTot. QG2",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: textColor,
-                  ),
-                ),
-                SizedBox(
-                  height: 50,
-                  width: 75,
-                  child: Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                if (widget.zone == 'AIN')
+                  Text(
+                    "Difetti \nTot. QG2",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: textColor,
                     ),
-                    color: warningColor,
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Center(
-                      // 👈 Center content both vertically & horizontally
-                      child: Text(
-                        widget.qg2_defects_value.toString(),
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
+                  ),
+                if (widget.zone == 'AIN')
+                  SizedBox(
+                    height: 50,
+                    width: 75,
+                    child: Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      color: warningColor,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Center(
+                        // 👈 Center content both vertically & horizontally
+                        child: Text(
+                          widget.qg2_defects_value.toString(),
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
                         ),
                       ),
                     ),
+                  )
+                else if (widget.zone == 'VPF')
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        formattedDate,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        formattedTime,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
-                )
               ],
             )
           else
@@ -868,12 +892,14 @@ class LegendItem extends StatelessWidget {
   final Color color;
   final String label;
   final bool isDashed;
+  final textSize;
 
   const LegendItem({
     super.key,
     required this.color,
     required this.label,
     this.isDashed = false,
+    this.textSize = 14,
   });
 
   @override
@@ -915,7 +941,10 @@ class LegendItem extends StatelessWidget {
                 ),
               ),
         const SizedBox(width: 6),
-        Text(label),
+        Text(
+          label,
+          style: TextStyle(fontSize: textSize),
+        ),
       ],
     );
   }
@@ -1121,12 +1150,165 @@ class YieldComparisonBarChart extends StatelessWidget {
   }
 }
 
-class YieldLineChart extends StatelessWidget {
+class YieldBarChart extends StatelessWidget {
+  final List<Map<String, dynamic>> data;
+  final double target;
+
+  const YieldBarChart({
+    super.key,
+    required this.data,
+    this.target = 90,
+  });
+
+  String _getCurrentShift() {
+    final hour = DateTime.now().hour;
+    if (hour >= 6 && hour < 14) return 'S1';
+    if (hour >= 14 && hour < 22) return 'S2';
+    return 'S3';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentShift = _getCurrentShift();
+    final adjustedData = data
+        .map((d) => {
+              ...d,
+              'shift':
+                  d['label'], // 👈 injects compatibility for reorderShifts()
+            })
+        .toList();
+
+    final orderedData = reorderShifts(adjustedData, currentShift);
+
+    return Card(
+      color: Colors.white,
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const SizedBox(width: 8),
+                const Text(
+                  'Yield per Turno',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                Text(
+                  'Target: $target%',
+                  style: TextStyle(
+                    color: Colors.orangeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100,
+              child: Stack(
+                children: [
+                  BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: 100,
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          getTooltipColor: (_) => Colors.grey.withOpacity(0.8),
+                          tooltipPadding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
+                          tooltipMargin: 6,
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            final value = rod.toY.toStringAsFixed(0);
+                            return BarTooltipItem(
+                              '$value%',
+                              const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              int i = value.toInt();
+                              return Text(orderedData[i]['label']);
+                            },
+                          ),
+                        ),
+                        topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                      ),
+                      gridData: FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      barGroups: List.generate(orderedData.length, (index) {
+                        final item = orderedData[index];
+                        return BarChartGroupData(
+                          showingTooltipIndicators: [0],
+                          x: index,
+                          barRods: [
+                            BarChartRodData(
+                              fromY: 0,
+                              toY: (item['yield'] ?? 0).toDouble(),
+                              width: 40,
+                              color: Colors.blue.shade900,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ],
+                        );
+                      }),
+                      extraLinesData: ExtraLinesData(horizontalLines: [
+                        HorizontalLine(
+                          y: target,
+                          color: Colors.orange,
+                          strokeWidth: 2,
+                          dashArray: [8, 4],
+                        ),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 20,
+              children: [
+                LegendItem(color: Colors.blue.shade900, label: 'Yield'),
+                LegendItem(
+                    color: Colors.orange, label: 'Target', isDashed: true),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class Yield2LineChart extends StatelessWidget {
   final List<Map<String, dynamic>> hourlyData1;
   final List<Map<String, dynamic>> hourlyData2;
   final double target;
 
-  const YieldLineChart({
+  const Yield2LineChart({
     super.key,
     required this.hourlyData1,
     required this.hourlyData2,
@@ -1352,6 +1534,174 @@ class YieldLineChart extends StatelessWidget {
                       color: Colors.orange, label: 'Target', isDashed: true),
                 ],
               ),*/
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class YieldLineChart extends StatelessWidget {
+  final List<Map<String, dynamic>> hourlyData1;
+  final double target;
+
+  const YieldLineChart({
+    super.key,
+    required this.hourlyData1,
+    required this.target,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final int length = hourlyData1.length;
+
+    final line1 = LineChartBarData(
+      isCurved: false,
+      show: true,
+      spots: List.generate(
+        hourlyData1.length,
+        (i) => FlSpot(i.toDouble(), (hourlyData1[i]['yield'] ?? 0).toDouble()),
+      ),
+      color: Colors.blue.shade900,
+      barWidth: 2,
+      dotData: FlDotData(show: true),
+    );
+
+    final targetLine = LineChartBarData(
+      spots: List.generate(
+        length,
+        (i) => FlSpot(i.toDouble(), target),
+      ),
+      color: Colors.orange,
+      isStrokeCapRound: true,
+      barWidth: 2,
+      isCurved: false,
+      dashArray: [6, 4],
+      dotData: FlDotData(show: false),
+    );
+
+    return Expanded(
+      child: Card(
+        color: Colors.white,
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Yield Oraria Cumulata',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Target: $target%',
+                    style: const TextStyle(
+                      color: Colors.orangeAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: LineChart(
+                  LineChartData(
+                    minY: 0,
+                    maxY: 140,
+                    lineTouchData: LineTouchData(
+                      enabled: true,
+                      handleBuiltInTouches: false,
+                      touchTooltipData: LineTouchTooltipData(
+                        getTooltipColor: (_) => Colors.transparent,
+                        tooltipRoundedRadius: 0,
+                        tooltipPadding: EdgeInsets.zero,
+                        tooltipMargin: 8,
+                        getTooltipItems: (spots) {
+                          return spots.map((spot) {
+                            if (spot.barIndex == 1) return null; // skip target
+                            return LineTooltipItem(
+                              '${spot.y.toInt()}%',
+                              TextStyle(
+                                color: Colors.blue.shade900,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            );
+                          }).toList();
+                        },
+                      ),
+                    ),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          getTitlesWidget: (value, meta) {
+                            final index = value.toInt();
+                            if (index >= 0 &&
+                                index < hourlyData1.length &&
+                                value == index.toDouble()) {
+                              return SideTitleWidget(
+                                meta: meta,
+                                child: Text(
+                                  hourlyData1[index]['hour'],
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
+                      topTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    ),
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: true,
+                      horizontalInterval: 20,
+                      getDrawingHorizontalLine: (value) => FlLine(
+                        color: Colors.grey.withOpacity(0.2),
+                        strokeWidth: 1,
+                      ),
+                    ),
+                    borderData: FlBorderData(
+                      show: true,
+                      border: const Border(
+                        left: BorderSide(),
+                        bottom: BorderSide(),
+                      ),
+                    ),
+                    showingTooltipIndicators: List.generate(length, (index) {
+                      return ShowingTooltipIndicators([
+                        LineBarSpot(
+                          line1,
+                          0,
+                          FlSpot(
+                            index.toDouble(),
+                            (hourlyData1[index]['yield'] ?? 0).toDouble(),
+                          ),
+                        ),
+                      ]);
+                    }),
+                    lineBarsData: [
+                      line1, // barIndex 0
+                      targetLine, // barIndex 1
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -1651,6 +2001,271 @@ class VPFDefectsHorizontalBarChart extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SpeedBar extends StatelessWidget {
+  const SpeedBar({
+    super.key,
+    required this.medianSec,
+    required this.currentSec,
+    this.maxSec = 120,
+    this.barHeight = 64,
+    this.textColor = Colors.black,
+    this.bgColor = Colors.grey,
+    this.tickStep = 10,
+  });
+
+  final double medianSec;
+  final double currentSec;
+  final double maxSec;
+  final double barHeight;
+  final Color textColor;
+  final Color bgColor;
+  final double tickStep;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Increased height for triangle + bar
+        SizedBox(
+          height: barHeight + 40, // extra space for arrow above
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Grey background bar (centered)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: barHeight,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    gradient: LinearGradient(
+                      colors: const [
+                        Colors.green,
+                        Colors.yellow,
+                        Colors.red,
+                      ],
+                      stops: [
+                        0,
+                        0.5,
+                        0.9,
+                      ],
+                    ),
+                    border: Border.all(color: Colors.black, width: 1),
+                  ),
+                ),
+              ),
+
+              // Median line
+              Align(
+                alignment: Alignment((medianSec / maxSec) * 2 - 1, 1),
+                child: Container(
+                  margin: EdgeInsets.only(bottom: 0),
+                  width: 2,
+                  height: barHeight,
+                  color: Colors.black,
+                ),
+              ),
+
+              // Pointer above the bar
+              Align(
+                alignment: Alignment((currentSec / maxSec) * 2 - 1, 1),
+                child: Transform.translate(
+                  offset: Offset(0, -5),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: const [
+                          Icon(
+                            Icons.arrow_drop_down,
+                            size: 85, // slightly larger for stroke
+                            color: Colors.white, // outline
+                          ),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            size: 80,
+                            color: Color.fromRGBO(33, 95, 154, 1), // fill
+                          ),
+                        ],
+                      ),
+                      Text(
+                        '${currentSec.round()} sec',
+                        style: TextStyle(fontSize: 12, color: textColor),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Axis labels with dynamic median
+        SizedBox(
+          width: double.infinity,
+          child: Stack(
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('0 sec', style: TextStyle(color: textColor)),
+              ),
+              Align(
+                alignment: Alignment((medianSec / maxSec) * 2 - 1, 0),
+                child: Text('${medianSec.round()} sec',
+                    style: TextStyle(color: textColor)),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text('${maxSec.round()} sec',
+                    style: TextStyle(color: textColor)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class DefectBarChartCard extends StatelessWidget {
+  final List<Map<String, dynamic>> defects;
+
+  const DefectBarChartCard({super.key, required this.defects});
+
+  static const Map<String, String> defectDescriptions = {
+    "NG1": "Cella rotta o scheggiata a V",
+    "NG1.1": "Cella rotta in prossimità JBX",
+    "NG2": "Macchie ECA / AG Paste",
+    "NG2.1": "Materiale estraneo sulla cella o matrice di celle",
+    "NG3": "Disallineamento celle/stringhe o materiale estraneo",
+    "NG3.1": "Deviazione ribbon rispetto al busbar",
+    "NG4": "Rottura o disallineamenti su glass",
+    "NG5": "Graffi o sporco su glass",
+    "NG 7": "Bolle lungo i bordi o nei fori JB",
+    "NG7.1": "Delaminazioni o bolle nella matrice",
+    "NG8": "Difetti JBX (silicone, cavi danneggiati)",
+    "NG8.1": "Difetti potting: bolle/mancanza",
+    "NG9": "Difetti su Power Label",
+    "NG10": "Difetti su telaio",
+  };
+
+  List<Map<String, dynamic>> normalizeDefects(List<Map<String, dynamic>> raw) {
+    final Map<String, int> inputMap = {
+      for (var item in raw) item['label']: item['count'],
+    };
+
+    return defectDescriptions.keys.map((code) {
+      return {
+        'label': code,
+        'count': inputMap[code] ?? 0,
+      };
+    }).toList();
+  }
+
+  String _truncate(String text, int maxLength) {
+    if (text.length <= maxLength) return text;
+    return '${text.substring(0, maxLength - 3)}...';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = normalizeDefects(defects);
+    final colors = List<Color>.generate(normalized.length,
+        (i) => Colors.primaries[i % Colors.primaries.length]);
+    final maxY = normalized
+            .map((d) => d['count'] as int)
+            .fold(0, (a, b) => a > b ? a : b)
+            .toDouble() +
+        1;
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 4,
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: BarChart(
+                BarChartData(
+                  borderData: FlBorderData(show: false),
+                  gridData: FlGridData(show: false),
+                  titlesData: FlTitlesData(
+                    leftTitles:
+                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles:
+                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles:
+                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles:
+                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  barGroups: List.generate(normalized.length, (i) {
+                    final count = (normalized[i]['count'] as int).toDouble();
+                    return BarChartGroupData(
+                      x: i,
+                      barsSpace: 1,
+                      barRods: [
+                        BarChartRodData(
+                          toY: count,
+                          color: colors[i],
+                          width: 18,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ],
+                      showingTooltipIndicators: [0],
+                    );
+                  }),
+                  maxY: maxY,
+                  barTouchData: BarTouchData(
+                    enabled: true,
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipColor: (_) => Colors.transparent,
+                      tooltipRoundedRadius: 6,
+                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                        final code = normalized[group.x.toInt()]['label'];
+                        final count = normalized[group.x.toInt()]['count'];
+                        return BarTooltipItem(
+                          '$code\n$count',
+                          const TextStyle(color: Colors.black, fontSize: 12),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 24),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: List.generate(normalized.length, (i) {
+                  final code = normalized[i]['label'];
+                  final description = defectDescriptions[code] ?? code;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: LegendItem(
+                      color: colors[i],
+                      label: '$code - ${_truncate(description, 40)}',
+                      textSize: 12,
+                    ),
+                  );
+                }),
               ),
             ),
           ],

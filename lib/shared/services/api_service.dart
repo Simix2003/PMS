@@ -1,5 +1,5 @@
 // lib/shared/services/api_service.dart
-// ignore_for_file: non_constant_identifier_names
+// ignore_for_file: non_constant_identifier_names, avoid_print
 // ignore_for_file: avoid_web_libraries_in_flutter
 
 import 'dart:async';
@@ -837,9 +837,9 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> fetchZoneVisualData(String zone) async {
+  static Future<Map<String, dynamic>> fetchVisualDataForAin() async {
     final response =
-        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=$zone'));
+        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=AIN'));
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -861,9 +861,33 @@ class ApiService {
         'fermi_data': data['fermi_data'] ?? [],
         'top_defects_qg2': data['top_defects_qg2'] ?? [],
         'total_defects_qg2': data['total_defects_qg2'] ?? 0,
+        'top_defects_vpf': data['top_defects_vpf'] ?? [],
       };
     } else {
       throw Exception('Failed to load zone data');
+    }
+  }
+
+  static Future<Map<String, dynamic>> fetchVisualDataForVpf() async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=VPF'));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return {
+        ...data,
+        'station_1_in': data['station_1_in'] ?? 0,
+        'station_1_out_ng': data['station_1_out_ng'] ?? 0,
+        'station_1_re_entered': data['station_1_re_entered'] ?? 0,
+        'speed_ratio': data['speed_ratio'] ?? [],
+        'station_1_yield': data['station_1_yield'] ?? 100,
+        'station_1_shifts': data['station_1_shifts'] ?? [],
+        'station_1_yield_last_8h': data['station_1_yield_last_8h'] ?? [],
+        'eq_defects': data['eq_defects'] ?? [],
+        'defects_vpf': data['defects_vpf'] ?? [],
+      };
+    } else {
+      throw Exception('Failed to load VPF zone data');
     }
   }
 

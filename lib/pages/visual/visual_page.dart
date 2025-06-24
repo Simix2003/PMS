@@ -6,10 +6,9 @@ import 'package:flutter/material.dart';
 import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
-import 'escalation_visual.dart';
 import 'shimmer_placeHolder.dart';
-import 'visual_widgets.dart';
-import 'package:gauge_indicator/gauge_indicator.dart';
+import 'visuals/AIN_page.dart';
+import 'visuals/VPF_page.dart';
 
 class VisualPage extends StatefulWidget {
   final String zone;
@@ -76,80 +75,16 @@ class _VisualPageState extends State<VisualPage> {
 
   Timer? _hourlyRefreshTimer;
 
-  Future<void> _showTargetEditDialog({
-    required String title,
-    required int currentValue,
-    required void Function(int newValue) onValueSaved,
-  }) async {
-    final controller = TextEditingController(text: currentValue.toString());
-    int? newValue;
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Modifica $title'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: 'Nuovo valore'),
-          onChanged: (value) {
-            newValue = int.tryParse(value);
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Annulla'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (newValue != null) {
-                onValueSaved(newValue!);
-              }
-              Navigator.of(context).pop();
-            },
-            child: const Text('Salva'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color getYieldColor(int value, int target) {
-    if (value >= target) {
-      return okColor; // GREEN
-    } else if (value >= target - 5) {
-      return warningColor; // ORANGE
-    } else {
-      return errorColor; // RED
-    }
-  }
-
-  Color getNgColor(int ngCount, int inCount) {
-    if (inCount == 0) return redColor; // fallback to red if division by zero
-
-    final percent = (ngCount / inCount) * 100;
-
-    if (percent > 5) {
-      return redColor; // RED
-    } else if (percent >= 2) {
-      return errorColor; // ORANGE
-    } else {
-      return okColor; // GREEN
-    }
-  }
-
-  Color getStationColor(int value) {
-    if (value == 1) {
-      return okColor;
-    } else if (value == 2) {
-      return warningColor;
-    } else if (value == 3) {
-      return errorColor;
-    } else {
-      return Colors.black;
-    }
-  }
+  // VPF
+  int In_1 = 0;
+  int ngOut_1 = 0;
+  int reEntered_1 = 0;
+  List<Map<String, dynamic>> speedRatioData = [];
+  List<Map<String, dynamic>> defectsVPF = [];
+  List<Map<String, dynamic>> eqDefects = [];
+  List<int> VPFCounts = [];
+  double medianSec = 40;
+  double currentSec = 75;
 
   Map<String, int> calculateEscalationCounts(
       List<Map<String, dynamic>> escalations) {
@@ -167,8 +102,18 @@ class _VisualPageState extends State<VisualPage> {
   }
 
   Future<void> fetchZoneData() async {
+    if (widget.zone == "AIN") {
+      await fetchAinZoneData();
+    } else if (widget.zone == "VPF") {
+      await fetchVpfZoneData();
+    } else {
+      print('Cannote fetch zone data Unknown zone: $widget.zone');
+    }
+  }
+
+  Future<void> fetchAinZoneData() async {
     try {
-      final response = await ApiService.fetchZoneVisualData(widget.zone);
+      final response = await ApiService.fetchVisualDataForAin();
       setState(() {
         bussingIn_1 = response['station_1_in'] ?? 0;
         bussingIn_2 = response['station_2_in'] ?? 0;
@@ -246,9 +191,6 @@ class _VisualPageState extends State<VisualPage> {
           ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
         }
 
-        // Optional: total count if needed
-        // vpf_defects_value = response['total_defects_vpf'];
-
         // Parse fermi data
         final fermiRaw =
             List<Map<String, dynamic>>.from(response['fermi_data'] ?? []);
@@ -282,7 +224,171 @@ class _VisualPageState extends State<VisualPage> {
     }
   }
 
-  void _initializeWebSocket() {
+  Future<void> fetchVpfZoneData() async {
+    try {
+      final response = await ApiService.fetchVisualDataForVpf();
+      setState(() {
+        // ─── Main Station Metrics ───────────────────────
+        In_1 = response['station_1_in'] ?? 0;
+        ngOut_1 = response['station_1_out_ng'] ?? 0;
+        reEntered_1 = response['station_1_re_entered'] ?? 0;
+        currentYield_1 = response['station_1_yield'] ?? 100;
+
+        // ─── Yield + Shift ──────────────────────────────
+        yieldLast8h_1 = List<Map<String, dynamic>>.from(
+            response['station_1_yield_last_8h'] ?? []);
+        station1Shifts =
+            List<Map<String, dynamic>>.from(response['station_1_shifts'] ?? []);
+
+        // ─── Speed Ratio Chart ──────────────────────────
+        speedRatioData =
+            List<Map<String, dynamic>>.from(response['speed_ratio'] ?? []);
+
+        // ─── Defects Chart (VPF) ────────────────────────
+        defectsVPF =
+            List<Map<String, dynamic>>.from(response['defects_vpf'] ?? []);
+
+        // ─── Equipment Defects (EQ) ─────────────────────
+        eqDefects =
+            List<Map<String, dynamic>>.from(response['eq_defects'] ?? []);
+
+        isLoading = false;
+      });
+    } catch (e) {
+      print("❌ Error fetching VPF zone data: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _initializeWebSocket() async {
+    if (widget.zone == "AIN") {
+      _initializeAinWebSocket();
+    } else if (widget.zone == "VPF") {
+      _initializeVpfWebSocket();
+    } else {
+      print('Cannot initialize websocket Unknown zone: $widget.zone');
+    }
+  }
+
+  void _initializeAinWebSocket() {
+    if (_isWebSocketConnected) return;
+
+    _webSocketService.connectToVisual(
+      line: 'Linea2',
+      zone: widget.zone,
+      onMessage: (data) {
+        if (!mounted) return;
+
+        setState(() {
+          // ─── Main station metrics ─────────────────────
+          bussingIn_1 = data['station_1_in'] ?? 0;
+          bussingIn_2 = data['station_2_in'] ?? 0;
+          ng_bussingOut_1 = data['station_1_out_ng'] ?? 0;
+          ng_bussingOut_2 = data['station_2_out_ng'] ?? 0;
+          currentYield_1 = data['station_1_yield'] ?? 100;
+          currentYield_2 = data['station_2_yield'] ?? 100;
+
+          // ─── Yield + Throughput 8h & shift ────────────
+          yieldLast8h_1 = List<Map<String, dynamic>>.from(
+              data['station_1_yield_last_8h'] ?? []);
+          yieldLast8h_2 = List<Map<String, dynamic>>.from(
+              data['station_2_yield_last_8h'] ?? []);
+          shiftThroughput =
+              List<Map<String, dynamic>>.from(data['shift_throughput'] ?? []);
+          hourlyThroughput =
+              List<Map<String, dynamic>>.from(data['last_8h_throughput'] ?? []);
+          station1Shifts = List<Map<String, dynamic>>.from(
+              data['station_1_yield_shifts'] ?? []);
+          station2Shifts = List<Map<String, dynamic>>.from(
+              data['station_2_yield_shifts'] ?? []);
+
+          mergedShiftData = List.generate(station1Shifts.length, (index) {
+            return {
+              'shift': station1Shifts[index]['label'],
+              'bussing1': station1Shifts[index]['yield'],
+              'bussing2': station2Shifts[index]['yield'],
+            };
+          });
+
+          throughputData = shiftThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            return {'ok': total - ng, 'ng': ng};
+          }).toList();
+
+          shiftLabels =
+              shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
+
+          hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            return {'ok': total - ng, 'ng': ng};
+          }).toList();
+
+          hourLabels =
+              hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
+          // ─── Fermi Data ───────────────────────────────
+          final fermiRaw =
+              List<Map<String, dynamic>>.from(data['fermi_data'] ?? []);
+          dataFermi = [];
+
+          for (final entry in fermiRaw) {
+            if (entry.containsKey("Available_Time_1")) {
+              availableTime_1 =
+                  int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
+            } else if (entry.containsKey("Available_Time_2")) {
+              availableTime_2 =
+                  int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
+            } else {
+              dataFermi.add([
+                entry['causale']?.toString() ?? '',
+                entry['station']?.toString() ?? '',
+                entry['count']?.toString() ?? '0',
+                entry['time']?.toString() ?? '0'
+              ]);
+            }
+          }
+
+          // ─── QG2 Defects ──────────────────────────────
+          final topDefectsQG2 =
+              List<Map<String, dynamic>>.from(data['top_defects_qg2'] ?? []);
+          defectLabels = [];
+          ain1Counts = [];
+          ain2Counts = [];
+
+          for (final defect in topDefectsQG2) {
+            defectLabels.add(defect['label']?.toString() ?? '');
+            ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+            ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+          }
+
+          qg2_defects_value = data['total_defects_qg2'] ?? 0;
+
+          // ─── VPF Defects ───────────────────────────────
+          final topDefectsVPF =
+              List<Map<String, dynamic>>.from(data['top_defects_vpf'] ?? []);
+          defectVPFLabels = [];
+          ain1VPFCounts = [];
+          ain2VPFCounts = [];
+
+          for (final defect in topDefectsVPF) {
+            defectVPFLabels.add(defect['label']?.toString() ?? '');
+            ain1VPFCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+            ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+          }
+        });
+      },
+      onDone: () => print("🛑 Visual WebSocket closed"),
+      onError: (err) => print("❌ WebSocket error: $err"),
+    );
+
+    _isWebSocketConnected = true;
+  }
+
+  void _initializeVpfWebSocket() {
     if (_isWebSocketConnected) return;
 
     _webSocketService.connectToVisual(
@@ -433,12 +539,6 @@ class _VisualPageState extends State<VisualPage> {
     super.dispose();
   }
 
-  void _refreshEscalationTrafficLight() {
-    setState(() {
-      // recalculates counts automatically
-    });
-  }
-
   Future<void> loadTargets() async {
     final targets = await ApiService.loadVisualTargets();
     if (targets != null) {
@@ -460,1129 +560,79 @@ class _VisualPageState extends State<VisualPage> {
         padding: const EdgeInsets.all(8),
         child: isLoading
             ? buildShimmerPlaceholder()
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ────── FIRST HEADER ROW ──────
-                  Row(
-                    children: [
-                      Flexible(
-                        flex: 4,
-                        child: // Shift target (moduli)
-                            GestureDetector(
-                          onTap: () {
-                            _showTargetEditDialog(
-                              title: 'Target Produzione Shift',
-                              currentValue: shift_target,
-                              onValueSaved: (newVal) async {
-                                setState(() {
-                                  shift_target = newVal;
-                                  hourly_shift_target =
-                                      (newVal ~/ 8).toDouble();
-                                });
-                                await ApiService.saveVisualTargets(
-                                    shift_target, yield_target);
-                              },
-                            );
-                          },
-                          child: HeaderBox(
-                            title: 'Produzione Shift',
-                            target: '$shift_target moduli',
-                            icon: Icons.solar_power,
-                          ),
+            : widget.zone == "AIN"
+                ? AinVisualsPage(
+                    shift_target: shift_target,
+                    hourly_shift_target: hourly_shift_target,
+                    yield_target: yield_target,
+                    circleSize: circleSize,
+                    station_1_status: station_1_status,
+                    station_2_status: station_2_status,
+                    errorColor: errorColor,
+                    okColor: okColor,
+                    textColor: textColor,
+                    warningColor: warningColor,
+                    redColor: redColor,
+                    ng_bussingOut_1: ng_bussingOut_1,
+                    ng_bussingOut_2: ng_bussingOut_2,
+                    bussingIn_1: bussingIn_1,
+                    bussingIn_2: bussingIn_2,
+                    currentYield_1: currentYield_1,
+                    currentYield_2: currentYield_2,
+                    throughputData: throughputData,
+                    shiftLabels: shiftLabels,
+                    hourlyData: hourlyData,
+                    hourLabels: hourLabels,
+                    dataFermi: dataFermi,
+                    station1Shifts: station1Shifts,
+                    station2Shifts: station2Shifts,
+                    mergedShiftData: mergedShiftData,
+                    yieldLast8h_1: yieldLast8h_1,
+                    yieldLast8h_2: yieldLast8h_2,
+                    counts: counts,
+                    availableTime_1: availableTime_1,
+                    availableTime_2: availableTime_2,
+                    defectLabels: defectLabels,
+                    defectVPFLabels: defectVPFLabels,
+                    ain1Counts: ain1Counts,
+                    ain1VPFCounts: ain1VPFCounts,
+                    ain2Counts: ain2Counts,
+                    ain2VPFCounts: ain2VPFCounts,
+                    last_n_shifts: last_n_shifts,
+                    qg2_defects_value: qg2_defects_value,
+                  )
+                : widget.zone == "VPF"
+                    ? VpfVisualsPage(
+                        shift_target: shift_target,
+                        hourly_shift_target: hourly_shift_target,
+                        yield_target: yield_target,
+                        circleSize: circleSize,
+                        station_1_status: station_1_status,
+                        errorColor: errorColor,
+                        okColor: okColor,
+                        textColor: textColor,
+                        warningColor: warningColor,
+                        redColor: redColor,
+                        speedRatioData: speedRatioData,
+                        reEntered_1: reEntered_1,
+                        station1Shifts: station1Shifts,
+                        currentYield_1: currentYield_1,
+                        yieldLast8h_1: yieldLast8h_1,
+                        counts: counts,
+                        last_n_shifts: last_n_shifts,
+                        defectsVPF: defectsVPF,
+                        In_1: In_1,
+                        ngOut_1: ngOut_1,
+                        medianSec: medianSec,
+                        currentSec: currentSec,
+                      )
+                    : const Center(
+                        child: Text(
+                          'ZONA non trovata',
+                          style: TextStyle(
+                              fontSize: 24, fontWeight: FontWeight.bold),
                         ),
                       ),
-                      Flexible(
-                        flex: 3,
-                        child: GestureDetector(
-                          onTap: () {
-                            _showTargetEditDialog(
-                              title: 'Target Yield',
-                              currentValue: yield_target,
-                              onValueSaved: (newVal) async {
-                                setState(() => yield_target = newVal);
-                                await ApiService.saveVisualTargets(
-                                    shift_target, yield_target);
-                              },
-                            );
-                          },
-                          child: HeaderBox(
-                            title: 'YIELD',
-                            target: '$yield_target %',
-                            icon: Icons.show_chart,
-                          ),
-                        ),
-                      ),
-                      Flexible(
-                        flex: 2,
-                        child: HeaderBox(
-                          title: 'ESCALATION',
-                          target: '',
-                          icon: Icons.account_tree_outlined,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // ────── VALUES FIRST ROW ──────
-                  Row(
-                    children: [
-                      Flexible(
-                        flex: 4,
-                        child: Container(
-                          height: 425,
-                          margin: const EdgeInsets.only(right: 6, bottom: 16),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            children: [
-                              // First row with 2 cards
-                              Flexible(
-                                child: Row(
-                                  children: [
-                                    Flexible(
-                                      flex: 3,
-                                      child: Column(
-                                        children: [
-                                          Flexible(
-                                            child: Column(
-                                              children: [
-                                                // Row titles (aligned with the two card columns)
-                                                Row(
-                                                  children: [
-                                                    const SizedBox(
-                                                      width: 100,
-                                                    ), // aligns with the AIN 1 / AIN 2 label
-                                                    Flexible(
-                                                      child: Center(
-                                                        child: Text(
-                                                          'Bussing IN',
-                                                          style: TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 18,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 70),
-                                                    Flexible(
-                                                      child: Center(
-                                                        child: Text(
-                                                          'NG Bussing OUT',
-                                                          style: TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 18,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-
-                                                const SizedBox(height: 8),
-
-                                                // First row of cards
-                                                Flexible(
-                                                  child: Row(
-                                                    children: [
-                                                      Text(
-                                                        'AIN 1',
-                                                        style: TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 24,
-                                                          color: Colors.black,
-                                                        ),
-                                                      ),
-
-                                                      // 🔴 First Circle
-                                                      const SizedBox(width: 8),
-                                                      Container(
-                                                        width: circleSize,
-                                                        height: circleSize,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: getStationColor(
-                                                              station_1_status),
-                                                          shape:
-                                                              BoxShape.circle,
-                                                        ),
-                                                      ),
-
-                                                      const SizedBox(width: 8),
-                                                      Flexible(
-                                                        child: Card(
-                                                          color: Colors.white,
-                                                          child: Container(
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              border:
-                                                                  Border.all(
-                                                                color:
-                                                                    textColor,
-                                                                width: 1,
-                                                              ),
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          12),
-                                                            ),
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                    vertical:
-                                                                        12),
-                                                            child: Center(
-                                                              child: Text(
-                                                                bussingIn_1
-                                                                    .toString(),
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  fontSize: 32,
-                                                                  color:
-                                                                      textColor,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-
-                                                      const SizedBox(width: 24),
-
-                                                      // 🟢 Second Circle
-                                                      Container(
-                                                        width: circleSize,
-                                                        height: circleSize,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: getNgColor(
-                                                            ng_bussingOut_1,
-                                                            bussingIn_1,
-                                                          ),
-                                                          shape:
-                                                              BoxShape.circle,
-                                                        ),
-                                                      ),
-
-                                                      const SizedBox(width: 8),
-
-                                                      Flexible(
-                                                        child: Card(
-                                                          color: Colors.white,
-                                                          child: Container(
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              border:
-                                                                  Border.all(
-                                                                color:
-                                                                    textColor,
-                                                                width: 1,
-                                                              ),
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          12),
-                                                            ),
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                    vertical:
-                                                                        12),
-                                                            child: Center(
-                                                              child: Text(
-                                                                ng_bussingOut_1
-                                                                    .toString(),
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  fontSize: 32,
-                                                                  color:
-                                                                      textColor,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 8),
-
-                                                // Second row of cards
-                                                Flexible(
-                                                  child: Row(
-                                                    children: [
-                                                      Text(
-                                                        'AIN 2',
-                                                        style: TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 24,
-                                                          color: Colors.black,
-                                                        ),
-                                                      ),
-                                                      SizedBox(width: 8),
-
-                                                      Container(
-                                                        width: circleSize,
-                                                        height: circleSize,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: getStationColor(
-                                                              station_2_status),
-                                                          shape:
-                                                              BoxShape.circle,
-                                                        ),
-                                                      ),
-                                                      SizedBox(width: 8),
-                                                      Flexible(
-                                                        child: Card(
-                                                          color: Colors.white,
-                                                          child: Container(
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              border:
-                                                                  Border.all(
-                                                                color:
-                                                                    textColor,
-                                                                width: 1,
-                                                              ),
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          12),
-                                                            ),
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                    vertical:
-                                                                        12),
-                                                            child: Center(
-                                                              child: Text(
-                                                                bussingIn_2
-                                                                    .toString(),
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  fontSize: 32,
-                                                                  color:
-                                                                      textColor,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 24),
-                                                      // 🟢 Second Circle
-                                                      Container(
-                                                        width: circleSize,
-                                                        height: circleSize,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: getNgColor(
-                                                            ng_bussingOut_2,
-                                                            bussingIn_2,
-                                                          ),
-                                                          shape:
-                                                              BoxShape.circle,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      Flexible(
-                                                        child: Card(
-                                                          color: Colors.white,
-                                                          child: Container(
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              border:
-                                                                  Border.all(
-                                                                color:
-                                                                    textColor,
-                                                                width: 1,
-                                                              ),
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          12),
-                                                            ),
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                    vertical:
-                                                                        12),
-                                                            child: Center(
-                                                              child: Text(
-                                                                ng_bussingOut_2
-                                                                    .toString(),
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  fontSize: 32,
-                                                                  color:
-                                                                      textColor,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    ThroughputBarChart(
-                                      data: throughputData,
-                                      labels: shiftLabels,
-                                      globalTarget: shift_target.toDouble(),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              // Second row with 1 card that fills all remaining space
-                              Flexible(
-                                child: HourlyBarChart(
-                                  data: hourlyData,
-                                  hourLabels: hourLabels,
-                                  target: hourly_shift_target,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Flexible(
-                        flex: 3,
-                        child: Container(
-                          height: 425,
-                          margin: const EdgeInsets.only(right: 6, bottom: 16),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            children: [
-                              // First row with 2 cards
-                              Flexible(
-                                child: Row(
-                                  children: [
-                                    Flexible(
-                                      flex: 1,
-                                      child: Column(
-                                        children: [
-                                          Flexible(
-                                            child: Column(
-                                              children: [
-                                                // Row titles
-                                                Row(
-                                                  children: [
-                                                    Flexible(
-                                                      child: Center(
-                                                        child: Text(
-                                                          'Yield media (Shift)',
-                                                          style: TextStyle(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            fontSize: 16,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-
-                                                const SizedBox(height: 8),
-
-                                                // First row of cards
-                                                Flexible(
-                                                  child: Row(
-                                                    children: [
-                                                      // Circle
-                                                      Container(
-                                                        width: circleSize,
-                                                        height: circleSize,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: getYieldColor(
-                                                            currentYield_1,
-                                                            yield_target,
-                                                          ),
-                                                          shape:
-                                                              BoxShape.circle,
-                                                        ),
-                                                      ),
-
-                                                      const SizedBox(
-                                                        width: 8,
-                                                      ),
-
-                                                      Flexible(
-                                                        child: Card(
-                                                          color: Colors.white,
-                                                          child: Container(
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              border:
-                                                                  Border.all(
-                                                                color:
-                                                                    textColor,
-                                                                width: 1,
-                                                              ),
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          12),
-                                                            ),
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                    vertical:
-                                                                        12),
-                                                            child: Center(
-                                                              child: Text(
-                                                                '${currentYield_1.toString()}%',
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  fontSize: 32,
-                                                                  color:
-                                                                      textColor,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-
-                                                // Second row of cards
-                                                Flexible(
-                                                  child: Row(
-                                                    children: [
-                                                      // Circle
-                                                      Container(
-                                                        width: circleSize,
-                                                        height: circleSize,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: getYieldColor(
-                                                            currentYield_2,
-                                                            yield_target,
-                                                          ),
-                                                          shape:
-                                                              BoxShape.circle,
-                                                        ),
-                                                      ),
-
-                                                      const SizedBox(
-                                                        width: 8,
-                                                      ),
-                                                      Flexible(
-                                                        child: Card(
-                                                          color: Colors.white,
-                                                          child: Container(
-                                                            decoration:
-                                                                BoxDecoration(
-                                                              border:
-                                                                  Border.all(
-                                                                color:
-                                                                    textColor,
-                                                                width: 1,
-                                                              ),
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .circular(
-                                                                          12),
-                                                            ),
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .symmetric(
-                                                                    vertical:
-                                                                        12),
-                                                            child: Center(
-                                                              child: Text(
-                                                                '${currentYield_2.toString()}%',
-                                                                style:
-                                                                    TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  fontSize: 32,
-                                                                  color:
-                                                                      textColor,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Flexible(
-                                      flex: 3,
-                                      child: YieldComparisonBarChart(
-                                        data: mergedShiftData,
-                                        target: yield_target as double,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              // Second row with 1 card that fills all remaining space
-                              YieldLineChart(
-                                hourlyData1: yieldLast8h_1,
-                                hourlyData2: yieldLast8h_2,
-                                target: yield_target as double,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Flexible(
-                        flex: 2,
-                        child: Container(
-                          height: 425,
-                          margin: const EdgeInsets.only(bottom: 1),
-                          padding: const EdgeInsets.all(1),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(1),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  // Left side: Traffic light + text
-                                  Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      TrafficLightWithBackground(
-                                        shiftManagerCount:
-                                            counts['shiftManager'] ?? 0,
-                                        headOfProductionCount:
-                                            counts['headOfProduction'] ?? 0,
-                                        closedCount: counts['closed'] ?? 0,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      (last_n_shifts > 0)
-                                          ? Text(
-                                              'Ultimi $last_n_shifts Shift',
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            )
-                                          : Text(
-                                              'Ultimo Shift',
-                                              style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                    ],
-                                  ),
-                                  const SizedBox(
-                                    width: 48,
-                                  ),
-
-                                  // Right side: Escalation button
-                                  EscalationButton(
-                                    last_n_shifts: last_n_shifts,
-                                    onEscalationsUpdated:
-                                        _refreshEscalationTrafficLight,
-                                  ),
-                                ],
-                              ),
-                              Spacer(),
-
-                              // Legend
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  LegendRow(
-                                      color: errorColor,
-                                      role: 'Head of production',
-                                      time: '> 4h'),
-                                  SizedBox(height: 8),
-                                  LegendRow(
-                                      color: warningColor,
-                                      role: 'Shift Manager',
-                                      time: '2h << 4h'),
-                                  SizedBox(height: 8),
-                                  LegendRow(
-                                      color: okColor, role: 'Chiusi', time: ''),
-                                ],
-                              ),
-                              SizedBox(height: 16),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // ────── SECOND HEADER ROW ──────
-                  Row(
-                    children: [
-                      // LEFT SIDE – UPTIME/DOWNTIME
-                      Flexible(
-                        flex: 3,
-                        child: HeaderBox(
-                          title: 'UPTIME/DOWNTIME Shift',
-                          target: '',
-                          icon: Icons.timer_outlined,
-                        ),
-                      ),
-
-                      // RIGHT SIDE – Pareto + NG Card
-                      Flexible(
-                        flex: 3,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Flexible(
-                              child: HeaderBox(
-                                title: 'Pareto Shift',
-                                target: '',
-                                icon: Icons.bar_chart_rounded,
-                                qg2_defects_value: qg2_defects_value.toString(),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // ────── SECOND ROW ──────
-                  Row(
-                    children: [
-                      Flexible(
-                        flex: 3,
-                        child: Container(
-                          height: 400,
-                          margin: const EdgeInsets.only(right: 6, bottom: 16),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              // LEFT COLUMN (2 stacked rows)
-                              Flexible(
-                                flex: 2,
-                                child: Column(
-                                  children: [
-                                    Flexible(
-                                      child: Card(
-                                        elevation: 10,
-                                        color: Colors.white,
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              const Text(
-                                                'Available \nTime\nAIN1',
-                                                style: TextStyle(
-                                                  fontSize: 28,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.black87,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 16),
-                                              Column(
-                                                children: [
-                                                  SizedBox(
-                                                    width: 200, // radius * 2
-                                                    child: Column(
-                                                      children: [
-                                                        AnimatedRadialGauge(
-                                                          duration:
-                                                              const Duration(
-                                                                  milliseconds:
-                                                                      800),
-                                                          curve:
-                                                              Curves.easeInOut,
-                                                          value: availableTime_1
-                                                              .toDouble(),
-                                                          radius: 100,
-                                                          axis: GaugeAxis(
-                                                            min: 0,
-                                                            max: 100,
-                                                            degrees: 180,
-                                                            style:
-                                                                const GaugeAxisStyle(
-                                                              thickness: 16,
-                                                              background: Color(
-                                                                  0xFFDDDDDD),
-                                                              segmentSpacing: 0,
-                                                            ),
-                                                            progressBar:
-                                                                GaugeRoundedProgressBar(
-                                                              color: () {
-                                                                if (availableTime_1 <=
-                                                                    50) {
-                                                                  return errorColor;
-                                                                }
-                                                                if (availableTime_1 <=
-                                                                    75) {
-                                                                  return warningColor;
-                                                                }
-                                                                return okColor;
-                                                              }(),
-                                                            ),
-                                                          ),
-                                                          builder: (context,
-                                                              child, value) {
-                                                            return Center(
-                                                              child: Text(
-                                                                '${value.toInt()}%',
-                                                                style:
-                                                                    const TextStyle(
-                                                                  fontSize: 32,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
-                                                              ),
-                                                            );
-                                                          },
-                                                        ),
-                                                        const SizedBox(
-                                                            height: 6),
-                                                        const Row(
-                                                          mainAxisAlignment:
-                                                              MainAxisAlignment
-                                                                  .spaceBetween,
-                                                          children: [
-                                                            Text('0%',
-                                                                style: TextStyle(
-                                                                    fontSize:
-                                                                        14)),
-                                                            Text('100%',
-                                                                style: TextStyle(
-                                                                    fontSize:
-                                                                        14)),
-                                                          ],
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              )
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    //const TopDefectsPieChart(),
-                                    Flexible(
-                                      child: Card(
-                                        elevation: 10,
-                                        color: Colors.white,
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              const Text(
-                                                'Available \nTime\nAIN2',
-                                                style: TextStyle(
-                                                  fontSize: 28,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.black87,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 16),
-                                              Column(
-                                                children: [
-                                                  SizedBox(
-                                                    width: 200, // radius * 2
-                                                    child: Column(
-                                                      children: [
-                                                        AnimatedRadialGauge(
-                                                          duration:
-                                                              const Duration(
-                                                                  milliseconds:
-                                                                      800),
-                                                          curve:
-                                                              Curves.easeInOut,
-                                                          value: availableTime_2
-                                                              .toDouble(),
-                                                          radius: 100,
-                                                          axis: GaugeAxis(
-                                                            min: 0,
-                                                            max: 100,
-                                                            degrees: 180,
-                                                            style:
-                                                                const GaugeAxisStyle(
-                                                              thickness: 16,
-                                                              background: Color(
-                                                                  0xFFDDDDDD),
-                                                              segmentSpacing: 0,
-                                                            ),
-                                                            progressBar:
-                                                                GaugeRoundedProgressBar(
-                                                              color: () {
-                                                                if (availableTime_2 <=
-                                                                    50) {
-                                                                  return errorColor;
-                                                                }
-                                                                if (availableTime_2 <=
-                                                                    75) {
-                                                                  return warningColor;
-                                                                }
-                                                                return okColor;
-                                                              }(),
-                                                            ),
-                                                          ),
-                                                          builder: (context,
-                                                              child, value) {
-                                                            return Center(
-                                                              child: Text(
-                                                                '${value.toInt()}%',
-                                                                style:
-                                                                    const TextStyle(
-                                                                  fontSize: 32,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                ),
-                                                              ),
-                                                            );
-                                                          },
-                                                        ),
-                                                        const SizedBox(
-                                                            height: 6),
-                                                        const Row(
-                                                          mainAxisAlignment:
-                                                              MainAxisAlignment
-                                                                  .spaceBetween,
-                                                          children: [
-                                                            Text('0%',
-                                                                style: TextStyle(
-                                                                    fontSize:
-                                                                        14)),
-                                                            Text('100%',
-                                                                style: TextStyle(
-                                                                    fontSize:
-                                                                        14)),
-                                                          ],
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ],
-                                              )
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                flex: 3,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Expanded(
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            border: Border.all(
-                                                color: Colors.black, width: 1),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                          ),
-                                          child: ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            child: Table(
-                                              border: TableBorder.all(
-                                                  color: Colors.black,
-                                                  width: 0.5),
-                                              columnWidths: const {
-                                                0: FlexColumnWidth(2),
-                                                1: FlexColumnWidth(1),
-                                                2: FlexColumnWidth(1),
-                                                3: FlexColumnWidth(1),
-                                              },
-                                              children: [
-                                                const TableRow(
-                                                  decoration: BoxDecoration(
-                                                      color: Colors.white),
-                                                  children: [
-                                                    Padding(
-                                                      padding:
-                                                          EdgeInsets.all(8),
-                                                      child: Text(
-                                                          "Tipo \nFermata",
-                                                          style: TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold)),
-                                                    ),
-                                                    Padding(
-                                                      padding:
-                                                          EdgeInsets.all(8),
-                                                      child: Text("Macchina",
-                                                          style: TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold)),
-                                                    ),
-                                                    Padding(
-                                                      padding:
-                                                          EdgeInsets.all(4),
-                                                      child: Text("Frequenza",
-                                                          style: TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold)),
-                                                    ),
-                                                    Padding(
-                                                      padding:
-                                                          EdgeInsets.all(8),
-                                                      child: Text(
-                                                          "Fermo Cumulato (min)",
-                                                          style: TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold)),
-                                                    ),
-                                                  ],
-                                                ),
-                                                ...buildCustomRows(dataFermi),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Flexible(
-                        flex: 3,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxHeight: 400, // ← set your maximum height here
-                          ),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Flexible(
-                                  flex: 3,
-                                  child: TopDefectsHorizontalBarChart(
-                                    defectLabels: defectLabels,
-                                    ain1Counts: ain1Counts,
-                                    ain2Counts: ain2Counts,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                // RIGHT COLUMN (1 full-height card)
-                                Flexible(
-                                  flex: 2,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Expanded(
-                                        child: VPFDefectsHorizontalBarChart(
-                                          defectLabels: defectVPFLabels,
-                                          ain1Counts: ain1VPFCounts,
-                                          ain2Counts: ain2VPFCounts,
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal: 4.0),
-                                        child: Text(
-                                          'Sviluppato da\n gruppo Process Eng e Capgemini',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                              fontSize: 18,
-                                              color: Colors.grey.shade700),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
       ),
     );
   }

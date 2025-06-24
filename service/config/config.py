@@ -14,6 +14,10 @@ ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
         "station_1_out_ng": ["MIN01"], 
         "station_2_out_ng": ["MIN02"]
     },
+    "VPF": {
+        "station_1_in":     ["VPF01"],
+        "station_1_out_ng": ["VPF01"],
+    },
 }
 
 # Default fallback values

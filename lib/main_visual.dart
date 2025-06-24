@@ -13,7 +13,9 @@ void main() async {
   // 🌍 Get the first segment of the path to determine the zone
   final uri = html.window.location;
   final pathSegments = uri.pathname!.split('/')..removeWhere((e) => e.isEmpty);
-  final zone = pathSegments.isNotEmpty ? pathSegments.first : 'AIN';
+  final zone = pathSegments.isNotEmpty
+      ? pathSegments.first
+      : 'VPF'; // Change this for testing with ZONES
 
   runApp(MyApp(zone: zone));
 }

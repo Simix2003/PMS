@@ -101,6 +101,9 @@ class _FindPageState extends State<FindPage> {
   // === VPF ===
   String? selectedVPF;
 
+  // === AIN ===
+  String? selectedAIN;
+
   final List<Map<String, String>> activeFilters = [];
 
   //Artboard? _riveArtboard;
@@ -157,6 +160,8 @@ class _FindPageState extends State<FindPage> {
     'NG9',
     'NG10',
   ];
+
+  final List<String> ainOptions = ['AIN NG2', 'AIN NG3'];
 
   final List<String> saldaturaOptions_1 = [
     'Stringa[1]',
@@ -481,6 +486,9 @@ class _FindPageState extends State<FindPage> {
       if (selectedDifettoGroup == null) return;
       if (selectedDifettoGroup == 'VPF') {
         compositeValue = selectedVPF!;
+      }
+      if (selectedDifettoGroup == 'AIN') {
+        compositeValue = selectedAIN!;
       } else {
         compositeValue = selectedDifettoGroup!;
       }
@@ -620,6 +628,7 @@ class _FindPageState extends State<FindPage> {
       selectedDifettoGroup = null;
       selectedGenerali = null;
       selectedVPF = null;
+      selectedAIN = null;
       selectedSaldaturaStringa = null;
       selectedSaldaturaSide = null;
       selectedSaldaturaPin = null;
@@ -819,6 +828,7 @@ class _FindPageState extends State<FindPage> {
               hint: 'Gruppo Difetto',
               value: selectedDifettoGroup,
               items: [
+                'AIN',
                 'Altro',
                 'Bad Soldering',
                 'Celle Rotte',
@@ -854,6 +864,7 @@ class _FindPageState extends State<FindPage> {
                   selectedLunghezzaStringa = null;
                   selectedGraffioSuCellaStringa = null;
                   selectedVPF = null;
+                  selectedAIN = null;
                 });
               },
             ),
@@ -875,6 +886,15 @@ class _FindPageState extends State<FindPage> {
                 value: selectedVPF,
                 items: vpfOptions,
                 onChanged: (val) => setState(() => selectedVPF = val),
+              ),
+
+            // === AIN ===
+            if (selectedDifettoGroup == 'AIN')
+              _buildStyledDropdown(
+                hint: 'Seleziona difetto AIN',
+                value: selectedAIN,
+                items: ainOptions,
+                onChanged: (val) => setState(() => selectedAIN = val),
               ),
 
             // === SALDATURA ===

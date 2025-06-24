@@ -127,6 +127,9 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                             timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
                             
                             refresh_top_defects_vpf(zone, timestamp)
+                        
+                        if success and channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
+                            await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_ain=True)
 
                         if success:
                             try:
@@ -353,8 +356,20 @@ async def read_data(
             ]
             data["Tipo_NG_VPF"] = vpf_values
             logging.debug(f"[{full_id}] ✅ VPF Defect flags: {vpf_values}")
+        
+        # Step 10: Read Defect NG for AIN                
+        ain_conf = config.get("difetti_ain")
+        if ain_conf and richiesta_ko and channel_id in ("AIN01", "AIN02"):
+            all_ain_values = [
+                extract_bool(buffer, ain_conf["byte"], i, start_byte)
+                for i in range(ain_conf["length"])
+            ]
+            # Take only 4th and 5th bits (index 3 and 4)
+            data["Tipo_NG_AIN"] = all_ain_values[3:5]
+            logging.debug(f"[{full_id}] ✅ AIN Defect flags (bit 4 & 5): {data['Tipo_NG_AIN']}")
 
-        # Step 10: Set NG flag
+
+        # Step 11: Set NG flag
         data["Compilato_Su_Ipad_Scarto_Presente"] = richiesta_ko
 
         return data

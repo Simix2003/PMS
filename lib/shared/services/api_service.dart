@@ -690,9 +690,6 @@ class ApiService {
         final List<dynamic> linesData = data['lines'];
         final List<dynamic> stationsData = data['stations'];
 
-        debugPrint(
-            "✅ Fetched ${linesData.length} lines and ${stationsData.length} stations");
-
         availableLines.clear();
         lineDisplayNames.clear();
         lineOptions.clear();
@@ -706,17 +703,9 @@ class ApiService {
           lineDisplayNames[name] = displayName;
           lineOptions.add(displayName);
         }
-
-        debugPrint("✅ availableLines after parsing: $availableLines");
-        debugPrint("✅ selectedLine before validation: $selectedLine");
-
         // Validate selectedLine
         if (!availableLines.contains(selectedLine)) {
-          debugPrint(
-              "⚠️ selectedLine '$selectedLine' is no longer valid. Resetting.");
           selectedLine = availableLines.isNotEmpty ? availableLines[0] : null;
-        } else {
-          debugPrint("✅ selectedLine '$selectedLine' still valid.");
         }
 
         for (final station in stationsData) {
@@ -725,8 +714,6 @@ class ApiService {
 
         // ⚠️ This line is redundant (overwrites the validated selection)
         // selectedLine = availableLines.isNotEmpty ? availableLines[0] : null;
-
-        debugPrint("✅ Final selectedLine: $selectedLine");
       } else {
         throw Exception('❌ Failed to load lines from server');
       }
@@ -742,8 +729,12 @@ class ApiService {
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
-    } else {
+    } else if (response.statusCode == 404) {
+      // XML not found (valid case)
       return null;
+    } else {
+      // Other errors (e.g. server down, 500, etc.)
+      throw Exception('Failed to fetch MBJ details: ${response.statusCode}');
     }
   }
 

@@ -2,6 +2,7 @@
 // ignore_for_file: must_be_immutable, deprecated_member_use
 
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 
 class DistancesSolarPanelWidget extends StatelessWidget {
   final double glassWidth;
@@ -165,6 +166,19 @@ class DistancesSolarPanelWidget extends StatelessWidget {
                               border: Border.all(color: Colors.red, width: 1),
                               borderRadius: BorderRadius.circular(2),
                             ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              defectIds.join(", "),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red,
+                                shadows: [
+                                  Shadow(blurRadius: 1, color: Colors.black)
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       );
@@ -217,10 +231,16 @@ class DistancesSolarPanelWidget extends StatelessWidget {
     );
     final warnStyle = baseStyle.copyWith(color: Colors.red);
 
+    double roundTo(double value, int places) {
+      final mod = math.pow(10.0, places);
+      return (value * mod).round() / mod;
+    }
+
     bool isOutOfTol(double v, String group) {
       final (min, max) =
           groupTolerances[group] ?? (double.negativeInfinity, double.infinity);
-      return v < min || v > max;
+      final rounded = roundTo(v, 1); // Match .toStringAsFixed(1)
+      return rounded < min || rounded > max;
     }
 
     bool shouldShow(double? v, bool groupFlag, String group) {
@@ -248,13 +268,13 @@ class DistancesSolarPanelWidget extends StatelessWidget {
         const grp = 'GlassRibbon';
         final flag = showGlassRibbon;
 
-        double? v(dynamic m, String side, String pos) =>
-            (m?[side]?[pos]) is num ? (m[side][pos] as num).toDouble() : null;
+        double? v(dynamic m, String side) =>
+            (m?[side]) is num ? (m[side] as num).toDouble() : null;
 
-        final lt = v(d0, 'left', 'top');
-        final lb = v(d1, 'left', 'bottom');
-        final rt = v(d0, 'right', 'top');
-        final rb = v(d1, 'right', 'bottom');
+        final lt = v(d0, 'left');
+        final lb = v(d1, 'left');
+        final rt = v(d0, 'right');
+        final rb = v(d1, 'right');
 
         if (shouldShow(lt, flag, grp)) {
           labels.add(Positioned(
@@ -295,11 +315,9 @@ class DistancesSolarPanelWidget extends StatelessWidget {
           final d = data[key];
           if (d == null) continue;
 
-          final topVal = (d['top'] as num?)?.toDouble();
-          final bottomVal = (d['bottom'] as num?)?.toDouble();
-          if (topVal == null || bottomVal == null) continue;
+          final val = (d['avg'] as num?)?.toDouble();
+          if (val == null) continue;
 
-          // Side vs middle tolerance group
           final grp = (key == 'y0' || key == 'y19')
               ? 'RibbonCellSide'
               : 'RibbonCellMiddle';
@@ -323,19 +341,12 @@ class DistancesSolarPanelWidget extends StatelessWidget {
               continue;
           }
 
-          if (shouldShow(topVal, flag, grp)) {
+          if (shouldShow(val, flag, grp)) {
             labels.add(Positioned(
                 left: x,
-                top: topY,
-                child: Text(topVal.toStringAsFixed(1),
-                    style: styleFor(topVal, grp))));
-          }
-          if (shouldShow(bottomVal, flag, grp)) {
-            labels.add(Positioned(
-                left: x,
-                top: bottomY,
-                child: Text(bottomVal.toStringAsFixed(1),
-                    style: styleFor(bottomVal, grp))));
+                top: (topY + bottomY) / 2,
+                child:
+                    Text(val.toStringAsFixed(1), style: styleFor(val, grp))));
           }
         }
       }
@@ -387,7 +398,6 @@ class DistancesSolarPanelWidget extends StatelessWidget {
     if (verticalCellGaps != null) {
       const grp = 'VerticalGap';
       final flag = showVerticalGaps;
-      const colsPerSide = _StylisedPanelPainter.colsPerSide;
       const ribbonWFrac = _StylisedPanelPainter.ribbonWFrac;
       const sideRibbonMargin = _StylisedPanelPainter.sideRibbonMargin;
       const ribbonToCellGap = _StylisedPanelPainter.ribbonToCellGap;
@@ -399,27 +409,40 @@ class DistancesSolarPanelWidget extends StatelessWidget {
       final rc = width * ribbonToCellGap;
       final gh = width * hSpacingFrac;
       final cw = width * cellWFrac;
+
       final l0 = em + rw + rc;
-      final r0 = width - em - rw - rc - (cw + gh) * colsPerSide;
+      final r0 = width - em - rw - rc - (cw + gh) * 10;
 
-      verticalCellGaps!.forEach((c, list) {
-        final colIdx = int.tryParse(c);
-        if (colIdx == null) return;
+      for (int row = 0; row < 5; row++) {
+        final rowData = verticalCellGaps!['$row'];
+        if (rowData == null) continue;
 
-        final x = (colIdx < colsPerSide)
-            ? l0 + colIdx * (cw + gh) + cw / 2
-            : r0 + (colIdx - colsPerSide) * (cw + gh) + cw / 2;
+        final y = rowH * (row + 1) - rowH / 10;
 
-        for (int r = 0; r < list.length; r++) {
-          final v = (list[r] as num?)?.toDouble();
-          if (v == null || !shouldShow(v, flag, grp)) continue;
-          final y = rowH * (r + 1) - rowH / 10;
+        for (final entry in (rowData['left'] as Map).entries) {
+          final col = int.tryParse(entry.key.substring(1));
+          final v = (entry.value as num?)?.toDouble();
+          if (col == null || v == null || !shouldShow(v, flag, grp)) continue;
+
+          final x = l0 + col * (cw + gh) + cw / 2;
           labels.add(Positioned(
               left: x - 8,
               top: y,
               child: Text(v.toStringAsFixed(1), style: styleFor(v, grp))));
         }
-      });
+
+        for (final entry in (rowData['right'] as Map).entries) {
+          final col = int.tryParse(entry.key.substring(1));
+          final v = (entry.value as num?)?.toDouble();
+          if (col == null || v == null || !shouldShow(v, flag, grp)) continue;
+
+          final x = r0 + (col - 10) * (cw + gh) + cw / 2;
+          labels.add(Positioned(
+              left: x - 8,
+              top: y,
+              child: Text(v.toStringAsFixed(1), style: styleFor(v, grp))));
+        }
+      }
     }
 
     // ───────────────────── 5) Glass ↔ Cell distances (Top/Bottom each cell) ─────

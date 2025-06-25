@@ -46,21 +46,31 @@ def get_mbj_details(modulo_id: str):
         raw_esito = int(final_judgement_str) if final_judgement_str and final_judgement_str.isdigit() else 10
         esito = 1 if raw_esito == 0 else 6 if raw_esito == 4 else 10
 
-        def check_any_value_below(data, threshold):
-            """Recursively check if any float value in nested dict/list is below the given threshold."""
+        TOLERANCES = {
+            "ribbon": (12.0, 2),
+            "cell": (1.0, 2),
+            "gap": (1.0, 2),
+            "glass": (12.0, 2),
+        }
+
+        def check_any_value_below(data, threshold, precision, depth=0):
             if isinstance(data, dict):
                 for value in data.values():
-                    if check_any_value_below(value, threshold):
-                        return True
+                    if isinstance(value, (int, float)):
+                        if round(value, precision) < threshold:
+                            return True
+                    elif isinstance(value, (dict, list)):
+                        if check_any_value_below(value, threshold, precision, depth + 1):
+                            return True
             elif isinstance(data, list):
                 for value in data:
-                    if isinstance(value, (int, float)) and value < threshold:
-                        return True
+                    if isinstance(value, (int, float)):
+                        if round(value, precision) < threshold:
+                            return True
                     elif isinstance(value, (dict, list)):
-                        if check_any_value_below(value, threshold):
+                        if check_any_value_below(value, threshold, precision, depth + 1):
                             return True
             return False
-
 
         ribbon_data = extract_InterconnectionGlassDistance(root)
         cell_data = extract_InterconnectionCellDistance(root)
@@ -69,12 +79,12 @@ def get_mbj_details(modulo_id: str):
         cell_defects = extract_CellDefects(root)
         has_el_defects = isinstance(cell_defects, dict) and len(cell_defects.get("cell_defects", [])) > 0
 
-        # Apply checks
         has_backlight_defects = (
-            check_any_value_below(ribbon_data, 12.0) or
-            check_any_value_below(cell_data, 1.0) or
-            check_any_value_below(cell_gap_data, 1.0) or
-            check_any_value_below(glass_cell_data, 12.0)
+            check_any_value_below(ribbon_data["interconnection_ribbon"], *TOLERANCES["ribbon"]) or
+            check_any_value_below(cell_data["interconnection_cell"], *TOLERANCES["cell"]) or
+            check_any_value_below(cell_gap_data["horizontal_cell_mm"], *TOLERANCES["gap"]) or
+            check_any_value_below(cell_gap_data["vertical_cell_mm"], *TOLERANCES["gap"]) or
+            check_any_value_below(glass_cell_data["glass_cell_mm"], *TOLERANCES["glass"])
         )
 
         return {

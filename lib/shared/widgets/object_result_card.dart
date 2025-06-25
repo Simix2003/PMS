@@ -188,21 +188,74 @@ class ObjectResultCard extends StatelessWidget {
                     final infoItems = [
                       _buildInfoRow(Icons.factory, 'Linea:',
                           data['line_display_name'] ?? '-', Colors.white),
-                      _buildInfoRow(Icons.precision_manufacturing, 'Stazione:',
-                          data['station_name'] ?? '-', Colors.white),
+                      FutureBuilder(
+                        future: data['station_name'] == 'ELL01'
+                            ? ApiService.fetchMBJDetails(data['id_modulo'])
+                                .catchError((_) => null)
+                            : Future.value(null),
+                        builder: (context, snapshot) {
+                          final isMBJ = data['station_name'] == 'ELL01';
+                          final showWarning = isMBJ &&
+                              snapshot.connectionState ==
+                                  ConnectionState.done &&
+                              snapshot.data == null;
+
+                          return Row(
+                            children: [
+                              Icon(Icons.precision_manufacturing,
+                                  color: Colors.white.withOpacity(0.8),
+                                  size: 18),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Stazione:',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.8),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      data['station_name'] ?? '-',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (showWarning)
+                                      const Padding(
+                                        padding: EdgeInsets.only(left: 6),
+                                        child: Icon(Icons.folder_off_rounded,
+                                            color: Colors.white, size: 18),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+
                       /*_buildInfoRow(Icons.person, 'Operatore:',
                           data['operator_id'] ?? '-', Colors.white),*/
-                      _buildInfoRow(
-                          Icons.work_history_sharp,
-                          'Stazione Precedente:',
-                          data['last_station_display_name'] ?? '-',
-                          Colors.white),
                       _buildInfoRow(Icons.access_time, 'Tempo Ciclo:',
                           _formatCycleTime(data['cycle_time']), Colors.white),
                       _buildInfoRow(Icons.login, 'Ingresso:',
                           _formatTime(data['start_time']), Colors.white),
                       _buildInfoRow(Icons.logout, 'Uscita:',
                           _formatTime(data['end_time']), Colors.white),
+                      if (data['station_name'] == "MIN01" ||
+                          data['station_name'] == "MIN02")
+                        _buildInfoRow(
+                            Icons.work_history_sharp,
+                            'Stringatrice:',
+                            data['last_station_display_name'] ?? '-',
+                            Colors.white),
                     ];
 
                     return Wrap(

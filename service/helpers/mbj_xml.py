@@ -1,16 +1,7 @@
-import os
-import logging
-
 from collections import defaultdict
 from statistics import mean
 from xml.etree.ElementTree import Element
 from xml.etree import ElementTree as ET
-
-def flip_right_half(data: list[float | None]) -> list[float | None]:
-    # Split into left (0–9) and right (10–19)
-    left = data[:10]
-    right = data[10:]
-    return left + list(reversed(right))
 
 def extract_InterconnectionGlassDistance(root):
     # Structure: row_index → {"left": [...], "right": [...]}
@@ -38,17 +29,9 @@ def extract_InterconnectionGlassDistance(root):
         right = distances_by_row[row]["right"]
 
         result[str(row)] = {
-            "left": {
-                "top": mean(left[:2]) if len(left) >= 2 else None,
-                "bottom": mean(left[-2:]) if len(left) >= 2 else None,
-            },
-            "right": {
-                "top": mean(right[:2]) if len(right) >= 2 else None,
-                "bottom": mean(right[-2:]) if len(right) >= 2 else None,
-            },
+            "left": mean(left) if left else None,
+            "right": mean(right) if right else None,
         }
-    #TODO
-    #AVG Di tutti i valori non solo gli ultimi 6
     
     return {"interconnection_ribbon": result}
 
@@ -89,14 +72,10 @@ def extract_InterconnectionCellDistance(root: Element) -> dict:
         for key in ("y0", "y9", "y10", "y19"):
             vals = raw[row][key]
             row_dict[key] = {
-                "top":    round(mean(vals[:2]), 3)  if len(vals) >= 2 else None,
-                "bottom": round(mean(vals[-2:]), 3) if len(vals) >= 2 else None,
+                "avg": round(mean(vals), 3) if vals else None
             }
         result[str(row)] = row_dict
     
-    #TODO
-    #Fare AVG tra tutti i valori non solo gli ultimi 3
-
     return {"interconnection_cell": result}
 
 def extract_RelativeCellPosition(root: ET.Element) -> dict:
@@ -119,44 +98,38 @@ def extract_RelativeCellPosition(root: ET.Element) -> dict:
         except (ValueError, TypeError):
             continue
 
-        # ✅ Horizontal gap: vertical line (X == 0), measure Y distance
+        # Horizontal gap: posX == 0 → measure posY
         if posX is not None and float(posX) == 0.0 and posY is not None:
             if row in range(6) and col in range(20):
-                val = float(posY)
-                horizontal[row][col].append(val)
+                horizontal[row][col].append(float(posY))
 
-        # ✅ Vertical gap: no print for now
+        # Vertical gap: posY == 0 → measure posX between row and row-1
         if posY is not None and float(posY) == 0.0 and posX is not None:
             row_above = row - 1
             if row_above in range(5) and col in range(20):
                 vertical[col][row_above].append(float(posX))
 
-    def mean_first_last(vals):
-        selected = vals[:2] + vals[-2:] if len(vals) >= 2 else []
-        return round(mean(selected), 3) if selected else None
-    
-    #TODO
-    #AVG Prima cella (X,0) 
-    #AVG Ultima cella (X,19)
-    #AVG Cella In mezzo (X,4) ( lato destro sarà (X,14))
+    def mean_all(vals: list[float]) -> float | None:
+        return round(mean(vals), 3) if vals else None
 
-    horiz_result = {}
-    for row in range(6):
-        row_result = []
-        for col in range(20):
-            values = horizontal[row][col]
-            avg = mean_first_last(values)
-            row_result.append(avg)
-        horiz_result[str(row)] = row_result
-
-    vert_result = {
-        str(col): [mean_first_last(vertical[col][row]) for row in range(5)] + [None]
-        for col in range(20)
+    horiz_result = {
+        str(row): [mean_all(horizontal[row][col]) for col in range(20)]
+        for row in range(6)
     }
+
+    # Extract only specific cols per row for vertical summary
+    vertical_summary = {}
+    target_cols_left = [0, 4, 9]
+    target_cols_right = [10, 14, 19]
+
+    for row in range(5):  # only 0–4, since vertical gap is between row and row+1
+        left = {f"c{col}": mean_all(vertical[col][row]) for col in target_cols_left}
+        right = {f"c{col}": mean_all(vertical[col][row]) for col in target_cols_right}
+        vertical_summary[str(row)] = {"left": left, "right": right}
 
     return {
         "horizontal_cell_mm": horiz_result,
-        "vertical_cell_mm": vert_result
+        "vertical_cell_mm": vertical_summary
     }
 
 def extract_GlassCellDistance(root: ET.Element) -> dict:
@@ -198,15 +171,10 @@ def extract_GlassCellDistance(root: ET.Element) -> dict:
             continue
 
     def avg(vals: list[float]) -> float | None:
-        return round(mean(vals[:2] + vals[-2:]), 3) if len(vals) >= 2 else None
-    #TODO
-    # Fare AVG di tutti i valori della Cella (5,0) e po (5,19)
+        return round(mean(vals), 3) if vals else None
 
     top_row    = [avg(raw_top[c])    for c in range(20)]
     bottom_row = [avg(raw_bottom[c]) for c in range(20)]
-
-    #top_row    = flip_right_half(top_row_raw)
-    #bottom_row = flip_right_half(bottom_row_raw)
 
     return {"glass_cell_mm": {"top": top_row, "bottom": bottom_row}}
 

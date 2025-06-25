@@ -43,14 +43,14 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
       appBar: AppBar(
         title: Text('Dettagli ELL – $idModulo'),
         actions: [
-          IconButton(
+          /*IconButton(
             icon: Icon(
                 showDetailedView ? Icons.visibility : Icons.visibility_off),
             tooltip: showDetailedView ? 'Nascondi Dettagli' : 'Mostra Dettagli',
             onPressed: () {
               setState(() => showDetailedView = !showDetailedView);
             },
-          ),
+          ),*/
         ],
       ),
       body: FutureBuilder<Map<String, dynamic>?>(
@@ -127,7 +127,7 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
 
           return Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1300),
+              constraints: const BoxConstraints(maxWidth: 1150),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: showDetailedView
@@ -177,11 +177,11 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
                                             showRibbons,
                                             (v) => setState(
                                                 () => showRibbons = v!)),
-                                        _buildCheckboxTile(
+                                        /* _buildCheckboxTile(
                                             'Gap Orizzontali',
                                             showHorizontalGaps,
                                             (v) => setState(
-                                                () => showHorizontalGaps = v!)),
+                                                () => showHorizontalGaps = v!)),*/
                                         _buildCheckboxTile(
                                             'Gap Verticali',
                                             showVerticalGaps,

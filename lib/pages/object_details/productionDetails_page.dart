@@ -44,7 +44,6 @@ class _ProductionDetailPageState extends State<ProductionDetailPage> {
 
     setState(() {
       _issuePaths = result['issue_paths'];
-      print('result, $result');
       _pictures = List<Map<String, String>>.from(result['pictures']);
     });
   }

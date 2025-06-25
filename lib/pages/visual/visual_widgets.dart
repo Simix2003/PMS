@@ -520,11 +520,8 @@ class ThroughputBarChart extends StatelessWidget {
 
   double _calculateSmartMaxY(int maxTotal, bool showTarget) {
     if (!showTarget) {
-      // Scale based only on max bar height
       return maxTotal + (maxTotal * 0.1).clamp(20, 100);
     }
-
-    // If target is shown, ensure it's included in maxY
     final base = globalTarget > maxTotal ? globalTarget : maxTotal.toDouble();
     final padding = (base * 0.1).clamp(20, 100);
     return base + padding;
@@ -559,8 +556,7 @@ class ThroughputBarChart extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  // Show global target
-                  Spacer(),
+                  const Spacer(),
                   Text(
                     'Target: ${globalTarget.toInt()}',
                     style: const TextStyle(
@@ -583,8 +579,8 @@ class ThroughputBarChart extends StatelessWidget {
                           enabled: true,
                           touchTooltipData: BarTouchTooltipData(
                             getTooltipColor: (_) => Colors.transparent,
-                            tooltipPadding: EdgeInsets.zero, // ← no padding
-                            tooltipMargin: 0, // ← no margin
+                            tooltipPadding: EdgeInsets.zero,
+                            tooltipMargin: 0,
                             fitInsideHorizontally: true,
                             fitInsideVertically: true,
                             getTooltipItem: (group, groupIndex, rod, rodIndex) {
@@ -592,8 +588,7 @@ class ThroughputBarChart extends StatelessWidget {
                               return BarTooltipItem(
                                 value,
                                 const TextStyle(
-                                  color: Colors
-                                      .black, // You can pick the color to match your bar
+                                  color: Colors.black,
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -660,12 +655,19 @@ class ThroughputBarChart extends StatelessWidget {
                             children: List.generate(barCount, (index) {
                               final ok = data[index]['ok']!;
                               if (ok <= 0) {
-                                return const SizedBox(); // Skip if ok == 0
+                                return const SizedBox();
                               }
 
                               final barCenterX = (2 * index + 1) * groupSpace;
                               final okHeight = chartHeight * (ok / maxY);
-                              final topOffset = chartHeight - okHeight;
+                              final labelHeight = 16.0;
+                              final topOfGreenBar = chartHeight - okHeight;
+
+                              final topOffset = okHeight >= 24
+                                  ? topOfGreenBar + 4 // inside the green bar
+                                  : (topOfGreenBar -
+                                          labelHeight) // above the bar
+                                      .clamp(0.0, chartHeight - labelHeight);
 
                               final text = '$ok';
                               final offset = text.length == 1
@@ -683,6 +685,12 @@ class ThroughputBarChart extends StatelessWidget {
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
+                                    shadows: [
+                                      Shadow(
+                                          offset: Offset(0, 0),
+                                          blurRadius: 2,
+                                          color: Colors.black),
+                                    ],
                                   ),
                                 ),
                               );
@@ -877,7 +885,7 @@ class HourlyBarChart extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: band['shift'] == currentShift
                                   ? Colors.white.withOpacity(0.0)
-                                  : Colors.grey.withOpacity(0.12),
+                                  : Colors.grey.withOpacity(0.18),
                               borderRadius: const BorderRadius.vertical(
                                 top: Radius.circular(8),
                                 bottom: Radius.circular(8),
@@ -1454,7 +1462,7 @@ class Yield2LineChart extends StatelessWidget {
       final isCurrent = band['shift'] == currentShift;
       final color = isCurrent
           ? Colors.white.withOpacity(0.0) // transparent for current shift
-          : Colors.grey.withOpacity(0.15); // light grey for others
+          : Colors.grey.withOpacity(0.18); // light grey for others
 
       return VerticalRangeAnnotation(
         x1: band['start'].toDouble(),

@@ -17,7 +17,7 @@ from service.routes.broadcast import broadcast
 from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_string
-from service.helpers.visual_helper import refresh_top_defects_qg2, refresh_top_defects_vpf, update_visual_data_on_new_module
+from service.helpers.visual_helper import refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
 
 def get_zone_from_station(station: str) -> Optional[str]:
     for zone, cfg in ZONE_SOURCES.items():
@@ -135,6 +135,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                             timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
                             
                             refresh_top_defects_vpf("AIN", timestamp)
+                            refresh_vpf_defects_data(timestamp)
                         
                         if success and channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
                             await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_ain=True)

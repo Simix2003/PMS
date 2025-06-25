@@ -687,7 +687,6 @@ def update_visual_data_on_new_module(
         try:
             loop = asyncio.get_running_loop()
             payload = copy.deepcopy(data)
-            print('payload for zone :', zone, 'is:', payload)
             loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(
                     broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
@@ -1197,3 +1196,131 @@ def refresh_median_cycle_time_vpf(now: Optional[datetime] = None) -> float:
     except Exception as e:
         logger.exception(f"❌ Failed to refresh VPF median cycle time: {e}")
         return 0.0
+
+def refresh_vpf_defects_data(now: datetime) -> None:
+    print('🔄 Refreshing defects_vpf and eq_defects for VPF')
+    category_station_map = {
+        'NG1':   [(40, 'RWS01'), (3, 'RMI01'), (93, 'LMN01'), (47, 'LMN02')],
+        'NG1.1': [(40, 'RWS01'), (3, 'RMI01'), (93, 'LMN01'), (47, 'LMN02'), (29, 'AIN01'), (30, 'AIN02')],
+        'NG2':   [(4, 'STR01'), (5, 'STR02'), (6, 'STR03'), (7, 'STR04'), (8, 'STR05')],
+        'NG2.1': [(40, 'RWS01'), (3, 'RMI01')],
+        'NG3':   [(29, 'AIN01'), (30, 'AIN02'), (93, 'LMN01'), (47, 'LMN02'), (40, 'RWS01'), (3, 'RMI01')],
+        'NG3.1': [(4, 'STR01'), (5, 'STR02'), (6, 'STR03'), (7, 'STR04'), (8, 'STR05')],
+        'NG7':   [(93, 'LMN01'), (47, 'LMN02')],
+        'NG7.1': [(93, 'LMN01'), (47, 'LMN02')],
+    }
+
+    try:
+        if now is None:
+            now = datetime.now()
+
+        with _update_lock:
+            if "VPF" not in global_state.visual_data:
+                logger.warning("⚠️ VPF zone data not found in global_state")
+                return
+
+            data = global_state.visual_data["VPF"]
+            shift_start, shift_end = get_shift_window(now)
+            conn = get_mysql_connection()
+            cursor = conn.cursor()
+
+            # Get NG production IDs (first occurrence at station 56)
+            sql_vpf_productions = """
+                SELECT p56.id
+                FROM productions p56
+                WHERE p56.esito = 6
+                  AND p56.station_id = 56
+                  AND p56.start_time BETWEEN %s AND %s
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM productions p_prev
+                      WHERE p_prev.object_id = p56.object_id
+                        AND p_prev.station_id = 56
+                        AND p_prev.start_time < p56.start_time
+                  )
+            """
+            cursor.execute(sql_vpf_productions, (shift_start, shift_end))
+            vpf_rows = cursor.fetchall()
+            vpf_prod_ids = [row["id"] for row in vpf_rows]
+
+            # --- defects_vpf ---
+            if not vpf_prod_ids:
+                data["defects_vpf"] = []
+            else:
+                placeholders = ','.join(['%s'] * len(vpf_prod_ids))
+                sql_vpf_defects = f"""
+                    SELECT d.category, COUNT(*) AS count
+                    FROM object_defects od
+                    JOIN defects d ON od.defect_id = d.id
+                    WHERE od.production_id IN ({placeholders})
+                    GROUP BY d.category
+                """
+                cursor.execute(sql_vpf_defects, vpf_prod_ids)
+                data["defects_vpf"] = [
+                    {"label": row["category"], "count": row["count"]}
+                    for row in cursor.fetchall()
+                ]
+
+            # --- eq_defects ---
+            eq_defects = {
+                cat: {station_name: 0 for _, station_name in station_info}
+                for cat, station_info in category_station_map.items()
+            }
+
+            if vpf_prod_ids:
+                sql_defect_objects = f"""
+                    SELECT d.category, p.object_id
+                    FROM object_defects od
+                    JOIN defects d ON d.id = od.defect_id
+                    JOIN productions p ON p.id = od.production_id
+                    WHERE od.production_id IN ({','.join(['%s'] * len(vpf_prod_ids))})
+                """
+                cursor.execute(sql_defect_objects, vpf_prod_ids)
+                defect_to_objects = defaultdict(set)
+                for row in cursor.fetchall():
+                    defect_to_objects[row["category"]].add(row["object_id"])
+
+                for cat, station_info in category_station_map.items():
+                    station_ids = [sid for sid, _ in station_info]
+                    station_names = {sid: name for sid, name in station_info}
+                    object_ids = defect_to_objects.get(cat, set())
+                    if not station_ids or not object_ids:
+                        continue
+
+                    obj_ph = ','.join(['%s'] * len(object_ids))
+                    stn_ph = ','.join(['%s'] * len(station_ids))
+
+                    sql_check_passages = f"""
+                        SELECT p.station_id, COUNT(DISTINCT p.object_id) AS count
+                        FROM productions p
+                        WHERE p.object_id IN ({obj_ph})
+                          AND p.station_id IN ({stn_ph})
+                          AND p.start_time < (
+                              SELECT MIN(p2.start_time)
+                              FROM productions p2
+                              WHERE p2.station_id = 56
+                                AND p2.object_id = p.object_id
+                          )
+                        GROUP BY p.station_id
+                    """
+                    cursor.execute(sql_check_passages, (*object_ids, *station_ids))
+                    for row in cursor.fetchall():
+                        sid = row["station_id"]
+                        count = row["count"]
+                        station_name = station_names.get(sid)
+                        if station_name:
+                            eq_defects[cat][station_name] = count
+
+            data["eq_defects"] = eq_defects
+
+            # --- Broadcast update ---
+            loop = asyncio.get_running_loop()
+            payload = copy.deepcopy(data)
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    broadcast_zone_update(line_name="Linea2", zone="VPF", payload=payload)
+                )
+            )
+
+    except Exception as e:
+        logger.exception(f"❌ refresh_vpf_defects_data() FAILED: {e}")

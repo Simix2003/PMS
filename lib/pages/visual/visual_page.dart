@@ -81,10 +81,8 @@ class _VisualPageState extends State<VisualPage> {
   int reEntered_1 = 0;
   List<Map<String, dynamic>> speedRatioData = [];
   List<Map<String, dynamic>> defectsVPF = [];
-  List<Map<String, dynamic>> eqDefects = [];
+  Map<String, Map<String, int>> eqDefects = {};
   List<int> VPFCounts = [];
-  double medianSec = 40;
-  double currentSec = 75;
 
   Map<String, int> calculateEscalationCounts(
       List<Map<String, dynamic>> escalations) {
@@ -249,8 +247,13 @@ class _VisualPageState extends State<VisualPage> {
             List<Map<String, dynamic>>.from(response['defects_vpf'] ?? []);
 
         // ─── Equipment Defects (EQ) ─────────────────────
-        eqDefects =
-            List<Map<String, dynamic>>.from(response['eq_defects'] ?? []);
+        eqDefects = (response['eq_defects'] != null)
+            ? Map<String, Map<String, int>>.from(
+                response['eq_defects'].map(
+                  (k, v) => MapEntry(k, Map<String, int>.from(v as Map)),
+                ),
+              )
+            : {};
 
         isLoading = false;
       });
@@ -623,8 +626,7 @@ class _VisualPageState extends State<VisualPage> {
                         defectsVPF: defectsVPF,
                         In_1: In_1,
                         ngOut_1: ngOut_1,
-                        medianSec: medianSec,
-                        currentSec: currentSec,
+                        eqDefects: eqDefects,
                       )
                     : const Center(
                         child: Text(

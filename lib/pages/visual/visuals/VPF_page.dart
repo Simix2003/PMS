@@ -26,8 +26,7 @@ class VpfVisualsPage extends StatefulWidget {
   final Map<String, int> counts;
   final List<Map<String, dynamic>> defectsVPF;
   final int last_n_shifts;
-  final double medianSec;
-  final double currentSec;
+  final Map<String, Map<String, int>> eqDefects;
 
   const VpfVisualsPage({
     super.key,
@@ -51,8 +50,7 @@ class VpfVisualsPage extends StatefulWidget {
     required this.defectsVPF,
     required this.last_n_shifts,
     required this.yieldLast8h_1,
-    required this.medianSec,
-    required this.currentSec,
+    required this.eqDefects,
   });
 
   @override
@@ -654,9 +652,12 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                                                     ),
                                                   ),
                                                   SpeedBar(
-                                                    medianSec: widget.medianSec,
+                                                    medianSec:
+                                                        widget.speedRatioData[0]
+                                                            ['medianSec'],
                                                     currentSec:
-                                                        widget.currentSec,
+                                                        widget.speedRatioData[0]
+                                                            ['currentSec'],
                                                     textColor: widget.textColor,
                                                   ),
                                                 ],
@@ -983,7 +984,10 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Flexible(flex: 3, child: DefectMatrixCard()),
+            Flexible(
+              flex: 3,
+              child: DefectMatrixCard(defectStationCountMap: widget.eqDefects),
+            ),
             Flexible(
               flex: 4,
               child: SizedBox(
@@ -992,11 +996,29 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
               ),
             ),
             Flexible(
-                flex: 2,
-                child: SizedBox(
-                  height: 460,
-                  child: StackedDefectBarCard(defects: widget.defectsVPF),
-                )),
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: 410,
+                    child: StackedDefectBarCard(defects: widget.defectsVPF),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4.0),
+                    child: Text(
+                      'Sviluppato da\n gruppo Process Eng e Capgemini',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 18,
+                        color:
+                            Color(0xFF616161), // same as Colors.grey.shade700
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         )
       ],

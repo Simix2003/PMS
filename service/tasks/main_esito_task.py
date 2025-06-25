@@ -347,17 +347,31 @@ async def read_data(
             values[0] = True  # Default fallback
         data["Lavorazione_Eseguita_Su_Stringatrice"] = values
 
-        # Step 9: Read Defect NG for VPF
-        vpf_conf = config.get("difetti_vpf")
+        # Step 9: Read Defect NG for VPF BYTE48
+        vpf_values_1 = []
+        vpf_conf = config.get("difetti_vpf_1")
         if vpf_conf and richiesta_ko and channel_id == "VPF01":
-            vpf_values = [
+            vpf_values_1 = [
                 extract_bool(buffer, vpf_conf["byte"], i, start_byte)
                 for i in range(vpf_conf["length"])
             ]
-            data["Tipo_NG_VPF"] = vpf_values
-            logging.debug(f"[{full_id}] ✅ VPF Defect flags: {vpf_values}")
-        
-        # Step 10: Read Defect NG for AIN                
+
+        # Step 10: Read Defect NG for VPF BYTE49
+        vpf_values_2 = []
+        vpf_conf = config.get("difetti_vpf_2")
+        if vpf_conf and richiesta_ko and channel_id == "VPF01":
+            vpf_values_2 = [
+                extract_bool(buffer, vpf_conf["byte"], i, start_byte)
+                for i in range(vpf_conf["length"])
+            ]
+
+        # ✅ COMBINE VPF DEFECTS
+        combined_vpf_values = vpf_values_1 + vpf_values_2
+        if combined_vpf_values:
+            data["Tipo_NG_VPF"] = combined_vpf_values
+            logging.debug(f"[{full_id}] ✅ VPF Defect flags: {combined_vpf_values}")
+
+        # Step 11: Read Defect NG for AIN                
         ain_conf = config.get("difetti_ain")
         if ain_conf and richiesta_ko and channel_id in ("AIN01", "AIN02"):
             all_ain_values = [
@@ -369,7 +383,7 @@ async def read_data(
             logging.debug(f"[{full_id}] ✅ AIN Defect flags (bit 4 & 5): {data['Tipo_NG_AIN']}")
 
 
-        # Step 11: Set NG flag
+        # Step 12: Set NG flag
         data["Compilato_Su_Ipad_Scarto_Presente"] = richiesta_ko
 
         return data

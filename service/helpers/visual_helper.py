@@ -101,6 +101,9 @@ def compute_yield(good: int, ng: int):
         return 0  # or return None if you want to hide it from the frontend
     return round((good / total) * 100)
 
+def time_to_seconds(time_val: timedelta) -> int:
+    return time_val.seconds if isinstance(time_val, timedelta) else 0
+
 def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     try:
         if now is None:
@@ -119,6 +122,17 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
 
 # ─────────────────────────────────────────────────────────────────────────────
 def _compute_snapshot_vpf(now: datetime) -> dict:
+    category_station_map = {
+    'NG1':   [(40, 'RWS01'), (3, 'RMI01'), (93, 'LMN01'), (47, 'LMN02')],
+    'NG1.1': [(40, 'RWS01'), (3, 'RMI01'), (93, 'LMN01'), (47, 'LMN02'), (29, 'AIN01'), (30, 'AIN02')],
+    'NG2':   [(4, 'STR01'), (5, 'STR02'), (6, 'STR03'), (7, 'STR04'), (8, 'STR05')],
+    'NG2.1': [(40, 'RWS01'), (3, 'RMI01')],
+    'NG3':   [(29, 'AIN01'), (30, 'AIN02'), (93, 'LMN01'), (47, 'LMN02'), (40, 'RWS01'), (3, 'RMI01')],
+    'NG3.1': [(4, 'STR01'), (5, 'STR02'), (6, 'STR03'), (7, 'STR04'), (8, 'STR05')],
+    'NG7':   [(93, 'LMN01'), (47, 'LMN02')],
+    'NG7.1': [(93, 'LMN01'), (47, 'LMN02')],
+    }
+
     try:
         if now is None:
             now = datetime.now()
@@ -182,7 +196,7 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
 
             s1_y8h.append({
                 "hour": label,
-                "good": s1_g,          # ➊ keep counts
+                "good": s1_g,
                 "ng":   s1_n,
                 "yield": compute_yield(s1_g, s1_n),
                 "start": h_start.isoformat(),
@@ -196,6 +210,13 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
             WHERE p56.esito = 6
             AND p56.station_id = 56
             AND p56.start_time BETWEEN %s AND %s
+            AND NOT EXISTS (
+                SELECT 1
+                FROM productions p_prev
+                WHERE p_prev.object_id = p56.object_id
+                AND p_prev.station_id = 56
+                AND p_prev.start_time < p56.start_time
+            )
         """
         cursor.execute(sql_vpf_productions, (shift_start, shift_end))
         vpf_rows = cursor.fetchall()
@@ -219,17 +240,100 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
                 for row in cursor.fetchall()
             ]
 
-        eq_defects = None
+        if not vpf_prod_ids:
+            eq_defects = {}
+        else:
+            eq_defects = {}
+
+            # Get mapping defect_category → set(object_id)
+            sql_defect_objects = f"""
+                SELECT d.category, p.object_id
+                FROM object_defects od
+                JOIN defects d ON d.id = od.defect_id
+                JOIN productions p ON p.id = od.production_id
+                WHERE od.production_id IN ({','.join(['%s'] * len(vpf_prod_ids))})
+            """
+            cursor.execute(sql_defect_objects, vpf_prod_ids)
+            defect_to_objects = {}
+            for row in cursor.fetchall():
+                cat = row["category"]
+                oid = row["object_id"]
+                defect_to_objects.setdefault(cat, set()).add(oid)
+
+            for cat, station_info in category_station_map.items():
+                station_ids = [sid for sid, _ in station_info]
+                station_names = {sid: name for sid, name in station_info}
+
+                # Prefill all stations with count 0
+                eq_defects[cat] = {name: 0 for _, name in station_info}
+
+                if cat not in defect_to_objects:
+                    continue
+
+                object_ids = defect_to_objects[cat]
+                if not station_ids or not object_ids:
+                    continue
+
+                object_placeholders = ','.join(['%s'] * len(object_ids))
+                station_placeholders = ','.join(['%s'] * len(station_ids))
+
+                sql_check_passages = f"""
+                    SELECT p.station_id, COUNT(DISTINCT p.object_id) AS count
+                    FROM productions p
+                    WHERE p.object_id IN ({object_placeholders})
+                    AND p.station_id IN ({station_placeholders})
+                    AND p.start_time < (
+                        SELECT MIN(p2.start_time)
+                        FROM productions p2
+                        WHERE p2.station_id = 56
+                        AND p2.object_id = p.object_id
+                    )
+                    GROUP BY p.station_id
+                """
+                cursor.execute(sql_check_passages, (*object_ids, *station_ids))
+                rows = cursor.fetchall()
+
+                for row in rows:
+                    sid = row["station_id"]
+                    count = row["count"]
+                    station_name = station_names.get(sid)
+                    if station_name:
+                        eq_defects[cat][station_name] = count
+
+        # -------- speed_ratio (median vs current cycle time at station 56) ------
+        sql_speed_data = """
+            SELECT p.cycle_time
+            FROM productions p
+            WHERE p.station_id = 56
+            AND p.cycle_time IS NOT NULL
+            AND p.start_time BETWEEN %s AND %s
+            ORDER BY p.start_time ASC
+        """
+        cursor.execute(sql_speed_data, (shift_start, shift_end))
+        cycle_times = [time_to_seconds(row["cycle_time"]) for row in cursor.fetchall()]
+
+        if cycle_times:
+            from statistics import median
+
+            median_sec = median(cycle_times)
+            current_sec = min(cycle_times[-1], 120)
+            speed_ratio = [{
+                "medianSec": median_sec,
+                "currentSec": current_sec
+            }]
+        else:
+            speed_ratio = []
 
     except Exception as e:
         logger.exception(f"❌ compute_zone_snapshot() FAILED for zone=AIN: {e}")
         raise
-    
+    print(speed_ratio)
+
     return {
     "station_1_in": s1_in,
     "station_1_out_ng": s1_ng,
     "station_1_re_entered": s1_reEntered,
-    "speed_ratio": None,
+    "speed_ratio": speed_ratio,
     "station_1_yield": s1_y,
     "station_1_shifts": s1_yield_shifts,
     "station_1_yield_last_8h": s1_y8h,

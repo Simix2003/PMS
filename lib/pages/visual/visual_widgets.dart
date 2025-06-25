@@ -2057,7 +2057,7 @@ class SpeedBar extends StatelessWidget {
                       ],
                       stops: [
                         0,
-                        0.5,
+                        0.6,
                         0.9,
                       ],
                     ),
@@ -2425,33 +2425,12 @@ class StackedDefectBarCard extends StatelessWidget {
 }
 
 class DefectMatrixCard extends StatelessWidget {
-  const DefectMatrixCard({super.key});
+  final Map<String, Map<String, int>> defectStationCountMap;
 
-  // Map of defect → station → count
-  static const Map<String, Map<String, int>> defectStationCountMap = {
-    'NG1': {'RWS01': 5, 'RMI01': 3, 'LMN01': 2, 'LMN02': 1},
-    'NG1.1': {
-      'RWS01': 2,
-      'RMI01': 4,
-      'LMN01': 1,
-      'LMN02': 1,
-      'AIN01': 3,
-      'AIN02': 2
-    },
-    'NG2': {'STR01': 7, 'STR02': 6, 'STR03': 5, 'STR04': 4, 'STR05': 3},
-    'NG2.1': {'RWS01': 1, 'RMI01': 1},
-    'NG3': {
-      'AIN01': 2,
-      'AIN02': 5,
-      'LMN01': 3,
-      'LMN02': 1,
-      'RWS01': 4,
-      'RMI01': 1
-    },
-    'NG3.1': {'STR01': 3, 'STR02': 2, 'STR03': 1, 'STR04': 1, 'STR05': 4},
-    'NG7': {'LMN01': 2, 'LMN02': 2},
-    'NG7.1': {'LMN01': 1, 'LMN02': 3},
-  };
+  const DefectMatrixCard({
+    super.key,
+    required this.defectStationCountMap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2486,9 +2465,121 @@ class DefectMatrixCard extends StatelessWidget {
                   3.2, // <-- Increase aspect ratio makes cards shorter
               children: defectStationCountMap.entries.map((entry) {
                 final defect = entry.key;
-                final stationCounts = entry.value;
+                final counts = entry.value;
 
-                final sortedStations = stationCounts.entries
+                if (defect == 'NG1.1' || defect == 'NG3') {
+                  final rowStations = ['AIN01', 'AIN02']; // + LMN if needed
+                  final allValuesAreZero = counts.values.every((v) => v == 0);
+
+                  if (allValuesAreZero) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.blueGrey[50],
+                        border: Border.all(color: Colors.black),
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            defect,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text('Nessun dato',
+                              style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    );
+                  }
+                  return Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.blueGrey[50],
+                      border: Border.all(color: Colors.black),
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          defect,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Table(
+                          defaultVerticalAlignment:
+                              TableCellVerticalAlignment.top,
+                          columnWidths: const {
+                            0: FixedColumnWidth(100),
+                            1: FixedColumnWidth(50),
+                            2: FixedColumnWidth(50),
+                          },
+                          children: [
+                            TableRow(
+                              children: [
+                                const SizedBox(),
+                                const Center(
+                                  child: Text('RMI01',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                const Center(
+                                  child: Text('RWS01',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                            TableRow(
+                              children: [
+                                Padding(
+                                  // ⬅️ Add padding to give slight space
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: rowStations.map((name) {
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 1), // ⬅️ reduce from 2
+                                        child:
+                                            Text('$name: ${counts[name] ?? 0}'),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                                Center(
+                                  child: Text(
+                                    '${counts['RMI01'] ?? 0}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                Center(
+                                  child: Text(
+                                    '${counts['RWS01'] ?? 0}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // Default rendering for other defects
+                final sortedStations = counts.entries
                     .where((e) => e.value > 0)
                     .toList()
                   ..sort((a, b) => b.value.compareTo(a.value));
@@ -2498,12 +2589,11 @@ class DefectMatrixCard extends StatelessWidget {
                     text: TextSpan(
                       style: const TextStyle(fontSize: 11, color: Colors.black),
                       children: [
-                        TextSpan(text: '${e.key}: '), // Station name
+                        TextSpan(text: '${e.key}: '),
                         TextSpan(
                           text: '${e.value}',
                           style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13), // Bold count
+                              fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                       ],
                     ),
@@ -2521,17 +2611,15 @@ class DefectMatrixCard extends StatelessWidget {
                     color: Colors.blueGrey[50],
                     border: Border.all(color: Colors.black),
                   ),
-                  padding: const EdgeInsets.all(8), // less padding
+                  padding: const EdgeInsets.all(8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min, // shrink vertically
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         defect,
                         style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                            fontWeight: FontWeight.bold, fontSize: 15),
                       ),
                       const SizedBox(height: 6),
                       sortedStations.isEmpty

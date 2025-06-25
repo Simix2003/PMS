@@ -342,11 +342,17 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                  widget.ngOut_1,
-                                                  widget.In_1,
-                                                ),
+                                                color: widget.ngOut_1 == 0
+                                                    ? Colors.white
+                                                    : getNgColor(widget.ngOut_1,
+                                                        widget.In_1),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: widget.ngOut_1 == 0
+                                                      ? Colors.black
+                                                      : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -460,10 +466,22 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                                                       width: widget.circleSize,
                                                       height: widget.circleSize,
                                                       decoration: BoxDecoration(
-                                                        color: getNgColor(
-                                                            widget.ngOut_1,
-                                                            widget.In_1),
+                                                        color: widget.ngOut_1 ==
+                                                                0
+                                                            ? Colors.white
+                                                            : getNgColor(
+                                                                widget.ngOut_1,
+                                                                widget.In_1),
                                                         shape: BoxShape.circle,
+                                                        border: Border.all(
+                                                          color: widget
+                                                                      .ngOut_1 ==
+                                                                  0
+                                                              ? Colors.black
+                                                              : Colors
+                                                                  .transparent,
+                                                          width: 2,
+                                                        ),
                                                       ),
                                                     ),
                                                     const SizedBox(width: 8),
@@ -731,11 +749,20 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getYieldColor(
-                                                  widget.currentYield_1,
-                                                  yield_target,
-                                                ),
+                                                color: widget.currentYield_1 ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getYieldColor(
+                                                        widget.currentYield_1,
+                                                        yield_target),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      widget.currentYield_1 == 0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -793,11 +820,24 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                                                       width: widget.circleSize,
                                                       height: widget.circleSize,
                                                       decoration: BoxDecoration(
-                                                        color: getYieldColor(
-                                                            widget
-                                                                .currentYield_1,
-                                                            yield_target),
+                                                        color: widget
+                                                                    .currentYield_1 ==
+                                                                0
+                                                            ? Colors.white
+                                                            : getYieldColor(
+                                                                widget
+                                                                    .currentYield_1,
+                                                                yield_target),
                                                         shape: BoxShape.circle,
+                                                        border: Border.all(
+                                                          color: widget
+                                                                      .currentYield_1 ==
+                                                                  0
+                                                              ? Colors.black
+                                                              : Colors
+                                                                  .transparent,
+                                                          width: 2,
+                                                        ),
                                                       ),
                                                     ),
                                                     const SizedBox(width: 8),

@@ -1552,9 +1552,61 @@ class YieldLineChart extends StatelessWidget {
     required this.target,
   });
 
+  List<Map<String, dynamic>> computeShiftBands(
+      List<Map<String, dynamic>> data) {
+    List<Map<String, dynamic>> bands = [];
+    int? startIdx;
+    String? currentShift;
+
+    String getShift(String hourStr) {
+      final hour = int.parse(hourStr.split(':')[0]);
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    for (int i = 0; i < data.length; i++) {
+      String shift = getShift(data[i]['hour']);
+      if (shift != currentShift) {
+        if (startIdx != null && currentShift != null) {
+          bands.add({'start': startIdx, 'end': i - 1, 'shift': currentShift});
+        }
+        startIdx = i;
+        currentShift = shift;
+      }
+    }
+
+    if (startIdx != null && currentShift != null) {
+      bands.add(
+          {'start': startIdx, 'end': data.length - 1, 'shift': currentShift});
+    }
+
+    return bands;
+  }
+
   @override
   Widget build(BuildContext context) {
     final int length = hourlyData1.length;
+
+    final shiftAnnotations = computeShiftBands(hourlyData1).map((band) {
+      Color color;
+      switch (band['shift']) {
+        case 'S1':
+          color = Colors.white.withOpacity(0.25);
+          break;
+        case 'S2':
+          color = Colors.white.withOpacity(0.25);
+          break;
+        default:
+          color = Colors.white.withOpacity(0.25);
+      }
+
+      return VerticalRangeAnnotation(
+        x1: band['start'].toDouble(),
+        x2: band['end'].toDouble() + 1,
+        color: color,
+      );
+    }).toList();
 
     final line1 = LineChartBarData(
       isCurved: false,
@@ -1615,6 +1667,9 @@ class YieldLineChart extends StatelessWidget {
                   LineChartData(
                     minY: 0,
                     maxY: 140,
+                    rangeAnnotations: RangeAnnotations(
+                      verticalRangeAnnotations: shiftAnnotations,
+                    ),
                     lineTouchData: LineTouchData(
                       enabled: true,
                       handleBuiltInTouches: false,
@@ -1625,7 +1680,8 @@ class YieldLineChart extends StatelessWidget {
                         tooltipMargin: 8,
                         getTooltipItems: (spots) {
                           return spots.map((spot) {
-                            if (spot.barIndex == 1) return null; // skip target
+                            if (spot.barIndex == 1)
+                              return null; // skip target line
                             return LineTooltipItem(
                               '${spot.y.toInt()}%',
                               TextStyle(
@@ -1662,10 +1718,12 @@ class YieldLineChart extends StatelessWidget {
                           },
                         ),
                       ),
-                      topTitles:
-                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      rightTitles:
-                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
                     ),
                     gridData: FlGridData(
                       show: true,

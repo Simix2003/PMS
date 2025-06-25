@@ -379,11 +379,21 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                  widget.ng_bussingOut_1,
-                                                  widget.bussingIn_1,
-                                                ),
+                                                color: widget.ng_bussingOut_1 ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getNgColor(
+                                                        widget.ng_bussingOut_1,
+                                                        widget.bussingIn_1),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      widget.ng_bussingOut_1 ==
+                                                              0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -484,13 +494,24 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                  widget.ng_bussingOut_2,
-                                                  widget.bussingIn_2,
-                                                ),
+                                                color: widget.ng_bussingOut_2 ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getNgColor(
+                                                        widget.ng_bussingOut_2,
+                                                        widget.bussingIn_2),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      widget.ng_bussingOut_2 ==
+                                                              0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
+
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: Card(
@@ -604,11 +625,20 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getYieldColor(
-                                                  widget.currentYield_1,
-                                                  yield_target,
-                                                ),
+                                                color: widget.currentYield_1 ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getYieldColor(
+                                                        widget.currentYield_1,
+                                                        yield_target),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      widget.currentYield_1 == 0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -658,11 +688,20 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getYieldColor(
-                                                  widget.currentYield_2,
-                                                  yield_target,
-                                                ),
+                                                color: widget.currentYield_2 ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getYieldColor(
+                                                        widget.currentYield_2,
+                                                        yield_target),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      widget.currentYield_2 == 0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 

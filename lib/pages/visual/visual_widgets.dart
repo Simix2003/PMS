@@ -2182,8 +2182,10 @@ class DefectBarChartCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = normalizeDefects(defects);
-    final colors = List<Color>.generate(normalized.length,
-        (i) => Colors.primaries[i % Colors.primaries.length]);
+    final colors = List<Color>.generate(
+      normalized.length,
+      (i) => Colors.primaries[i % Colors.primaries.length],
+    );
     final maxY = normalized
             .map((d) => d['count'] as int)
             .fold(0, (a, b) => a > b ? a : b)
@@ -2197,59 +2199,86 @@ class DefectBarChartCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            /// Left side: Title + BarChart
             Expanded(
               flex: 3,
-              child: BarChart(
-                BarChartData(
-                  borderData: FlBorderData(show: false),
-                  gridData: FlGridData(show: false),
-                  titlesData: FlTitlesData(
-                    leftTitles:
-                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles:
-                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles:
-                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    topTitles:
-                        AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  ),
-                  barGroups: List.generate(normalized.length, (i) {
-                    final count = (normalized[i]['count'] as int).toDouble();
-                    return BarChartGroupData(
-                      x: i,
-                      barsSpace: 1,
-                      barRods: [
-                        BarChartRodData(
-                          toY: count,
-                          color: colors[i],
-                          width: 18,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ],
-                      showingTooltipIndicators: [0],
-                    );
-                  }),
-                  maxY: maxY,
-                  barTouchData: BarTouchData(
-                    enabled: true,
-                    touchTooltipData: BarTouchTooltipData(
-                      getTooltipColor: (_) => Colors.transparent,
-                      tooltipRoundedRadius: 6,
-                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        final code = normalized[group.x.toInt()]['label'];
-                        final count = normalized[group.x.toInt()]['count'];
-                        return BarTooltipItem(
-                          '$code\n$count',
-                          const TextStyle(color: Colors.black, fontSize: 12),
-                        );
-                      },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'Difetti VPF ( R = 0 )',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
+                  Expanded(
+                    child: BarChart(
+                      BarChartData(
+                        borderData: FlBorderData(show: false),
+                        gridData: FlGridData(show: false),
+                        titlesData: FlTitlesData(
+                          leftTitles: AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                          bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                          topTitles: AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                        ),
+                        barGroups: List.generate(normalized.length, (i) {
+                          final count =
+                              (normalized[i]['count'] as int).toDouble();
+                          return BarChartGroupData(
+                            x: i,
+                            barsSpace: 1,
+                            barRods: [
+                              BarChartRodData(
+                                toY: count,
+                                color: colors[i],
+                                width: 18,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            showingTooltipIndicators: [0],
+                          );
+                        }),
+                        maxY: maxY,
+                        barTouchData: BarTouchData(
+                          enabled: true,
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) => Colors.transparent,
+                            tooltipRoundedRadius: 6,
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              final code = normalized[group.x.toInt()]['label'];
+                              final count =
+                                  normalized[group.x.toInt()]['count'];
+                              return BarTooltipItem(
+                                '$code\n$count',
+                                const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 12,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+
             const SizedBox(width: 24),
+
+            /// Right side: Legend aligned with top
             Expanded(
               flex: 2,
               child: Column(
@@ -2268,6 +2297,261 @@ class DefectBarChartCard extends StatelessWidget {
                 }),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class StackedDefectBarCard extends StatelessWidget {
+  final List<Map<String, dynamic>> defects;
+
+  const StackedDefectBarCard({super.key, required this.defects});
+
+  static const Map<String, String> defectDescriptions = {
+    "NG1": "Cella rotta o scheggiata a V",
+    "NG1.1": "Cella rotta in prossimità JBX",
+    "NG2": "Macchie ECA / AG Paste",
+    "NG2.1": "Materiale estraneo sulla cella o matrice di celle",
+    "NG3": "Disallineamento celle/stringhe o materiale estraneo",
+    "NG3.1": "Deviazione ribbon rispetto al busbar",
+    "NG4": "Rottura o disallineamenti su glass",
+    "NG5": "Graffi o sporco su glass",
+    "NG 7": "Bolle lungo i bordi o nei fori JB",
+    "NG7.1": "Delaminazioni o bolle nella matrice",
+    "NG8": "Difetti JBX (silicone, cavi danneggiati)",
+    "NG8.1": "Difetti potting: bolle/mancanza",
+    "NG9": "Difetti su Power Label",
+    "NG10": "Difetti su telaio",
+  };
+
+  List<Map<String, dynamic>> normalizeAndFilter(
+      List<Map<String, dynamic>> raw) {
+    final inputMap = {for (var item in raw) item['label']: item['count'] ?? 0};
+
+    final result = defectDescriptions.keys
+        .map((code) => {
+              'label': code,
+              'count': inputMap[code] ?? 0,
+              'index': defectDescriptions.keys.toList().indexOf(code),
+            })
+        .where((e) => e['count']! > 0)
+        .toList();
+
+    result.sort((a, b) =>
+        (a['count'] as int).compareTo(b['count'] as int)); // ascending
+
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = normalizeAndFilter(defects);
+    final total =
+        normalized.fold<int>(0, (sum, e) => sum + (e['count'] as int));
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 4,
+      color: Colors.white,
+      child: SizedBox(
+        height: 240,
+        child: total == 0
+            ? Center(
+                child: Text(
+                  'Nessun difetto rilevato',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              )
+            : Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Difetti VPF ( R = 0 )',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.center,
+                        child: SizedBox(
+                          width: 150,
+                          child: Column(
+                            children: normalized.map((defect) {
+                              final label = defect['label'] as String;
+                              final count = defect['count'] as int;
+                              final index = defect['index'] as int;
+                              final fraction = count / total;
+                              final color = Colors
+                                  .primaries[index % Colors.primaries.length];
+
+                              return Expanded(
+                                flex: count,
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 2),
+                                  color: color,
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '$label: $count, ${(fraction * 100).toStringAsFixed(0)}%',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class DefectMatrixCard extends StatelessWidget {
+  const DefectMatrixCard({super.key});
+
+  // Map of defect → station → count
+  static const Map<String, Map<String, int>> defectStationCountMap = {
+    'NG1': {'RWS01': 5, 'RMI01': 3, 'LMN01': 2, 'LMN02': 1},
+    'NG1.1': {
+      'RWS01': 2,
+      'RMI01': 4,
+      'LMN01': 1,
+      'LMN02': 1,
+      'AIN01': 3,
+      'AIN02': 2
+    },
+    'NG2': {'STR01': 7, 'STR02': 6, 'STR03': 5, 'STR04': 4, 'STR05': 3},
+    'NG2.1': {'RWS01': 1, 'RMI01': 1},
+    'NG3': {
+      'AIN01': 2,
+      'AIN02': 5,
+      'LMN01': 3,
+      'LMN02': 1,
+      'RWS01': 4,
+      'RMI01': 1
+    },
+    'NG3.1': {'STR01': 3, 'STR02': 2, 'STR03': 1, 'STR04': 1, 'STR05': 4},
+    'NG7': {'LMN01': 2, 'LMN02': 2},
+    'NG7.1': {'LMN01': 1, 'LMN02': 3},
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Colors.white,
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(4),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 4, left: 8, top: 4),
+              child: Text(
+                'EQ di provenienza per difetto',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            GridView.count(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(8),
+              shrinkWrap: true,
+              crossAxisCount: 2,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio:
+                  3.2, // <-- Increase aspect ratio makes cards shorter
+              children: defectStationCountMap.entries.map((entry) {
+                final defect = entry.key;
+                final stationCounts = entry.value;
+
+                final sortedStations = stationCounts.entries
+                    .where((e) => e.value > 0)
+                    .toList()
+                  ..sort((a, b) => b.value.compareTo(a.value));
+
+                final stationWidgets = sortedStations.map((e) {
+                  return RichText(
+                    text: TextSpan(
+                      style: const TextStyle(fontSize: 11, color: Colors.black),
+                      children: [
+                        TextSpan(text: '${e.key}: '), // Station name
+                        TextSpan(
+                          text: '${e.value}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13), // Bold count
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList();
+
+                final stationChunks = <List<Widget>>[[], []];
+                for (int i = 0; i < stationWidgets.length; i++) {
+                  stationChunks[i % 2].add(stationWidgets[i]);
+                }
+
+                return Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.blueGrey[50],
+                    border: Border.all(color: Colors.black),
+                  ),
+                  padding: const EdgeInsets.all(8), // less padding
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min, // shrink vertically
+                    children: [
+                      Text(
+                        defect,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      sortedStations.isEmpty
+                          ? const Text('Nessun dato',
+                              style: TextStyle(fontSize: 12))
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                    child: Column(children: stationChunks[0])),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                    child: Column(children: stationChunks[1])),
+                              ],
+                            ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            )
           ],
         ),
       ),

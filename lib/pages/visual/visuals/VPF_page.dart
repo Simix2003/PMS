@@ -983,37 +983,20 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Flexible(
-              flex: 3,
-              child: SizedBox(
-                height: 400,
-                width: 600,
-                child: Card(
-                  color: Colors.blue,
-                  elevation: 10,
-                  child: Center(child: Text('EQ Splitted in 6')),
-                ),
-              ),
-            ),
+            Flexible(flex: 3, child: DefectMatrixCard()),
             Flexible(
               flex: 4,
               child: SizedBox(
-                height: 400,
+                height: 460,
                 child: DefectBarChartCard(defects: widget.defectsVPF),
               ),
             ),
             Flexible(
-              flex: 2,
-              child: SizedBox(
-                height: 400,
-                width: 800,
-                child: Card(
-                  color: Colors.red,
-                  elevation: 10,
-                  child: Center(child: Text('Difettini')),
-                ),
-              ),
-            ),
+                flex: 2,
+                child: SizedBox(
+                  height: 460,
+                  child: StackedDefectBarCard(defects: widget.defectsVPF),
+                )),
           ],
         )
       ],

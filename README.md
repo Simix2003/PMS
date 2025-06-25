@@ -18,3 +18,4 @@ Versions:
 "2.3.1" - Fixed Mini Bro, Fixed Visual, added Process Eng & Capgemini, Added "Difetto" filter for VPF
 "2.3.2" - Added AIN filter and AIN NG2 & NG3
 "2.3.3" - Visual Improvements, small fixes
+"2.3.4" - MBJ Defects and new Averages

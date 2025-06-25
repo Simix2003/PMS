@@ -27,7 +27,7 @@ class _LoadingScreenState extends State<LoadingScreen>
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   double _loadingProgress = 0.0;
-  String versionNumber = "2.3.3";
+  String versionNumber = "2.3.4";
 
   // For animated background blobs
   final List<Blob> _blobs = List.generate(

@@ -777,8 +777,54 @@ class HourlyBarChart extends StatelessWidget {
     });
   }
 
+  List<Map<String, dynamic>> computeShiftBandsFromLabels(
+      List<String> hourLabels) {
+    List<Map<String, dynamic>> bands = [];
+    int? startIdx;
+    String? currentShift;
+
+    String getShift(String hourStr) {
+      final hour = int.parse(hourStr.split(':')[0]);
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    for (int i = 0; i < hourLabels.length; i++) {
+      String shift = getShift(hourLabels[i]);
+      if (shift != currentShift) {
+        if (startIdx != null) {
+          bands.add({'start': startIdx, 'end': i - 1, 'shift': currentShift});
+        }
+        startIdx = i;
+        currentShift = shift;
+      }
+    }
+
+    if (startIdx != null && currentShift != null) {
+      bands.add({
+        'start': startIdx,
+        'end': hourLabels.length - 1,
+        'shift': currentShift
+      });
+    }
+
+    return bands;
+  }
+
+  String getCurrentShiftLabel() {
+    final now = TimeOfDay.now();
+    final hour = now.hour;
+    if (hour >= 6 && hour < 14) return 'S1';
+    if (hour >= 14 && hour < 22) return 'S2';
+    return 'S3';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bands = computeShiftBandsFromLabels(hourLabels);
+    final currentShift = getCurrentShiftLabel();
+
     final maxY = _calculateMaxY();
 
     return Card(
@@ -814,71 +860,113 @@ class HourlyBarChart extends StatelessWidget {
               ],
             ),
             Expanded(
-              child: Stack(
-                children: [
-                  BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      maxY: maxY,
-                      barTouchData: BarTouchData(
-                        enabled: true,
-                        touchTooltipData: BarTouchTooltipData(
-                          getTooltipColor: (_) => Colors.transparent,
-                          tooltipPadding: EdgeInsets.zero, // ← no padding
-                          tooltipMargin: 0, // ← no margin
-                          fitInsideHorizontally: true,
-                          fitInsideVertically: true,
-                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                            final value = rod.toY.toString();
-                            return BarTooltipItem(
-                              value,
-                              const TextStyle(
-                                color: Colors
-                                    .black, // You can pick the color to match your bar
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final barSpacing = constraints.maxWidth / hourLabels.length;
+
+                  return Stack(
+                    children: [
+                      // SHIFT BACKGROUND BANDS
+                      for (var band in bands)
+                        Positioned(
+                          left: band['start'] * barSpacing,
+                          width: (band['end'] - band['start'] + 1) * barSpacing,
+                          top: 0,
+                          bottom: 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: band['shift'] == currentShift
+                                  ? Colors.white.withOpacity(0.0)
+                                  : Colors.grey.withOpacity(0.12),
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(8),
+                                bottom: Radius.circular(8),
+                              ),
+                            ),
+                            alignment: Alignment.topLeft,
+                            padding: const EdgeInsets.only(top: 4, left: 8),
+                            child: Text(
+                              switch (band['shift']) {
+                                'S1' => 'Shift 1',
+                                'S2' => 'Shift 2',
+                                'S3' => 'Shift 3',
+                                _ => '',
+                              },
+                              style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
+                                color: Colors.black54,
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                      titlesData: FlTitlesData(
-                        leftTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: false)),
-                        topTitles: AxisTitles(
-                            sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (value, meta) {
-                              final i = value.toInt();
-                              if (i >= 0 && i < hourLabels.length) {
-                                return Text(
-                                  hourLabels[i],
-                                  style: const TextStyle(fontSize: 16),
-                                );
-                              }
-                              return const SizedBox.shrink();
-                            },
+                            ),
                           ),
                         ),
-                      ),
-                      gridData: FlGridData(show: false),
-                      borderData: FlBorderData(show: false),
-                      barGroups: _buildBarGroups(maxY),
-                      extraLinesData: ExtraLinesData(horizontalLines: [
-                        HorizontalLine(
-                          y: target,
-                          color: Colors.orangeAccent,
-                          strokeWidth: 2,
-                          dashArray: [8, 4],
+
+                      // BAR CHART ON TOP
+                      BarChart(
+                        BarChartData(
+                          alignment: BarChartAlignment.spaceAround,
+                          maxY: maxY,
+                          barTouchData: BarTouchData(
+                            enabled: true,
+                            touchTooltipData: BarTouchTooltipData(
+                              getTooltipColor: (_) => Colors.transparent,
+                              tooltipPadding: EdgeInsets.zero,
+                              tooltipMargin: 0,
+                              fitInsideHorizontally: true,
+                              fitInsideVertically: true,
+                              getTooltipItem:
+                                  (group, groupIndex, rod, rodIndex) {
+                                final value = rod.toY.toString();
+                                return BarTooltipItem(
+                                  value,
+                                  const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          titlesData: FlTitlesData(
+                            leftTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            rightTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            topTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (value, meta) {
+                                  final i = value.toInt();
+                                  if (i >= 0 && i < hourLabels.length) {
+                                    return Text(
+                                      hourLabels[i],
+                                      style: const TextStyle(fontSize: 16),
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                },
+                              ),
+                            ),
+                          ),
+                          gridData: FlGridData(show: false),
+                          borderData: FlBorderData(show: false),
+                          barGroups: _buildBarGroups(maxY),
+                          extraLinesData: ExtraLinesData(horizontalLines: [
+                            HorizontalLine(
+                              y: target,
+                              color: Colors.orangeAccent,
+                              strokeWidth: 2,
+                              dashArray: [8, 4],
+                            ),
+                          ]),
                         ),
-                      ]),
-                    ),
-                  ),
-                ],
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -1319,6 +1407,62 @@ class Yield2LineChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final length = hourlyData1.length; // assume same length for both
 
+    List<Map<String, dynamic>> computeShiftBands(
+        List<Map<String, dynamic>> data) {
+      List<Map<String, dynamic>> bands = [];
+      int? startIdx;
+      String? currentShift;
+
+      String getShift(String hourStr) {
+        final hour = int.parse(hourStr.split(':')[0]);
+        if (hour >= 6 && hour < 14) return 'S1';
+        if (hour >= 14 && hour < 22) return 'S2';
+        return 'S3';
+      }
+
+      for (int i = 0; i < data.length; i++) {
+        String shift = getShift(data[i]['hour']);
+        if (shift != currentShift) {
+          if (startIdx != null && currentShift != null) {
+            bands.add({'start': startIdx, 'end': i - 1, 'shift': currentShift});
+          }
+          startIdx = i;
+          currentShift = shift;
+        }
+      }
+
+      if (startIdx != null && currentShift != null) {
+        bands.add(
+            {'start': startIdx, 'end': data.length - 1, 'shift': currentShift});
+      }
+
+      return bands;
+    }
+
+    String getCurrentShiftLabel() {
+      final now = TimeOfDay.now();
+      final hour = now.hour;
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    final currentShift = getCurrentShiftLabel();
+    final shiftBands = computeShiftBands(hourlyData1); // based on data1 timing
+
+    final shiftAnnotations = shiftBands.map((band) {
+      final isCurrent = band['shift'] == currentShift;
+      final color = isCurrent
+          ? Colors.white.withOpacity(0.0) // transparent for current shift
+          : Colors.grey.withOpacity(0.15); // light grey for others
+
+      return VerticalRangeAnnotation(
+        x1: band['start'].toDouble(),
+        x2: band['end'].toDouble() + 1,
+        color: color,
+      );
+    }).toList();
+
     final line1 = LineChartBarData(
       isCurved: false,
       show: true,
@@ -1374,6 +1518,9 @@ class Yield2LineChart extends StatelessWidget {
               Expanded(
                 child: LineChart(
                   LineChartData(
+                    rangeAnnotations: RangeAnnotations(
+                      verticalRangeAnnotations: shiftAnnotations,
+                    ),
                     minY: 0,
                     maxY: 140,
                     lineTouchData: LineTouchData(
@@ -1569,7 +1716,11 @@ class YieldLineChart extends StatelessWidget {
       String shift = getShift(data[i]['hour']);
       if (shift != currentShift) {
         if (startIdx != null && currentShift != null) {
-          bands.add({'start': startIdx, 'end': i - 1, 'shift': currentShift});
+          bands.add({
+            'start': startIdx,
+            'end': i - 1,
+            'shift': currentShift,
+          });
         }
         startIdx = i;
         currentShift = shift;
@@ -1577,8 +1728,11 @@ class YieldLineChart extends StatelessWidget {
     }
 
     if (startIdx != null && currentShift != null) {
-      bands.add(
-          {'start': startIdx, 'end': data.length - 1, 'shift': currentShift});
+      bands.add({
+        'start': startIdx,
+        'end': data.length - 1,
+        'shift': currentShift,
+      });
     }
 
     return bands;
@@ -1588,18 +1742,22 @@ class YieldLineChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final int length = hourlyData1.length;
 
-    final shiftAnnotations = computeShiftBands(hourlyData1).map((band) {
-      Color color;
-      switch (band['shift']) {
-        case 'S1':
-          color = Colors.white.withOpacity(0.25);
-          break;
-        case 'S2':
-          color = Colors.white.withOpacity(0.25);
-          break;
-        default:
-          color = Colors.white.withOpacity(0.25);
-      }
+    String getCurrentShiftLabel() {
+      final now = TimeOfDay.now();
+      final hour = now.hour;
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    final currentShift = getCurrentShiftLabel();
+    final shiftBands = computeShiftBands(hourlyData1);
+
+    final shiftAnnotations = shiftBands.map((band) {
+      final isCurrent = band['shift'] == currentShift;
+      final color = isCurrent
+          ? Colors.white.withOpacity(0.0) // no overlay = white background
+          : Colors.grey.withOpacity(0.15); // light grey overlay
 
       return VerticalRangeAnnotation(
         x1: band['start'].toDouble(),
@@ -2184,7 +2342,7 @@ class _SpeedBarState extends State<SpeedBar> {
                   child: Padding(
                     padding: const EdgeInsets.only(top: 20),
                     child: Text(
-                      '${widget.medianSec.round()} sec',
+                      'Tempo medio: ${widget.medianSec.round()} sec',
                       style: TextStyle(color: widget.textColor),
                     ),
                   ),

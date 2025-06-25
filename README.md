@@ -17,3 +17,4 @@ Versions:
 "2.3.0" - Added Mini Bro for Daily export
 "2.3.1" - Fixed Mini Bro, Fixed Visual, added Process Eng & Capgemini, Added "Difetto" filter for VPF
 "2.3.2" - Added AIN filter and AIN NG2 & NG3
+"2.3.3" - Visual Improvements, small fixes

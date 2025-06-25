@@ -42,18 +42,30 @@ class _AIHelperChatState extends State<AIHelperChat> {
   void initState() {
     super.initState();
 
-    messages.add(_ChatMessage(role: 'ai', content: '', shimmer: true));
-
-    Future.delayed(const Duration(milliseconds: 1000), () {
+    // Immediately remove shimmer and add welcome message
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _disposed) return;
 
       setState(() {
         messages.removeWhere((m) => m.shimmer);
+
         messages.add(_ChatMessage(
           role: 'ai',
-          content: 'Come posso aiutarti? Scegli un\'opzione qui sotto:',
+          content: 'Ciao! Sono Simix, il tuo assistente personale.',
         ));
-        _showButtons = true;
+      });
+
+      // Delay just between the two messages
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted || _disposed) return;
+
+        setState(() {
+          messages.add(_ChatMessage(
+            role: 'ai',
+            content: 'Come posso aiutarti? Scegli un\'opzione qui sotto:',
+          ));
+          _showButtons = true;
+        });
       });
     });
   }

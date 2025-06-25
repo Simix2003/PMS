@@ -2190,7 +2190,7 @@ class _FindPageState extends State<FindPage> {
                 ),
               ),
             ),*/
-          const AnimatedAIButton(),
+          if (!isSelecting || !isExporting) const AnimatedAIButton(),
         ],
       ),
     );

@@ -231,7 +231,7 @@ def daily_export(background_tasks: BackgroundTasks, data: dict = Body(...)):
             SELECT p.id AS production_id, o.id_modulo
             FROM productions p
             JOIN objects o ON p.object_id = o.id
-            WHERE p.end_time >= %s AND p.end_time <= %s
+            WHERE p.start_time >= %s AND p.start_time <= %s
             """,
             (start_dt, end_dt),
         )

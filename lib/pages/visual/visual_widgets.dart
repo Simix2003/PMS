@@ -2780,8 +2780,10 @@ class DefectMatrixCard extends StatelessWidget {
                                       return Padding(
                                         padding: const EdgeInsets.symmetric(
                                             vertical: 1), // ⬅️ reduce from 2
-                                        child:
-                                            Text('$name: ${counts[name] ?? 0}'),
+                                        child: Text(
+                                            '$name: ${counts[name] ?? 0}',
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold)),
                                       );
                                     }).toList(),
                                   ),
@@ -2820,7 +2822,10 @@ class DefectMatrixCard extends StatelessWidget {
                     text: TextSpan(
                       style: const TextStyle(fontSize: 11, color: Colors.black),
                       children: [
-                        TextSpan(text: '${e.key}: '),
+                        TextSpan(
+                            text: '${e.key}: ',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
                         TextSpan(
                           text: '${e.value}',
                           style: const TextStyle(

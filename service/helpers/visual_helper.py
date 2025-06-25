@@ -7,8 +7,9 @@ import sys
 import copy
 from collections import defaultdict
 from threading import RLock 
-from typing import Dict, DefaultDict, Any
+from typing import Dict, DefaultDict, Any, Optional
 import json
+from statistics import median
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -240,11 +241,13 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
                 for row in cursor.fetchall()
             ]
 
-        if not vpf_prod_ids:
-            eq_defects = {}
-        else:
-            eq_defects = {}
+        # Always prefill eq_defects with zeros
+        eq_defects = {
+            cat: {station_name: 0 for _, station_name in station_info}
+            for cat, station_info in category_station_map.items()
+        }
 
+        if vpf_prod_ids:
             # Get mapping defect_category → set(object_id)
             sql_defect_objects = f"""
                 SELECT d.category, p.object_id
@@ -263,9 +266,6 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
             for cat, station_info in category_station_map.items():
                 station_ids = [sid for sid, _ in station_info]
                 station_names = {sid: name for sid, name in station_info}
-
-                # Prefill all stations with count 0
-                eq_defects[cat] = {name: 0 for _, name in station_info}
 
                 if cat not in defect_to_objects:
                     continue
@@ -310,24 +310,25 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
             ORDER BY p.start_time ASC
         """
         cursor.execute(sql_speed_data, (shift_start, shift_end))
-        cycle_times = [time_to_seconds(row["cycle_time"]) for row in cursor.fetchall()]
+        raw_rows = cursor.fetchall()
+        cycle_times = [time_to_seconds(row["cycle_time"]) for row in raw_rows]
 
         if cycle_times:
-            from statistics import median
-
             median_sec = median(cycle_times)
             current_sec = min(cycle_times[-1], 120)
-            speed_ratio = [{
-                "medianSec": median_sec,
-                "currentSec": current_sec
-            }]
         else:
-            speed_ratio = []
+            median_sec = 0
+            current_sec = 0
+            print(f"[VPF] No cycle times available — setting both median and current to 0")
+
+        speed_ratio = [{
+            "medianSec": median_sec,
+            "currentSec": current_sec
+        }]
 
     except Exception as e:
         logger.exception(f"❌ compute_zone_snapshot() FAILED for zone=AIN: {e}")
         raise
-    print(speed_ratio)
 
     return {
     "station_1_in": s1_in,
@@ -655,142 +656,242 @@ def _compute_snapshot_ain(now: datetime) -> dict:
 }
 
 def update_visual_data_on_new_module(
-        zone: str,
-        station_name: str,
-        esito: int,
-        ts: datetime
-    ) -> None:
-
+    zone: str,
+    station_name: str,
+    esito: int,
+    ts: datetime,
+    cycle_time: Optional[str] = None
+) -> None:
     if zone not in global_state.visual_data:
         global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
         return
 
     with _update_lock:
+        current_shift_start, _ = get_shift_window(ts)
         data = global_state.visual_data[zone]
-        cfg = ZONE_SOURCES[zone]
-
-        current_shift_start, current_shift_end = get_shift_window(ts)
         cached_shift_start = data.get("__shift_start")
 
         if cached_shift_start != current_shift_start.isoformat():
             global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
             return
 
-        # 2. Update counters
-        if station_name in cfg["station_1_in"]:
-            data["station_1_in"] += 1
-        elif station_name in cfg["station_2_in"]:
-            data["station_2_in"] += 1
+        if zone == "VPF":
+            _update_snapshot_vpf(data, station_name, esito, ts, cycle_time)
+        elif zone == "AIN":
+            _update_snapshot_ain(data, station_name, esito, ts)
+        else:
+            logger.warning(f"⚠️ Unknown zone: {zone}")
+            return
 
-        if esito == 6:
-            if station_name in cfg["station_1_out_ng"]:
-                data["station_1_out_ng"] += 1
-            elif station_name in cfg["station_2_out_ng"]:
-                data["station_2_out_ng"] += 1
-
-        # 3. Recompute shift yield
-        s1_good = data["station_1_in"] - data["station_1_out_ng"]
-        s2_good = data["station_2_in"] - data["station_2_out_ng"]
-        data["station_1_yield"] = compute_yield(s1_good, data["station_1_out_ng"])
-        data["station_2_yield"] = compute_yield(s2_good, data["station_2_out_ng"])
-
-        # 3-bis. Shift throughput
-        current_shift_label = (
-            "S1" if 6 <= current_shift_start.hour < 14 else
-            "S2" if 14 <= current_shift_start.hour < 22 else
-            "S3"
-        )
-
-        is_in_station = station_name in cfg["station_1_in"] or station_name in cfg["station_2_in"]
-        is_qc_station = station_name in cfg["station_1_out_ng"] or station_name in cfg["station_2_out_ng"]
-
-        for shift in data["shift_throughput"]:
-            if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-                if is_in_station:
-                    shift["total"] += 1
-                if esito == 6 and is_qc_station:
-                    shift["ng"] += 1
-                break
-
-        # 4. Update yield shifts
-        def update_shift_yield(station_yield_shifts, is_relevant_station):
-            if not is_relevant_station:
-                return
-            for shift in station_yield_shifts:
-                if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-                    if esito == 6:
-                        shift["ng"] += 1
-                    else:
-                        shift["good"] += 1
-                    shift["yield"] = compute_yield(shift["good"], shift["ng"])
-                    break
-
-        update_shift_yield(data["station_1_yield_shifts"], station_name in cfg["station_1_out_ng"])
-        update_shift_yield(data["station_2_yield_shifts"], station_name in cfg["station_2_out_ng"])
-
-        # 5. Update hourly bins
-        hour_start = ts.replace(minute=0, second=0, microsecond=0)
-        hour_label = hour_start.strftime("%H:%M")
-
-        def _touch_hourly(list_key: str):
-            lst = data[list_key]
-
-            # ➋ look for the bin
-            for entry in lst:
-                if entry["hour"] == hour_label:
-                    # -------- throughput list --------
-                    if list_key == "last_8h_throughput":
-                        entry["total"] += 1
-                        if esito == 6:
-                            entry["ng"] += 1
-                    # -------- yield lists --------
-                    else:
-                        if esito == 6:
-                            entry["ng"] += 1
-                        else:
-                            entry["good"] += 1
-                        entry["yield"] = compute_yield(entry["good"], entry["ng"])
-                    break
-            else:   # ⬅ executed only if the loop didn’t break → new hour
-                new_entry: Dict[str, Any] = {
-                    "hour": hour_label,
-                    "start": hour_start.isoformat(),
-                    "end": (hour_start + timedelta(hours=1)).isoformat(),
-                }
-                if list_key == "last_8h_throughput":
-                    new_entry.update({"total": 1, "ng": 1 if esito == 6 else 0})
-                else:
-                    new_entry.update({
-                        "good": 0 if esito == 6 else 1,
-                        "ng":   1 if esito == 6 else 0,
-                    })
-                    new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"])
-
-                lst.append(new_entry)
-                lst[:] = lst[-8:]           # keep only last 8
-
-
-
-        if is_in_station or (esito == 6 and is_qc_station):
-            _touch_hourly("last_8h_throughput")
-
-        if station_name in cfg["station_1_out_ng"]:
-            _touch_hourly("station_1_yield_last_8h")
-        elif station_name in cfg["station_2_out_ng"]:
-            _touch_hourly("station_2_yield_last_8h")
-
-        # 6. WebSocket push
+        # Push via WebSocket
         try:
             loop = asyncio.get_running_loop()
             payload = copy.deepcopy(data)
+            print('payload for zone :', zone, 'is:', payload)
             loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(
                     broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
                 )
             )
-
         except Exception as e:
             logger.warning(f"⚠️ Could not schedule WebSocket update for {zone}: {e}")
+
+def _update_snapshot_ain(
+    data: dict,
+    station_name: str,
+    esito: int,
+    ts: datetime
+) -> None:
+    cfg = ZONE_SOURCES["AIN"]
+
+    current_shift_start, _ = get_shift_window(ts)
+    current_shift_label = (
+        "S1" if 6 <= current_shift_start.hour < 14 else
+        "S2" if 14 <= current_shift_start.hour < 22 else
+        "S3"
+    )
+
+    # 1. Update counters
+    if station_name in cfg["station_1_in"]:
+        data["station_1_in"] += 1
+    elif station_name in cfg["station_2_in"]:
+        data["station_2_in"] += 1
+
+    if esito == 6:
+        if station_name in cfg["station_1_out_ng"]:
+            data["station_1_out_ng"] += 1
+        elif station_name in cfg["station_2_out_ng"]:
+            data["station_2_out_ng"] += 1
+
+    # 2. Recompute yield
+    s1_good = data["station_1_in"] - data["station_1_out_ng"]
+    s2_good = data["station_2_in"] - data["station_2_out_ng"]
+    data["station_1_yield"] = compute_yield(s1_good, data["station_1_out_ng"])
+    data["station_2_yield"] = compute_yield(s2_good, data["station_2_out_ng"])
+
+    # 3. Update shift throughput
+    is_in_station = station_name in cfg["station_1_in"] or station_name in cfg["station_2_in"]
+    is_qc_station = station_name in cfg["station_1_out_ng"] or station_name in cfg["station_2_out_ng"]
+
+    for shift in data["shift_throughput"]:
+        if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+            if is_in_station:
+                shift["total"] += 1
+            if esito == 6 and is_qc_station:
+                shift["ng"] += 1
+            break
+
+    # 4. Update yield per shift
+    def update_shift_yield(station_yield_shifts, is_relevant_station):
+        if not is_relevant_station:
+            return
+        for shift in station_yield_shifts:
+            if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                if esito == 6:
+                    shift["ng"] += 1
+                else:
+                    shift["good"] += 1
+                shift["yield"] = compute_yield(shift["good"], shift["ng"])
+                break
+
+    update_shift_yield(data["station_1_yield_shifts"], station_name in cfg["station_1_out_ng"])
+    update_shift_yield(data["station_2_yield_shifts"], station_name in cfg["station_2_out_ng"])
+
+    # 5. Update hourly bins
+    hour_start = ts.replace(minute=0, second=0, microsecond=0)
+    hour_label = hour_start.strftime("%H:%M")
+
+    def _touch_hourly(list_key: str):
+        lst = data[list_key]
+        for entry in lst:
+            if entry["hour"] == hour_label:
+                if list_key == "last_8h_throughput":
+                    entry["total"] += 1
+                    if esito == 6:
+                        entry["ng"] += 1
+                else:
+                    if esito == 6:
+                        entry["ng"] += 1
+                    else:
+                        entry["good"] += 1
+                    entry["yield"] = compute_yield(entry["good"], entry["ng"])
+                break
+        else:
+            new_entry: Dict[str, Any] = {
+                "hour": hour_label,
+                "start": hour_start.isoformat(),
+                "end": (hour_start + timedelta(hours=1)).isoformat(),
+            }
+            if list_key == "last_8h_throughput":
+                new_entry.update({"total": 1, "ng": 1 if esito == 6 else 0})
+            else:
+                new_entry.update({
+                    "good": 0 if esito == 6 else 1,
+                    "ng":   1 if esito == 6 else 0,
+                })
+                new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"])
+            lst.append(new_entry)
+            lst[:] = lst[-8:]
+
+    if is_in_station or (esito == 6 and is_qc_station):
+        _touch_hourly("last_8h_throughput")
+
+    if station_name in cfg["station_1_out_ng"]:
+        _touch_hourly("station_1_yield_last_8h")
+    elif station_name in cfg["station_2_out_ng"]:
+        _touch_hourly("station_2_yield_last_8h")
+
+def _update_snapshot_vpf(
+    data: dict,
+    station_name: str,
+    esito: int,
+    ts: datetime,
+    cycle_time: Optional[str]
+) -> None:
+    cfg = ZONE_SOURCES["VPF"]
+
+    current_shift_start, _ = get_shift_window(ts)
+    current_shift_label = (
+        "S1" if 6 <= current_shift_start.hour < 14 else
+        "S2" if 14 <= current_shift_start.hour < 22 else
+        "S3"
+    )
+
+    # 1. Update counters
+    is_in_station = station_name in cfg["station_1_in"]
+    is_qc_station = station_name in cfg["station_1_out_ng"]
+
+    if is_in_station:
+        data["station_1_in"] += 1
+
+    if esito == 6 and is_qc_station:
+        data["station_1_out_ng"] += 1
+
+    # 2. Recompute yield
+    good = data["station_1_in"] - data["station_1_out_ng"]
+    data["station_1_yield"] = compute_yield(good, data["station_1_out_ng"])
+
+    # 3. Update shift yield (station_1_shifts)
+    for shift in data["station_1_shifts"]:
+        if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+            if esito == 6:
+                shift["ng"] += 1
+            else:
+                shift["good"] += 1
+            shift["yield"] = compute_yield(shift["good"], shift["ng"])
+            break
+
+    # 4. Update last 8h hourly bins (station_1_yield_last_8h)
+    hour_start = ts.replace(minute=0, second=0, microsecond=0)
+    hour_label = hour_start.strftime("%H:%M")
+
+    def _touch_hourly(list_key: str):
+        lst = data[list_key]
+        for entry in lst:
+            if entry["hour"] == hour_label:
+                if esito == 6:
+                    entry["ng"] += 1
+                else:
+                    entry["good"] += 1
+                entry["yield"] = compute_yield(entry["good"], entry["ng"])
+                return
+        # Create new hour bin if not found
+        new_entry: dict = {
+            "hour": hour_label,
+            "start": hour_start.isoformat(),
+            "end": (hour_start + timedelta(hours=1)).isoformat(),
+            "good": 0 if esito == 6 else 1,
+            "ng": 1 if esito == 6 else 0,
+        }
+        new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"])
+        lst.append(new_entry)
+        lst[:] = lst[-8:]
+
+    if is_in_station or (esito == 6 and is_qc_station):
+        _touch_hourly("station_1_yield_last_8h")
+  
+    # 5. Update speed_ratio
+    if cycle_time:
+        try:
+            # Convert cycle_time string to seconds (float)
+            h, m, s = cycle_time.split(":")
+            current_sec = int(h) * 3600 + int(m) * 60 + float(s)
+
+            # Reuse existing median if present, else fallback
+            median_sec = (
+                data["speed_ratio"][0]["medianSec"]
+                if "speed_ratio" in data and isinstance(data["speed_ratio"], list) and data["speed_ratio"]
+                else current_sec
+            )
+
+            # Overwrite with latest currentSec, keep fixed median
+            data["speed_ratio"] = [{
+                "medianSec": median_sec,
+                "currentSec": current_sec
+            }]
+
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to parse cycle_time '{cycle_time}': {e}")
 
 def refresh_fermi_data(zone: str, ts: datetime) -> None:
     """

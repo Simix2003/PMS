@@ -100,6 +100,7 @@ class _VisualPageState extends State<VisualPage> {
   }
 
   Future<void> fetchZoneData() async {
+    print(widget.zone);
     if (widget.zone == "AIN") {
       await fetchAinZoneData();
     } else if (widget.zone == "VPF") {
@@ -402,102 +403,32 @@ class _VisualPageState extends State<VisualPage> {
 
         setState(() {
           // ─── Main station metrics ─────────────────────
-          bussingIn_1 = data['station_1_in'] ?? 0;
-          bussingIn_2 = data['station_2_in'] ?? 0;
-          ng_bussingOut_1 = data['station_1_out_ng'] ?? 0;
-          ng_bussingOut_2 = data['station_2_out_ng'] ?? 0;
+          In_1 = data['station_1_in'] ?? 0;
+          ngOut_1 = data['station_1_out_ng'] ?? 0;
+          reEntered_1 = data['station_1_re_entered'] ?? 0;
           currentYield_1 = data['station_1_yield'] ?? 100;
-          currentYield_2 = data['station_2_yield'] ?? 100;
 
-          // ─── Yield + Throughput 8h & shift ────────────
           yieldLast8h_1 = List<Map<String, dynamic>>.from(
               data['station_1_yield_last_8h'] ?? []);
-          yieldLast8h_2 = List<Map<String, dynamic>>.from(
-              data['station_2_yield_last_8h'] ?? []);
-          shiftThroughput =
-              List<Map<String, dynamic>>.from(data['shift_throughput'] ?? []);
-          hourlyThroughput =
-              List<Map<String, dynamic>>.from(data['last_8h_throughput'] ?? []);
-          station1Shifts = List<Map<String, dynamic>>.from(
-              data['station_1_yield_shifts'] ?? []);
-          station2Shifts = List<Map<String, dynamic>>.from(
-              data['station_2_yield_shifts'] ?? []);
+          station1Shifts =
+              List<Map<String, dynamic>>.from(data['station_1_shifts'] ?? []);
 
-          mergedShiftData = List.generate(station1Shifts.length, (index) {
-            return {
-              'shift': station1Shifts[index]['label'],
-              'bussing1': station1Shifts[index]['yield'],
-              'bussing2': station2Shifts[index]['yield'],
-            };
-          });
+          // ─── Speed Ratio Chart ──────────────────────────
+          speedRatioData =
+              List<Map<String, dynamic>>.from(data['speed_ratio'] ?? []);
 
-          throughputData = shiftThroughput.map<Map<String, int>>((e) {
-            final total = (e['total'] ?? 0) as int;
-            final ng = (e['ng'] ?? 0) as int;
-            return {'ok': total - ng, 'ng': ng};
-          }).toList();
+          // ─── Defects Chart (VPF) ────────────────────────
+          defectsVPF =
+              List<Map<String, dynamic>>.from(data['defects_vpf'] ?? []);
 
-          shiftLabels =
-              shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
-
-          hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
-            final total = (e['total'] ?? 0) as int;
-            final ng = (e['ng'] ?? 0) as int;
-            return {'ok': total - ng, 'ng': ng};
-          }).toList();
-
-          hourLabels =
-              hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
-
-          // ─── Fermi Data ───────────────────────────────
-          final fermiRaw =
-              List<Map<String, dynamic>>.from(data['fermi_data'] ?? []);
-          dataFermi = [];
-
-          for (final entry in fermiRaw) {
-            if (entry.containsKey("Available_Time_1")) {
-              availableTime_1 =
-                  int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
-            } else if (entry.containsKey("Available_Time_2")) {
-              availableTime_2 =
-                  int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
-            } else {
-              dataFermi.add([
-                entry['causale']?.toString() ?? '',
-                entry['station']?.toString() ?? '',
-                entry['count']?.toString() ?? '0',
-                entry['time']?.toString() ?? '0'
-              ]);
-            }
-          }
-
-          // ─── QG2 Defects ──────────────────────────────
-          final topDefectsQG2 =
-              List<Map<String, dynamic>>.from(data['top_defects_qg2'] ?? []);
-          defectLabels = [];
-          ain1Counts = [];
-          ain2Counts = [];
-
-          for (final defect in topDefectsQG2) {
-            defectLabels.add(defect['label']?.toString() ?? '');
-            ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
-            ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
-          }
-
-          qg2_defects_value = data['total_defects_qg2'] ?? 0;
-
-          // ─── VPF Defects ───────────────────────────────
-          final topDefectsVPF =
-              List<Map<String, dynamic>>.from(data['top_defects_vpf'] ?? []);
-          defectVPFLabels = [];
-          ain1VPFCounts = [];
-          ain2VPFCounts = [];
-
-          for (final defect in topDefectsVPF) {
-            defectVPFLabels.add(defect['label']?.toString() ?? '');
-            ain1VPFCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
-            ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
-          }
+          // ─── Equipment Defects (EQ) ─────────────────────
+          eqDefects = (data['eq_defects'] != null)
+              ? Map<String, Map<String, int>>.from(
+                  data['eq_defects'].map(
+                    (k, v) => MapEntry(k, Map<String, int>.from(v as Map)),
+                  ),
+                )
+              : {};
         });
       },
       onDone: () => print("🛑 Visual WebSocket closed"),

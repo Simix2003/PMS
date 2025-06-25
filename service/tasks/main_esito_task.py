@@ -4,6 +4,7 @@ import logging
 
 import os
 import sys
+from typing import Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -11,12 +12,23 @@ from service.connections.mysql import get_mysql_connection, insert_defects, inse
 from service.connections.temp_data import remove_temp_issues
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
-from service.config.config import PLC_DB_RANGES, debug
+from service.config.config import PLC_DB_RANGES, ZONE_SOURCES, debug
 from service.routes.broadcast import broadcast
 from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_string
 from service.helpers.visual_helper import refresh_top_defects_qg2, refresh_top_defects_vpf, update_visual_data_on_new_module
+
+def get_zone_from_station(station: str) -> Optional[str]:
+    for zone, cfg in ZONE_SOURCES.items():
+        if station in (
+            cfg.get("station_1_in", []) +
+            cfg.get("station_2_in", []) +
+            cfg.get("station_1_out_ng", []) +
+            cfg.get("station_2_out_ng", [])
+        ):
+            return zone
+    return None
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
     print(f"[{full_station_id}] Starting background task.")
@@ -109,9 +121,6 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                         start_byte=start_byte,
                                         )
                 
-                # 🔍 Read current Id_Modulo again directly from PLC
-                id_mod_conf = paths["id_modulo"]
-
                 if result:
                     passato_flags[full_station_id] = True
                     production_id = incomplete_productions.get(full_station_id)
@@ -122,32 +131,37 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                         )
                         if success and channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
                             await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_vpf=True)
-                            zone = "AIN"  # TODO: derive dynamically from MySQL if needed
                             assert end_time and final_esito is not None
                             timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
                             
-                            refresh_top_defects_vpf(zone, timestamp)
+                            refresh_top_defects_vpf("AIN", timestamp)
                         
                         if success and channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
                             await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_ain=True)
 
                         if success:
                             try:
-                                zone = "AIN"  # TODO: derive dynamically from MySQL if needed
+                                zone = get_zone_from_station(channel_id)
                                 assert end_time and final_esito is not None
 
                                 timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
 
-                                update_visual_data_on_new_module(
-                                    zone=zone,
-                                    station_name=channel_id,
-                                    esito=final_esito,
-                                    ts=timestamp
-                                )
-                                if fine_scarto:
-                                    refresh_top_defects_qg2(zone, timestamp)
+                                print(result['Tempo_Ciclo'])
+                                if zone:
+                                    update_visual_data_on_new_module(
+                                        zone=zone,
+                                        station_name=channel_id,
+                                        esito=final_esito,
+                                        ts=timestamp,
+                                        cycle_time=result['Tempo_Ciclo']
+                                    )
 
-                                print(f"📡 Called update_visual_data_on_new_module ✅")
+                                    if zone == "AIN" and fine_scarto:
+                                        refresh_top_defects_qg2(zone, timestamp)
+
+                                    print(f"📡 Called update_visual_data_on_new_module ✅")
+                                else:
+                                    logging.warning(f"⚠️ Unknown zone for station {channel_id} — skipping visual update")
 
                             except Exception as vis_err:
                                 logging.warning(f"⚠️ Could not update visual_data for {channel_id}: {vis_err}")

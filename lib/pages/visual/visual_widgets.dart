@@ -2010,7 +2010,7 @@ class VPFDefectsHorizontalBarChart extends StatelessWidget {
   }
 }
 
-class SpeedBar extends StatelessWidget {
+class SpeedBar extends StatefulWidget {
   const SpeedBar({
     super.key,
     required this.medianSec,
@@ -2031,105 +2031,110 @@ class SpeedBar extends StatelessWidget {
   final double tickStep;
 
   @override
+  State<SpeedBar> createState() => _SpeedBarState();
+}
+
+class _SpeedBarState extends State<SpeedBar> {
+  @override
   Widget build(BuildContext context) {
+    final medianAlignX =
+        ((widget.medianSec / widget.maxSec).clamp(0, 1) * 2 - 1).toDouble();
+    final currentAlignX =
+        ((widget.currentSec / widget.maxSec).clamp(0, 1) * 2 - 1).toDouble();
+
     return Column(
       children: [
-        // Increased height for triangle + bar
         SizedBox(
-          height: barHeight + 40, // extra space for arrow above
+          height: widget.barHeight + 40,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // Grey background bar (centered)
+              // ── Background bar ──
               Positioned(
                 bottom: 0,
                 left: 0,
                 right: 0,
                 child: Container(
-                  height: barHeight,
+                  height: widget.barHeight,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
-                    gradient: LinearGradient(
-                      colors: const [
-                        Colors.green,
-                        Colors.yellow,
-                        Colors.red,
-                      ],
-                      stops: [
-                        0,
-                        0.6,
-                        0.9,
-                      ],
+                    gradient: const LinearGradient(
+                      colors: [Colors.green, Colors.yellow, Colors.red],
+                      stops: [0, 0.6, 0.9],
                     ),
                     border: Border.all(color: Colors.black, width: 1),
                   ),
                 ),
               ),
 
-              // Median line
-              Align(
-                alignment: Alignment((medianSec / maxSec) * 2 - 1, 1),
-                child: Container(
-                  margin: EdgeInsets.only(bottom: 0),
-                  width: 2,
-                  height: barHeight,
-                  color: Colors.black,
-                ),
-              ),
-
-              // Pointer above the bar
-              Align(
-                alignment: Alignment((currentSec / maxSec) * 2 - 1, 1),
-                child: Transform.translate(
-                  offset: Offset(0, -5),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Stack(
-                        alignment: Alignment.center,
-                        children: const [
-                          Icon(
-                            Icons.arrow_drop_down,
-                            size: 85, // slightly larger for stroke
-                            color: Colors.white, // outline
-                          ),
-                          Icon(
-                            Icons.arrow_drop_down,
-                            size: 80,
-                            color: Color.fromRGBO(33, 95, 154, 1), // fill
-                          ),
-                        ],
-                      ),
-                      Text(
-                        '${currentSec.round()} sec',
-                        style: TextStyle(fontSize: 12, color: textColor),
-                      ),
-                    ],
+              // ── Median line ──
+              if (widget.medianSec > 0)
+                Align(
+                  alignment: Alignment(medianAlignX, 1),
+                  child: Container(
+                    width: 2,
+                    height: widget.barHeight,
+                    color: Colors.black,
                   ),
                 ),
-              ),
+
+              // ── Animated Arrow ──
+              if (widget.currentSec > 0)
+                AnimatedAlign(
+                  alignment: Alignment(currentAlignX, 1),
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeOutCubic,
+                  child: Transform.translate(
+                    offset: const Offset(0, -5),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Stack(
+                          alignment: Alignment.center,
+                          children: const [
+                            Icon(Icons.arrow_drop_down,
+                                size: 85, color: Colors.white),
+                            Icon(Icons.arrow_drop_down,
+                                size: 80, color: Color(0xFF215F9A)),
+                          ],
+                        ),
+                        Text(
+                          '${widget.currentSec.round()} sec',
+                          style:
+                              TextStyle(fontSize: 12, color: widget.textColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
 
-        // Axis labels with dynamic median
+        // ── Axis labels ──
         SizedBox(
           width: double.infinity,
           child: Stack(
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text('0 sec', style: TextStyle(color: textColor)),
+                child: Text('0 sec', style: TextStyle(color: widget.textColor)),
               ),
-              Align(
-                alignment: Alignment((medianSec / maxSec) * 2 - 1, 0),
-                child: Text('${medianSec.round()} sec',
-                    style: TextStyle(color: textColor)),
-              ),
+              if (widget.medianSec > 0)
+                Align(
+                  alignment: Alignment(medianAlignX, 0),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 20),
+                    child: Text(
+                      '${widget.medianSec.round()} sec',
+                      style: TextStyle(color: widget.textColor),
+                    ),
+                  ),
+                ),
               Align(
                 alignment: Alignment.centerRight,
-                child: Text('${maxSec.round()} sec',
-                    style: TextStyle(color: textColor)),
+                child: Text('${widget.maxSec.round()} sec',
+                    style: TextStyle(color: widget.textColor)),
               ),
             ],
           ),
@@ -2357,32 +2362,34 @@ class StackedDefectBarCard extends StatelessWidget {
       color: Colors.white,
       child: SizedBox(
         height: 240,
-        child: total == 0
-            ? Center(
-                child: Text(
-                  'Nessun difetto rilevato',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                    fontStyle: FontStyle.italic,
-                  ),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Difetti VPF ( R = 0 )',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
                 ),
-              )
-            : Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Difetti VPF ( R = 0 )',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: Align(
+              ),
+              const SizedBox(height: 8),
+
+              // Show either chart or fallback text
+              Expanded(
+                child: total == 0
+                    ? Center(
+                        child: Text(
+                          'Nessun difetto rilevato',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      )
+                    : Align(
                         alignment: Alignment.center,
                         child: SizedBox(
                           width: 150,
@@ -2415,10 +2422,10 @@ class StackedDefectBarCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
               ),
+            ],
+          ),
+        ),
       ),
     );
   }

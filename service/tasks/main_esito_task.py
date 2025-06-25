@@ -146,15 +146,16 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                 assert end_time and final_esito is not None
 
                                 timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
+                                reentered = bool(result.get("Re_entered_from_m506", False))
 
-                                print(result['Tempo_Ciclo'])
                                 if zone:
                                     update_visual_data_on_new_module(
                                         zone=zone,
                                         station_name=channel_id,
                                         esito=final_esito,
                                         ts=timestamp,
-                                        cycle_time=result['Tempo_Ciclo']
+                                        cycle_time=result['Tempo_Ciclo'],
+                                        reentered=reentered
                                     )
 
                                     if zone == "AIN" and fine_scarto:
@@ -385,6 +386,12 @@ async def read_data(
         if combined_vpf_values:
             data["Tipo_NG_VPF"] = combined_vpf_values
             logging.debug(f"[{full_id}] ✅ VPF Defect flags: {combined_vpf_values}")
+        
+        # Get the re-entered flag
+        re_entered_conf = config.get("re_entered_from_m506")
+        if re_entered_conf and channel_id == "VPF01":
+            reentered = extract_bool(buffer, re_entered_conf["byte"], re_entered_conf["bit"], start_byte)
+            data["Re_entered_from_m506"] = reentered
 
         # Step 11: Read Defect NG for AIN                
         ain_conf = config.get("difetti_ain")

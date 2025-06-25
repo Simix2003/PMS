@@ -2,22 +2,22 @@
     "trigger": {
         "db": 19606,
         "bit": 4,
-        "byte": 50
+        "byte": 0
     },
     "id_modulo": {
         "db": 19606,
-        "byte": 52,
+        "byte": 2,
         "length": 20
     },
     "id_utente": {
         "db": 19606,
-        "byte": 74,
+        "byte": 24,
         "length": 20
     },
     "fine_buona": {
         "db": 19606,
-        "bit": 5,
-        "byte": 50
+        "bit": 6,
+        "byte": 0
     },
     "fine_fermo": {
         "db": 19102,
@@ -26,8 +26,8 @@
     },
     "fine_scarto": {
         "db": 19606,
-        "bit": 6,
-        "byte": 50
+        "bit": 7,
+        "byte": 0
     },
     "evento_fermo": {
         "db": 19102,
@@ -41,8 +41,18 @@
     },
     "stringatrice": {
         "db": 19606,
-        "byte": 96,
+        "byte": 46,
         "length": 5
+    },
+    "difetti_vpf_1": {
+        "db": 19606,
+        "byte": 48,
+        "length": 8
+    },
+    "difetti_vpf_2": {
+        "db": 19606,
+        "byte": 49,
+        "length": 8
     },
     "stazione_fermo": {
         "db": 19102,
@@ -59,6 +69,11 @@
         "bit": 3,
         "byte": 200
     },
+    "stazione_esclusa": {
+        "db": 19606,
+        "bit": 3,
+        "byte": 1
+    },
     "dati_pronti_fermi": {
         "db": 19100,
         "bit": 2,
@@ -69,14 +84,19 @@
         "bit": 1,
         "byte": 200
     },
-    "pezzo_salvato_su_DB_con_inizio_ciclo": {
+    "esito_scarto_compilato": {
         "db": 19606,
-        "bit": 4,
+        "bit": 0,
         "byte": 1000
     },
-    "difetti_ain": {
+    "pezzo_salvato_su_DB_con_inizio_ciclo": {
         "db": 19606,
-        "byte": 51,
-        "length": 8
+        "bit": 5,
+        "byte": 1000
+    },
+    "re_entered_from_m506": {
+        "db": 19606,
+        "bit": 5,
+        "byte": 1
     }
 }

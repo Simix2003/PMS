@@ -660,7 +660,8 @@ def update_visual_data_on_new_module(
     station_name: str,
     esito: int,
     ts: datetime,
-    cycle_time: Optional[str] = None
+    cycle_time: Optional[str] = None,
+    reentered: bool = False
 ) -> None:
     if zone not in global_state.visual_data:
         global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
@@ -676,7 +677,7 @@ def update_visual_data_on_new_module(
             return
 
         if zone == "VPF":
-            _update_snapshot_vpf(data, station_name, esito, ts, cycle_time)
+            _update_snapshot_vpf(data, station_name, esito, ts, cycle_time, reentered)
         elif zone == "AIN":
             _update_snapshot_ain(data, station_name, esito, ts)
         else:
@@ -805,7 +806,8 @@ def _update_snapshot_vpf(
     station_name: str,
     esito: int,
     ts: datetime,
-    cycle_time: Optional[str]
+    cycle_time: Optional[str],
+    reentered: bool = False
 ) -> None:
     cfg = ZONE_SOURCES["VPF"]
 
@@ -816,10 +818,14 @@ def _update_snapshot_vpf(
         "S3"
     )
 
-    # 1. Update counters
     is_in_station = station_name in cfg["station_1_in"]
     is_qc_station = station_name in cfg["station_1_out_ng"]
 
+    if reentered:
+        data["station_1_re_entered"] += 1
+        return  # ✅ skip all stats
+
+    # 1. Update counters
     if is_in_station:
         data["station_1_in"] += 1
 
@@ -830,7 +836,7 @@ def _update_snapshot_vpf(
     good = data["station_1_in"] - data["station_1_out_ng"]
     data["station_1_yield"] = compute_yield(good, data["station_1_out_ng"])
 
-    # 3. Update shift yield (station_1_shifts)
+    # 3. Update shift yield
     for shift in data["station_1_shifts"]:
         if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
             if esito == 6:
@@ -840,7 +846,7 @@ def _update_snapshot_vpf(
             shift["yield"] = compute_yield(shift["good"], shift["ng"])
             break
 
-    # 4. Update last 8h hourly bins (station_1_yield_last_8h)
+    # 4. Update hourly bins
     hour_start = ts.replace(minute=0, second=0, microsecond=0)
     hour_label = hour_start.strftime("%H:%M")
 
@@ -854,12 +860,12 @@ def _update_snapshot_vpf(
                     entry["good"] += 1
                 entry["yield"] = compute_yield(entry["good"], entry["ng"])
                 return
-        # Create new hour bin if not found
+        # Create new hour bin
         new_entry: dict = {
             "hour": hour_label,
             "start": hour_start.isoformat(),
             "end": (hour_start + timedelta(hours=1)).isoformat(),
-            "good": 0 if esito == 6 else 1,
+            "good": 1 if esito != 6 else 0,
             "ng": 1 if esito == 6 else 0,
         }
         new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"])
@@ -868,22 +874,19 @@ def _update_snapshot_vpf(
 
     if is_in_station or (esito == 6 and is_qc_station):
         _touch_hourly("station_1_yield_last_8h")
-  
+
     # 5. Update speed_ratio
     if cycle_time:
         try:
-            # Convert cycle_time string to seconds (float)
             h, m, s = cycle_time.split(":")
             current_sec = int(h) * 3600 + int(m) * 60 + float(s)
 
-            # Reuse existing median if present, else fallback
             median_sec = (
                 data["speed_ratio"][0]["medianSec"]
                 if "speed_ratio" in data and isinstance(data["speed_ratio"], list) and data["speed_ratio"]
                 else current_sec
             )
 
-            # Overwrite with latest currentSec, keep fixed median
             data["speed_ratio"] = [{
                 "medianSec": median_sec,
                 "currentSec": current_sec

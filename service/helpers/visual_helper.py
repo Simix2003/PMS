@@ -1152,3 +1152,48 @@ def refresh_top_defects_vpf(zone: str, ts: datetime) -> None:
 
     except Exception as e:
         logger.exception(f"❌ Exception in refresh_top_defects_vpf: {e}")
+
+def refresh_median_cycle_time_vpf(now: Optional[datetime] = None) -> float:
+    if now is None:
+        now = datetime.now()
+
+    shift_start, shift_end = get_shift_window(now)
+
+    try:
+        conn = get_mysql_connection()
+        cursor = conn.cursor()
+
+        sql_speed_data = """
+            SELECT p.cycle_time
+            FROM productions p
+            WHERE p.station_id = 56
+            AND p.cycle_time IS NOT NULL
+            AND p.start_time BETWEEN %s AND %s
+            ORDER BY p.start_time ASC
+        """
+        cursor.execute(sql_speed_data, (shift_start, shift_end))
+        raw_rows = cursor.fetchall()
+
+        cycle_times = [time_to_seconds(row["cycle_time"]) for row in raw_rows]
+        if not cycle_times:
+            logger.warning("⚠️ No cycle times found for VPF, median remains unchanged.")
+            return 0.0
+
+        new_median = median(cycle_times)
+
+        # ✅ Update in-memory data
+        with _update_lock:
+            vpf_data = global_state.visual_data.get("VPF")
+            if (
+                vpf_data and
+                isinstance(vpf_data.get("speed_ratio"), list) and
+                vpf_data["speed_ratio"]
+            ):
+                vpf_data["speed_ratio"][0]["medianSec"] = new_median
+                logger.info(f"✅ Updated VPF medianSec to {new_median:.2f} sec")
+
+        return new_median
+
+    except Exception as e:
+        logger.exception(f"❌ Failed to refresh VPF median cycle time: {e}")
+        return 0.0

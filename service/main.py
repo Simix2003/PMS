@@ -29,7 +29,7 @@ from service.connections.mysql import get_mysql_connection, load_channels_from_d
 from service.connections.xml_watcher import watch_folder_for_new_xml
 from service.tasks.main_esito_task import background_task, make_status_callback
 from service.tasks.main_fermi_task import fermi_task
-from service.tasks.daily_export_task import daily_export_loop
+from service.helpers.visual_helper import refresh_median_cycle_time_vpf
 from service.state.global_state import plc_connections, stop_threads, passato_flags
 from service.routes.plc_routes import router as plc_router
 from service.routes.issue_routes import router as issue_router
@@ -123,10 +123,19 @@ async def start_background_tasks():
             asyncio.create_task(background_task(plc, key))
             logger.info(f"✅ Background task started for station {key}")
 
-    logger.info("✅ All PLC and background tasks launched")
+    # STEP 4 — Refresh VPF median every 59 minutes
+    async def loop_refresh_median():
+        while True:
+            try:
+                refresh_median_cycle_time_vpf()
+            except Exception as e:
+                logger.warning(f"⚠️ Median refresh failed: {e}")
+            await asyncio.sleep(59 * 60)  # 59 minutes
 
-    # Schedule daily export task
-    asyncio.create_task(daily_export_loop())
+    asyncio.create_task(loop_refresh_median())
+    logger.info("🕒 Scheduled VPF median refresh every 59 minutes")
+
+    logger.info("✅ All PLC and background tasks launched")
 
 # ---------------- LIFESPAN ----------------
 @asynccontextmanager

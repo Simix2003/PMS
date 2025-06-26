@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
-debug = False
+debug = True
 
 CHANNELS: dict = {}
 
@@ -17,6 +17,12 @@ ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
     "VPF": {
         "station_1_in":     ["VPF01"],
         "station_1_out_ng": ["VPF01"],
+    },
+    "ELL": {
+        "station_1_in":     ["ELL01"],
+        "station_2_in":     ["RMI01"],
+        "station_1_out_ng": ["ELL01"],
+        "station_2_out_ng": ["RMI01"],
     },
 }
 

@@ -664,7 +664,7 @@ class ThroughputBarChart extends StatelessWidget {
                               final topOfGreenBar = chartHeight - okHeight;
 
                               final topOffset = okHeight >= 24
-                                  ? topOfGreenBar + 4 // inside the green bar
+                                  ? topOfGreenBar // inside the green bar
                                   : (topOfGreenBar -
                                           labelHeight) // above the bar
                                       .clamp(0.0, chartHeight - labelHeight);

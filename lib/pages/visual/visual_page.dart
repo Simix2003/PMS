@@ -8,6 +8,7 @@ import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
 import 'shimmer_placeHolder.dart';
 import 'visuals/AIN_page.dart';
+import 'visuals/ELL_page.dart';
 import 'visuals/VPF_page.dart';
 
 class VisualPage extends StatefulWidget {
@@ -105,6 +106,8 @@ class _VisualPageState extends State<VisualPage> {
       await fetchAinZoneData();
     } else if (widget.zone == "VPF") {
       await fetchVpfZoneData();
+    } else if (widget.zone == "ELL") {
+      await fetchEllZoneData();
     } else {
       print('Cannote fetch zone data Unknown zone: $widget.zone');
     }
@@ -260,6 +263,119 @@ class _VisualPageState extends State<VisualPage> {
       });
     } catch (e) {
       print("❌ Error fetching VPF zone data: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> fetchEllZoneData() async {
+    try {
+      final response = await ApiService.fetchVisualDataForEll();
+      setState(() {
+        bussingIn_1 = response['station_1_in'] ?? 0;
+        bussingIn_2 = response['station_2_in'] ?? 0;
+        ng_bussingOut_1 = response['station_1_out_ng'] ?? 0;
+        ng_bussingOut_2 = response['station_2_out_ng'] ?? 0;
+        currentYield_1 = response['station_1_yield'] ?? 100;
+        currentYield_2 = response['station_2_yield'] ?? 100;
+
+        yieldLast8h_1 = List<Map<String, dynamic>>.from(
+            response['station_1_yield_last_8h'] ?? []);
+        yieldLast8h_2 = List<Map<String, dynamic>>.from(
+            response['station_2_yield_last_8h'] ?? []);
+        shiftThroughput =
+            List<Map<String, dynamic>>.from(response['shift_throughput'] ?? []);
+        hourlyThroughput = List<Map<String, dynamic>>.from(
+            response['last_8h_throughput'] ?? []);
+        station1Shifts = List<Map<String, dynamic>>.from(
+            response['station_1_yield_shifts'] ?? []);
+        station2Shifts = List<Map<String, dynamic>>.from(
+            response['station_2_yield_shifts'] ?? []);
+
+        mergedShiftData = List.generate(station1Shifts.length, (index) {
+          return {
+            'shift': station1Shifts[index]['label'],
+            'bussing1': station1Shifts[index]['yield'],
+            'bussing2': station2Shifts[index]['yield'],
+          };
+        });
+
+        throughputData = shiftThroughput.map<Map<String, int>>((e) {
+          final total = (e['total'] ?? 0) as int;
+          final ng = (e['ng'] ?? 0) as int;
+          return {'ok': total - ng, 'ng': ng};
+        }).toList();
+
+        shiftLabels =
+            shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
+
+        hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+          final total = (e['total'] ?? 0) as int;
+          final ng = (e['ng'] ?? 0) as int;
+          return {'ok': total - ng, 'ng': ng};
+        }).toList();
+
+        hourLabels =
+            hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
+        // Parse Top Defects QG2
+        final topDefectsRaw =
+            List<Map<String, dynamic>>.from(response['top_defects_qg2'] ?? []);
+
+        defectLabels = [];
+        ain1Counts = [];
+        ain2Counts = [];
+
+        for (final defect in topDefectsRaw) {
+          defectLabels.add(defect['label']?.toString() ?? '');
+          ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+          ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+        }
+
+        qg2_defects_value = response['total_defects_qg2'];
+
+        // Parse Top Defects VPF
+        final topDefectsVPF =
+            List<Map<String, dynamic>>.from(response['top_defects_vpf'] ?? []);
+
+        defectVPFLabels = [];
+        ain1VPFCounts = [];
+        ain2VPFCounts = [];
+
+        for (final defect in topDefectsVPF) {
+          defectVPFLabels.add(defect['label']?.toString() ?? '');
+          ain1VPFCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+          ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+        }
+
+        // Parse fermi data
+        final fermiRaw =
+            List<Map<String, dynamic>>.from(response['fermi_data'] ?? []);
+
+        dataFermi = []; // clear previous data
+
+        for (final entry in fermiRaw) {
+          if (entry.containsKey("Available_Time_1")) {
+            availableTime_1 =
+                int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
+          } else if (entry.containsKey("Available_Time_2")) {
+            availableTime_2 =
+                int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
+          } else {
+            dataFermi.add([
+              entry['causale']?.toString() ?? '',
+              entry['station']?.toString() ?? '',
+              entry['count']?.toString() ?? '0',
+              entry['time']?.toString() ?? '0'
+            ]);
+          }
+        }
+
+        isLoading = false;
+      });
+    } catch (e) {
+      print("❌ Error fetching zone data: $e");
       setState(() {
         isLoading = false;
       });
@@ -559,13 +675,54 @@ class _VisualPageState extends State<VisualPage> {
                         ngOut_1: ngOut_1,
                         eqDefects: eqDefects,
                       )
-                    : const Center(
-                        child: Text(
-                          'ZONA non trovata',
-                          style: TextStyle(
-                              fontSize: 24, fontWeight: FontWeight.bold),
-                        ),
-                      ),
+                    : widget.zone == "ELL"
+                        ? EllVisualsPage(
+                            shift_target: shift_target,
+                            hourly_shift_target: hourly_shift_target,
+                            yield_target: yield_target,
+                            circleSize: circleSize,
+                            station_1_status: station_1_status,
+                            station_2_status: station_2_status,
+                            errorColor: errorColor,
+                            okColor: okColor,
+                            textColor: textColor,
+                            warningColor: warningColor,
+                            redColor: redColor,
+                            ng_1: ng_bussingOut_1,
+                            ng_2: ng_bussingOut_2,
+                            in_1: bussingIn_1,
+                            in_2: bussingIn_2,
+                            currentYield_1: currentYield_1,
+                            currentYield_2: currentYield_2,
+                            throughputData: throughputData,
+                            shiftLabels: shiftLabels,
+                            hourlyData: hourlyData,
+                            hourLabels: hourLabels,
+                            dataFermi: dataFermi,
+                            station1Shifts: station1Shifts,
+                            station2Shifts: station2Shifts,
+                            mergedShiftData: mergedShiftData,
+                            yieldLast8h_1: yieldLast8h_1,
+                            yieldLast8h_2: yieldLast8h_2,
+                            counts: counts,
+                            availableTime_1: availableTime_1,
+                            availableTime_2: availableTime_2,
+                            defectLabels: defectLabels,
+                            defectVPFLabels: defectVPFLabels,
+                            ain1Counts: ain1Counts,
+                            ain1VPFCounts: ain1VPFCounts,
+                            ain2Counts: ain2Counts,
+                            ain2VPFCounts: ain2VPFCounts,
+                            last_n_shifts: last_n_shifts,
+                            qg2_defects_value: qg2_defects_value,
+                          )
+                        : const Center(
+                            child: Text(
+                              'ZONA non trovata',
+                              style: TextStyle(
+                                  fontSize: 24, fontWeight: FontWeight.bold),
+                            ),
+                          ),
       ),
     );
   }

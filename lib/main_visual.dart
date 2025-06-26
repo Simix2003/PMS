@@ -15,7 +15,7 @@ void main() async {
   final pathSegments = uri.pathname!.split('/')..removeWhere((e) => e.isEmpty);
   final zone = pathSegments.isNotEmpty
       ? pathSegments.first
-      : 'VPF'; // Change this for testing with ZONES
+      : 'ELL'; // Change this for testing with ZONES
 
   runApp(MyApp(zone: zone));
 }

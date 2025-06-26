@@ -672,15 +672,20 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
         cursor = conn.cursor()
 
-        # -------- current shift totals / yield ----------
-        s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
-        s2_in  = count_unique_objects(cursor, cfg["station_2_in"],  shift_start, shift_end, "all")
-        s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
-        s2_ng  = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "ng")
-        s1_g   = s1_in - s1_ng
-        s2_g   = s2_in - s2_ng
-        s1_y   = compute_yield(s1_g, s1_ng)
-        s2_y   = compute_yield(s2_g, s2_ng)
+        # First pass stats
+        s1_in = count_unique_objects(cursor, cfg["station_1_in"], shift_start, shift_end, "all")
+        s1_ng = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
+        s1_g = s1_in - s1_ng
+
+        # Rework stats
+        s2_in = count_unique_objects(cursor, cfg["station_2_in"], shift_start, shift_end, "all")
+        s2_ng = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "ng")
+        s2_g = s2_in - s2_ng
+
+        # Yields
+        fpy_y = compute_yield(s1_g, s1_ng)
+        rwk_y = compute_yield(s1_g + s2_g, s1_ng + s2_ng)
+
 
         # -------- last 3 shifts yield + throughput -------
         FPY_yield_shifts, RWK_yield_shifs, shift_throughput = [], [], []
@@ -706,9 +711,9 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 "label": label,
                 "start": start.isoformat(),
                 "end": end.isoformat(),
-                "yield": compute_yield(s2_g, s2_n),
-                "good": s2_g,
-                "ng": s2_n
+                "yield": compute_yield(s1_g + s2_g, s1_n + s2_n),
+                "good": s1_g + s2_g,
+                "ng": s1_n + s2_n
             })
 
             # throughput
@@ -754,17 +759,18 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
             FPY_y8h.append({
                 "hour": label,
-                "good": s1_g,          # ➊ keep counts
+                "good": s1_g,
                 "ng":   s1_n,
                 "yield": compute_yield(s1_g, s1_n),
                 "start": h_start.isoformat(),
                 "end":   h_end.isoformat(),
             })
+
             RWK_y8h.append({
                 "hour": label,
-                "good": s2_g,
-                "ng":   s2_n,
-                "yield": compute_yield(s2_g, s2_n),
+                "good": s1_g + s2_g,
+                "ng":   s1_n + s2_n,
+                "yield": compute_yield(s1_g + s2_g, s1_n + s2_n),
                 "start": h_start.isoformat(),
                 "end":   h_end.isoformat(),
             })
@@ -888,8 +894,8 @@ def _compute_snapshot_ell(now: datetime) -> dict:
     "station_2_in": s2_in,
     "station_1_out_ng": s1_ng,
     "station_2_out_ng": s2_ng,
-    "station_1_yield": s1_y,
-    "station_2_yield": s2_y,
+    "FPY_yield": fpy_y,
+    "RWK_yield": rwk_y,
     "FPY_yield_shifts": FPY_yield_shifts,
     "RWK_yield_shifts": RWK_yield_shifs,
     "FPY_yield_last_8h": FPY_y8h,

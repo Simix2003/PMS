@@ -95,6 +95,8 @@ class _VisualPageState extends State<VisualPage> {
   List<int> min1Counts = [];
   List<int> min2Counts = [];
   List<int> ellCounts = [];
+  int currentFPYYield = 100;
+  int currentRWKYield = 100;
 
   Map<String, int> calculateEscalationCounts(
       List<Map<String, dynamic>> escalations) {
@@ -289,8 +291,8 @@ class _VisualPageState extends State<VisualPage> {
         ngOut_1 = response['station_1_out_ng'] ?? 0;
         ngScrap = response['station_2_out_ng'] ?? 0;
 
-        currentYield_1 = response['station_1_yield'] ?? 100;
-        currentYield_2 = response['station_2_yield'] ?? 100;
+        currentFPYYield = response['FPY_yield'] ?? 100;
+        currentRWKYield = response['RWK_yield'] ?? 100;
 
         FPYLast8h = List<Map<String, dynamic>>.from(
             response['FPY_yield_last_8h'] ?? []);
@@ -350,11 +352,6 @@ class _VisualPageState extends State<VisualPage> {
           min2Counts.add(int.tryParse(defect['min2'].toString()) ?? 0);
           ellCounts.add(int.tryParse(defect['ell'].toString()) ?? 0);
         }
-
-        print('defectLabels: $defectLabels');
-        print('min1Counts: $min1Counts');
-        print('min2Counts: $min2Counts');
-        print('ellCounts: $ellCounts');
 
         // Parse fermi data
         final fermiRaw =

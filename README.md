@@ -34,8 +34,19 @@ pip install pip-audit
 
 # scansione delle dipendenze
 pip-audit -r service/requirements.txt
+
+#Se il Venv è attivo basta fare : 
+pip-audit
 ```
 
 Se vengono rilevate librerie affette da vulnerabilità, è necessario aggiornarle
 alla versione corretta, modificando `service/requirements.txt` e verificando che
 la nuova versione non riporti alert.
+
+Last run: 26/06/2023 18:42:00
+(venv) PS D:\Imix\Lavori\2025\3SUN\IX-Monitor\ix_monitor> pip-audit
+Found 2 known vulnerabilities in 1 package
+Name  Version ID                  Fix Versions
+----- ------- ------------------- ------------
+torch 2.7.0   GHSA-887c-mr87-cxwp
+torch 2.7.0   GHSA-3749-ghw9-m3mg 2.7.1rc1

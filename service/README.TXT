@@ -2,6 +2,8 @@ TO START THE VIRTUAL ENVIRONMENT OF Python 3.11.2 use:
 PS D:\Imix\Lavori\2025\3SUN\IX-Monitor\ix_monitor>                     
 >> # Activate it
 >> & "service/venv/Scripts/Activate.ps1"
+pip freeze > requirements.txt
+
 pyinstaller --clean service.spec
 
 

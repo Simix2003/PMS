@@ -21,8 +21,8 @@ class EllVisualsPage extends StatefulWidget {
   final int ng_2;
   final int in_1;
   final int in_2;
-  final int currentYield_1;
-  final int currentYield_2;
+  final int currentFPYYield;
+  final int currentRWKYield;
   final List<Map<String, int>> throughputDataEll;
   final List<String> shiftLabels;
   final List<Map<String, int>> hourlyData;
@@ -58,8 +58,8 @@ class EllVisualsPage extends StatefulWidget {
     required this.ng_2,
     required this.in_1,
     required this.in_2,
-    required this.currentYield_1,
-    required this.currentYield_2,
+    required this.currentFPYYield,
+    required this.currentRWKYield,
     required this.throughputDataEll,
     required this.shiftLabels,
     required this.hourlyData,
@@ -632,16 +632,17 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: widget.currentYield_1 ==
+                                                color: widget.currentFPYYield ==
                                                         0
                                                     ? Colors.white
                                                     : getYieldColor(
-                                                        widget.currentYield_1,
+                                                        widget.currentFPYYield,
                                                         yield_target),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
                                                   color:
-                                                      widget.currentYield_1 == 0
+                                                      widget.currentFPYYield ==
+                                                              0
                                                           ? Colors.black
                                                           : Colors.transparent,
                                                   width: 2,
@@ -670,7 +671,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      '${widget.currentYield_1.toString()}%',
+                                                      '${widget.currentFPYYield.toString()}%',
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -711,16 +712,17 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: widget.currentYield_2 ==
+                                                color: widget.currentRWKYield ==
                                                         0
                                                     ? Colors.white
                                                     : getYieldColor(
-                                                        widget.currentYield_2,
+                                                        widget.currentRWKYield,
                                                         yield_target),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
                                                   color:
-                                                      widget.currentYield_2 == 0
+                                                      widget.currentRWKYield ==
+                                                              0
                                                           ? Colors.black
                                                           : Colors.transparent,
                                                   width: 2,
@@ -748,7 +750,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      '${widget.currentYield_2.toString()}%',
+                                                      '${widget.currentRWKYield.toString()}%',
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -1031,9 +1033,9 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(
+                            /*Expanded(
                               child: BufferChart(),
-                            ),
+                            ),*/
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 4.0),
                               child: Text(

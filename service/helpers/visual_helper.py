@@ -933,6 +933,8 @@ def update_visual_data_on_new_module(
             _update_snapshot_vpf(data, station_name, esito, ts, cycle_time, reentered)
         elif zone == "AIN":
             _update_snapshot_ain(data, station_name, esito, ts)
+        elif zone == "ELL":
+            _update_snapshot_ell(data, station_name, esito, ts)
         else:
             logger.warning(f"⚠️ Unknown zone: {zone}")
             return
@@ -1147,6 +1149,146 @@ def _update_snapshot_vpf(
 
         except Exception as e:
             logger.warning(f"⚠️ Failed to parse cycle_time '{cycle_time}': {e}")
+
+def _update_snapshot_ell(
+    data: dict,
+    station_name: str,
+    esito: int,
+    ts: datetime
+) -> None:
+    cfg = ZONE_SOURCES["ELL"]
+
+    current_shift_start, _ = get_shift_window(ts)
+    current_shift_label = (
+        "S1" if 6 <= current_shift_start.hour < 14 else
+        "S2" if 14 <= current_shift_start.hour < 22 else
+        "S3"
+    )
+
+    is_in_station_1 = station_name in cfg["station_1_in"]
+    is_in_station_2 = station_name in cfg["station_2_in"]
+    is_out_ng_1 = station_name in cfg["station_1_out_ng"]
+    is_out_ng_2 = station_name in cfg["station_2_out_ng"]
+
+    # 1. Update counters
+    if is_in_station_1:
+        data["station_1_in"] += 1
+    elif is_in_station_2:
+        data["station_2_in"] += 1
+
+    if esito == 6:
+        if is_out_ng_1:
+            data["station_1_out_ng"] += 1
+        elif is_out_ng_2:
+            data["station_2_out_ng"] += 1
+
+    # 2. Recompute FPY & RWK current yield
+    s1_g = data["station_1_in"] - data["station_1_out_ng"]
+    s2_g = data["station_2_in"] - data["station_2_out_ng"]
+    s1_ng = data["station_1_out_ng"]
+    s2_ng = data["station_2_out_ng"]
+
+    data["FPY_yield"] = compute_yield(s1_g, s1_ng)
+    data["RWK_yield"] = compute_yield(s1_g + s2_g, s1_ng + s2_ng)
+
+    # 3. Update shift throughput
+    for shift in data["shift_throughput"]:
+        if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+            if is_in_station_1 or is_in_station_2:
+                shift["total"] += 1
+            if esito == 6 and (is_out_ng_1 or is_out_ng_2):
+                shift["ng"] += 1
+                if is_out_ng_2:
+                    shift["scrap"] += 1
+            break
+
+        # 4. Update shift yields
+    def update_yield_shift(lst):
+        for shift in lst:
+            if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                if esito == 6:
+                    shift["ng"] += 1
+                else:
+                    shift["good"] += 1
+                shift["yield"] = compute_yield(shift["good"], shift["ng"])
+                return shift
+        return None
+
+    # Updated logic: FPY = all station_1, RWK = all station_1 + station_2
+    if is_in_station_1:
+        update_yield_shift(data["FPY_yield_shifts"])
+
+    if is_in_station_1 or is_in_station_2:
+        update_yield_shift(data["RWK_yield_shifts"])
+
+
+    # 5. Update hourly bins
+    hour_start = ts.replace(minute=0, second=0, microsecond=0)
+    hour_label = hour_start.strftime("%H:%M")
+
+    def _touch_hourly(list_key: str):
+        lst = data[list_key]
+        for entry in lst:
+            if entry["hour"] == hour_label:
+                if list_key == "last_8h_throughput":
+                    entry["total"] += 1
+                    if esito == 6:
+                        entry["ng"] += 1
+                        if is_out_ng_2:
+                            entry["scrap"] += 1
+                else:
+                    if esito == 6:
+                        entry["ng"] += 1
+                    else:
+                        entry["good"] += 1
+                    if list_key == "FPY_yield_last_8h":
+                        entry["yield"] = compute_yield(entry["good"], entry["ng"])
+                    elif list_key == "RWK_yield_last_8h":
+                        fpy = next((e for e in data["FPY_yield_last_8h"] if e["hour"] == hour_label), None)
+                        if fpy:
+                            entry["yield"] = compute_yield(
+                                fpy["good"] + entry["good"],
+                                fpy["ng"] + entry["ng"]
+                            )
+                return
+
+        # New entry
+        good = 0 if esito == 6 else 1
+        ng = 1 if esito == 6 else 0
+        new_entry: Dict[str, Any] = {
+            "hour": hour_label,
+            "start": hour_start.isoformat(),
+            "end": (hour_start + timedelta(hours=1)).isoformat(),
+        }
+
+        if list_key == "last_8h_throughput":
+            new_entry.update({
+                "total": 1,
+                "ng": ng,
+                "scrap": 1 if esito == 6 and is_out_ng_2 else 0,
+            })
+        else:
+            new_entry.update({"good": good, "ng": ng})
+            if list_key == "FPY_yield_last_8h":
+                new_entry["yield"] = compute_yield(good, ng)
+            elif list_key == "RWK_yield_last_8h":
+                fpy = next((e for e in data["FPY_yield_last_8h"] if e["hour"] == hour_label), None)
+                fpy_good = fpy["good"] if fpy else 0
+                fpy_ng = fpy["ng"] if fpy else 0
+                new_entry["yield"] = compute_yield(fpy_good + good, fpy_ng + ng)
+
+        lst.append(new_entry)
+        lst[:] = lst[-8:]
+
+    if is_in_station_1 or is_in_station_2 or (esito == 6 and (is_out_ng_1 or is_out_ng_2)):
+        _touch_hourly("last_8h_throughput")
+
+    # Updated logic: FPY = all station_1, RWK = all station_1 + station_2
+    if is_in_station_1:
+        _touch_hourly("FPY_yield_last_8h")
+
+    if is_in_station_1 or is_in_station_2:
+        _touch_hourly("RWK_yield_last_8h")
 
 def refresh_fermi_data(zone: str, ts: datetime) -> None:
     """

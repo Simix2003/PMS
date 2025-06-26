@@ -114,7 +114,6 @@ class _VisualPageState extends State<VisualPage> {
   }
 
   Future<void> fetchZoneData() async {
-    print(widget.zone);
     if (widget.zone == "AIN") {
       await fetchAinZoneData();
     } else if (widget.zone == "VPF") {
@@ -339,8 +338,6 @@ class _VisualPageState extends State<VisualPage> {
         final topDefectsRaw =
             List<Map<String, dynamic>>.from(response['top_defects'] ?? []);
 
-        print('topDefectsRaw: $topDefectsRaw');
-
         defectLabels = [];
         min1Counts = [];
         min2Counts = [];
@@ -383,6 +380,8 @@ class _VisualPageState extends State<VisualPage> {
       _initializeAinWebSocket();
     } else if (widget.zone == "VPF") {
       _initializeVpfWebSocket();
+    } else if (widget.zone == "ELL") {
+      _initializeEllWebSocket();
     } else {
       print('Cannot initialize websocket Unknown zone: $widget.zone');
     }
@@ -550,6 +549,105 @@ class _VisualPageState extends State<VisualPage> {
     _isWebSocketConnected = true;
   }
 
+  void _initializeEllWebSocket() {
+    if (_isWebSocketConnected) return;
+
+    _webSocketService.connectToVisual(
+      line: 'Linea2',
+      zone: widget.zone,
+      onMessage: (data) {
+        if (!mounted) return;
+
+        setState(() {
+          // ─── Station Metrics ───────────────────────────
+          In_1 = data['station_1_in'] ?? 0;
+          In_2 = data['station_2_in'] ?? 0;
+          ngOut_1 = data['station_1_out_ng'] ?? 0;
+          ngScrap = data['station_2_out_ng'] ?? 0;
+
+          currentFPYYield = data['FPY_yield'] ?? 100;
+          currentRWKYield = data['RWK_yield'] ?? 100;
+
+          // ─── Yield + Throughput ────────────────────────
+          FPYLast8h =
+              List<Map<String, dynamic>>.from(data['FPY_yield_last_8h'] ?? []);
+          RWKLast8h =
+              List<Map<String, dynamic>>.from(data['RWK_yield_last_8h'] ?? []);
+          shiftThroughput =
+              List<Map<String, dynamic>>.from(data['shift_throughput'] ?? []);
+          hourlyThroughput =
+              List<Map<String, dynamic>>.from(data['last_8h_throughput'] ?? []);
+          FPY_yield_shifts =
+              List<Map<String, dynamic>>.from(data['FPY_yield_shifts'] ?? []);
+          RWK_yield_shifs =
+              List<Map<String, dynamic>>.from(data['RWK_yield_shifts'] ?? []);
+
+          mergedShiftData = List.generate(FPY_yield_shifts.length, (index) {
+            return {
+              'shift': FPY_yield_shifts[index]['label'],
+              'FPY': FPY_yield_shifts[index]['yield'],
+              'RWK': RWK_yield_shifs[index]['yield'],
+            };
+          });
+
+          throughputDataEll = shiftThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            final scrap = (e['scrap'] ?? 0) as int;
+            return {'ok': total - ng - scrap, 'ng': ng, 'scrap': scrap};
+          }).toList();
+
+          shiftLabels =
+              shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
+
+          hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            final scrap = (e['scrap'] ?? 0) as int;
+            return {'ok': total - ng, 'ng': ng, 'scrap': scrap};
+          }).toList();
+
+          hourLabels =
+              hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
+          // ─── Defects Chart ─────────────────────────────
+          final topDefectsRaw =
+              List<Map<String, dynamic>>.from(data['top_defects'] ?? []);
+
+          defectLabels = [];
+          min1Counts = [];
+          min2Counts = [];
+          ellCounts = [];
+
+          for (final defect in topDefectsRaw) {
+            defectLabels.add(defect['label']?.toString() ?? '');
+            min1Counts.add(int.tryParse(defect['min1'].toString()) ?? 0);
+            min2Counts.add(int.tryParse(defect['min2'].toString()) ?? 0);
+            ellCounts.add(int.tryParse(defect['ell'].toString()) ?? 0);
+          }
+
+          // ─── Fermi Data ────────────────────────────────
+          final fermiRaw =
+              List<Map<String, dynamic>>.from(data['fermi_data'] ?? []);
+          dataFermi = [];
+
+          for (final entry in fermiRaw) {
+            dataFermi.add([
+              entry['causale']?.toString() ?? '',
+              entry['station']?.toString() ?? '',
+              entry['count']?.toString() ?? '0',
+              entry['time']?.toString() ?? '0'
+            ]);
+          }
+        });
+      },
+      onDone: () => print("🛑 Visual WebSocket closed"),
+      onError: (err) => print("❌ WebSocket error: $err"),
+    );
+
+    _isWebSocketConnected = true;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -688,8 +786,8 @@ class _VisualPageState extends State<VisualPage> {
                             ng_2: ngScrap,
                             in_1: In_1,
                             in_2: In_2,
-                            currentYield_1: currentYield_1,
-                            currentYield_2: currentYield_2,
+                            currentFPYYield: currentFPYYield,
+                            currentRWKYield: currentRWKYield,
                             throughputDataEll: throughputDataEll,
                             shiftLabels: shiftLabels,
                             hourlyData: hourlyData,

@@ -3,6 +3,7 @@ from datetime import datetime
 import logging
 
 import os
+import re
 import sys
 
 
@@ -116,9 +117,11 @@ async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, ch
         await insert_fermo_data(data, conn)
 
         try:
-            zone = "AIN"  # TODO: derive dynamically from MySQL if needed
-
+            zone = "AIN"
             timestamp = data["DataInizio"] if data and data.get("DataInizio") else datetime.now()
+            refresh_fermi_data(zone, timestamp)
+
+            zone = "ELL"
             refresh_fermi_data(zone, timestamp)
 
         except Exception as vis_err:

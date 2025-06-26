@@ -20,3 +20,22 @@ Versions:
 "2.3.3" - Visual Improvements, small fixes
 "2.3.4" - MBJ Defects and new Averages
 "2.4.0" - Visual Management for ELL
+
+## OWASP dependency verification
+
+Per verificare la presenza di vulnerabilità note nelle dipendenze Python è
+possibile utilizzare `pip-audit`. L'esecuzione di `pip-audit` consente di
+confrontare le versioni dichiarate in `service/requirements.txt` con il
+database CVE mantenuto da PyPA.
+
+```bash
+# installazione dello strumento (richiede connettività a PyPI)
+pip install pip-audit
+
+# scansione delle dipendenze
+pip-audit -r service/requirements.txt
+```
+
+Se vengono rilevate librerie affette da vulnerabilità, è necessario aggiornarle
+alla versione corretta, modificando `service/requirements.txt` e verificando che
+la nuova versione non riporti alert.

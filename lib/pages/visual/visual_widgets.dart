@@ -660,14 +660,16 @@ class ThroughputBarChart extends StatelessWidget {
 
                               final barCenterX = (2 * index + 1) * groupSpace;
                               final okHeight = chartHeight * (ok / maxY);
-                              final labelHeight = 16.0;
+
                               final topOfGreenBar = chartHeight - okHeight;
 
                               final topOffset = okHeight >= 40
                                   ? topOfGreenBar // inside the green bar
-                                  : (topOfGreenBar -
-                                          labelHeight) // above the bar
-                                      .clamp(0.0, chartHeight - labelHeight);
+                                  : okHeight >= 20
+                                      ? (topOfGreenBar - 16)
+                                          .clamp(0.0, chartHeight - 16)
+                                      : (topOfGreenBar - 32)
+                                          .clamp(0.0, chartHeight - 32);
 
                               final text = '$ok';
                               final offset = text.length == 1
@@ -893,14 +895,16 @@ class ThroughputELLBarChart extends StatelessWidget {
 
                               final barCenterX = (2 * index + 1) * groupSpace;
                               final okHeight = chartHeight * (ok / maxY);
-                              final labelHeight = 16.0;
+
                               final topOfGreenBar = chartHeight - okHeight;
 
                               final topOffset = okHeight >= 40
                                   ? topOfGreenBar // inside the green bar
-                                  : (topOfGreenBar -
-                                          labelHeight) // above the bar
-                                      .clamp(0.0, chartHeight - labelHeight);
+                                  : okHeight >= 20
+                                      ? (topOfGreenBar - 16)
+                                          .clamp(0.0, chartHeight - 16)
+                                      : (topOfGreenBar - 32)
+                                          .clamp(0.0, chartHeight - 32);
 
                               final text = '$ok';
                               final offset = text.length == 1

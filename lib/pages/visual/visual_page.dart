@@ -60,6 +60,7 @@ class _VisualPageState extends State<VisualPage> {
   List<List<String>> dataFermi = [];
 
   List<Map<String, int>> throughputData = [];
+  List<Map<String, int>> throughputDataEll = [];
   List<String> shiftLabels = [];
   List<Map<String, int>> hourlyData = [];
   List<String> hourLabels = [];
@@ -84,6 +85,16 @@ class _VisualPageState extends State<VisualPage> {
   List<Map<String, dynamic>> defectsVPF = [];
   Map<String, Map<String, int>> eqDefects = {};
   List<int> VPFCounts = [];
+
+  int In_2 = 0;
+  int ngScrap = 0;
+  List<Map<String, dynamic>> FPY_yield_shifts = [];
+  List<Map<String, dynamic>> RWK_yield_shifs = [];
+  List<Map<String, dynamic>> FPYLast8h = [];
+  List<Map<String, dynamic>> RWKLast8h = [];
+  List<int> min1Counts = [];
+  List<int> min2Counts = [];
+  List<int> ellCounts = [];
 
   Map<String, int> calculateEscalationCounts(
       List<Map<String, dynamic>> escalations) {
@@ -273,38 +284,40 @@ class _VisualPageState extends State<VisualPage> {
     try {
       final response = await ApiService.fetchVisualDataForEll();
       setState(() {
-        bussingIn_1 = response['station_1_in'] ?? 0;
-        bussingIn_2 = response['station_2_in'] ?? 0;
-        ng_bussingOut_1 = response['station_1_out_ng'] ?? 0;
-        ng_bussingOut_2 = response['station_2_out_ng'] ?? 0;
+        In_1 = response['station_1_in'] ?? 0;
+        In_2 = response['station_2_in'] ?? 0;
+        ngOut_1 = response['station_1_out_ng'] ?? 0;
+        ngScrap = response['station_2_out_ng'] ?? 0;
+
         currentYield_1 = response['station_1_yield'] ?? 100;
         currentYield_2 = response['station_2_yield'] ?? 100;
 
-        yieldLast8h_1 = List<Map<String, dynamic>>.from(
-            response['station_1_yield_last_8h'] ?? []);
-        yieldLast8h_2 = List<Map<String, dynamic>>.from(
-            response['station_2_yield_last_8h'] ?? []);
+        FPYLast8h = List<Map<String, dynamic>>.from(
+            response['FPY_yield_last_8h'] ?? []);
+        RWKLast8h = List<Map<String, dynamic>>.from(
+            response['RWK_yield_last_8h'] ?? []);
         shiftThroughput =
             List<Map<String, dynamic>>.from(response['shift_throughput'] ?? []);
         hourlyThroughput = List<Map<String, dynamic>>.from(
             response['last_8h_throughput'] ?? []);
-        station1Shifts = List<Map<String, dynamic>>.from(
-            response['station_1_yield_shifts'] ?? []);
-        station2Shifts = List<Map<String, dynamic>>.from(
-            response['station_2_yield_shifts'] ?? []);
+        FPY_yield_shifts =
+            List<Map<String, dynamic>>.from(response['FPY_yield_shifts'] ?? []);
+        RWK_yield_shifs =
+            List<Map<String, dynamic>>.from(response['RWK_yield_shifts'] ?? []);
 
-        mergedShiftData = List.generate(station1Shifts.length, (index) {
+        mergedShiftData = List.generate(FPY_yield_shifts.length, (index) {
           return {
-            'shift': station1Shifts[index]['label'],
-            'bussing1': station1Shifts[index]['yield'],
-            'bussing2': station2Shifts[index]['yield'],
+            'shift': FPY_yield_shifts[index]['label'],
+            'FPY': FPY_yield_shifts[index]['yield'],
+            'RWK': RWK_yield_shifs[index]['yield'],
           };
         });
 
-        throughputData = shiftThroughput.map<Map<String, int>>((e) {
+        throughputDataEll = shiftThroughput.map<Map<String, int>>((e) {
           final total = (e['total'] ?? 0) as int;
           final ng = (e['ng'] ?? 0) as int;
-          return {'ok': total - ng, 'ng': ng};
+          final scrap = (e['scrap'] ?? 0) as int;
+          return {'ok': total - ng - scrap, 'ng': ng, 'scrap': scrap};
         }).toList();
 
         shiftLabels =
@@ -313,7 +326,8 @@ class _VisualPageState extends State<VisualPage> {
         hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
           final total = (e['total'] ?? 0) as int;
           final ng = (e['ng'] ?? 0) as int;
-          return {'ok': total - ng, 'ng': ng};
+          final scrap = (e['scrap'] ?? 0) as int;
+          return {'ok': total - ng, 'ng': ng, 'scrap': scrap};
         }).toList();
 
         hourLabels =
@@ -321,33 +335,26 @@ class _VisualPageState extends State<VisualPage> {
 
         // Parse Top Defects QG2
         final topDefectsRaw =
-            List<Map<String, dynamic>>.from(response['top_defects_qg2'] ?? []);
+            List<Map<String, dynamic>>.from(response['top_defects'] ?? []);
+
+        print('topDefectsRaw: $topDefectsRaw');
 
         defectLabels = [];
-        ain1Counts = [];
-        ain2Counts = [];
+        min1Counts = [];
+        min2Counts = [];
+        ellCounts = [];
 
         for (final defect in topDefectsRaw) {
           defectLabels.add(defect['label']?.toString() ?? '');
-          ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
-          ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+          min1Counts.add(int.tryParse(defect['min1'].toString()) ?? 0);
+          min2Counts.add(int.tryParse(defect['min2'].toString()) ?? 0);
+          ellCounts.add(int.tryParse(defect['ell'].toString()) ?? 0);
         }
 
-        qg2_defects_value = response['total_defects_qg2'];
-
-        // Parse Top Defects VPF
-        final topDefectsVPF =
-            List<Map<String, dynamic>>.from(response['top_defects_vpf'] ?? []);
-
-        defectVPFLabels = [];
-        ain1VPFCounts = [];
-        ain2VPFCounts = [];
-
-        for (final defect in topDefectsVPF) {
-          defectVPFLabels.add(defect['label']?.toString() ?? '');
-          ain1VPFCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
-          ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
-        }
+        print('defectLabels: $defectLabels');
+        print('min1Counts: $min1Counts');
+        print('min2Counts: $min2Counts');
+        print('ellCounts: $ellCounts');
 
         // Parse fermi data
         final fermiRaw =
@@ -356,20 +363,12 @@ class _VisualPageState extends State<VisualPage> {
         dataFermi = []; // clear previous data
 
         for (final entry in fermiRaw) {
-          if (entry.containsKey("Available_Time_1")) {
-            availableTime_1 =
-                int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
-          } else if (entry.containsKey("Available_Time_2")) {
-            availableTime_2 =
-                int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
-          } else {
-            dataFermi.add([
-              entry['causale']?.toString() ?? '',
-              entry['station']?.toString() ?? '',
-              entry['count']?.toString() ?? '0',
-              entry['time']?.toString() ?? '0'
-            ]);
-          }
+          dataFermi.add([
+            entry['causale']?.toString() ?? '',
+            entry['station']?.toString() ?? '',
+            entry['count']?.toString() ?? '0',
+            entry['time']?.toString() ?? '0'
+          ]);
         }
 
         isLoading = false;
@@ -688,33 +687,29 @@ class _VisualPageState extends State<VisualPage> {
                             textColor: textColor,
                             warningColor: warningColor,
                             redColor: redColor,
-                            ng_1: ng_bussingOut_1,
-                            ng_2: ng_bussingOut_2,
-                            in_1: bussingIn_1,
-                            in_2: bussingIn_2,
+                            ng_1: ngOut_1,
+                            ng_2: ngScrap,
+                            in_1: In_1,
+                            in_2: In_2,
                             currentYield_1: currentYield_1,
                             currentYield_2: currentYield_2,
-                            throughputData: throughputData,
+                            throughputDataEll: throughputDataEll,
                             shiftLabels: shiftLabels,
                             hourlyData: hourlyData,
                             hourLabels: hourLabels,
                             dataFermi: dataFermi,
-                            station1Shifts: station1Shifts,
-                            station2Shifts: station2Shifts,
                             mergedShiftData: mergedShiftData,
-                            yieldLast8h_1: yieldLast8h_1,
-                            yieldLast8h_2: yieldLast8h_2,
+                            FPYLast8h: FPYLast8h,
+                            RWKLast8h: RWKLast8h,
                             counts: counts,
-                            availableTime_1: availableTime_1,
-                            availableTime_2: availableTime_2,
                             defectLabels: defectLabels,
-                            defectVPFLabels: defectVPFLabels,
-                            ain1Counts: ain1Counts,
-                            ain1VPFCounts: ain1VPFCounts,
-                            ain2Counts: ain2Counts,
-                            ain2VPFCounts: ain2VPFCounts,
+                            min1Counts: min1Counts,
+                            min2Counts: min2Counts,
+                            ellCounts: ellCounts,
+                            shiftThroughput: shiftThroughput,
+                            FPY_yield_shifts: FPY_yield_shifts,
+                            RWK_yield_shifs: RWK_yield_shifs,
                             last_n_shifts: last_n_shifts,
-                            qg2_defects_value: qg2_defects_value,
                           )
                         : const Center(
                             child: Text(

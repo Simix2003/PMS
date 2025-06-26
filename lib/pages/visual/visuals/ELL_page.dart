@@ -1,7 +1,6 @@
-// ignore_for_file: must_be_immutable, non_constant_identifier_names
+// ignore_for_file: must_be_immutable, non_constant_identifier_names, file_names
 
 import 'package:flutter/material.dart';
-import 'package:gauge_indicator/gauge_indicator.dart';
 import 'package:ix_monitor/pages/visual/visual_widgets.dart';
 import '../../../shared/services/api_service.dart';
 import '../escalation_visual.dart';
@@ -24,26 +23,22 @@ class EllVisualsPage extends StatefulWidget {
   final int in_2;
   final int currentYield_1;
   final int currentYield_2;
-  final List<Map<String, int>> throughputData;
+  final List<Map<String, int>> throughputDataEll;
   final List<String> shiftLabels;
   final List<Map<String, int>> hourlyData;
   final List<String> hourLabels;
-  final List<Map<String, dynamic>> station1Shifts;
-  final List<Map<String, dynamic>> station2Shifts;
-  final List<Map<String, dynamic>> mergedShiftData;
   final List<List<String>> dataFermi;
-  final List<Map<String, dynamic>> yieldLast8h_1;
-  final List<Map<String, dynamic>> yieldLast8h_2;
+  final List<Map<String, dynamic>> mergedShiftData;
+  final List<Map<String, dynamic>> FPYLast8h;
+  final List<Map<String, dynamic>> RWKLast8h;
   final Map<String, int> counts;
-  final int availableTime_1;
-  final int availableTime_2;
   final List<String> defectLabels;
-  final List<String> defectVPFLabels;
-  final List<int> ain1Counts;
-  final List<int> ain1VPFCounts;
-  final List<int> ain2Counts;
-  final List<int> ain2VPFCounts;
-  final int qg2_defects_value;
+  final List<int> min1Counts;
+  final List<int> min2Counts;
+  final List<int> ellCounts;
+  final List<Map<String, dynamic>> shiftThroughput;
+  final List<Map<String, dynamic>> FPY_yield_shifts;
+  final List<Map<String, dynamic>> RWK_yield_shifs;
   final int last_n_shifts;
 
   const EllVisualsPage({
@@ -65,26 +60,22 @@ class EllVisualsPage extends StatefulWidget {
     required this.in_2,
     required this.currentYield_1,
     required this.currentYield_2,
-    required this.throughputData,
+    required this.throughputDataEll,
     required this.shiftLabels,
     required this.hourlyData,
     required this.hourLabels,
-    required this.station1Shifts,
-    required this.station2Shifts,
-    required this.mergedShiftData,
     required this.dataFermi,
-    required this.yieldLast8h_1,
-    required this.yieldLast8h_2,
+    required this.mergedShiftData,
+    required this.FPYLast8h,
+    required this.RWKLast8h,
     required this.counts,
-    required this.availableTime_1,
-    required this.availableTime_2,
     required this.defectLabels,
-    required this.defectVPFLabels,
-    required this.ain1Counts,
-    required this.ain1VPFCounts,
-    required this.ain2Counts,
-    required this.ain2VPFCounts,
-    required this.qg2_defects_value,
+    required this.min1Counts,
+    required this.min2Counts,
+    required this.ellCounts,
+    required this.shiftThroughput,
+    required this.FPY_yield_shifts,
+    required this.RWK_yield_shifs,
     required this.last_n_shifts,
   });
 
@@ -572,8 +563,8 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          ThroughputBarChart(
-                            data: widget.throughputData,
+                          ThroughputELLBarChart(
+                            data: widget.throughputDataEll,
                             labels: widget.shiftLabels,
                             globalTarget: shift_target.toDouble(),
                           ),
@@ -582,12 +573,9 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                     ),
                     const SizedBox(height: 8),
                     // Second row with 1 card that fills all remaining space
-                    Flexible(
-                      child: HourlyBarChart(
-                        data: widget.hourlyData,
-                        hourLabels: widget.hourLabels,
-                        target: hourly_shift_target,
-                      ),
+                    YieldELLLineChart_FPY(
+                      hourlyData1: widget.FPYLast8h,
+                      target: yield_target as double,
                     ),
                   ],
                 ),
@@ -784,7 +772,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                           const SizedBox(width: 8),
                           Flexible(
                             flex: 3,
-                            child: YieldComparisonBarChart(
+                            child: YieldComparisonELLBarChart(
                               data: widget.mergedShiftData,
                               target: yield_target as double,
                             ),
@@ -794,9 +782,8 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                     ),
                     const SizedBox(height: 8),
                     // Second row with 1 card that fills all remaining space
-                    Yield2LineChart(
-                      hourlyData1: widget.yieldLast8h_1,
-                      hourlyData2: widget.yieldLast8h_2,
+                    YieldELLLineChart_RWK(
+                      hourlyData1: widget.RWKLast8h,
                       target: yield_target as double,
                     ),
                   ],
@@ -894,7 +881,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
           children: [
             // LEFT SIDE – UPTIME/DOWNTIME
             Flexible(
-              flex: 3,
+              flex: 2,
               child: HeaderBox(
                 title: 'UPTIME/DOWNTIME Shift',
                 target: '',
@@ -913,7 +900,6 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                       title: 'Pareto Shift',
                       target: '',
                       icon: Icons.bar_chart_rounded,
-                      qg2_defects_value: widget.qg2_defects_value.toString(),
                       zone: 'ELL',
                     ),
                   ),
@@ -929,225 +915,18 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
         Row(
           children: [
             Flexible(
-              flex: 3,
+              flex: 2,
               child: Container(
                 height: 400,
                 margin: const EdgeInsets.only(right: 6, bottom: 16),
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
-                    // LEFT COLUMN (2 stacked rows)
                     Flexible(
-                      flex: 2,
-                      child: Column(
-                        children: [
-                          Flexible(
-                            child: Card(
-                              elevation: 10,
-                              color: Colors.white,
-                              child: Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text(
-                                      'Available \nTime\nELL',
-                                      style: TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Column(
-                                      children: [
-                                        SizedBox(
-                                          width: 200, // radius * 2
-                                          child: Column(
-                                            children: [
-                                              AnimatedRadialGauge(
-                                                duration: const Duration(
-                                                    milliseconds: 800),
-                                                curve: Curves.easeInOut,
-                                                value: widget.availableTime_1
-                                                    .toDouble(),
-                                                radius: 100,
-                                                axis: GaugeAxis(
-                                                  min: 0,
-                                                  max: 100,
-                                                  degrees: 180,
-                                                  style: const GaugeAxisStyle(
-                                                    thickness: 16,
-                                                    background:
-                                                        Color(0xFFDDDDDD),
-                                                    segmentSpacing: 0,
-                                                  ),
-                                                  progressBar:
-                                                      GaugeRoundedProgressBar(
-                                                    color: () {
-                                                      if (widget
-                                                              .availableTime_1 <=
-                                                          50) {
-                                                        return widget
-                                                            .errorColor;
-                                                      }
-                                                      if (widget
-                                                              .availableTime_1 <=
-                                                          75) {
-                                                        return widget
-                                                            .warningColor;
-                                                      }
-                                                      return widget.okColor;
-                                                    }(),
-                                                  ),
-                                                ),
-                                                builder:
-                                                    (context, child, value) {
-                                                  return Center(
-                                                    child: Text(
-                                                      '${value.toInt()}%',
-                                                      style: const TextStyle(
-                                                        fontSize: 32,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                              const SizedBox(height: 6),
-                                              const Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text('0%',
-                                                      style: TextStyle(
-                                                          fontSize: 14)),
-                                                  Text('100%',
-                                                      style: TextStyle(
-                                                          fontSize: 14)),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          //const TopDefectsPieChart(),
-                          Flexible(
-                            child: Card(
-                              elevation: 10,
-                              color: Colors.white,
-                              child: Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text(
-                                      'Available \nTime\nRMI',
-                                      style: TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Column(
-                                      children: [
-                                        SizedBox(
-                                          width: 200, // radius * 2
-                                          child: Column(
-                                            children: [
-                                              AnimatedRadialGauge(
-                                                duration: const Duration(
-                                                    milliseconds: 800),
-                                                curve: Curves.easeInOut,
-                                                value: widget.availableTime_2
-                                                    .toDouble(),
-                                                radius: 100,
-                                                axis: GaugeAxis(
-                                                  min: 0,
-                                                  max: 100,
-                                                  degrees: 180,
-                                                  style: const GaugeAxisStyle(
-                                                    thickness: 16,
-                                                    background:
-                                                        Color(0xFFDDDDDD),
-                                                    segmentSpacing: 0,
-                                                  ),
-                                                  progressBar:
-                                                      GaugeRoundedProgressBar(
-                                                    color: () {
-                                                      if (widget
-                                                              .availableTime_2 <=
-                                                          50) {
-                                                        return widget
-                                                            .errorColor;
-                                                      }
-                                                      if (widget
-                                                              .availableTime_2 <=
-                                                          75) {
-                                                        return widget
-                                                            .warningColor;
-                                                      }
-                                                      return widget.okColor;
-                                                    }(),
-                                                  ),
-                                                ),
-                                                builder:
-                                                    (context, child, value) {
-                                                  return Center(
-                                                    child: Text(
-                                                      '${value.toInt()}%',
-                                                      style: const TextStyle(
-                                                        fontSize: 32,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                              const SizedBox(height: 6),
-                                              const Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text('0%',
-                                                      style: TextStyle(
-                                                          fontSize: 14)),
-                                                  Text('100%',
-                                                      style: TextStyle(
-                                                          fontSize: 14)),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      flex: 3,
                       child: Padding(
                         padding: const EdgeInsets.all(8),
                         child: Column(
@@ -1238,10 +1017,11 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                     children: [
                       Flexible(
                         flex: 3,
-                        child: TopDefectsHorizontalBarChart(
+                        child: TopDefectsRMIHorizontalBarChart(
                           defectLabels: widget.defectLabels,
-                          ain1Counts: widget.ain1Counts,
-                          ain2Counts: widget.ain2Counts,
+                          min1Counts: widget.min1Counts,
+                          min2Counts: widget.min2Counts,
+                          ellCounts: widget.ellCounts,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -1252,11 +1032,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Expanded(
-                              child: VPFDefectsHorizontalBarChart(
-                                defectLabels: widget.defectVPFLabels,
-                                ain1Counts: widget.ain1VPFCounts,
-                                ain2Counts: widget.ain2VPFCounts,
-                              ),
+                              child: BufferChart(),
                             ),
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 4.0),

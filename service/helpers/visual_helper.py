@@ -683,8 +683,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
         s2_y   = compute_yield(s2_g, s2_ng)
 
         # -------- last 3 shifts yield + throughput -------
-        s1_yield_shifts, s2_yield_shifts, shift_throughput = [], [], []
-        qc_stations = cfg["station_1_out_ng"] + cfg["station_2_out_ng"]
+        FPY_yield_shifts, RWK_yield_shifs, shift_throughput = [], [], []
         for label, start, end in get_previous_shifts(now):
             # yields
             s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  start, end, "all")
@@ -694,7 +693,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
             s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
             s2_g = s2_in_ - s2_n
 
-            s1_yield_shifts.append({
+            FPY_yield_shifts.append({
                 "label": label,
                 "start": start.isoformat(),
                 "end": end.isoformat(),
@@ -703,7 +702,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 "ng": s1_n
             })
 
-            s2_yield_shifts.append({
+            RWK_yield_shifs.append({
                 "label": label,
                 "start": start.isoformat(),
                 "end": end.isoformat(),
@@ -715,30 +714,34 @@ def _compute_snapshot_ell(now: datetime) -> dict:
             # throughput
             tot = (count_unique_objects(cursor, cfg["station_1_in"], start, end, "all") +
                 count_unique_objects(cursor, cfg["station_2_in"], start, end, "all"))
-            ng = s1_n + s2_n
+            ng = s1_n
             shift_throughput.append({
                 "label": label,
                 "start": start.isoformat(),
                 "end": end.isoformat(),
                 "total": tot,
-                "ng": ng
+                "ng": ng,
+                "scrap" : s2_n
+
             })
 
         # -------- last 8 h bins (yield + throughput) -----
-        last_8h_throughput, s1_y8h, s2_y8h = [], [], []
+        last_8h_throughput, FPY_y8h, RWK_y8h = [], [], []
         for label, h_start, h_end in get_last_8h_bins(now):
             # THROUGHPUT
             tot  = (count_unique_objects(cursor, cfg["station_1_in"], h_start, h_end, "all") +
                     count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all")) or 0
-            ng   = (count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") +
-                    count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng")) or 0
+            ng   = (count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng")) or 0
+
+            scrap = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
 
             last_8h_throughput.append({
                 "hour": label,
                 "start": h_start.isoformat(),
                 "end": h_end.isoformat(),
                 "total": tot,
-                "ng": ng
+                "ng": ng,
+                "scrap": scrap
             })
 
             # YIELDS PER STATION
@@ -749,7 +752,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
             s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
             s2_g = s2_in_ - s2_n
 
-            s1_y8h.append({
+            FPY_y8h.append({
                 "hour": label,
                 "good": s1_g,          # ➊ keep counts
                 "ng":   s1_n,
@@ -757,7 +760,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 "start": h_start.isoformat(),
                 "end":   h_end.isoformat(),
             })
-            s2_y8h.append({
+            RWK_y8h.append({
                 "hour": label,
                 "good": s2_g,
                 "ng":   s2_n,
@@ -769,41 +772,33 @@ def _compute_snapshot_ell(now: datetime) -> dict:
         # -------- fermi_data calculation --------
         # get top 4 stops in current shift
 
-        # Query total stop time for station 29
-        sql_total_29 = """
+        # Query total stop time for station 9
+        sql_total_9 = """
             SELECT SUM(st.stop_time) AS total_time
             FROM stops st
             WHERE st.type = 'STOP'
-            AND st.station_id = 29
+            AND st.station_id = 9
             AND st.start_time BETWEEN %s AND %s
         """
-        cursor.execute(sql_total_29, (shift_start, shift_end))
-        row29 = cursor.fetchone() or {}
-        total_stop_time_29 = row29.get("total_time") or 0
-        total_stop_time_minutes_29 = total_stop_time_29 / 60
-        available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
+        cursor.execute(sql_total_9, (shift_start, shift_end))
 
-        # Query total stop time for station 30
-        sql_total_30 = """
+        # Query total stop time for station 3
+        sql_total_3 = """
             SELECT SUM(st.stop_time) AS total_time
             FROM stops st
             WHERE st.type = 'STOP'
-            AND st.station_id = 30
+            AND st.station_id = 3
             AND st.start_time BETWEEN %s AND %s
         """
-        cursor.execute(sql_total_30, (shift_start, shift_end))
-        row30 = cursor.fetchone() or {}
-        total_stop_time_30 = row30.get("total_time") or 0
-        total_stop_time_minutes_30 = total_stop_time_30 / 60
-        available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
-
+        cursor.execute(sql_total_3, (shift_start, shift_end))
+ 
         # Query top 4 stops for both stations
         sql = """
             SELECT s.name AS station_name, st.reason, COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
             FROM stops st
             JOIN stations s ON st.station_id = s.id
             WHERE st.type = 'STOP'
-            AND st.station_id IN (29, 30)
+            AND st.station_id IN (9, 3)
             AND st.start_time BETWEEN %s AND %s
             GROUP BY st.station_id, st.reason
             ORDER BY total_time DESC
@@ -820,17 +815,13 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 "time": total_minutes
             })
 
-        # Append both available times at the end
-        fermi_data.append({"Available_Time_1": f"{available_time_29}"})
-        fermi_data.append({"Available_Time_2": f"{available_time_30}"})
-
         # -------- top_defects_qg2 calculation from productions + object_defects --------
-        # 1️⃣ Query productions table for esito 6 on stations 1+2
+        # 1️⃣ Query productions table for esito 6 on stations 1+2+9
         sql_productions = """
             SELECT id, station_id
             FROM productions
             WHERE esito = 6
-            AND station_id IN (1, 2)
+            AND station_id IN (1, 2, 9)
             AND start_time BETWEEN %s AND %s
         """
         cursor.execute(sql_productions, (shift_start, shift_end))
@@ -839,8 +830,9 @@ def _compute_snapshot_ell(now: datetime) -> dict:
         # Split production IDs by station
         production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
         production_ids_2= [row['id'] for row in rows if row['station_id'] == 2]
+        production_ids_9 = [row['id'] for row in rows if row['station_id'] == 9]
 
-        all_production_ids = tuple(production_ids_1 + production_ids_2)
+        all_production_ids = tuple(production_ids_1 + production_ids_2 + production_ids_9)
         if not all_production_ids:
             all_production_ids = (0,)
 
@@ -857,8 +849,9 @@ def _compute_snapshot_ell(now: datetime) -> dict:
         # Build mapping production_id → station_id
         production_station_map = {pid: 1 for pid in production_ids_1}
         production_station_map.update({pid: 2 for pid in production_ids_2})
+        production_station_map.update({pid: 9 for pid in production_ids_9})
 
-        defect_counter = defaultdict(lambda: {1: set(), 2: set()})
+        defect_counter = defaultdict(lambda: {1: set(), 2: set(), 9: set()})
 
         for row in rows:
             prod_id = row['production_id']
@@ -870,79 +863,21 @@ def _compute_snapshot_ell(now: datetime) -> dict:
         # Aggregate counts
         full_results = []
         for category, stations in defect_counter.items():
-            ain1_count = len(stations[1])
-            ain2_count = len(stations[2])
-            total = ain1_count + ain2_count
+            min1_count = len(stations[1])
+            min2_count = len(stations[2])
+            ell_count = len(stations[9])
+            total = min1_count + min2_count + ell_count
             full_results.append({
                 "label": category,
-                "ain1": ain1_count,
-                "ain2": ain2_count,
+                "min1": min1_count,
+                "min2": min2_count,
+                "ell": ell_count,
                 "total": total
             })
 
-        # Compute total over all categories ✅
-        total_defects_qg2 = sum(r["total"] for r in full_results)
-
         # Then get top 5
         results = sorted(full_results, key=lambda x: x['total'], reverse=True)[:5]
-        top_defects_qg2 = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in results]
-
-        # -------- top_defects_vpf (defects 12,14,15 from station 56, grouped by source station 29/30) ------
-        sql_vpf_productions = """
-            SELECT p56.id, origin.station_id AS origin_station
-            FROM productions p56
-            JOIN productions origin ON p56.object_id = origin.object_id
-            WHERE p56.esito = 6
-            AND p56.station_id = 56
-            AND p56.start_time BETWEEN %s AND %s
-            AND origin.station_id IN (29, 30)
-        """
-        cursor.execute(sql_vpf_productions, (shift_start, shift_end))
-        vpf_rows = cursor.fetchall()
-
-        vpf_prod_ids = [row['id'] for row in vpf_rows]
-        vpf_prod_map = {row['id']: row['origin_station'] for row in vpf_rows}
-
-        if not vpf_prod_ids:
-            top_defects_vpf = []
-        else:
-            placeholders = ','.join(['%s'] * len(vpf_prod_ids))
-            sql_vpf_defects = f"""
-                SELECT od.production_id, d.category
-                FROM object_defects od
-                JOIN defects d ON od.defect_id = d.id
-                WHERE od.production_id IN ({placeholders})
-                AND od.defect_id IN (12, 14, 15)
-            """
-            cursor.execute(sql_vpf_defects, vpf_prod_ids)
-            defect_rows = cursor.fetchall()
-
-            vpf_counter: Dict[str, Dict[int, int]] = defaultdict(lambda: {29: 0, 30: 0})
-            for row in defect_rows:
-                pid = row["production_id"]
-                category = row["category"]
-                if pid in vpf_prod_map:
-                    station = vpf_prod_map[pid]
-                    if station in (29, 30):
-                        vpf_counter[category][station] += 1
-
-            vpf_results = []
-            for category, stations in vpf_counter.items():
-                c29 = stations[29]
-                c30 = stations[30]
-                total = c29 + c30
-                vpf_results.append({
-                    "label": category,
-                    "ain1": c29,  # AIN1 = 29
-                    "ain2": c30,  # AIN2 = 30
-                    "total": total
-                })
-
-            top5_vpf = sorted(vpf_results, key=lambda r: r["total"], reverse=True)[:5]
-            top_defects_vpf = [
-                {"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]}
-                for r in top5_vpf
-            ]
+        top_defects = [{"label": r["label"], "min1": r["min1"], "min2": r["min2"], "ell": r["ell"]} for r in results]
 
     except Exception as e:
         logger.exception(f"❌ compute_zone_snapshot() FAILED for zone=AIN: {e}")
@@ -955,18 +890,16 @@ def _compute_snapshot_ell(now: datetime) -> dict:
     "station_2_out_ng": s2_ng,
     "station_1_yield": s1_y,
     "station_2_yield": s2_y,
-    "station_1_yield_shifts": s1_yield_shifts,
-    "station_2_yield_shifts": s2_yield_shifts,
-    "station_1_yield_last_8h": s1_y8h,
-    "station_2_yield_last_8h": s2_y8h,
+    "FPY_yield_shifts": FPY_yield_shifts,
+    "RWK_yield_shifts": RWK_yield_shifs,
+    "FPY_yield_last_8h": FPY_y8h,
+    "RWK_yield_last_8h": RWK_y8h,
     "shift_throughput": shift_throughput,
     "last_8h_throughput": last_8h_throughput,
     "__shift_start": shift_start.isoformat(),
     "__last_hour": hour_start.isoformat(),
     "fermi_data": fermi_data,
-    "top_defects_qg2": top_defects_qg2,
-    "top_defects_vpf": top_defects_vpf,
-    "total_defects_qg2": total_defects_qg2,
+    "top_defects": top_defects,
 }
 
 def update_visual_data_on_new_module(

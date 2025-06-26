@@ -897,19 +897,17 @@ class ApiService {
         'station_2_out_ng': data['station_2_out_ng'] ?? 0,
         'station_1_yield': data['station_1_yield'] ?? 100,
         'station_2_yield': data['station_2_yield'] ?? 100,
-        'station_1_yield_shifts': data['station_1_yield_shifts'] ?? [],
-        'station_2_yield_shifts': data['station_2_yield_shifts'] ?? [],
+        'FPY_yield_shifts': data['FPY_yield_shifts'] ?? [],
+        'RWK_yield_shifs': data['RWK_yield_shifs'] ?? [],
         'station_1_yield_last_8h': data['station_1_yield_last_8h'] ?? [],
         'station_2_yield_last_8h': data['station_2_yield_last_8h'] ?? [],
         'shift_throughput': data['shift_throughput'] ?? [],
         'last_8h_throughput': data['last_8h_throughput'] ?? [],
         'fermi_data': data['fermi_data'] ?? [],
-        'top_defects_qg2': data['top_defects_qg2'] ?? [],
-        'total_defects_qg2': data['total_defects_qg2'] ?? 0,
-        'top_defects_vpf': data['top_defects_vpf'] ?? [],
+        'top_defects': data['top_defects'] ?? [],
       };
     } else {
-      throw Exception('Failed to load zone data');
+      throw Exception('Failed to load ELL visual data');
     }
   }
 

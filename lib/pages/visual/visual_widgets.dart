@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use, use_build_context_synchronously, non_constant_identifier_names, library_private_types_in_public_api, prefer_typing_uninitialized_variables
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously, non_constant_identifier_names, library_private_types_in_public_api, prefer_typing_uninitialized_variables, camel_case_types
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'dart:async';
@@ -371,7 +371,7 @@ class LegendRow extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        if (time.isNotEmpty) const SizedBox(width: 8),
         if (time.isNotEmpty)
           // Time cell
           Expanded(
@@ -663,7 +663,7 @@ class ThroughputBarChart extends StatelessWidget {
                               final labelHeight = 16.0;
                               final topOfGreenBar = chartHeight - okHeight;
 
-                              final topOffset = okHeight >= 24
+                              final topOffset = okHeight >= 40
                                   ? topOfGreenBar // inside the green bar
                                   : (topOfGreenBar -
                                           labelHeight) // above the bar
@@ -728,6 +728,254 @@ class ThroughputBarChart extends StatelessWidget {
               if (ng > 0)
                 BarChartRodStackItem(
                     ok.toDouble(), (ok + ng).toDouble(), Colors.red),
+            ],
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
+          ),
+        ],
+        showingTooltipIndicators: [0, 1],
+      );
+    });
+  }
+}
+
+class ThroughputELLBarChart extends StatelessWidget {
+  final List<Map<String, int>> data;
+  final List<String> labels;
+  final double globalTarget;
+
+  const ThroughputELLBarChart({
+    super.key,
+    required this.data,
+    required this.labels,
+    this.globalTarget = 360,
+  });
+
+  double _calculateSmartMaxY(int maxTotal, bool showTarget) {
+    if (!showTarget) {
+      return maxTotal + (maxTotal * 0.1).clamp(20, 100);
+    }
+    final base = globalTarget > maxTotal ? globalTarget : maxTotal.toDouble();
+    final padding = (base * 0.1).clamp(20, 100);
+    return base + padding;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxTotal = data
+        .map((e) => e['ok']! + e['ng']! + e['scrap']!)
+        .reduce((a, b) => a > b ? a : b);
+    final bool showTarget = maxTotal >= globalTarget * 0.5;
+    final double maxY = _calculateSmartMaxY(maxTotal, showTarget);
+
+    return Expanded(
+      flex: 2,
+      child: Card(
+        color: Colors.white,
+        elevation: 10,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'Throughput',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Target: ${globalTarget.toInt()}',
+                    style: const TextStyle(
+                      color: Colors.orangeAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: Stack(
+                  children: [
+                    BarChart(
+                      BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY: maxY,
+                        barTouchData: BarTouchData(
+                          enabled: true,
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) => Colors.transparent,
+                            tooltipPadding: EdgeInsets.zero,
+                            tooltipMargin: 0,
+                            fitInsideHorizontally: true,
+                            fitInsideVertically: true,
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              final value = rod.toY.toString();
+                              return BarTooltipItem(
+                                value,
+                                const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        titlesData: FlTitlesData(
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                final index = value.toInt();
+                                if (index >= 0 && index < labels.length) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Text(
+                                      labels[index],
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ),
+                        ),
+                        gridData: FlGridData(show: false),
+                        borderData: FlBorderData(show: false),
+                        barGroups: _buildBarGroups(data),
+                        extraLinesData: ExtraLinesData(
+                          horizontalLines: [
+                            HorizontalLine(
+                              y: globalTarget,
+                              color: Colors.orangeAccent,
+                              strokeWidth: 2,
+                              dashArray: [6, 3],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final chartWidth = constraints.maxWidth;
+                          final chartHeight = constraints.maxHeight;
+                          final barCount = data.length;
+                          final groupSpace = chartWidth / (barCount * 2);
+
+                          return Stack(
+                            children: List.generate(barCount, (index) {
+                              final ok = data[index]['ok']!;
+                              if (ok <= 0) {
+                                return const SizedBox();
+                              }
+
+                              final barCenterX = (2 * index + 1) * groupSpace;
+                              final okHeight = chartHeight * (ok / maxY);
+                              final labelHeight = 16.0;
+                              final topOfGreenBar = chartHeight - okHeight;
+
+                              final topOffset = okHeight >= 40
+                                  ? topOfGreenBar // inside the green bar
+                                  : (topOfGreenBar -
+                                          labelHeight) // above the bar
+                                      .clamp(0.0, chartHeight - labelHeight);
+
+                              final text = '$ok';
+                              final offset = text.length == 1
+                                  ? 4
+                                  : text.length == 2
+                                      ? 8
+                                      : 12;
+
+                              return Positioned(
+                                left: barCenterX - offset,
+                                top: topOffset,
+                                child: Text(
+                                  text,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    shadows: [
+                                      Shadow(
+                                          offset: Offset(0, 0),
+                                          blurRadius: 2,
+                                          color: Colors.black),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 20,
+                children: [
+                  LegendItem(color: Colors.green, label: 'G'),
+                  LegendItem(color: Colors.red, label: 'NG'),
+                  LegendItem(color: Colors.black, label: 'Scrap'),
+                  LegendItem(
+                      color: Colors.orange, label: 'Target', isDashed: true),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<BarChartGroupData> _buildBarGroups(List<Map<String, int>> data) {
+    return List.generate(data.length, (index) {
+      final ok = data[index]['ok']!;
+      final ng = data[index]['ng']!;
+      final scrap = data[index]['scrap']!;
+      final total = ok + ng + scrap;
+
+      return BarChartGroupData(
+        x: index,
+        barRods: [
+          BarChartRodData(
+            color: Colors.transparent,
+            fromY: 0,
+            toY: total.toDouble(),
+            width: 64,
+            rodStackItems: [
+              if (ok > 0) BarChartRodStackItem(0, ok.toDouble(), Colors.green),
+              if (ng > 0)
+                BarChartRodStackItem(
+                    ok.toDouble(), (ok + ng).toDouble(), Colors.red),
+              if (scrap > 0)
+                BarChartRodStackItem((ok + ng).toDouble(),
+                    (ok + ng + scrap).toDouble(), Colors.black),
             ],
             borderRadius: const BorderRadius.all(Radius.circular(4)),
           ),
@@ -1099,7 +1347,7 @@ class YieldComparisonBarChart extends StatelessWidget {
               children: [
                 const SizedBox(width: 8),
                 const Text(
-                  'Yield per Turno',
+                  'Yield per Shift',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
@@ -1235,6 +1483,189 @@ class YieldComparisonBarChart extends StatelessWidget {
               children: [
                 LegendItem(color: Colors.blue.shade900, label: 'AIN 1'),
                 LegendItem(color: Colors.lightBlue.shade200, label: 'AIN 2'),
+                LegendItem(
+                    color: Colors.orange, label: 'Target', isDashed: true),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class YieldComparisonELLBarChart extends StatelessWidget {
+  final List<Map<String, dynamic>> data;
+  final double target;
+
+  const YieldComparisonELLBarChart({
+    super.key,
+    required this.data,
+    this.target = 90,
+  });
+
+  String _getCurrentShift() {
+    final hour = DateTime.now().hour;
+    if (hour >= 6 && hour < 14) return 'S1';
+    if (hour >= 14 && hour < 22) return 'S2';
+    return 'S3';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentShift = _getCurrentShift();
+    final orderedData = reorderShifts(data, currentShift);
+
+    return Card(
+      color: Colors.white,
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const SizedBox(width: 8),
+                const Text(
+                  'Yield per Shift',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                Text(
+                  'Target: $target%',
+                  style: TextStyle(
+                    color: Colors.orangeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100,
+              child: Stack(
+                children: [
+                  // 🔹 Chart
+                  BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: 100,
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          getTooltipColor: (_) => Colors.grey
+                              .withOpacity(0.8), // 🔹 semi-transparent grey
+                          tooltipPadding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
+                          tooltipMargin: 6,
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            final value = rod.toY.toStringAsFixed(0);
+
+                            return BarTooltipItem(
+                              '$value%',
+                              const TextStyle(
+                                color: Colors.white, // 🔸 white text
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              int i = value.toInt();
+                              return Text(orderedData[i]['shift']);
+                            },
+                          ),
+                        ),
+                        topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                      ),
+                      gridData: FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      barGroups: List.generate(orderedData.length, (index) {
+                        final item = orderedData[index];
+                        if (item['FPY'] == null || item['RWK'] == null) {
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: 0,
+                                width: 40,
+                                color: Colors.blue.shade900,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: 0,
+                                width: 40,
+                                color: Colors.lightBlue.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 6,
+                          );
+                        } else {
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: (item['FPY'] as num).toDouble(),
+                                width: 40,
+                                color: Colors.blue.shade900,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: (item['RWK'] as num).toDouble(),
+                                width: 40,
+                                color: Colors.lightBlue.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 6,
+                          );
+                        }
+                      }),
+                      extraLinesData: ExtraLinesData(horizontalLines: [
+                        HorizontalLine(
+                          y: target,
+                          color: Colors.orange,
+                          strokeWidth: 2,
+                          dashArray: [8, 4],
+                        ),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 20,
+              children: [
+                LegendItem(color: Colors.blue.shade900, label: 'FPY'),
+                LegendItem(
+                    color: Colors.lightBlue.shade200,
+                    label: 'Yield con ReWork'),
                 LegendItem(
                     color: Colors.orange, label: 'Target', isDashed: true),
               ],
@@ -1846,8 +2277,485 @@ class YieldLineChart extends StatelessWidget {
                         tooltipMargin: 8,
                         getTooltipItems: (spots) {
                           return spots.map((spot) {
-                            if (spot.barIndex == 1)
+                            if (spot.barIndex == 1) {
                               return null; // skip target line
+                            }
+                            return LineTooltipItem(
+                              '${spot.y.toInt()}%',
+                              TextStyle(
+                                color: Colors.blue.shade900,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            );
+                          }).toList();
+                        },
+                      ),
+                    ),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          getTitlesWidget: (value, meta) {
+                            final index = value.toInt();
+                            if (index >= 0 &&
+                                index < hourlyData1.length &&
+                                value == index.toDouble()) {
+                              return SideTitleWidget(
+                                meta: meta,
+                                child: Text(
+                                  hourlyData1[index]['hour'],
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
+                      topTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                    ),
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: true,
+                      horizontalInterval: 20,
+                      getDrawingHorizontalLine: (value) => FlLine(
+                        color: Colors.grey.withOpacity(0.2),
+                        strokeWidth: 1,
+                      ),
+                    ),
+                    borderData: FlBorderData(
+                      show: true,
+                      border: const Border(
+                        left: BorderSide(),
+                        bottom: BorderSide(),
+                      ),
+                    ),
+                    showingTooltipIndicators: List.generate(length, (index) {
+                      return ShowingTooltipIndicators([
+                        LineBarSpot(
+                          line1,
+                          0,
+                          FlSpot(
+                            index.toDouble(),
+                            (hourlyData1[index]['yield'] ?? 0).toDouble(),
+                          ),
+                        ),
+                      ]);
+                    }),
+                    lineBarsData: [
+                      line1, // barIndex 0
+                      targetLine, // barIndex 1
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class YieldELLLineChart_RWK extends StatelessWidget {
+  final List<Map<String, dynamic>> hourlyData1;
+  final double target;
+
+  const YieldELLLineChart_RWK({
+    super.key,
+    required this.hourlyData1,
+    required this.target,
+  });
+
+  List<Map<String, dynamic>> computeShiftBands(
+      List<Map<String, dynamic>> data) {
+    List<Map<String, dynamic>> bands = [];
+    int? startIdx;
+    String? currentShift;
+
+    String getShift(String hourStr) {
+      final hour = int.parse(hourStr.split(':')[0]);
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    for (int i = 0; i < data.length; i++) {
+      String shift = getShift(data[i]['hour']);
+      if (shift != currentShift) {
+        if (startIdx != null && currentShift != null) {
+          bands.add({
+            'start': startIdx,
+            'end': i - 1,
+            'shift': currentShift,
+          });
+        }
+        startIdx = i;
+        currentShift = shift;
+      }
+    }
+
+    if (startIdx != null && currentShift != null) {
+      bands.add({
+        'start': startIdx,
+        'end': data.length - 1,
+        'shift': currentShift,
+      });
+    }
+
+    return bands;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final int length = hourlyData1.length;
+
+    String getCurrentShiftLabel() {
+      final now = TimeOfDay.now();
+      final hour = now.hour;
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    final currentShift = getCurrentShiftLabel();
+    final shiftBands = computeShiftBands(hourlyData1);
+
+    final shiftAnnotations = shiftBands.map((band) {
+      final isCurrent = band['shift'] == currentShift;
+      final color = isCurrent
+          ? Colors.white.withOpacity(0.0) // no overlay = white background
+          : Colors.grey.withOpacity(0.15); // light grey overlay
+
+      return VerticalRangeAnnotation(
+        x1: band['start'].toDouble(),
+        x2: band['end'].toDouble() + 1,
+        color: color,
+      );
+    }).toList();
+
+    final line1 = LineChartBarData(
+      isCurved: false,
+      show: true,
+      spots: List.generate(
+        hourlyData1.length,
+        (i) => FlSpot(i.toDouble(), (hourlyData1[i]['yield'] ?? 0).toDouble()),
+      ),
+      color: Colors.blue.shade900,
+      barWidth: 2,
+      dotData: FlDotData(show: true),
+    );
+
+    final targetLine = LineChartBarData(
+      spots: List.generate(
+        length,
+        (i) => FlSpot(i.toDouble(), target),
+      ),
+      color: Colors.orange,
+      isStrokeCapRound: true,
+      barWidth: 2,
+      isCurved: false,
+      dashArray: [6, 4],
+      dotData: FlDotData(show: false),
+    );
+
+    return Expanded(
+      child: Card(
+        color: Colors.white,
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Yield Oraria con ReWork',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Target: $target%',
+                    style: const TextStyle(
+                      color: Colors.orangeAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: LineChart(
+                  LineChartData(
+                    minY: 0,
+                    maxY: 140,
+                    rangeAnnotations: RangeAnnotations(
+                      verticalRangeAnnotations: shiftAnnotations,
+                    ),
+                    lineTouchData: LineTouchData(
+                      enabled: true,
+                      handleBuiltInTouches: false,
+                      touchTooltipData: LineTouchTooltipData(
+                        getTooltipColor: (_) => Colors.transparent,
+                        tooltipRoundedRadius: 0,
+                        tooltipPadding: EdgeInsets.zero,
+                        tooltipMargin: 8,
+                        getTooltipItems: (spots) {
+                          return spots.map((spot) {
+                            if (spot.barIndex == 1) {
+                              return null; // skip target line
+                            }
+                            return LineTooltipItem(
+                              '${spot.y.toInt()}%',
+                              TextStyle(
+                                color: Colors.blue.shade900,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            );
+                          }).toList();
+                        },
+                      ),
+                    ),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          getTitlesWidget: (value, meta) {
+                            final index = value.toInt();
+                            if (index >= 0 &&
+                                index < hourlyData1.length &&
+                                value == index.toDouble()) {
+                              return SideTitleWidget(
+                                meta: meta,
+                                child: Text(
+                                  hourlyData1[index]['hour'],
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
+                      topTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      rightTitles: AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                    ),
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: true,
+                      horizontalInterval: 20,
+                      getDrawingHorizontalLine: (value) => FlLine(
+                        color: Colors.grey.withOpacity(0.2),
+                        strokeWidth: 1,
+                      ),
+                    ),
+                    borderData: FlBorderData(
+                      show: true,
+                      border: const Border(
+                        left: BorderSide(),
+                        bottom: BorderSide(),
+                      ),
+                    ),
+                    showingTooltipIndicators: List.generate(length, (index) {
+                      return ShowingTooltipIndicators([
+                        LineBarSpot(
+                          line1,
+                          0,
+                          FlSpot(
+                            index.toDouble(),
+                            (hourlyData1[index]['yield'] ?? 0).toDouble(),
+                          ),
+                        ),
+                      ]);
+                    }),
+                    lineBarsData: [
+                      line1, // barIndex 0
+                      targetLine, // barIndex 1
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class YieldELLLineChart_FPY extends StatelessWidget {
+  final List<Map<String, dynamic>> hourlyData1;
+  final double target;
+
+  const YieldELLLineChart_FPY({
+    super.key,
+    required this.hourlyData1,
+    required this.target,
+  });
+
+  List<Map<String, dynamic>> computeShiftBands(
+      List<Map<String, dynamic>> data) {
+    List<Map<String, dynamic>> bands = [];
+    int? startIdx;
+    String? currentShift;
+
+    String getShift(String hourStr) {
+      final hour = int.parse(hourStr.split(':')[0]);
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    for (int i = 0; i < data.length; i++) {
+      String shift = getShift(data[i]['hour']);
+      if (shift != currentShift) {
+        if (startIdx != null && currentShift != null) {
+          bands.add({
+            'start': startIdx,
+            'end': i - 1,
+            'shift': currentShift,
+          });
+        }
+        startIdx = i;
+        currentShift = shift;
+      }
+    }
+
+    if (startIdx != null && currentShift != null) {
+      bands.add({
+        'start': startIdx,
+        'end': data.length - 1,
+        'shift': currentShift,
+      });
+    }
+
+    return bands;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final int length = hourlyData1.length;
+
+    String getCurrentShiftLabel() {
+      final now = TimeOfDay.now();
+      final hour = now.hour;
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    final currentShift = getCurrentShiftLabel();
+    final shiftBands = computeShiftBands(hourlyData1);
+
+    final shiftAnnotations = shiftBands.map((band) {
+      final isCurrent = band['shift'] == currentShift;
+      final color = isCurrent
+          ? Colors.white.withOpacity(0.0) // no overlay = white background
+          : Colors.grey.withOpacity(0.15); // light grey overlay
+
+      return VerticalRangeAnnotation(
+        x1: band['start'].toDouble(),
+        x2: band['end'].toDouble() + 1,
+        color: color,
+      );
+    }).toList();
+
+    final line1 = LineChartBarData(
+      isCurved: false,
+      show: true,
+      spots: List.generate(
+        hourlyData1.length,
+        (i) => FlSpot(i.toDouble(), (hourlyData1[i]['yield'] ?? 0).toDouble()),
+      ),
+      color: Colors.blue.shade900,
+      barWidth: 2,
+      dotData: FlDotData(show: true),
+    );
+
+    final targetLine = LineChartBarData(
+      spots: List.generate(
+        length,
+        (i) => FlSpot(i.toDouble(), target),
+      ),
+      color: Colors.orange,
+      isStrokeCapRound: true,
+      barWidth: 2,
+      isCurved: false,
+      dashArray: [6, 4],
+      dotData: FlDotData(show: false),
+    );
+
+    return Expanded(
+      child: Card(
+        color: Colors.white,
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const SizedBox(width: 8),
+                  const Text(
+                    'FPY',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Target: $target%',
+                    style: const TextStyle(
+                      color: Colors.orangeAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: LineChart(
+                  LineChartData(
+                    minY: 0,
+                    maxY: 140,
+                    rangeAnnotations: RangeAnnotations(
+                      verticalRangeAnnotations: shiftAnnotations,
+                    ),
+                    lineTouchData: LineTouchData(
+                      enabled: true,
+                      handleBuiltInTouches: false,
+                      touchTooltipData: LineTouchTooltipData(
+                        getTooltipColor: (_) => Colors.transparent,
+                        tooltipRoundedRadius: 0,
+                        tooltipPadding: EdgeInsets.zero,
+                        tooltipMargin: 8,
+                        getTooltipItems: (spots) {
+                          return spots.map((spot) {
+                            if (spot.barIndex == 1) {
+                              return null; // skip target line
+                            }
                             return LineTooltipItem(
                               '${spot.y.toInt()}%',
                               TextStyle(
@@ -2084,6 +2992,165 @@ class TopDefectsHorizontalBarChart extends StatelessWidget {
   }
 }
 
+class TopDefectsRMIHorizontalBarChart extends StatelessWidget {
+  final List<String> defectLabels;
+  final List<int> min1Counts;
+  final List<int> min2Counts;
+  final List<int> ellCounts;
+
+  const TopDefectsRMIHorizontalBarChart({
+    super.key,
+    required this.defectLabels,
+    required this.min1Counts,
+    required this.min2Counts,
+    required this.ellCounts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 10,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(start: 16, end: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ✅ Title
+            const Text(
+              "Difetti RMI",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ✅ Legends
+            Wrap(
+              spacing: 20,
+              children: [
+                LegendItem(color: Colors.blue.shade900, label: 'MIN01'),
+                LegendItem(color: Colors.lightBlue, label: 'MIN02'),
+                LegendItem(color: Colors.orange, label: 'ELL'),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // ✅ Chart
+            Expanded(
+              child: Stack(
+                children: [
+                  RotatedBox(
+                    quarterTurns: 1,
+                    child: BarChart(
+                      BarChartData(
+                        barTouchData: BarTouchData(
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) =>
+                                Colors.transparent, // transparent bg
+                            rotateAngle: -90, // rotate tooltip content
+                            tooltipPadding: EdgeInsets.zero, // no extra padding
+                            tooltipMargin: 8, // close to bar
+                            tooltipRoundedRadius: 0, // square box
+                            tooltipBorder: BorderSide.none, // no border
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              return BarTooltipItem(
+                                '${rod.toY.toInt()}',
+                                TextStyle(
+                                  color: rod.color, // same as bar color
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        maxY: 20,
+                        alignment: BarChartAlignment.spaceBetween,
+                        barGroups: List.generate(defectLabels.length, (index) {
+                          final min1 = min1Counts[index].toDouble();
+                          final min2 = min2Counts[index].toDouble();
+                          final ell = ellCounts[index].toDouble();
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1, 2],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                toY: min1,
+                                width: 10,
+                                color: Colors.blue.shade900,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                toY: min2,
+                                width: 10,
+                                color: Colors.lightBlue.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                toY: ell,
+                                width: 10,
+                                color: Colors.orange,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 2,
+                          );
+                        }),
+                        titlesData: FlTitlesData(
+                          leftTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 100,
+                              getTitlesWidget: (value, meta) {
+                                final i = value.toInt();
+                                if (i < defectLabels.length) {
+                                  return RotatedBox(
+                                    quarterTurns: -1,
+                                    child: Text(
+                                      defectLabels[i],
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ),
+                        ),
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          getDrawingHorizontalLine: (value) => FlLine(
+                            color: Colors.grey.withOpacity(0.2),
+                            strokeWidth: 1,
+                          ),
+                        ),
+                        borderData: FlBorderData(show: false),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class VPFDefectsHorizontalBarChart extends StatelessWidget {
   final List<String> defectLabels;
   final List<int> ain1Counts;
@@ -2229,6 +3296,118 @@ class VPFDefectsHorizontalBarChart extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class BufferChart extends StatefulWidget {
+  const BufferChart({super.key});
+
+  @override
+  State<BufferChart> createState() => _BufferChartState();
+}
+
+class _BufferChartState extends State<BufferChart> {
+  final ScrollController _scrollController = ScrollController();
+
+  final List<Map<String, dynamic>> defects = List.generate(
+    21,
+    (index) => {
+      "id": index + 1,
+      "name": "Defect NG${index + 1}",
+      "eta": "${10 + index} min",
+      "rework": (index * 2) % 5 + 1,
+    },
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 10,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Buffer Difetti",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                itemCount: defects.length,
+                itemBuilder: (context, index) {
+                  final defect = defects.reversed.toList()[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _DefectCard(
+                      number: defect["id"] as int,
+                      name: defect["name"] as String,
+                      eta: defect["eta"] as String,
+                      rework: defect["rework"] as int,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DefectCard extends StatelessWidget {
+  final int number;
+  final String name;
+  final String eta;
+  final int rework;
+
+  const _DefectCard({
+    required this.number,
+    required this.name,
+    required this.eta,
+    required this.rework,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          Text("#$number", style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(name)),
+          Text("ETA: $eta", style: const TextStyle(color: Colors.orange)),
+          const SizedBox(width: 12),
+          Row(
+            children: [
+              const Icon(Icons.autorenew, size: 18, color: Colors.green),
+              const SizedBox(width: 4),
+              Text("x$rework",
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ],
       ),
     );
   }

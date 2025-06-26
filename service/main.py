@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 import logging
+import json
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
@@ -11,8 +12,30 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-# Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+# Setup logging with JSON formatter
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        log_record = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "name": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            log_record["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_record, ensure_ascii=False)
+
+
+def configure_logging():
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.handlers.clear()
+    root_logger.addHandler(handler)
+
+
+configure_logging()
 logger = logging.getLogger("PMS")
 
 # Extend Python path for module resolution

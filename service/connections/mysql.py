@@ -2,6 +2,8 @@ import base64
 from datetime import datetime, timedelta
 import json
 import logging
+
+logger = logging.getLogger(__name__)
 from typing import Optional
 import pymysql
 from pymysql.cursors import DictCursor
@@ -67,7 +69,7 @@ def get_mysql_connection():
         return conn
 
     except Exception as e:
-        logging.warning(f"MySQL connection lost or not available. Reconnecting… ({e})")
+        logger.warning(f"MySQL connection lost or not available. Reconnecting… ({e})")
         conn = pymysql.connect(
             host=MYSQL_HOST,
             user=MYSQL_USER,
@@ -79,7 +81,7 @@ def get_mysql_connection():
             charset="utf8mb4"
         )
         global_state.mysql_connection = conn
-        logging.info("✅ MySQL reconnected")
+        logger.info("✅ MySQL reconnected")
         return conn
 
 def get_line_name(line_id: int):
@@ -115,7 +117,7 @@ def load_channels_from_db() -> tuple[dict, dict]:
         try:
             cfg = json.loads(row["config"]) if isinstance(row["config"], str) else row["config"]
         except Exception:
-            logging.warning(f"Invalid config JSON for station {row['name']}")
+            logger.warning(f"Invalid config JSON for station {row['name']}")
             continue
 
         plc_info = row.get("plc")
@@ -154,7 +156,7 @@ def load_channels_from_db() -> tuple[dict, dict]:
                 db_range["min"] = min(db_range["min"], byte)
                 db_range["max"] = max(db_range["max"], byte + extra_bytes)
 
-    print(f"PLC_DB_RANGES: {plc_db_ranges}")
+    logger.debug(f"PLC_DB_RANGES: {plc_db_ranges}")
 
     return channels, plc_db_ranges
 
@@ -212,7 +214,7 @@ async def insert_initial_production_data(data, station_name, connection, esito):
             if existing_prod:
                 production_id = existing_prod["id"]
                 connection.commit()
-                logging.info(f"Production record already exists: ID {production_id} for object {object_id}")
+                logger.info(f"Production record already exists: ID {production_id} for object {object_id}")
                 return production_id
 
             # Retrieve last_station_id from stringatrice if available.
@@ -254,12 +256,12 @@ async def insert_initial_production_data(data, station_name, connection, esito):
             production_id = cursor.lastrowid
 
             connection.commit()
-            logging.info(f"Initial production inserted: ID {production_id} for object {object_id}")
+            logger.info(f"Initial production inserted: ID {production_id} for object {object_id}")
             return production_id
 
     except Exception as e:
         connection.rollback()
-        logging.error(f"Error inserting initial production data: {e}")
+        logger.error(f"Error inserting initial production data: {e}")
         return None
 
 async def update_production_final(production_id, data, station_name, connection, fine_buona, fine_scarto):
@@ -268,7 +270,7 @@ async def update_production_final(production_id, data, station_name, connection,
             cursor.execute("SELECT esito FROM productions WHERE id = %s", (production_id,))
             row = cursor.fetchone()
             if not row:
-                logging.warning(f"No production found with ID {production_id}")
+                logger.warning(f"No production found with ID {production_id}")
                 return False, None, None
 
             current_esito = row["esito"]
@@ -284,7 +286,7 @@ async def update_production_final(production_id, data, station_name, connection,
                     WHERE id = %s
                 """
                 cursor.execute(sql_update, (end_time, final_esito, production_id))
-                logging.info(f"✅ Updated end_time + esito ({final_esito}) for production {production_id}")
+                logger.info(f"✅ Updated end_time + esito ({final_esito}) for production {production_id}")
             else:
                 sql_update = """
                     UPDATE productions 
@@ -292,14 +294,14 @@ async def update_production_final(production_id, data, station_name, connection,
                     WHERE id = %s
                 """
                 cursor.execute(sql_update, (end_time, production_id))
-                logging.info(f"ℹ️ Updated only end_time for production {production_id} (esito was already {current_esito})")
+                logger.info(f"ℹ️ Updated only end_time for production {production_id} (esito was already {current_esito})")
 
             connection.commit()
             return True, final_esito, end_time
 
     except Exception as e:
         connection.rollback()
-        logging.error(f"Error updating production {production_id}: {e}")
+        logger.error(f"Error updating production {production_id}: {e}")
         return False, None, None
 
 async def insert_defects(data, production_id, channel_id, line_name, cursor, from_vpf: bool = False, from_ain: bool = False):
@@ -408,7 +410,7 @@ async def update_esito(esito: int, production_id: int, cursor, connection):
     except Exception as e:
         if connection:
             connection.rollback()
-        logging.error(f"❌ Error updating esito for production_id={production_id}: {e}")
+        logger.error(f"❌ Error updating esito for production_id={production_id}: {e}")
         return False
    
 def save_warning_on_mysql(
@@ -460,11 +462,13 @@ def save_warning_on_mysql(
             ))
             mysql_conn.commit()
             inserted_id = cursor.lastrowid
-            print(f"💾 Warning saved for {target_station['name']} (from {source_station_name}) with ID {inserted_id}")
+            logger.info(
+                f"💾 Warning saved for {target_station['name']} (from {source_station_name}) with ID {inserted_id}"
+            )
             return inserted_id
 
     except Exception as e:
-        logging.error(f"❌ Failed to save warning to MySQL: {e}")
+        logger.error(f"❌ Failed to save warning to MySQL: {e}")
         return None
 
 async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
@@ -480,7 +484,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             last_prod = cursor.fetchone()
 
             if not last_prod:
-                print("⚠️ No production data found.")
+                logger.warning("⚠️ No production data found.")
                 return
 
             prod_id = last_prod["production_id"]
@@ -579,7 +583,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                         consecutive += 1
 
                         if enable_consecutive and consecutive >= consecutive_limit:
-                            print(f"🔴 Warning (consecutive KO)")
+                            logger.warning("🔴 Warning (consecutive KO)")
                             warning_payload = {
                                 "timestamp": datetime.now().isoformat(),
                                 "station_name": station["name"],
@@ -615,7 +619,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
 
                 # ✅ Check threshold AFTER the loop
                 if count >= threshold:
-                    print(f"🔴 Warning (threshold)")
+                    logger.warning("🔴 Warning (threshold)")
                     warning_payload = {
                         "timestamp": datetime.now().isoformat(),
                         "station_name": station["name"],
@@ -645,7 +649,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                                 await broadcast_stringatrice_warning(row["line_name"], row)
 
     except Exception as e:
-        logging.error(f"❌ Error fetching last production origin: {e}")
+        logger.error(f"❌ Error fetching last production origin: {e}")
 
 def get_last_station_id_from_productions(id_modulo, connection):
     try:
@@ -661,7 +665,7 @@ def get_last_station_id_from_productions(id_modulo, connection):
             row = cursor.fetchone()
             return row["station_id"] if row else None
     except Exception as e:
-        logging.error(f"❌ Failed to retrieve last station for {id_modulo}: {e}")
+        logger.error(f"❌ Failed to retrieve last station for {id_modulo}: {e}")
         return None
 
 def check_existing_production(id_modulo, station: str, timestamp: datetime, conn) -> bool:
@@ -717,7 +721,7 @@ def create_stop(
 
 def update_stop_status(stop_id, new_status, changed_at, operator_id, conn):
     with conn.cursor() as cursor:
-        print("➡ Updating main stops table...")
+        logger.debug("➡ Updating main stops table...")
 
         sql = """
             UPDATE stops 

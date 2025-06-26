@@ -113,3 +113,11 @@ async def health_check(response: Response):
     }))
 
     return health_response
+
+
+# --- Web Health Endpoint ---
+
+@router.get("/web_health")
+async def web_health() -> Response:
+    """Simple endpoint used to check that the frontend is reachable."""
+    return Response(content="OK", media_type="text/plain")

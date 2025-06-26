@@ -4,10 +4,19 @@
 
 L’applicazione espone un endpoint di Health Check conforme ai requisiti richiesti per il monitoraggio centralizzato da parte dell’infrastruttura 3Sun.
 
-## Endpoint
+## Endpoint Backend
 
-**Metodo:** `GET`  
+**Metodo:** `GET`
 **URL:** `https://192.168.32.138:8050/api/health_check`
+
+---
+
+## Endpoint Frontend
+
+**Metodo:** `GET`
+**URL:** `https://192.168.32.138:8050/web_health`
+
+Restituisce `200 OK` con corpo `OK`.
 
 ---
 
@@ -56,3 +65,5 @@ La risposta è in formato `application/json` strutturato.
     }
   }
 }
+
+```

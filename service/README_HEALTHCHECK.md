@@ -8,7 +8,7 @@ Ogni frontend è servito su una porta dedicata e fornisce un file health.json st
 ## Endpoint Backend
 
 # Metodo: GET
-# URL: https://192.168.32.138:8050/api/health_check
+# URL: https://10.10.33.134:8050/api/health_check
 
 Restituisce un oggetto JSON con stato, versioni, uptime, stato database e connessioni PLC.
 
@@ -17,7 +17,7 @@ Restituisce un oggetto JSON con stato, versioni, uptime, stato database e connes
 ## Endpoint Frontend (per ciascuna porta)
 
 # Metodo: GET
-# URL: https://192.168.32.138:{PORTA}/web_health
+# URL: https://10.10.33.134:{PORTA}/web_health
 
 Tutti i frontend espongono un file health.json statico su:
 Porte attive:

@@ -2,7 +2,9 @@ import asyncio
 import os
 import sys
 import logging
+import logging.config
 import json
+import time
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
@@ -11,32 +13,72 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Setup logging with JSON formatter
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        log_record = {
-            "timestamp": self.formatTime(record, self.datefmt),
-            "level": record.levelname,
-            "name": record.name,
-            "message": record.getMessage(),
-        }
+        if hasattr(record, "json") and isinstance(record.json, dict):
+            log_record = dict(record.json)
+        else:
+            log_record = {"message": record.getMessage()}
+
+        log_record.update(
+            {
+                "timestamp": self.formatTime(record, self.datefmt),
+                "level": record.levelname,
+                "name": record.name,
+            }
+        )
         if record.exc_info:
             log_record["exception"] = self.formatException(record.exc_info)
         return json.dumps(log_record, ensure_ascii=False)
 
 
-def configure_logging():
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-    root_logger.handlers.clear()
-    root_logger.addHandler(handler)
+def configure_logging() -> dict:
+    log_config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {"json": {"()": JsonFormatter}},
+        "handlers": {
+            "default": {
+                "class": "logging.StreamHandler",
+                "formatter": "json",
+                "stream": "ext://sys.stdout",
+            }
+        },
+        "root": {"level": "INFO", "handlers": ["default"]},
+        "loggers": {
+            "uvicorn": {"handlers": ["default"], "level": "INFO"},
+            "uvicorn.error": {"level": "INFO"},
+            "uvicorn.access": {"handlers": ["default"], "level": "INFO", "propagate": False},
+        },
+    }
+    logging.config.dictConfig(log_config)
+    return log_config
 
 
-configure_logging()
+LOG_CONFIG = configure_logging()
 logger = logging.getLogger("PMS")
+
+
+class AccessLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        start_time = time.perf_counter()
+        response = await call_next(request)
+        duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        logging.getLogger("uvicorn.access").info(
+            "",
+            extra={
+                "json": {
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "duration_ms": duration_ms,
+                }
+            },
+        )
+        return response
 
 # Extend Python path for module resolution
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -217,6 +259,7 @@ logger.info("🔄 Creating FastAPI app")
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(AccessLogMiddleware)
 app.mount("/images", StaticFiles(directory=str(IMAGES_DIR)), name="images")
 
 # Register routers
@@ -235,4 +278,10 @@ logger.info("✅ FastAPI app ready")
 # ---------------- MAIN ENTRY ----------------
 if __name__ == "__main__":
     logger.info("🚀 Launching Uvicorn")
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8001,
+        log_config=LOG_CONFIG,
+        access_log=False,
+    )

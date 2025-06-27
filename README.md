@@ -45,6 +45,19 @@ Assicurati di avere tutte le dipendenze installate tramite:
 pip install -r service/requirements.txt
 ```
 
+### Log JSON
+
+Ogni richiesta HTTP generata dal backend viene registrata in formato JSON.
+Nel terminale (o nei log del container) compariranno record simili a:
+
+```json
+{"method": "GET", "path": "/api/health_check", "status_code": 200, "duration_ms": 3.5}
+```
+
+Questi log di accesso sono prodotti tramite un middleware FastAPI e
+sono inviati allo standard output. Se avvii l'applicazione in Docker,
+puoi leggerli con `docker logs`.
+
 ---
 
 ## Avvio del Frontend (Flutter Web)

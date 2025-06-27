@@ -6,7 +6,6 @@ pip freeze > requirements.txt
 
 pyinstaller --clean service.spec
 
-
 flutter build web --web-renderer html
 
 # Build for port 8050 (HomePage only)

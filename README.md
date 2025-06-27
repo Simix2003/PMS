@@ -1,7 +1,92 @@
 # PMS
 
-Production Monitoring System
-A web application to monitor productions in a factory.
+## PMS – Avvio Backend e Frontend
+
+## Configurazione Iniziale
+
+Per avviare il sistema in modalità di sviluppo **senza connessione al PLC**, è necessario abilitare la modalità debug:
+
+1. Apri il file di configurazione:
+
+   ```
+   service/config/config.py
+   ```
+
+2. Imposta la seguente variabile:
+
+   ```python
+   debug = True
+   ```
+
+Questo bypassa la connessione al PLC e consente l’esecuzione in locale.
+
+---
+
+## Avvio del Backend
+
+Esegui il backend tramite:
+
+```bash
+python service/main.py
+```
+
+Assicurati di avere tutte le dipendenze installate tramite:
+
+```bash
+pip install -r service/requirements.txt
+```
+
+---
+
+## Avvio del Frontend (Flutter Web)
+
+A seconda della pagina che vuoi visualizzare, esegui uno dei seguenti comandi:
+
+* **Home Page**:
+
+  ```bash
+  flutter run -d chrome --web-renderer html -t lib/main_home.dart
+  ```
+
+* **Pagina Dati Produzione**:
+
+  ```bash
+  flutter run -d chrome --web-renderer html -t lib/main_data.dart
+  ```
+
+* **Pagina Stringatrici**:
+
+  ```bash
+  flutter run -d chrome --web-renderer html -t lib/main_stringatrici.dart
+  ```
+
+* **Visualizzazione in Tempo Reale**:
+
+  ```bash
+  flutter run -d chrome --web-renderer html -t lib/main_visual.dart
+  ```
+
+> ℹ️ Verifica che Flutter sia installato correttamente con:
+>
+> ```bash
+> flutter doctor
+> ```
+
+---
+
+## Struttura Progetto (Base)
+
+```
+/lib                    # Codice Flutter frontend
+/service                # Backend Python
+```
+
+---
+
+## ✅ Note Finali
+
+* Modalità debug = solo per sviluppo. Disabilitare (`debug = False`) per ambiente di produzione.
+* Verifica eventuali porte occupate prima di avviare il backend.
 
 ## Changelog
 Versions:

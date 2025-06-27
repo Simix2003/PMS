@@ -22,6 +22,15 @@ Questo bypassa la connessione al PLC e consente l’esecuzione in locale.
 
 ---
 
+## Configurazione Database
+
+Prima di avviare il backend, è necessario creare lo schema del database. Utilizza il file schema.sql incluso nel progetto:
+
+```
+service\schema.sql
+```
+
+
 ## Avvio del Backend
 
 Esegui il backend tramite:

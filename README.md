@@ -144,3 +144,8 @@ Name  Version ID                  Fix Versions
 ----- ------- ------------------- ------------
 torch 2.7.0   GHSA-887c-mr87-cxwp
 torch 2.7.0   GHSA-3749-ghw9-m3mg 2.7.1rc1
+
+## Log Collection on Windows
+
+Per istruzioni sull'installazione e configurazione dell'agente di raccolta log (Filebeat) consultare [service/README_LOGGING.md](service/README_LOGGING.md).
+

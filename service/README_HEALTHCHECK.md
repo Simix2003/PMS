@@ -88,3 +88,21 @@ dell'interfaccia web.
 - I file health.json dei frontend vengono generati staticamente e distribuiti all'interno delle cartelle build/ di
 ciascun frontend durante il deploy.
 - In caso di errore (file mancante), l'endpoint /web_health restituira' 404.
+
+## Monitoraggio con Prometheus
+Per il monitoraggio del sistema in ambiente Windows è possibile utilizzare l'[windows_exporter](https://github.com/prometheus-community/windows_exporter).
+
+Lo script `windows_exporter_setup.ps1` nella cartella `service/` scarica e installa l'exporter come servizio di Windows.
+Il servizio espone le metriche sulla porta `9182` di default.
+
+### Esempio di configurazione Prometheus
+Nel file `prometheus.yml` aggiungere un job di scrape simile al seguente:
+
+```yaml
+scrape_configs:
+  - job_name: 'windows'
+    static_configs:
+      - targets: ['HOST_IP:9182']
+```
+
+Sostituire `HOST_IP` con l'indirizzo della macchina su cui è in esecuzione l'exporter.

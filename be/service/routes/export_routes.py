@@ -13,6 +13,8 @@ from service.connections.mysql import get_mysql_connection
 
 router = APIRouter()
 
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
 #  EXPORT END-POINT – ACCETTA:
 #    • modulo_ids     → id_modulo (stringhe) oppure objects.id (int)
@@ -46,7 +48,7 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
                 loop.run_until_complete(coro)
                 loop.close()
         except Exception as e:
-            logging.warning(f"⚠️ Could not broadcast export progress: {e}")
+            logger.warning(f"⚠️ Could not broadcast export progress: {e}")
 
     # elimina stringhe vuote e deduplica
     object_ids   = [oid for oid in object_ids if str(oid).strip()]
@@ -199,7 +201,7 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
             send_progress("defects")
 
     except Exception as e:
-        logging.error(f"❌ Error during export: {e}")
+        logger.error(f"❌ Error during export: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
     # -------- 7. GENERA EXCEL & PULIZIA -------------------------------------------
@@ -238,7 +240,7 @@ def daily_export(background_tasks: BackgroundTasks, data: dict = Body(...)):
         rows = cursor.fetchall()
 
     if not rows:
-        logging.info("Daily export: no data found for %s - %s", start_dt, end_dt)
+        logger.info("Daily export: no data found for %s - %s", start_dt, end_dt)
         return {"status": "ok", "filename": None}
 
     production_ids = [row["production_id"] for row in rows]

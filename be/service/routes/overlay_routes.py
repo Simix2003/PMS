@@ -2,11 +2,14 @@ from fastapi import APIRouter, Request, Query
 from fastapi.responses import JSONResponse
 import json
 import os
+import logging
 
 from service.routes.station_routes import get_station_for_object
 from service.config.config import debug, IMAGES_DIR
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
 
 def get_config_path(line_name: str, station: str):
     return os.path.join(IMAGES_DIR, line_name, station, "overlay_config.json")
@@ -28,14 +31,14 @@ async def get_overlay_config(
     config_file = get_config_path(line_name, target_station)
 
     if not os.path.exists(config_file):
-        print(f"❌ Config file not found: {config_file}")
+        logger.error(f"Config file not found: {config_file}")
         return JSONResponse(status_code=417, content={"error": f"Overlay config not found for {line_name}/{station}"})
 
     try:
         with open(config_file, "r") as f:
             all_configs = json.load(f)
     except json.JSONDecodeError as e:
-        print(f"❌ JSON decode error: {e}")
+        logging.error(f"JSON decode error: {e}")
         all_configs = {}
 
     for image_name, config in all_configs.items():
@@ -52,7 +55,7 @@ async def get_overlay_config(
                 "rectangles": config.get("rectangles", [])
             }
 
-    print("⚠️ No matching path found. Returning fallback with empty image URL.")
+    logging.warning("No matching path found. Returning fallback with empty image URL.")
     return {"image_url": "", "rectangles": []}
 
 

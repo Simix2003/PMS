@@ -16,6 +16,7 @@ from service.connections.mysql import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # -------------------------
 # Create new stop
@@ -43,7 +44,7 @@ async def api_create_stop(payload: Dict[str, Any]):
         )
         return {"status": "ok", "stop_id": stop_id}
     except Exception as e:
-        logging.error(f"Error creating stop: {e}")
+        logger.error(f"Error creating stop: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------------
@@ -68,7 +69,7 @@ async def api_update_status(payload: Dict[str, Any]):
         )
         return {"status": "ok"}
     except Exception as e:
-        logging.error(f"Error updating stop status: {e}")
+        logger.error(f"Error updating stop status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------------
@@ -86,7 +87,7 @@ async def api_update_reason(payload: Dict[str, Any]):
         )
         return {"status": "ok"}
     except Exception as e:
-        logging.error(f"Error updating stop reason: {e}")
+        logger.error(f"Error updating stop reason: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------------
@@ -99,7 +100,7 @@ async def api_get_stops(station_id: int, shifts_back: int = 3):
         stops = get_stops_for_station(station_id, conn, shifts_back)
         return {"status": "ok", "stops": stops}
     except Exception as e:
-        logging.error(f"Error fetching stops: {e}")
+        logger.error(f"Error fetching stops: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------------
@@ -112,7 +113,7 @@ async def api_get_stop_details(stop_id: int):
         data = get_stop_with_levels(stop_id, conn)
         return {"status": "ok", "stop": data}
     except Exception as e:
-        logging.error(f"Error fetching stop details: {e}")
+        logger.error(f"Error fetching stop details: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/api/escalation/delete_stop/{stop_id}")
@@ -129,6 +130,6 @@ async def api_delete_stop(stop_id: int):
         conn.commit()
         return {"status": "ok"}
     except Exception as e:
-        logging.error(f"Error deleting stop {stop_id}: {e}")
+        logger.error(f"Error deleting stop {stop_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

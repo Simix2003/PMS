@@ -10,12 +10,12 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.state import global_state
 from service.helpers.helpers import generate_time_buckets
 from service.config.config import CHANNELS
 from service.connections.mysql import get_mysql_connection
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.post("/api/graph_data")
 async def get_graph_data(request: Request):
@@ -28,7 +28,7 @@ async def get_graph_data(request: Request):
     group_by = payload.get("groupBy", "hourly")
     extra_filter = payload.get("extra_filter")
 
-    print("\n--- API /graph_data called ---")
+    logger.debug("\n--- API /graph_data called ---")
     conn = get_mysql_connection()
     result: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
@@ -57,7 +57,7 @@ async def get_graph_data(request: Request):
     # ── Esito / Yield / CycleTime ──────────────────────────────────────────
     if any(m in metrics for m in ("Esito", "Yield", "CycleTime")):
         with conn.cursor() as cur:
-            print("\nRunning ESITO / CYCLE query...")
+            logging.debug("\nRunning ESITO / CYCLE query...")
             if group_by == "shifts":
                 sql = f"""
                     SELECT
@@ -179,7 +179,7 @@ async def get_graph_data(request: Request):
     # ── Difetto ────────────────────────────────────────────────────────────
     if "Difetto" in metrics and extra_filter:
         category = extra_filter.strip()
-        print(f"[🔍] Selected defect category: {category}")
+        logging.debug(f"Selected defect category: {category}")
 
         if group_by == "shifts":
             sql = f"""
@@ -498,5 +498,5 @@ async def productions_summary(
             }
 
     except Exception as e:
-        logging.error(f"MySQL Error: {e}")
+        logger.error(f"MySQL Error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})

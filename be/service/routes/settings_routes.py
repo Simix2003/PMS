@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-
+import logging
 import os
 import sys
 
@@ -10,6 +10,7 @@ from service.connections.mysql import get_mysql_connection
 from service.config.config import CHANNELS
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Global settings cache
 REFRESHED_SETTINGS = {}
@@ -57,7 +58,7 @@ def get_production_lines():
     with conn.cursor() as cursor:
         cursor.execute("SELECT name, display_name FROM production_lines ORDER BY id")
         lines = cursor.fetchall()
-        print(lines)
+        logger.debug(lines)
 
     # Corrected version: include everything except invalid dummy rows
     lines_list = []
@@ -66,13 +67,13 @@ def get_production_lines():
         display_name = row['display_name']
 
         if name.lower() == 'name' and display_name.lower() == 'display_name':
-            print(f"⚠️ Skipping invalid entry from DB: name={name}, display_name={display_name}")
+            logging.debug(f"⚠️ Skipping invalid entry from DB: name={name}, display_name={display_name}")
             continue
 
         lines_list.append({"name": name, "display_name": display_name})
 
     if not lines_list:
-        print("⚠️ No valid production lines found, check database content.")
+        logging.warning("⚠️ No valid production lines found, check database content.")
 
     # Build stations from channels map (unchanged)
     station_names = []

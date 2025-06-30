@@ -16,6 +16,7 @@ from service.routes.broadcast import broadcast_stringatrice_warning
 from service.helpers.helpers import compress_base64_to_jpeg_blob
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/api/warnings/{line_name}")
 def get_unacknowledged_warnings(line_name: str):
@@ -80,7 +81,7 @@ async def suppress_warning(payload: dict):
 
         return {"status": "ok", "updated": True}
     except Exception as e:
-        logging.error(f"❌ Failed to suppress warning: {e}")
+        logger.error(f"Failed to suppress warning: {e}")
         raise HTTPException(status_code=500, detail="Server error")
 
 

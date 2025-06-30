@@ -8,7 +8,6 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.state import global_state
 from service.helpers.helpers import get_channel_config
 from service.state.global_state import plc_connections
 from service.routes.broadcast import broadcast
@@ -16,6 +15,7 @@ from service.config.config import debug
 from service.connections.mysql import get_mysql_connection
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/api/station_for_object")
 async def get_station_for_object(id_modulo: str):
@@ -44,7 +44,7 @@ async def get_station_for_object(id_modulo: str):
             return {"station": row["station_name"]}
 
     except Exception as e:
-        logging.error(f"❌ Error in get_station_for_object({id_modulo}): {e}")
+        logger.error(f"Error in get_station_for_object({id_modulo}): {e}")
         raise HTTPException(status_code=500, detail="Server error.")
 
 @router.post("/api/set_outcome")
@@ -74,14 +74,14 @@ async def set_outcome(request: Request):
             read_conf["db"], read_conf["byte"], read_conf["length"]
         )
     except Exception as e:
-        logging.error(f"❌ Error reading PLC data: {e}")
+        logger.error(f"Error reading PLC data: {e}")
 
     if not debug:
         if not rework:
             if str(current_object_id) != str(object_id):
                 return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
 
-    print(f"✅ Outcome '{outcome.upper()}' written for object {object_id} on {line_name}.{channel_id}")
+    logger.debug(f"Outcome '{outcome.upper()}' written for object {object_id} on {line_name}.{channel_id}")
     await broadcast(line_name, channel_id, {
         "trigger": None,
         "objectId": object_id,

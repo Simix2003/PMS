@@ -20,7 +20,7 @@ from service.config.config import KNOWN_DEFECTS, DEFECT_SIMILARITY_MODEL_PATH
 from service.connections.mysql import get_mysql_connection
 
 router = APIRouter()
-logger = logging.getLogger("PMS")
+logger = logging.getLogger(__name__)
 
 # ───────────────────────────────────────────────────────────────
 

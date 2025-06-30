@@ -14,6 +14,7 @@ from service.config.config import COLUMN_MAP
 from service.connections.mysql import get_mysql_connection
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.post("/api/search")
 async def search_results(request: Request):
@@ -28,7 +29,7 @@ async def search_results(request: Request):
         direction = "ASC" if order_direction.lower() == "crescente" else "DESC"
         show_all_events = payload.get("show_all_events", False)
 
-        print(f"show_all_events: {show_all_events}")
+        logger.debug(f"show_all_events: {show_all_events}")
 
         join_clauses = []
         where_clauses = []
@@ -417,5 +418,5 @@ async def search_results(request: Request):
             return {"results": results}
 
     except Exception as e:
-        logging.error(f"Search API Error: {e}")
+        logger.error(f"Search API Error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})

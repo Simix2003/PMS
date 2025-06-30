@@ -17,6 +17,7 @@ from service.connections.mysql import get_mysql_connection
 from service.state.global_state import plc_connections
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Timestamp avvio processo
 process_start_time = time.time()
@@ -39,7 +40,7 @@ def check_database_connection() -> Dict[str, str]:
             cursor.execute("SELECT 1")
         return {"status": "ok", "message": "MySQL OK"}
     except Exception as e:
-        logging.error(f"MySQL health check failed: {e}")
+        logger.error(f"MySQL health check failed: {e}")
         return {"status": "error", "message": str(e)}
 
 def check_plc_connections() -> Dict[str, Dict[str, str]]:
@@ -106,7 +107,7 @@ async def health_check(response: Response):
     }
 
     # Logging JSON conforme alle specifiche cliente
-    logging.info(json.dumps({
+    logger.info(json.dumps({
         "event": "health_check",
         "timestamp": backend_info["timestamp"],
         "result": health_response

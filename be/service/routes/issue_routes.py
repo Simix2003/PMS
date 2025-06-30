@@ -18,6 +18,7 @@ from service.config.settings import load_settings
 from service.config.config import ISSUE_TREE, debug
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 def get_current_settings():
     return load_settings()
@@ -86,7 +87,7 @@ async def set_issues(request: Request):
                 conn.rollback()
             if cursor:
                 cursor.close()
-            logging.error(f"❌ Unexpected error inserting defects for {full_id}: {e}")
+            logger.error(f"❌ Unexpected error inserting defects for {full_id}: {e}")
             return JSONResponse(status_code=500, content={"error": "Errore interno del server"})
 
     target = paths["esito_scarto_compilato"]
@@ -171,7 +172,7 @@ async def get_issues_for_object(line_name: str, channel_id: str, id_modulo: str,
                     return {"issue_paths": [], "pictures": []}
 
                 if latest_prod["station_type"] == "rework":
-                    print("⚠️ Latest production is rework → skipping defect extraction.")
+                    logger.debug("Latest production is rework → skipping defect extraction.")
                     return {"issue_paths": [], "pictures": []}
 
                 # Step 2: Get latest QC production instead
@@ -190,7 +191,7 @@ async def get_issues_for_object(line_name: str, channel_id: str, id_modulo: str,
 
                 production_id = qc_prod["id"]
             else:
-                print('Using provided ProductionId:', production_id)
+                logging.debug('Using provided ProductionId:', production_id)
 
             # 3. Estrai i difetti associati con join alle foto
             cursor.execute("""
@@ -271,12 +272,12 @@ async def get_issues_for_object(line_name: str, channel_id: str, id_modulo: str,
             
             if defects and write_to_plc:
                 if debug: 
-                    print(f"🔁 Writing to PLC for {full_id}")
+                    logger.debug(f"Writing to PLC for {full_id}")
                 else:
                     await asyncio.to_thread(plc_connection.write_bool, target["db"], target["byte"], target["bit"], True)
 
             return {"issue_paths": issue_paths, "pictures": pictures}
 
     except Exception as e:
-        logging.error(f"❌ Errore nel recupero dei difetti per id_modulo={id_modulo}: {e}")
+        logger.error(f"❌ Errore nel recupero dei difetti per id_modulo={id_modulo}: {e}")
         raise HTTPException(status_code=500, detail="Errore nel server.")

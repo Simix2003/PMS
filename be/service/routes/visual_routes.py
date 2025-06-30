@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timedelta
-
+import logging
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -10,6 +10,7 @@ from service.helpers.visual_helper import compute_zone_snapshot, load_targets, s
 from service.config.config import ZONE_SOURCES
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 def initialize_visual_cache():
     for zone in ZONE_SOURCES:
@@ -28,7 +29,7 @@ async def get_visual_data(zone: str = Query(...)):
 
     # Force recompute if the hour has changed
     if last_hour != current_hour:
-        print(f"🕒 Hour changed: recomputing snapshot for {zone}")
+        logger.debug(f"🕒 Hour changed: recomputing snapshot for {zone}")
         cached_data = compute_zone_snapshot(zone, now=now)
         cached_data["__last_hour"] = current_hour
         global_state.visual_data[zone] = cached_data

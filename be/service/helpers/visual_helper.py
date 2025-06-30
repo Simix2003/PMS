@@ -109,6 +109,7 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     try:
         if now is None:
             now = datetime.now()
+        now = now - timedelta(days=7)
 
         if zone == "VPF":
             return _compute_snapshot_vpf(now)

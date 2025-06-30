@@ -1226,7 +1226,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 4.0),
                               child: Text(
-                                'Sviluppato da\n gruppo Process Eng e Capgemini',
+                                'Sviluppato da 3SUN Process Eng, \nCapgemini, empowered by Bottero',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     fontSize: 18, color: Colors.grey.shade700),

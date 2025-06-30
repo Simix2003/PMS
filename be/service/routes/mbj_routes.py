@@ -52,6 +52,8 @@ def get_mbj_details(modulo_id: str):
             "gap": (1.0, 2),
             "glass": (12.0, 2),
         }
+        count_crack = 0
+        count_bad_soldering = 0
 
         def check_any_value_below(data, threshold, precision, depth=0):
             if isinstance(data, dict):
@@ -77,7 +79,15 @@ def get_mbj_details(modulo_id: str):
         cell_gap_data = extract_RelativeCellPosition(root)
         glass_cell_data = extract_GlassCellDistance(root)
         cell_defects = extract_CellDefects(root)
-        has_el_defects = isinstance(cell_defects, dict) and len(cell_defects.get("cell_defects", [])) > 0
+        if isinstance(cell_defects, dict):
+            for cell in cell_defects.get("cell_defects", []):
+                defects = set(cell.get("defects", []))
+                if 7 in defects:
+                    count_crack += 1
+                if 81 in defects:
+                    count_bad_soldering += 1
+
+        has_el_defects = (count_crack + count_bad_soldering) > 0
 
         has_backlight_defects = (
             check_any_value_below(ribbon_data["interconnection_ribbon"], *TOLERANCES["ribbon"]) or

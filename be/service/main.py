@@ -130,7 +130,7 @@ from service.routes.visual_routes import initialize_visual_cache, router as visu
 from service.routes.escalation_routes import router as escalation_router
 
 LOG_CONFIG = configure_logging()
-logger = logging.getLogger("PMS")
+logger = logging.getLogger(__name__)
 
 # ---------------- INIT GLOBAL FLAGS ----------------
 def init_global_flags():

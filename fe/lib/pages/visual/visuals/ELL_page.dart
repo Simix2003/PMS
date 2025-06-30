@@ -843,10 +843,20 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                           width: 48,
                         ),
 
-                        // Right side: Escalation button
-                        EscalationButton(
-                          last_n_shifts: widget.last_n_shifts,
-                          onEscalationsUpdated: refreshEscalationTrafficLight,
+                        Column(
+                          children: [
+                            Text("Linea B",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 32)),
+                            const SizedBox(height: 24),
+                            // Right side: Escalation button
+                            EscalationButton(
+                              last_n_shifts: widget.last_n_shifts,
+                              onEscalationsUpdated:
+                                  refreshEscalationTrafficLight,
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1039,7 +1049,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 4.0),
                               child: Text(
-                                'Sviluppato da\n gruppo Process Eng e Capgemini',
+                                'Sviluppato da 3SUN Process Eng, \nCapgemini, empowered by Bottero',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     fontSize: 18, color: Colors.grey.shade700),

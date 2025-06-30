@@ -119,3 +119,5 @@ venv/
 
 /be/service/build/
 /fe/build/
+
+/data/

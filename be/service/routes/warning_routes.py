@@ -1,8 +1,9 @@
 import base64
 from datetime import datetime
-from doctest import debug
+from service.config.config import debug
 import logging
 from fastapi import APIRouter, Body, HTTPException
+import pymysql
 from pymysql.cursors import DictCursor
 
 import sys
@@ -12,6 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection, save_warning_on_mysql
 from service.routes.broadcast import broadcast_stringatrice_warning
+from service.helpers.helpers import compress_base64_to_jpeg_blob
 
 router = APIRouter()
 
@@ -21,9 +23,11 @@ def get_unacknowledged_warnings(line_name: str):
 
     with conn.cursor(DictCursor) as cursor:
         cursor.execute("""
-            SELECT * FROM stringatrice_warnings
-            WHERE line_name = %s AND acknowledged = 0
-            ORDER BY timestamp DESC
+            SELECT w.*, p.photo
+            FROM stringatrice_warnings w
+            LEFT JOIN photos p ON w.photo_id = p.id
+            WHERE w.line_name = %s AND w.acknowledged = 0
+            ORDER BY w.timestamp DESC
         """, (line_name,))
         rows = cursor.fetchall()
 
@@ -89,21 +93,21 @@ async def suppress_with_photo(data: dict = Body(...)):
     timestamp = datetime.fromisoformat(timestamp_raw).strftime('%Y-%m-%d %H:%M:%S')
 
     image_base64 = data.get("photo")
-    if not image_base64:
-        print("⚠️ No image provided in request")
-    else:
-        print(f"📸 Received base64 image length: {len(image_base64)}")
-
-    image_blob = base64.b64decode(image_base64) if image_base64 else None
+    image_blob = compress_base64_to_jpeg_blob(image_base64, quality=70) if image_base64 else None
 
     try:
         with conn.cursor() as cursor:
+            photo_id = None
+            if image_blob:
+                cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (pymysql.Binary(image_blob),))
+                photo_id = cursor.lastrowid
+
             cursor.execute("""
                 UPDATE stringatrice_warnings
                 SET suppress_on_source = 1,
-                    photo = %s
+                    photo_id = %s
                 WHERE line_name = %s AND timestamp = %s
-            """, (image_blob, line_name, timestamp))
+            """, (photo_id, line_name, timestamp))
             conn.commit()
     except Exception as e:
         conn.rollback()
@@ -115,7 +119,8 @@ if debug:
     @router.post("/api/debug_warning")
     async def debug_warning(payload: dict):
         """
-        Trigger a fake warning broadcast manually from Postman
+        Trigger a fake warning broadcast manually from Postman.
+        Also stores it in MySQL with proper ID.
         """
         line = payload.get("line_name", "No Line")
         station_name = payload.get("station_name", "No Station")
@@ -144,8 +149,36 @@ if debug:
             "display_name": station_display,
         }
 
-        await broadcast_stringatrice_warning(line, warning_payload)
         conn = get_mysql_connection()
-        save_warning_on_mysql(warning_payload, conn, station, defect, source_station)
 
-        return {"status": "sent", "payload": warning_payload}
+        inserted_id = save_warning_on_mysql(
+            warning_payload,
+            conn,
+            station,
+            defect,
+            {"display_name": source_station},
+            suppress_on_source=False
+        )
+
+        if inserted_id:
+            with conn.cursor(DictCursor) as cursor:
+                cursor.execute("""
+                    SELECT w.*, p.photo
+                    FROM stringatrice_warnings w
+                    LEFT JOIN photos p ON w.photo_id = p.id
+                    WHERE w.id = %s
+                """, (inserted_id,))
+                row = cursor.fetchone()
+
+                if row:
+                    row["suppress_on_source"] = bool(int(row.get("suppress_on_source", 0)))
+                    if row.get("photo"):
+                        row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
+
+                    if isinstance(row.get("timestamp"), datetime):
+                        row["timestamp"] = row["timestamp"].isoformat()
+
+                    await broadcast_stringatrice_warning(line, row)
+                    return {"status": "sent", "payload": row}
+
+        return {"status": "error", "reason": "Could not insert warning"}

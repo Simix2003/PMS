@@ -1,75 +1,56 @@
-from datetime import datetime
+import base64
+from datetime import datetime, timedelta
+import json
 import logging
+
+logger = logging.getLogger(__name__)
+from typing import Optional
 import pymysql
 from pymysql.cursors import DictCursor
+from dotenv import load_dotenv, find_dotenv
 
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.temp_data import get_latest_issues
-from service.helpers.helpers import detect_category, parse_issue_path
+from service.helpers.helpers import detect_category, parse_issue_path, compress_base64_to_jpeg_blob
 from service.routes.broadcast import broadcast_stringatrice_warning
 from service.state import global_state
 
 # ---------------- MYSQL ----------------
-DB_SCHEMA = """
-Il database contiene le seguenti tabelle:
+load_dotenv(find_dotenv())
 
-1 `objects`
-- id (PK)
-- id_modulo (VARCHAR, UNIQUE)
-- creator_station_id (FK to stations.id)
-- created_at (DATETIME)
+if os.getenv("ENV_MODE") == "docker":
+    MYSQL_HOST = os.getenv("MYSQL_HOST", "db")
+else:
+    MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
+MYSQL_USER = os.getenv("MYSQL_USER", "root")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "Master36!")
+MYSQL_DB = os.getenv("MYSQL_DB", "ix_monitor")
+MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
 
-2 `stations`
-- id (PK)
-- line_id (FK to production_lines.id)
-- name (VARCHAR)
-- display_name (VARCHAR)
-- type (ENUM: 'creator', 'qc', 'rework', 'other')
-- config (JSON)
-- created_at (DATETIME)
+VPF_DEFECT_ID_MAP = {
+        0: 11,  # NG1
+        1: 13,  # NG2
+        2: 15,  # NG3
+        3: 17,  # NG4
+        4: 18,  # NG5
+        5: 20,  # NG7.1
+        6: 19,  # NG7
+        7: 21,  # NG8
+        8: 23,  # NG9
+        9: 24,  # NG10
+        10: 12, # NG1.1
+        11: 14, # NG2.1
+        12: 16, # NG3.1
+        13: 22, # NG8.1
+    }
 
-3 `production_lines`
-- id (PK)
-- name (VARCHAR)
-- display_name (VARCHAR)
-- description (TEXT)
-
-4 `productions`
-- id (PK)
-- object_id (FK to objects.id)
-- station_id (FK to stations.id)
-- start_time (DATETIME)
-- end_time (DATETIME)
-- esito (INT) -- 1 = OK, 6 = KO, 2 = In Progress ( No Esito )
-- operator_id (VARCHAR)
-- cycle_time (TIME) -- calcolato come differenza tra end_time e start_time
-- last_station_id (FK to stations.id, NULLABLE)
-
-5 `defects`
-- id (PK)
-- category (ENUM: 'Generali', 'Saldatura', 'Disallineamento', 'Mancanza Ribbon', 'I_Ribbon Leadwire', 'Macchie ECA', 'Celle Rotte', 'Lunghezza String Ribbon', 'Graffio su Cella', 'Altro')
-
-6 `object_defects`
-- id (PK)
-- production_id (FK to productions.id)
-- defect_id (FK to defects.id)
-- defect_type (VARCHAR, NULLABLE) -- usato solo per i "Generali"
-- i_ribbon (INT, NULLABLE)
-- stringa (INT, NULLABLE)
-- ribbon_lato (ENUM: 'F', 'M', 'B', NULLABLE)
-- s_ribbon (INT, NULLABLE)
-- extra_data (VARCHAR, NULLABLE)
-
-7 `station_defects`
-- station_id (FK to stations.id)
-- defect_id (FK to defects.id)
-(Chiave primaria composta: station_id + defect_id)
-
-"""""
-
+AIN_DEFECT_ID_MAP = {
+        0: 25,
+        1: 26,
+    }
 
 def get_mysql_connection():
     """
@@ -81,29 +62,103 @@ def get_mysql_connection():
     try:
         conn = global_state.mysql_connection
 
-        # First use or explicitly closed
         if conn is None or not conn.open:
             raise RuntimeError("No active MySQL connection")
 
-        # Reconnect if socket was dropped (e.g. idle too long)
         conn.ping(reconnect=True)
         return conn
 
     except Exception as e:
-        logging.warning(f"MySQL connection lost or not available. Reconnecting… ({e})")
+        logger.warning(f"MySQL connection lost or not available. Reconnecting… ({e})")
         conn = pymysql.connect(
-            host=os.environ.get("MYSQL_HOST", "db"),
-            user=os.environ.get("MYSQL_USER", "root"),
-            password=os.environ.get("MYSQL_PASSWORD", "Master36!"),
-            database=os.environ.get("MYSQL_DATABASE", "ix_monitor"),
-            port=int(os.environ.get("MYSQL_PORT", 3306)),
+            host=MYSQL_HOST,
+            user=MYSQL_USER,
+            password=MYSQL_PASSWORD,
+            database=MYSQL_DB,
+            port=MYSQL_PORT,
             cursorclass=DictCursor,
             autocommit=False,
             charset="utf8mb4"
         )
         global_state.mysql_connection = conn
-        logging.info("✅ MySQL reconnected")
+        logger.debug("✅ MySQL reconnected")
         return conn
+
+def get_line_name(line_id: int):
+    """Return the production line name for a given ID."""
+    conn = get_mysql_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT name FROM production_lines WHERE id = %s", (line_id,))
+        row = cursor.fetchone()
+        return row["name"] if row else None
+
+def load_channels_from_db() -> tuple[dict, dict]:
+    """
+    Load station configs from MySQL and return:
+    1. CHANNELS dict: {line_name: {station_name: config_dict}}
+    2. PLC DB RANGES dict: {(ip, slot): {db_number: {'min': x, 'max': y}}}
+    """
+    conn = get_mysql_connection()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT id, line_id, name, config, plc FROM stations")
+        rows = cursor.fetchall()
+
+    channels: dict = {}
+    plc_db_ranges: dict[tuple[str, int], dict[int, dict[str, int]]] = {}
+
+    for row in rows:
+        if row["config"] is None:
+            continue
+
+        line_name = get_line_name(row["line_id"])
+        if not line_name:
+            continue
+
+        try:
+            cfg = json.loads(row["config"]) if isinstance(row["config"], str) else row["config"]
+        except Exception:
+            logger.warning(f"Invalid config JSON for station {row['name']}")
+            continue
+
+        plc_info = row.get("plc")
+        if plc_info:
+            try:
+                cfg["plc"] = json.loads(plc_info) if isinstance(plc_info, str) else plc_info
+            except Exception:
+                cfg["plc"] = None
+
+        # Save config
+        channels.setdefault(line_name, {})[row["name"]] = cfg
+
+        # Collect DB range info if PLC and config present
+        plc = cfg.get("plc")
+        if not plc:
+            continue
+
+        plc_key = (plc["ip"], plc.get("slot", 0))
+
+        for key, field in cfg.items():
+            if isinstance(field, dict) and "db" in field and "byte" in field:
+                db = field["db"]
+                byte = field["byte"]
+
+                # Compute extra bytes safely
+                if "length" in field:
+                    extra_bytes = field["length"] + 2
+                elif key in ["inizio_fermo", "fine_fermo"]:
+                    extra_bytes = 8  # datetime size
+                elif key in ["evento_fermo", "stazione_fermo"]:
+                    extra_bytes = 2  # int size
+                else:
+                    extra_bytes = 1  # bool
+
+                db_range = plc_db_ranges.setdefault(plc_key, {}).setdefault(db, {"min": byte, "max": byte})
+                db_range["min"] = min(db_range["min"], byte)
+                db_range["max"] = max(db_range["max"], byte + extra_bytes)
+
+    logger.debug(f"PLC_DB_RANGES: {plc_db_ranges}")
+
+    return channels, plc_db_ranges
 
 async def insert_initial_production_data(data, station_name, connection, esito):
     """
@@ -159,15 +214,17 @@ async def insert_initial_production_data(data, station_name, connection, esito):
             if existing_prod:
                 production_id = existing_prod["id"]
                 connection.commit()
-                logging.info(f"Production record already exists: ID {production_id} for object {object_id}")
+                logger.debug(f"Production record already exists: ID {production_id} for object {object_id}")
                 return production_id
 
             # Retrieve last_station_id from stringatrice if available.
             last_station_id = None
+
+            # Priority 1: From stringatrice flags
             str_flags = data.get("Lavorazione_Eseguita_Su_Stringatrice", [])
             if any(str_flags):
                 stringatrice_index = str_flags.index(True) + 1
-                stringatrice_name = f"Str{stringatrice_index}"
+                stringatrice_name = f"STR{stringatrice_index:02d}"  # <-- pad with leading zero
                 cursor.execute(
                     "SELECT id FROM stations WHERE name = %s AND line_id = %s",
                     (stringatrice_name, line_id)
@@ -175,6 +232,10 @@ async def insert_initial_production_data(data, station_name, connection, esito):
                 str_row = cursor.fetchone()
                 if str_row:
                     last_station_id = str_row["id"]
+
+            # Priority 2: From Last_Station (only if no stringatrice found)
+            if not last_station_id and data.get("Last_Station"):
+                last_station_id = data['Last_Station']
 
             # Insert into productions table with esito = 2 (in progress) and no end_time.
             sql_productions = """
@@ -195,43 +256,37 @@ async def insert_initial_production_data(data, station_name, connection, esito):
             production_id = cursor.lastrowid
 
             connection.commit()
-            logging.info(f"Initial production inserted: ID {production_id} for object {object_id}")
+            logger.debug(f"Initial production inserted: ID {production_id} for object {object_id}")
             return production_id
 
     except Exception as e:
         connection.rollback()
-        logging.error(f"Error inserting initial production data: {e}")
+        logger.error(f"Error inserting initial production data: {e}")
         return None
 
 async def update_production_final(production_id, data, station_name, connection, fine_buona, fine_scarto):
-    """
-    Always update end_time. Update esito only if the current value is 2.
-    """
     try:
         with connection.cursor() as cursor:
-            # Step 1: Read current esito
             cursor.execute("SELECT esito FROM productions WHERE id = %s", (production_id,))
             row = cursor.fetchone()
             if not row:
-                logging.warning(f"No production found with ID {production_id}")
-                return False
+                logger.warning(f"No production found with ID {production_id}")
+                return False, None, None
 
             current_esito = row["esito"]
             final_esito = 6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1
-            if station_name == "M326":
+            if station_name == "RMI01":
                 final_esito = 5 if fine_buona else 6
             end_time = data.get("DataFine")
 
-            # Step 2: Conditional update
-            if current_esito == 2 or station_name == "M326":
-
+            if current_esito == 2 or station_name == "RMI01":
                 sql_update = """
                     UPDATE productions 
                     SET end_time = %s, esito = %s 
                     WHERE id = %s
                 """
                 cursor.execute(sql_update, (end_time, final_esito, production_id))
-                logging.info(f"✅ Updated end_time + esito ({final_esito}) for production {production_id}")
+                logger.debug(f"✅ Updated end_time + esito ({final_esito}) for production {production_id}")
             else:
                 sql_update = """
                     UPDATE productions 
@@ -239,36 +294,96 @@ async def update_production_final(production_id, data, station_name, connection,
                     WHERE id = %s
                 """
                 cursor.execute(sql_update, (end_time, production_id))
-                logging.info(f"ℹ️ Updated only end_time for production {production_id} (esito was already {current_esito})")
+                logger.debug(f"ℹ️ Updated only end_time for production {production_id} (esito was already {current_esito})")
 
             connection.commit()
-            return True
+            return True, final_esito, end_time
 
     except Exception as e:
         connection.rollback()
-        logging.error(f"Error updating production {production_id}: {e}")
-        return False
+        logger.error(f"Error updating production {production_id}: {e}")
+        return False, None, None
 
-async def insert_defects(data, production_id, channel_id, line_name, cursor):
-    # 1. Get defects mapping from DB.
+async def insert_defects(data, production_id, channel_id, line_name, cursor, from_vpf: bool = False, from_ain: bool = False):
+    # 1. Get defects mapping from DB
     cursor.execute("SELECT id, category FROM defects")
     cat_map = {row["category"]: row["id"] for row in cursor.fetchall()}
 
-    # 2. Load the issues from temporary storage using the proper line name.
-    issues = get_latest_issues(line_name, channel_id)
-    data["issues"] = issues  # Inject into data if needed later.
+    # --- VPF Defects ---
+    if from_vpf:
+        flags = data.get("Tipo_NG_VPF", [])
+        if flags:
+            for idx, flag in enumerate(flags):
+                if not flag or idx not in VPF_DEFECT_ID_MAP:
+                    continue
 
-    # 3. For each issue path, parse and insert a row.
-    for path in issues:
-        category = detect_category(path)  # e.g. "Generali"
-        defect_id = cat_map.get(category, cat_map["Altro"])  # fallback if unknown
+                defect_id = VPF_DEFECT_ID_MAP[idx]
+                cursor.execute("""
+                    INSERT INTO object_defects (
+                        production_id, defect_id, defect_type, stringa,
+                        s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    production_id,
+                    defect_id,
+                    f"VPF_NG_{idx+1}",
+                    None, None, None, None, None, None
+                ))
+        return
+
+    # --- AIN Defects ---
+    if from_ain:
+        flags = data.get("Tipo_NG_AIN", [])  # Only 2 values: bit3 and bit4
+        if flags:
+            for idx, flag in enumerate(flags):  # idx is 0 or 1
+                if not flag or idx not in AIN_DEFECT_ID_MAP:
+                    continue
+
+                defect_id = AIN_DEFECT_ID_MAP[idx]
+                defect_type = f"AIN_NG{idx + 2}"  # idx=0 → NG2, idx=1 → NG3
+
+                cursor.execute("""
+                    INSERT INTO object_defects (
+                        production_id, defect_id, defect_type, stringa,
+                        s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    production_id,
+                    defect_id,
+                    defect_type,
+                    None, None, None, None, None, None
+                ))
+        return
+
+    # --- Other fallback defects ---
+    issues = get_latest_issues(line_name, channel_id)
+    data["issues"] = issues
+
+    for issue in issues:
+        path = issue.get("path")
+        image_base64 = issue.get("image_base64")
+        if not path:
+            continue
+
+        category = detect_category(path)
+        defect_id = cat_map.get(category, cat_map["Altro"])
         parsed = parse_issue_path(path, category)
-        sql = """
+
+        photo_id = None
+        if image_base64:
+            image_blob = compress_base64_to_jpeg_blob(image_base64, quality=70)
+            if image_blob is None:
+                raise ValueError(f"Invalid image for defect path: {path}")
+
+            cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (pymysql.Binary(image_blob),))
+            photo_id = cursor.lastrowid
+
+        cursor.execute("""
             INSERT INTO object_defects (
-                production_id, defect_id, defect_type, stringa, s_ribbon, i_ribbon, ribbon_lato, extra_data
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(sql, (
+                production_id, defect_id, defect_type, stringa,
+                s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
             production_id,
             defect_id,
             parsed["defect_type"],
@@ -276,7 +391,8 @@ async def insert_defects(data, production_id, channel_id, line_name, cursor):
             parsed["s_ribbon"],
             parsed["i_ribbon"],
             parsed["ribbon_lato"],
-            parsed['extra_data']
+            parsed["extra_data"],
+            photo_id
         ))
 
 async def update_esito(esito: int, production_id: int, cursor, connection):
@@ -294,7 +410,7 @@ async def update_esito(esito: int, production_id: int, cursor, connection):
     except Exception as e:
         if connection:
             connection.rollback()
-        logging.error(f"❌ Error updating esito for production_id={production_id}: {e}")
+        logger.error(f"❌ Error updating esito for production_id={production_id}: {e}")
         return False
    
 def save_warning_on_mysql(
@@ -302,12 +418,21 @@ def save_warning_on_mysql(
     mysql_conn,
     target_station: dict,
     defect_name: str,
-    source_station: str,
+    source_station: dict,
     suppress_on_source: bool = False,
-    image_blob: bytes = None # type: ignore
+    image_blob: Optional[bytes] = None
 ):
     try:
+        source_station_name = source_station["display_name"] if isinstance(source_station, dict) else str(source_station)
+
         with mysql_conn.cursor() as cursor:
+            # Insert image if present
+            photo_id = None
+            if image_blob:
+                cursor.execute("INSERT INTO photos (photo) VALUES (%s)", (pymysql.Binary(image_blob),))
+                photo_id = cursor.lastrowid
+
+            # Insert warning with photo_id
             cursor.execute("""
                 INSERT INTO stringatrice_warnings (
                     line_name,
@@ -320,7 +445,7 @@ def save_warning_on_mysql(
                     timestamp,
                     source_station,
                     suppress_on_source,
-                    photo
+                    photo_id
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 target_station["line_name"],
@@ -331,14 +456,20 @@ def save_warning_on_mysql(
                 warning_payload["value"],
                 warning_payload["limit"],
                 datetime.now(),
-                source_station,
+                source_station_name,
                 suppress_on_source,
-                image_blob
+                photo_id
             ))
             mysql_conn.commit()
-            print(f"💾 Warning saved for {target_station['name']} (from {source_station})")
+            inserted_id = cursor.lastrowid
+            logger.debug(
+                f"💾 Warning saved for {target_station['name']} (from {source_station_name}) with ID {inserted_id}"
+            )
+            return inserted_id
+
     except Exception as e:
-        logging.error(f"❌ Failed to save warning to MySQL: {e}")
+        logger.error(f"❌ Failed to save warning to MySQL: {e}")
+        return None
 
 async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
     try:
@@ -353,7 +484,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             last_prod = cursor.fetchone()
 
             if not last_prod:
-                print("⚠️ No production data found.")
+                logger.warning("⚠️ No production data found.")
                 return
 
             prod_id = last_prod["production_id"]
@@ -387,7 +518,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
 
             full_station_id = f"{station['line_name']}.{station['name']}"
 
-            # Step 4: Fetch the most recent 49 productions by end_time
+            # Step 4: Fetch the most recent 24 productions by end_time
             cursor.execute("""
                 SELECT 
                     p.id AS production_id, 
@@ -402,7 +533,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                 WHERE p.last_station_id = %s AND p.id != %s
                 GROUP BY p.id
                 ORDER BY p.end_time DESC
-                LIMIT 49
+                LIMIT 24
             """, (last_station_id, prod_id))
             recent_productions = cursor.fetchall()
 
@@ -452,7 +583,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                         consecutive += 1
 
                         if enable_consecutive and consecutive >= consecutive_limit:
-                            print(f"🔴 Warning (consecutive KO)")
+                            logger.warning("🔴 Warning (consecutive KO)")
                             warning_payload = {
                                 "timestamp": datetime.now().isoformat(),
                                 "station_name": station["name"],
@@ -462,9 +593,25 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                                 "type": "consecutive",
                                 "value": consecutive,
                                 "limit": consecutive_limit,
+                                "source_station": source_station['name']
                             }
-                            await broadcast_stringatrice_warning(station["line_name"], warning_payload)
-                            save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
+                            inserted_id = save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
+                            if inserted_id:
+                                with mysql_conn.cursor(DictCursor) as cursor:
+                                    cursor.execute("""
+                                        SELECT w.*, p.photo
+                                        FROM stringatrice_warnings w
+                                        LEFT JOIN photos p ON w.photo_id = p.id
+                                        WHERE w.id = %s
+                                    """, (inserted_id,))
+                                    row = cursor.fetchone()
+                                    if row:
+                                        row["suppress_on_source"] = bool(int(row.get("suppress_on_source", 0)))
+                                        if row.get("photo") is not None:
+                                            row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
+
+                                        await broadcast_stringatrice_warning(row["line_name"], row)
+
 
                             break  # ✅ Optional: stop loop after warning
                     else:
@@ -472,7 +619,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
 
                 # ✅ Check threshold AFTER the loop
                 if count >= threshold:
-                    print(f"🔴 Warning (threshold)")
+                    logger.warning("🔴 Warning (threshold)")
                     warning_payload = {
                         "timestamp": datetime.now().isoformat(),
                         "station_name": station["name"],
@@ -482,9 +629,215 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                         "type": "threshold",
                         "value": count,
                         "limit": threshold,
+                        "source_station": source_station['name']
                     }
-                    await broadcast_stringatrice_warning(station["line_name"], warning_payload)
-                    save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
+                    inserted_id = save_warning_on_mysql(warning_payload, mysql_conn, station, defect_name, source_station, False)
+                    if inserted_id:
+                        with mysql_conn.cursor(DictCursor) as cursor:
+                            cursor.execute("""
+                                SELECT w.*, p.photo
+                                FROM stringatrice_warnings w
+                                LEFT JOIN photos p ON w.photo_id = p.id
+                                WHERE w.id = %s
+                            """, (inserted_id,))
+                            row = cursor.fetchone()
+                            if row:
+                                row["suppress_on_source"] = bool(int(row.get("suppress_on_source", 0)))
+                                if row.get("photo") is not None:
+                                    row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
+
+                                await broadcast_stringatrice_warning(row["line_name"], row)
 
     except Exception as e:
-        logging.error(f"❌ Error fetching last production origin: {e}")
+        logger.error(f"❌ Error fetching last production origin: {e}")
+
+def get_last_station_id_from_productions(id_modulo, connection):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT p.station_id
+                FROM productions p
+                JOIN objects o ON p.object_id = o.id
+                WHERE o.id_modulo = %s AND p.end_time IS NOT NULL
+                ORDER BY p.end_time DESC
+                LIMIT 1
+            """, (id_modulo,))
+            row = cursor.fetchone()
+            return row["station_id"] if row else None
+    except Exception as e:
+        logger.error(f"❌ Failed to retrieve last station for {id_modulo}: {e}")
+        return None
+
+def check_existing_production(id_modulo, station: str, timestamp: datetime, conn) -> bool:
+    """Check if a production record for this module, station, and time already exists."""
+    cursor = conn.cursor() 
+    query = """
+        SELECT 1 FROM productions p
+        JOIN stations s ON p.last_station_id = s.id
+        JOIN objects o ON p.object_id = o.id
+        WHERE o.id_modulo = %s
+          AND s.name = %s
+          AND ABS(TIMESTAMPDIFF(SECOND, p.start_time, %s)) < 10
+        LIMIT 1;
+    """
+    cursor.execute(query, (id_modulo, station, timestamp))
+    result = cursor.fetchone()
+    cursor.close()
+    return result is not None
+
+# Create full stop + first level entry
+def create_stop(
+    station_id: int,
+    start_time,
+    end_time,
+    operator_id: str,
+    stop_type: str,
+    reason: str,
+    status: str,
+    linked_production_id: Optional[int],
+    conn
+) -> int:
+    """Insert a new stop and its initial status level."""
+    cursor = conn.cursor()
+
+    # Insert stop
+    query_stop = """
+        INSERT INTO stops (station_id, start_time, end_time, operator_id, type, reason, status, linked_production_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    cursor.execute(query_stop, (station_id, start_time, end_time, operator_id, stop_type, reason, status, linked_production_id))
+    stop_id = cursor.lastrowid
+
+    # Insert first status level
+    query_level = """
+        INSERT INTO stop_status_changes (stop_id, status, changed_at, operator_id)
+        VALUES (%s, %s, %s, %s)
+    """
+    cursor.execute(query_level, (stop_id, status, start_time, operator_id))
+
+    conn.commit()
+    cursor.close()
+    return stop_id
+
+def update_stop_status(stop_id, new_status, changed_at, operator_id, conn):
+    with conn.cursor() as cursor:
+        logger.debug("➡ Updating main stops table...")
+
+        sql = """
+            UPDATE stops 
+            SET status=%s, operator_id=%s
+            WHERE id=%s
+        """
+        cursor.execute(sql, (new_status, operator_id, stop_id))
+
+        # Insert new status change row into history table
+        insert_level = """
+            INSERT INTO stop_status_changes (stop_id, status, changed_at, operator_id)
+            VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(insert_level, (stop_id, new_status, changed_at, operator_id))
+
+        if new_status == "CLOSED":
+            cursor.execute("SELECT start_time FROM stops WHERE id=%s", (stop_id,))
+            row = cursor.fetchone()
+
+            if not row or not row['start_time']:
+                raise Exception(f"Start time not found for stop_id={stop_id}")
+
+            start_time = row['start_time']
+
+            end_time = datetime.now()
+
+            # Only update end_time — stop_time is auto-generated
+            cursor.execute("""
+                UPDATE stops 
+                SET end_time=%s
+                WHERE id=%s
+            """, (end_time, stop_id))
+
+    conn.commit()
+
+def update_stop_reason(stop_id: int, reason: str, conn):
+    """Update the reason/title of a stop."""
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE stops
+            SET reason=%s
+            WHERE id=%s
+            """,
+            (reason, stop_id),
+        )
+    conn.commit()
+
+# Example shift configuration
+SHIFT_DURATION_HOURS = 8
+SHIFT_START_TIMES = ["06:00", "14:00", "22:00"]
+
+def get_shift_start(now: datetime):
+    date = now.date()
+    for shift_time in reversed(SHIFT_START_TIMES):
+        shift_hour, shift_minute = map(int, shift_time.split(":"))
+        shift_start = datetime(date.year, date.month, date.day, shift_hour, shift_minute)
+        if now >= shift_start:
+            return shift_start
+    # if now before first shift of day
+    yesterday = date - timedelta(days=1)
+    shift_hour, shift_minute = map(int, SHIFT_START_TIMES[-1].split(":"))
+    return datetime(yesterday.year, yesterday.month, yesterday.day, shift_hour, shift_minute)
+
+def get_stops_for_station(station_id: int, conn, shifts_back: int = 3):
+    """Get stops for a station within last N shifts."""
+    now = datetime.now()
+    current_shift_start = get_shift_start(now)
+    target_start_time = current_shift_start - timedelta(hours=SHIFT_DURATION_HOURS * (shifts_back-1))
+
+    cursor = conn.cursor()
+    query = """
+    SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
+    FROM stops
+    WHERE station_id = %s AND type = %s AND start_time >= %s
+    ORDER BY start_time DESC
+    """
+    params = (station_id, "ESCALATION", target_start_time)
+    cursor.execute(query, params)
+    results = cursor.fetchall()
+    cursor.close()
+    return results
+
+# Get full stop with escalation levels
+def get_stop_with_levels(stop_id: int, conn):
+    """Fetch stop info + all its levels."""
+    cursor = conn.cursor()
+
+    stop_query = """
+        SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
+        FROM stops
+        WHERE id = %s
+    """
+    cursor.execute(stop_query, (stop_id,))
+    stop_data = cursor.fetchone()
+
+    levels_query = """
+        SELECT id, status, changed_at, operator_id, created_at
+        FROM stop_status_changes
+        WHERE stop_id = %s
+        ORDER BY changed_at ASC
+    """
+    cursor.execute(levels_query, (stop_id,))
+    levels_data = cursor.fetchall()
+
+    cursor.close()
+    return {
+        "stop": stop_data,
+        "levels": levels_data
+    }
+
+# Delete stop fully
+def delete_stop(stop_id: int, conn):
+    """Delete stop and its levels (full cleanup)."""
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM stop_status_changes WHERE stop_id = %s", (stop_id,))
+    cursor.execute("DELETE FROM stops WHERE id = %s", (stop_id,))
+    conn.commit()
+    cursor.close()

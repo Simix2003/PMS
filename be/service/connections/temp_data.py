@@ -56,4 +56,3 @@ def remove_temp_issues(line_name, channel_id, object_id):
         )
     ]
     save_temp_data(filtered_data)
-    print(f"🗑️ Removed temp issue for {line_name}.{channel_id} - {object_id}")

@@ -1,11 +1,108 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:ix_monitor/shared/utils/helpers.dart';
 
-class ProductionDetailPage extends StatelessWidget {
-  final Map<String, dynamic> data;
+import '../../shared/services/api_service.dart';
 
-  const ProductionDetailPage({super.key, required this.data});
+class ProductionDetailPage extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final double minCycleTimeThreshold;
+
+  const ProductionDetailPage(
+      {super.key, required this.data, required this.minCycleTimeThreshold});
+
+  @override
+  State<ProductionDetailPage> createState() => _ProductionDetailPageState();
+}
+
+class _ProductionDetailPageState extends State<ProductionDetailPage> {
+  List<String> _issuePaths = [];
+  List<Map<String, String>> _pictures = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDefects();
+  }
+
+  Future<void> _fetchDefects() async {
+    final idModulo = widget.data['id_modulo'];
+    final productionId = widget.data['production_id'];
+    final lineName = widget
+        .data['line_display_name']; // NOT CORRECT, I WON'T USE THAT IN Backend
+    final stationName = widget.data['station_name'];
+
+    final result = await ApiService.fetchInitialIssuesForObject(
+      lineName,
+      stationName,
+      idModulo,
+      false,
+      productionId: productionId.toString(),
+    );
+
+    setState(() {
+      _issuePaths = result['issue_paths'];
+      _pictures = List<Map<String, String>>.from(result['pictures']);
+    });
+  }
+
+  String _formatDefectPath(String path) {
+    // Remove the leading parts
+    final parts =
+        path.replaceFirst('Dati.Esito.Esito_Scarto.Difetti.', '').split('.');
+
+    if (parts.isEmpty) return path;
+
+    final category = parts[0];
+
+    switch (category) {
+      case 'Generali':
+        return 'Generale: ${parts.length > 1 ? parts[1] : 'N/A'}';
+
+      case 'Altro':
+        return 'Altro: ${path.split(':').last.trim()}';
+
+      case 'Saldatura':
+        final stringa = RegExp(r'Stringa\[(\d+)\]').firstMatch(path)?.group(1);
+        final pin = RegExp(r'Pin\[(\d+)\]').firstMatch(path)?.group(1);
+        final lato = parts.last;
+        return 'Saldatura: Stringa $stringa, Pin $pin, Lato $lato';
+
+      case 'Disallineamento':
+        if (path.contains('Stringa')) {
+          final stringa =
+              RegExp(r'Stringa\[(\d+)\]').firstMatch(path)?.group(1);
+          return 'Disallineamento: Stringa $stringa';
+        } else {
+          final ribbon = RegExp(r'Ribbon\[(\d+)\]').firstMatch(path)?.group(1);
+          final lato = parts.last;
+          return 'Disallineamento: Ribbon $ribbon, Lato $lato';
+        }
+
+      case 'Mancanza Ribbon':
+        final ribbon = RegExp(r'Ribbon\[(\d+)\]').firstMatch(path)?.group(1);
+        final lato = parts.last;
+        return 'Mancanza Ribbon: $ribbon, Lato $lato';
+
+      case 'I_Ribbon Leadwire':
+        final ribbon = RegExp(r'Ribbon\[(\d+)\]').firstMatch(path)?.group(1);
+        final lato = parts.last;
+        return 'I_Ribbon Leadwire: Ribbon $ribbon, Lato $lato';
+
+      case 'Macchie ECA':
+      case 'Celle Rotte':
+      case 'Bad Soldering':
+      case 'Lunghezza String Ribbon':
+      case 'Graffio su Cella':
+        final stringa = RegExp(r'Stringa\[(\d+)\]').firstMatch(path)?.group(1);
+        return '$category: Stringa $stringa';
+
+      default:
+        return category;
+    }
+  }
 
   String _formatDateTime(dynamic value) {
     if (value == null) return 'N/A';
@@ -27,12 +124,34 @@ class ProductionDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final esito = data['esito'] as int?;
+    int esito = widget.data['esito'] as int? ?? 0;
+    final cycleTime = widget.data['cycle_time'] as int?;
+
+    // Define stations where short cycle time → esito 7 (NC)
+    const shortCycleCheckStations = {
+      'MIN01',
+      'MIN02',
+      'RMI01',
+      'RWS01',
+      'VPF01',
+      'FUG01',
+      'FUG02',
+      'VIM01'
+    };
+
+    // Apply condition only for those stations
+    if (shortCycleCheckStations.contains(widget.data['station_name'])) {
+      if (esito == 1 &&
+          cycleTime != null &&
+          cycleTime < widget.minCycleTimeThreshold) {
+        esito = 7;
+      }
+    }
     final statusColor = getStatusColor(esito);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('ID Modulo: ${data['id_modulo']}'),
+        title: Text('ID Modulo: ${widget.data['id_modulo']}'),
         foregroundColor: Colors.white,
         backgroundColor: statusColor,
       ),
@@ -75,48 +194,95 @@ class ProductionDetailPage extends StatelessWidget {
 
           // GENERAL INFO
           _buildSectionTitle('Informazioni Generali'),
-          _buildInfoTile(Icons.factory, 'Linea', data['line_display_name']),
           _buildInfoTile(
-              Icons.precision_manufacturing, 'Stazione', data['station_name']),
-          _buildInfoTile(Icons.person, 'Operatore', data['operator_id']),
+              Icons.factory, 'Linea', widget.data['line_display_name']),
+          _buildInfoTile(Icons.precision_manufacturing, 'Stazione',
+              widget.data['station_name']),
+          _buildInfoTile(Icons.work_history_sharp, 'Stazione Precedente',
+              widget.data['last_station_display_name']),
+          _buildInfoTile(Icons.person, 'Operatore', widget.data['operator_id']),
           _buildInfoTile(Icons.timer_outlined, 'Tempo ciclo',
-              _formatCycleTime(data['cycle_time'])),
+              _formatCycleTime(widget.data['cycle_time'])),
           const SizedBox(height: 20),
 
           // TIMINGS
           _buildSectionTitle('Tempi'),
+          _buildInfoTile(Icons.login, 'Ingresso',
+              _formatDateTime(widget.data['start_time'])),
           _buildInfoTile(
-              Icons.login, 'Ingresso', _formatDateTime(data['start_time'])),
-          _buildInfoTile(
-              Icons.logout, 'Uscita', _formatDateTime(data['end_time'])),
+              Icons.logout, 'Uscita', _formatDateTime(widget.data['end_time'])),
           const SizedBox(height: 20),
 
           // DEFECTS
           _buildSectionTitle('Difetti Rilevati'),
-          if (data['defect_categories'] != null &&
-              (data['defect_categories'] as String).trim().isNotEmpty)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: (data['defect_categories'] as String)
-                  .split(',')
-                  .map((e) => e.trim())
-                  .where((e) => e.isNotEmpty)
-                  .map(
-                    (category) => Chip(
-                      label: Text(category),
-                      backgroundColor: Colors.red.shade100,
-                      labelStyle: const TextStyle(
-                        color: Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  )
-                  .toList(),
-            )
-          else
+          if (_issuePaths.isEmpty)
             Text('Nessun difetto rilevato.',
-                style: TextStyle(color: Colors.green.shade700, fontSize: 16)),
+                style: TextStyle(color: Colors.green.shade700, fontSize: 16))
+          else
+            Column(
+              children: _issuePaths.map((defect) {
+                final photo = _pictures.firstWhere(
+                  (p) => p['defect'] == defect,
+                  orElse: () => {},
+                );
+
+                return Container(
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.red, width: 2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Card(
+                    elevation: 0,
+                    color: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.warning,
+                        color: Colors.red,
+                        size: 24,
+                      ),
+                      title: Text(_formatDefectPath(defect)),
+                      trailing: photo.isNotEmpty
+                          ? ElevatedButton.icon(
+                              icon: const Icon(
+                                Icons.image,
+                                size: 32,
+                                color: Colors.white,
+                              ),
+                              label: const Text("Visualizza Immagine"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blueAccent,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 24, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.of(context).push(MaterialPageRoute(
+                                  builder: (_) => Scaffold(
+                                    appBar: AppBar(
+                                        title: const Text("Foto Difetto")),
+                                    body: Center(
+                                      child: Image.memory(
+                                        base64Decode(
+                                            photo['image']!.split(',').last),
+                                      ),
+                                    ),
+                                  ),
+                                ));
+                              },
+                            )
+                          : null,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
         ],
       ),
     );

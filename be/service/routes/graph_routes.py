@@ -29,59 +29,107 @@ async def get_graph_data(request: Request):
     extra_filter = payload.get("extra_filter")
 
     print("\n--- API /graph_data called ---")
-
-    date_format = {
-        "daily": "%Y-%m-%d",
-        "weekly": "%Y-%m-%d",
-    }.get(group_by, "%Y-%m-%d %H:00:00")
-
     conn = get_mysql_connection()
     result: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
-    # ESITO / YIELD / CYCLE TIME
-    if "Esito" in metrics or "Yield" in metrics or "CycleTime" in metrics:
+    # ── Prepare date_format and shift SQL if needed ─────────────────────────
+    if group_by == "shifts":
+        # bucket_date is the calendar day; bucket_shift is T1/T2/T3
+        bucket_date = "DATE(p.end_time)"
+        bucket_shift = """
+          CASE
+            WHEN HOUR(p.end_time) BETWEEN 6 AND 13 THEN 'T1'
+            WHEN HOUR(p.end_time) BETWEEN 14 AND 21 THEN 'T2'
+            ELSE 'T3'
+          END
+        """
+        bucket_expr = f"CONCAT(DATE_FORMAT({bucket_date}, '%Y-%m-%d'), ' ', {bucket_shift})"
+        order_clause = "ORDER BY day, shift"
+    else:
+        # hourly or daily (or weekly)
+        date_format = {
+            "daily": "%Y-%m-%d",
+            "weekly": "%Y-%m-%d",
+        }.get(group_by, "%Y-%m-%d %H:00:00")
+        bucket_expr = "DATE_FORMAT(p.end_time, %s)"
+        order_clause = "ORDER BY bucket"
+
+    # ── Esito / Yield / CycleTime ──────────────────────────────────────────
+    if any(m in metrics for m in ("Esito", "Yield", "CycleTime")):
         with conn.cursor() as cur:
             print("\nRunning ESITO / CYCLE query...")
-            cur.execute("""
-                SELECT
-                DATE_FORMAT(p.end_time, %s) AS bucket,
-                p.esito,
-                COUNT(*) AS count,
-                AVG(TIMESTAMPDIFF(SECOND, p.start_time, p.end_time)) AS avg_cycle_time
-                FROM productions p
-                JOIN stations s ON p.station_id = s.id
-                JOIN production_lines pl ON s.line_id = pl.id
-                WHERE pl.display_name = %s
-                AND s.name = %s
-                AND p.end_time BETWEEN %s AND %s
-                GROUP BY bucket, p.esito
-                ORDER BY bucket
-            """, (date_format, line, station, start, end))
+            if group_by == "shifts":
+                sql = f"""
+                    SELECT
+                      {bucket_date} AS day,
+                      {bucket_shift} AS shift,
+                      p.esito,
+                      COUNT(*) AS count,
+                      AVG(TIMESTAMPDIFF(SECOND, p.start_time, p.end_time)) AS avg_cycle_time
+                    FROM productions p
+                    JOIN stations s ON p.station_id = s.id
+                    JOIN production_lines pl ON s.line_id = pl.id
+                    WHERE pl.display_name = %s
+                      AND s.name = %s
+                      AND p.end_time BETWEEN %s AND %s
+                    GROUP BY day, shift, p.esito
+                    {order_clause}
+                """
+                params = (line, station, start, end)
+            else:
+                sql = f"""
+                    SELECT
+                      {bucket_expr} AS bucket,
+                      p.esito,
+                      COUNT(*) AS count,
+                      AVG(TIMESTAMPDIFF(SECOND, p.start_time, p.end_time)) AS avg_cycle_time
+                    FROM productions p
+                    JOIN stations s ON p.station_id = s.id
+                    JOIN production_lines pl ON s.line_id = pl.id
+                    WHERE pl.display_name = %s
+                      AND s.name = %s
+                      AND p.end_time BETWEEN %s AND %s
+                    GROUP BY bucket, p.esito
+                    {order_clause}
+                """
+                params = (date_format, line, station, start, end)
 
+            cur.execute(sql, params)
             rows = cur.fetchall()
 
+        # aggregate counts
         agg = defaultdict(lambda: {"G": 0, "NG": 0, "Escluso": 0, "In Produzione": 0, "G Operatore": 0, "total": 0, "avg_cycle_time": 0})
         for r in rows:
-            b = r["bucket"]
-            e = r["esito"]
-            c = r["count"]
-            avg_ct = r["avg_cycle_time"] or 0
+            if group_by == "shifts":
+                day = r["day"].strftime("%Y-%m-%d")
+                shift = r["shift"]
+                b = f"{day} {shift}"
+            else:
+                b = r["bucket"]
+            e, c, avg_ct = r["esito"], r["count"], r["avg_cycle_time"] or 0
 
-            if e == 1:
-                agg[b]["G"] += c
-            elif e == 6:
-                agg[b]["NG"] += c
-            elif e == 0:
-                agg[b]["Escluso"] += c
-            elif e == 2:
-                agg[b]["In Produzione"] += c
-            elif e == 8:
-                agg[b]["G Operatore"] += c
+            # map esito codes
+            if e == 1:   agg[b]["G"] += c
+            elif e == 6: agg[b]["NG"] += c
+            elif e == 0: agg[b]["Escluso"] += c
+            elif e == 2: agg[b]["In Produzione"] += c
+            elif e == 8: agg[b]["G Operatore"] += c
             agg[b]["total"] += c
             agg[b]["avg_cycle_time"] = avg_ct
 
+        # build result entries
         for b, v in agg.items():
-            dt = datetime.strptime(b, date_format)
+            # parse back into a datetime for ISO timestamp
+            if group_by == "shifts":
+                date_str, shift = b.split(" ")
+                hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
+                dt = datetime.fromisoformat(date_str)
+                if shift == "T3":
+                    dt += timedelta(days=1)  # Shift T3 belongs to the NEXT day
+                dt = dt.replace(hour=hour)
+            else:
+                dt = datetime.strptime(b, date_format)
+
             ts = dt.isoformat()
 
             if "Esito" in metrics:
@@ -94,71 +142,130 @@ async def get_graph_data(request: Request):
             if "Yield" in metrics:
                 tot = v["G"] + v["NG"]
                 pct = (v["G"] / tot) * 100 if tot > 0 else 0
-                result["Yield"].append({"timestamp": ts, "value": pct})
+                result["Yield"].append({"timestamp": ts, "value": round(pct, 1)})
 
             if "CycleTime" in metrics:
                 result["CycleTime"].append({"timestamp": ts, "value": v["avg_cycle_time"]})
 
-        expected_buckets = generate_time_buckets(start, end, group_by)
-        keys_to_pad = []
-        if "Esito" in metrics and extra_filter:
-            keys_to_pad.append(extra_filter)
-        if "Yield" in metrics:
-            keys_to_pad.append("Yield")
-        if "CycleTime" in metrics:
-            keys_to_pad.append("CycleTime")
+        # 🛠️ Add this HERE, not inside the "Difetto" block
+        expected = generate_time_buckets(start, end, group_by)
+        metrics_to_pad = []
 
-        for key in keys_to_pad:
+        if "Esito" in metrics:
+            metrics_to_pad.append(extra_filter if extra_filter else "Esito")
+        if "Yield" in metrics:
+            metrics_to_pad.append("Yield")
+        if "CycleTime" in metrics:
+            metrics_to_pad.append("CycleTime")
+
+        for key in metrics_to_pad:
             existing = {item["timestamp"] for item in result[key]}
-            for bucket in expected_buckets:
-                dt = datetime.strptime(bucket, date_format)
+            for bucket in expected:
+                if group_by == "shifts":
+                    date_str, shift = bucket.split(" ")
+                    hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
+                    dt = datetime.fromisoformat(date_str)
+                    if shift == "T3":
+                        dt += timedelta(days=1)  # Shift T3 belongs to the NEXT day
+                    dt = dt.replace(hour=hour)
+                else:
+                    dt = datetime.strptime(bucket, date_format)
+
                 ts = dt.isoformat()
                 if ts not in existing:
                     result[key].append({"timestamp": ts, "value": 0})
             result[key].sort(key=lambda x: x["timestamp"])
 
-    # DIFETTO
+    # ── Difetto ────────────────────────────────────────────────────────────
     if "Difetto" in metrics and extra_filter:
         category = extra_filter.strip()
         print(f"[🔍] Selected defect category: {category}")
 
-        query = f"""
-            SELECT
-            DATE_FORMAT(p.end_time, %s) AS bucket,
-            COUNT(*) AS count
-            FROM productions p
-            JOIN stations s ON p.station_id = s.id
-            JOIN production_lines pl ON s.line_id = pl.id
-            JOIN object_defects od ON p.id = od.production_id
-            JOIN defects d ON od.defect_id = d.id
-            WHERE
-            pl.display_name = %s AND
-            s.name = %s AND
-            p.end_time BETWEEN %s AND %s AND
-            d.category = %s
-            GROUP BY bucket
-            ORDER BY bucket
-        """
-        params = [date_format, line, station, start, end, category]
+        if group_by == "shifts":
+            sql = f"""
+                SELECT
+                  DATE(p.end_time) AS day,
+                  {bucket_shift} AS shift,
+                  COUNT(DISTINCT p.object_id) AS count
+                FROM productions p
+                JOIN stations s ON p.station_id = s.id
+                JOIN production_lines pl ON s.line_id = pl.id
+                JOIN object_defects od ON p.id = od.production_id
+                JOIN defects d ON od.defect_id = d.id
+                WHERE pl.display_name = %s
+                  AND s.name = %s
+                  AND p.end_time BETWEEN %s AND %s
+                  AND d.category = %s
+                GROUP BY day, shift
+                ORDER BY day, shift
+            """
+            params = (line, station, start, end, category)
+        else:
+            sql = f"""
+                SELECT
+                  {bucket_expr} AS bucket,
+                  COUNT(DISTINCT p.object_id) AS count
+                FROM productions p
+                JOIN stations s ON p.station_id = s.id
+                JOIN production_lines pl ON s.line_id = pl.id
+                JOIN object_defects od ON p.id = od.production_id
+                JOIN defects d ON od.defect_id = d.id
+                WHERE pl.display_name = %s
+                  AND s.name = %s
+                  AND p.end_time BETWEEN %s AND %s
+                  AND d.category = %s
+                GROUP BY bucket
+                ORDER BY bucket
+            """
+            params = (date_format, line, station, start, end, category)
 
         with conn.cursor() as cur:
-            cur.execute(query, tuple(params))
-            defect_rows = cur.fetchall()
+            cur.execute(sql, params)
+            rows = cur.fetchall()
 
-        for row in defect_rows:
-            dt = datetime.strptime(row["bucket"], date_format)
+        for r in rows:
+            if group_by == "shifts":
+                date_str, shift = bucket.split(" ")
+                hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
+                dt = datetime.fromisoformat(date_str)
+                if shift == "T3":
+                    dt += timedelta(days=1)  # Shift T3 belongs to the NEXT day
+                dt = dt.replace(hour=hour)
+            else:
+                dt = datetime.strptime(bucket, date_format)
+
             result[category].append({
                 "timestamp": dt.isoformat(),
-                "value": row["count"]
+                "value": r["count"]
             })
 
-        expected_buckets = generate_time_buckets(start, end, group_by)
-        existing = {item["timestamp"] for item in result[category]}
-        for bucket in expected_buckets:
-            ts = datetime.strptime(bucket, date_format).isoformat()
-            if ts not in existing:
-                result[category].append({"timestamp": ts, "value": 0})
-        result[category].sort(key=lambda x: x["timestamp"])
+        # pad missing buckets for all metrics
+        expected = generate_time_buckets(start, end, group_by)
+        metrics_to_pad = []
+
+        if "Esito" in metrics:
+            metrics_to_pad.append(extra_filter if extra_filter else "Esito")
+        if "Yield" in metrics:
+            metrics_to_pad.append("Yield")
+        if "CycleTime" in metrics:
+            metrics_to_pad.append("CycleTime")
+
+        for key in metrics_to_pad:
+            existing = {item["timestamp"] for item in result[key]}
+            for bucket in expected:
+                if group_by == "shifts":
+                    date_str, shift = bucket.split(" ")
+                    hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
+                    dt = datetime.fromisoformat(date_str)
+                    if shift == "T3":
+                        dt += timedelta(days=1)  # Shift T3 belongs to the NEXT day
+                    dt = dt.replace(hour=hour)
+                else:
+                    dt = datetime.strptime(bucket, date_format)
+                ts = dt.isoformat()
+                if ts not in existing:
+                    result[key].append({"timestamp": ts, "value": 0})
+            result[key].sort(key=lambda x: x["timestamp"])
 
     return result
 
@@ -251,8 +358,17 @@ async def productions_summary(
                     SUM(CASE WHEN p.esito = 5 THEN 1 ELSE 0 END) AS ok_op_count,
                     SUM(CASE WHEN p.esito = 6 THEN 1 ELSE 0 END) AS bad_count,
                     SEC_TO_TIME(AVG(TIME_TO_SEC(p.cycle_time))) AS avg_cycle_time
-                FROM productions p
+                FROM (
+                    SELECT *
+                    FROM productions p
+                    WHERE (p.station_id, p.object_id, p.end_time) IN (
+                        SELECT station_id, object_id, MAX(end_time)
+                        FROM productions
+                        GROUP BY station_id, object_id
+                    )
+                ) p
                 JOIN stations s ON p.station_id = s.id
+
                 LEFT JOIN production_lines pl ON s.line_id = pl.id
                 {where_clause}
                 GROUP BY s.name, s.display_name
@@ -274,11 +390,19 @@ async def productions_summary(
 
             query_time_cycles = f"""
                 SELECT s.name as station_code, TIME_TO_SEC(p.cycle_time) as cycle_seconds
-                FROM productions p
+                FROM (
+                    SELECT *
+                    FROM productions p
+                    WHERE (p.station_id, p.object_id, p.end_time) IN (
+                        SELECT station_id, object_id, MAX(end_time)
+                        FROM productions
+                        GROUP BY station_id, object_id
+                    )
+                ) p
                 JOIN stations s ON p.station_id = s.id
                 LEFT JOIN production_lines pl ON s.line_id = pl.id
                 {where_clause} AND (
-                    p.esito = 1 OR (s.name = 'M326' AND p.esito = 5)
+                    p.esito = 1 OR (s.name = 'RMI01' AND p.esito = 5)
                 )
             """
             cursor.execute(query_time_cycles, tuple(params))
@@ -324,7 +448,7 @@ async def productions_summary(
                     if station_code in stations:
                         stations[station_code].setdefault("defects", {})[category] = count
 
-            for category in ["Mancanza Ribbon", "I_Ribbon Leadwire", "Saldatura", "Disallineamento", "Generali", "Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella"]:
+            for category in ["Mancanza Ribbon", "I_Ribbon Leadwire", "Saldatura", "Disallineamento", "Generali", "Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella", "Bad Soldering"]:
                 fetch_defect_summary(category, category)
 
             for station, data in stations.items():
@@ -333,11 +457,19 @@ async def productions_summary(
                 total_defects = sum(defects.values())
                 generic = bad_count_val - total_defects
                 if generic > 0:
-                    stations[station].setdefault("defects", {})["Generico"] = generic
+                    stations[station].setdefault("defects", {})["Senza Causale"] = generic
 
             query_last = f"""
                 SELECT s.name as station, o.id_modulo, p.esito, p.cycle_time, p.start_time, p.end_time
-                FROM productions p
+                FROM (
+                    SELECT *
+                    FROM productions p
+                    WHERE (p.station_id, p.object_id, p.end_time) IN (
+                        SELECT station_id, object_id, MAX(end_time)
+                        FROM productions
+                        GROUP BY station_id, object_id
+                    )
+                ) p
                 JOIN stations s ON p.station_id = s.id
                 JOIN objects o ON p.object_id = o.id
                 LEFT JOIN production_lines pl ON s.line_id = pl.id

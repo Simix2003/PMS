@@ -1,5 +1,5 @@
 // lib/shared/services/api_service.dart
-// ignore_for_file: non_constant_identifier_names
+// ignore_for_file: non_constant_identifier_names, avoid_print
 // ignore_for_file: avoid_web_libraries_in_flutter
 
 import 'dart:async';
@@ -7,6 +7,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:html' as html;
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+import '../models/globals.dart';
+import 'socket_service.dart';
 
 class ApiService {
   static String get baseUrl {
@@ -36,66 +40,43 @@ class ApiService {
     }
   }
 
-  static Future<void> uploadImages({
-    required String objectId,
-    required List<Map<String, String>> images,
-  }) async {
-    if (images.isEmpty) return;
-
-    final uri = Uri.parse('$baseUrl/api/upload_images');
-    final request = http.MultipartRequest('POST', uri);
-
-    request.fields['object_id'] = objectId;
-
-    for (var i = 0; i < images.length; i++) {
-      final defect = images[i]['defect'] ?? 'unknown';
-      final base64Str = images[i]['image']!;
-      final imageBytes = base64Decode(base64Str);
-
-      // ✅ Add image file
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'images',
-          imageBytes,
-          filename: 'image_$i.jpg',
-        ),
-      );
-
-      // ✅ Add defect field as a form entry
-      request.files.add(
-        http.MultipartFile.fromString(
-          'defects',
-          defect,
-        ),
-      );
-    }
-
-    final response = await request.send();
-
-    if (response.statusCode != 200) {
-      final body = await response.stream.bytesToString();
-      throw Exception("Failed to upload images:\n$body");
-    }
-  }
-
   static Future<bool> submitIssues({
     required String selectedLine,
     required String selectedChannel,
     required String objectId,
-    required List<String> issues,
+    required List<Map<String, dynamic>> issues,
   }) async {
+    final payload = {
+      'line_name': selectedLine,
+      'channel_id': selectedChannel,
+      'object_id': objectId,
+      'issues': issues,
+    };
+
     final response = await http.post(
       Uri.parse('$baseUrl/api/set_issues'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'line_name': selectedLine,
-        'channel_id': selectedChannel,
-        'object_id': objectId,
-        'issues': issues,
-      }),
+      body: jsonEncode(payload),
     );
 
-    return response.statusCode == 200;
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      // Try to extract the error message
+      String errorMessage = 'Errore durante l’invio.';
+      try {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        if (body.containsKey('error')) {
+          errorMessage = body['error'];
+        }
+      } catch (_) {
+        // If parsing fails, use raw body
+        errorMessage = response.body;
+      }
+
+      // Let the caller (e.g. _submitIssues) handle the message
+      throw Exception(errorMessage);
+    }
   }
 
   static Future<void> simulateTrigger(String line, String channel) async {
@@ -162,6 +143,7 @@ class ApiService {
     final response = await http.get(Uri.parse(url));
     if (response.statusCode == 200) {
       final jsonMap = json.decode(response.body);
+
       for (var station in jsonMap['stations'].values) {
         station['last_object'] ??= 'No Data';
         station['last_esito'] ??= 'No Data';
@@ -177,7 +159,25 @@ class ApiService {
           station['cycle_times'] = <num>[]; // fallback
         }
       }
-      return Map<String, dynamic>.from(jsonMap);
+
+      Map<String, dynamic> deepCastToStringKeyedMap(Map input) {
+        return input.map((key, value) {
+          if (value is Map) {
+            return MapEntry(key.toString(), deepCastToStringKeyedMap(value));
+          } else if (value is List) {
+            return MapEntry(
+                key.toString(),
+                value.map((e) {
+                  return e is Map ? deepCastToStringKeyedMap(e) : e;
+                }).toList());
+          } else {
+            return MapEntry(key.toString(), value);
+          }
+        });
+      }
+
+      final cleaned = deepCastToStringKeyedMap(jsonMap as Map);
+      return cleaned;
     } else {
       throw Exception('Errore durante il caricamento dei dati');
     }
@@ -306,7 +306,7 @@ class ApiService {
     String effectiveStation = station;
 
     // 🛠 If we are in rework, use the original QC station instead
-    if (station == "M326") {
+    if (station == "RMI01") {
       final oldStation = await fetchStationForObject(object_id);
       if (oldStation != null) {
         effectiveStation = oldStation;
@@ -336,19 +336,55 @@ class ApiService {
   }
 
   static Future<String?> exportSelectedObjectsAndGetDownloadUrl({
-    required List<String> objectIds,
+    required List<String> productionIds, // <-- true production row IDs
+    required List<String> moduloIds, // <-- id_modulo strings (for full history)
     required List<Map<String, String>> filters,
+    required bool fullHistory,
+    void Function(String step, int? current, int? total)? onProgress,
   }) async {
     final url = Uri.parse('$baseUrl/api/export_objects');
+
+    final progressId = DateTime.now().millisecondsSinceEpoch.toString();
+
+    StreamSubscription? sub;
+    WebSocketChannel? channel;
+    if (onProgress != null) {
+      final wsUri =
+          Uri.parse('${WebSocketService.baseUrl}/ws/export/$progressId');
+      channel = WebSocketChannel.connect(wsUri);
+      sub = channel.stream.listen(
+        (message) {
+          try {
+            final data = jsonDecode(message);
+            final step = data['step'];
+            final current = data['current'];
+            final total = data['total'];
+            if (step is String) {
+              onProgress(
+                step,
+                current is int ? current : null,
+                total is int ? total : null,
+              );
+            }
+          } catch (_) {}
+        },
+      );
+    }
 
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        "object_ids": objectIds,
+        "modulo_ids": moduloIds,
+        "production_ids": productionIds,
         "filters": filters,
+        "fullHistory": fullHistory, // 👈 Include it in the request body
+        "progressId": progressId,
       }),
     );
+
+    await sub?.cancel();
+    await channel?.sink.close();
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -356,8 +392,64 @@ class ApiService {
       if (filename != null) {
         return "$baseUrl/api/download_export/$filename";
       }
+    } else {
+      print("❌ Export failed: ${response.statusCode} - ${response.body}");
+    }
+    return null;
+  }
+
+  static Future<String?> exportDailyAndGetDownloadUrl({
+    void Function(String step, int? current, int? total)? onProgress,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/daily_export');
+
+    final progressId = DateTime.now().millisecondsSinceEpoch.toString();
+
+    StreamSubscription? sub;
+    WebSocketChannel? channel;
+    if (onProgress != null) {
+      final wsUri =
+          Uri.parse('${WebSocketService.baseUrl}/ws/export/$progressId');
+      channel = WebSocketChannel.connect(wsUri);
+      sub = channel.stream.listen(
+        (message) {
+          try {
+            final data = jsonDecode(message);
+            final step = data['step'];
+            final current = data['current'];
+            final total = data['total'];
+            if (step is String) {
+              onProgress(
+                step,
+                current is int ? current : null,
+                total is int ? total : null,
+              );
+            }
+          } catch (_) {}
+        },
+      );
     }
 
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        "progressId": progressId,
+      }),
+    );
+
+    await sub?.cancel();
+    await channel?.sink.close();
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final filename = data["filename"];
+      if (filename != null) {
+        return "$baseUrl/api/download_export/$filename";
+      }
+    } else {
+      print("❌ Daily export failed: ${response.statusCode} - ${response.body}");
+    }
     return null;
   }
 
@@ -366,24 +458,42 @@ class ApiService {
     required String? orderBy,
     required String? orderDirection,
     required String? limit,
+    required bool showAllEvents,
   }) async {
     final uri = Uri.parse('$baseUrl/api/search');
+
+    // 🧼 Clean up 'Difetto' filter values
+    final cleanedFilters = filters.map((f) {
+      if (f['type'] == 'Difetto' && f['value'] != null) {
+        final raw = f['value']!;
+        final cleanedParts = raw
+            .split('>')
+            .map((p) => p.trim())
+            .where((p) => p.isNotEmpty)
+            .toList();
+
+        return {
+          'type': f['type']!,
+          'value': cleanedParts.join(' > '),
+        };
+      }
+      return f;
+    }).toList();
 
     final response = await http.post(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        "filters": filters,
+        "filters": cleanedFilters,
         "order_by": orderBy,
         "order_direction": orderDirection,
         "limit": limit,
+        "show_all_events": showAllEvents,
       }),
     );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-
-      // Each item contains object_id, latest_event, history, and event_count
       return List<Map<String, dynamic>>.from(data["results"] ?? []);
     } else {
       throw Exception("Errore durante la ricerca");
@@ -426,23 +536,40 @@ class ApiService {
     }
   }
 
-  static Future<List<String>> fetchInitialIssuesForObject(
-      String idModulo) async {
+  static Future<Map<String, dynamic>> fetchInitialIssuesForObject(
+    String lineName,
+    String channelId,
+    String idModulo,
+    bool write_to_plc, {
+    String? productionId,
+  }) async {
     try {
       final uri =
-          Uri.parse('$baseUrl/api/issues/for_object?id_modulo=$idModulo');
+          Uri.parse('$baseUrl/api/issues/for_object').replace(queryParameters: {
+        'line_name': lineName,
+        'channel_id': channelId,
+        'id_modulo': idModulo,
+        'write_to_plc': write_to_plc.toString(),
+        if (productionId != null) 'production_id': productionId,
+      });
+
       final response = await http.get(uri);
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data.cast<String>(); // Converti dinamicamente a List<String>
+        final Map<String, dynamic> data = json.decode(response.body);
+        return {
+          'issue_paths': List<String>.from(data['issue_paths'] ?? []),
+          'pictures': (data['pictures'] as List<dynamic>)
+              .map((e) => Map<String, String>.from(e as Map))
+              .toList(),
+        };
       } else {
         debugPrint("❌ Failed to fetch initial issues: ${response.statusCode}");
-        return [];
+        return {'issue_paths': [], 'pictures': []};
       }
     } catch (e) {
       debugPrint("❌ Exception in fetchInitialIssuesForObject: $e");
-      return [];
+      return {'issue_paths': [], 'pictures': []};
     }
   }
 
@@ -533,6 +660,413 @@ class ApiService {
       return response.statusCode == 200;
     } catch (e) {
       debugPrint("❌ Error suppressing warning with photo: $e");
+      return false;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchDataFromQuery(
+      String query) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/run_sql_query'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'query': query}),
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> raw = jsonDecode(response.body);
+      return raw.cast<Map<String, dynamic>>();
+    } else {
+      throw Exception('Errore nella query: ${response.body}');
+    }
+  }
+
+  static Future<void> fetchLinesAndInitializeGlobals() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/api/lines'));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(response.body);
+
+        final List<dynamic> linesData = data['lines'];
+        final List<dynamic> stationsData = data['stations'];
+
+        availableLines.clear();
+        lineDisplayNames.clear();
+        lineOptions.clear();
+        availableStations.clear();
+
+        for (final item in linesData) {
+          final name = item['name'];
+          final displayName = item['display_name'];
+
+          availableLines.add(name);
+          lineDisplayNames[name] = displayName;
+          lineOptions.add(displayName);
+        }
+        // Validate selectedLine
+        if (!availableLines.contains(selectedLine)) {
+          selectedLine = availableLines.isNotEmpty ? availableLines[0] : null;
+        }
+
+        for (final station in stationsData) {
+          availableStations.add(station);
+        }
+
+        // ⚠️ This line is redundant (overwrites the validated selection)
+        // selectedLine = availableLines.isNotEmpty ? availableLines[0] : null;
+      } else {
+        throw Exception('❌ Failed to load lines from server');
+      }
+    } catch (e) {
+      debugPrint("❌ Error fetching lines: $e");
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> fetchMBJDetails(String idModulo) async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/mbj_events/$idModulo'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else if (response.statusCode == 404) {
+      // XML not found (valid case)
+      return null;
+    } else {
+      // Other errors (e.g. server down, 500, etc.)
+      throw Exception('Failed to fetch MBJ details: ${response.statusCode}');
+    }
+  }
+
+  static Future<bool> preloadXmlIndex() async {
+    try {
+      final response =
+          await http.post(Uri.parse('$baseUrl/api/reload_xml_index'));
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        debugPrint('❌ Failed to preload XML index: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('❌ Exception while preloading XML: $e');
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> checkDefectSimilarity(
+      String userInput) async {
+    final url = Uri.parse('$baseUrl/api/ml/check_defect_similarity');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'input_text': userInput}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        debugPrint(
+            '❌ Failed to check defect similarity: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('❌ Exception during checkDefectSimilarity: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> predictReworkETAByObject(
+      String objectId) async {
+    final url = Uri.parse('$baseUrl/api/ml/predict_eta_by_id_modulo');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_modulo': objectId}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['confidence'] == 'high') {
+          return {
+            'etaInfo': {
+              'eta_sec': data['eta_sec'],
+              'eta_min': data['eta_min'].round(),
+              'reasoning': data['reasoning'],
+              'samples': data['historical_samples']
+            },
+            'noDefectsFound': false
+          };
+        } else {
+          return {'etaInfo': null, 'noDefectsFound': false};
+        }
+      } else if (response.statusCode == 419) {
+        debugPrint('ℹ️ No DEFECTS found for object_id $objectId');
+        return {'etaInfo': null, 'noDefectsFound': true};
+      } else {
+        debugPrint('❌ Failed to get ETA by object_id: ${response.statusCode}');
+        return {'etaInfo': null, 'noDefectsFound': false};
+      }
+    } catch (e) {
+      debugPrint('❌ Exception during predictReworkETAByObject: $e');
+      return {'etaInfo': null, 'noDefectsFound': false};
+    }
+  }
+
+  Future<Map<String, dynamic>?> getQGStations() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/tablet_stations'));
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to load stations: ${response.body}");
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>> fetchVisualDataForAin() async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=AIN'));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      return {
+        ...data,
+        'station_1_in': data['station_1_in'] ?? 0,
+        'station_2_in': data['station_2_in'] ?? 0,
+        'station_1_out_ng': data['station_1_out_ng'] ?? 0,
+        'station_2_out_ng': data['station_2_out_ng'] ?? 0,
+        'station_1_yield': data['station_1_yield'] ?? 100,
+        'station_2_yield': data['station_2_yield'] ?? 100,
+        'station_1_yield_shifts': data['station_1_yield_shifts'] ?? [],
+        'station_2_yield_shifts': data['station_2_yield_shifts'] ?? [],
+        'station_1_yield_last_8h': data['station_1_yield_last_8h'] ?? [],
+        'station_2_yield_last_8h': data['station_2_yield_last_8h'] ?? [],
+        'shift_throughput': data['shift_throughput'] ?? [],
+        'last_8h_throughput': data['last_8h_throughput'] ?? [],
+        'fermi_data': data['fermi_data'] ?? [],
+        'top_defects_qg2': data['top_defects_qg2'] ?? [],
+        'total_defects_qg2': data['total_defects_qg2'] ?? 0,
+        'top_defects_vpf': data['top_defects_vpf'] ?? [],
+      };
+    } else {
+      throw Exception('Failed to load zone data');
+    }
+  }
+
+  static Future<Map<String, dynamic>> fetchVisualDataForVpf() async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=VPF'));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return {
+        ...data,
+        'station_1_in': data['station_1_in'] ?? 0,
+        'station_1_out_ng': data['station_1_out_ng'] ?? 0,
+        'station_1_re_entered': data['station_1_re_entered'] ?? 0,
+        'speed_ratio': data['speed_ratio'] ?? [],
+        'station_1_yield': data['station_1_yield'] ?? 100,
+        'station_1_shifts': data['station_1_shifts'] ?? [],
+        'station_1_yield_last_8h': data['station_1_yield_last_8h'] ?? [],
+        'eq_defects': data['eq_defects'] ?? [],
+        'defects_vpf': data['defects_vpf'] ?? [],
+      };
+    } else {
+      throw Exception('Failed to load VPF zone data');
+    }
+  }
+
+  static Future<Map<String, dynamic>> fetchVisualDataForEll() async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=ELL'));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      return {
+        ...data,
+        'station_1_in': data['station_1_in'] ?? 0,
+        'station_2_in': data['station_2_in'] ?? 0,
+        'station_1_out_ng': data['station_1_out_ng'] ?? 0,
+        'station_2_out_ng': data['station_2_out_ng'] ?? 0,
+        'FPY_yield': data['FPY_yield'] ?? 100,
+        'RWK_yield': data['RWK_yield'] ?? 100,
+        'FPY_yield_shifts': data['FPY_yield_shifts'] ?? [],
+        'RWK_yield_shifts': data['RWK_yield_shifts'] ?? [],
+        'FPY_yield_last_8h': data['FPY_yield_last_8h'] ?? [],
+        'RWK_yield_last_8h': data['RWK_yield_last_8h'] ?? [],
+        'shift_throughput': data['shift_throughput'] ?? [],
+        'last_8h_throughput': data['last_8h_throughput'] ?? [],
+        'fermi_data': data['fermi_data'] ?? [],
+        'top_defects': data['top_defects'] ?? [],
+      };
+    } else {
+      throw Exception('Failed to load ELL visual data');
+    }
+  }
+
+  Future<Map<String, dynamic>?> createStop({
+    required int stationId,
+    required String startTime,
+    required String operatorId,
+    required String stopType,
+    required String reason,
+    required String status,
+    int? linkedProductionId,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/escalation/create_stop');
+
+    final payload = {
+      "station_id": stationId,
+      "start_time": startTime,
+      "operator_id": operatorId,
+      "stop_type": stopType,
+      "reason": reason,
+      "status": status,
+      if (linkedProductionId != null)
+        "linked_production_id": linkedProductionId,
+    };
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to create stop: ${response.body}");
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> updateStopStatus({
+    required int stopId,
+    required String newStatus,
+    required String changedAt,
+    required String operatorId,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/escalation/update_status');
+
+    final payload = {
+      "stop_id": stopId,
+      "new_status": newStatus,
+      "changed_at": changedAt,
+      "operator_id": operatorId,
+    };
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to update stop status: ${response.body}");
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> updateStopReason({
+    required int stopId,
+    required String reason,
+  }) async {
+    final url = Uri.parse('$baseUrl/api/escalation/update_reason');
+
+    final payload = {
+      "stop_id": stopId,
+      "reason": reason,
+    };
+
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to update stop reason: ${response.body}");
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getStopDetails(int stopId) async {
+    final url = Uri.parse('$baseUrl/api/escalation/get_stop_details/$stopId');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to load stop details: ${response.body}");
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getStopsForStation(int stationId,
+      {int shiftsBack = 3}) async {
+    final url = Uri.parse(
+        '$baseUrl/api/escalation/get_stops/$stationId?shifts_back=$shiftsBack');
+    final response = await http.get(url);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to load stops: ${response.body}");
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> deleteStop(int stopId) async {
+    final url = Uri.parse('$baseUrl/api/escalation/delete_stop/$stopId');
+
+    final response = await http.delete(url);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to delete stop: ${response.body}");
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> loadVisualTargets() async {
+    final url = Uri.parse('$baseUrl/api/visual_targets');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("❌ Failed to load visual targets: ${response.body}");
+      return null;
+    }
+  }
+
+  static Future<bool> saveVisualTargets(
+      int shiftTarget, int yieldTarget) async {
+    final url = Uri.parse('$baseUrl/api/visual_targets');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'shift_target': shiftTarget,
+        'yield_target': yieldTarget,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      print("❌ Failed to save visual targets: ${response.body}");
       return false;
     }
   }

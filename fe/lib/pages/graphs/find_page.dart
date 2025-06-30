@@ -1,9 +1,14 @@
-// ignore_for_file: deprecated_member_use, non_constant_identifier_names, library_private_types_in_public_api, avoid_web_libraries_in_flutter, use_build_context_synchronously, avoid_print
+// ignore_for_file: deprecated_member_use, non_constant_identifier_names, library_private_types_in_public_api, avoid_web_libraries_in_flutter, use_build_context_synchronously
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:ix_monitor/pages/ai_helper_chat.dart';
+import 'package:ix_monitor/pages/settings_page.dart';
 import 'dart:html' as html;
+import '../../shared/models/globals.dart';
+import '../manuali/manualSelection_page.dart';
+import '../object_details/mbjDetails_page.dart';
 import '../object_details/objectDetails_page.dart';
 import '../object_details/productionDetails_page.dart';
 import '../../shared/services/api_service.dart';
@@ -11,6 +16,8 @@ import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_result_card.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
 import 'dart:ui';
+import 'dart:math' as math;
+//import 'package:rive/rive.dart';
 
 class FindPage extends StatefulWidget {
   final List<Map<String, String>>? initialFilters;
@@ -39,12 +46,20 @@ class _FindPageState extends State<FindPage> {
   String? selectedRibbonSide;
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _numericController = TextEditingController();
+  final TextEditingController _eventiController = TextEditingController();
   bool isSelecting = false;
   final Set<String> selectedObjectIds = {}; // Main selection for 'Difetto'
   String? selectedDifettoGroup;
   bool isExporting = false;
+  String exportStatus = '';
+  bool searching = false;
+  bool showFilters = true;
+  bool isShowingAllEvents = false;
+  int _totalEvents = 0;
 
   String? selectedCycleTimeCondition;
+
+  String? selectedEventiCondition;
 
 // === GENERALI ===
   String? selectedGenerali;
@@ -77,22 +92,35 @@ class _FindPageState extends State<FindPage> {
 // === GRAFFIO SU CELLA ===
   String? selectedGraffioSuCellaStringa;
 
+// === BAD SOLDERING ===
+  String? selectedBadSolderingStringa;
+
 // === LUNGHEZZA STRING RIBBON ===
   String? selectedLunghezzaStringa;
 
+  // === VPF ===
+  String? selectedVPF;
+
+  // === AIN ===
+  String? selectedAIN;
+
   final List<Map<String, String>> activeFilters = [];
 
+  //Artboard? _riveArtboard;
+  //SMIBool? _boolInput;
+
   final List<String> filterOptions = [
-    'Linea',
-    'Stazione',
-    'Esito',
-    'Difetto',
-    'ID Modulo',
     'Data',
-    'Turno',
-    "Stringatrice",
+    'Difetto',
+    'Esito',
+    'Eventi',
+    'ID Modulo',
+    'Linea',
     'Operatore',
+    'Stazione',
+    'Stringatrice',
     'Tempo Ciclo',
+    'Turno',
   ];
 
   final List<String> esitoOptions = [
@@ -107,12 +135,50 @@ class _FindPageState extends State<FindPage> {
     'Non Lavorato Poe Scaduto',
     'No Good da Bussing',
     'Materiale Esterno su Celle',
-    'Bad Soldering',
-    'Passthroug',
-    'Poe in Eccesso'
+    'Passthrough al Bussing',
+    'Poe in Eccesso',
+    'Solo Poe',
+    'Solo Vetro',
+    'Matrice Incompleta',
+    'Molteplici Bus Bar',
+    'Test'
   ];
 
+  final List<String> vpfOptions = [
+    'NG1',
+    'NG1.1',
+    'NG2',
+    'NG2.1',
+    'NG3',
+    'NG3.1',
+    'NG4',
+    'NG5',
+    'NG7',
+    'NG7.1',
+    'NG8',
+    'NG8.1',
+    'NG9',
+    'NG10',
+  ];
+
+  final List<String> ainOptions = ['AIN NG2', 'AIN NG3'];
+
   final List<String> saldaturaOptions_1 = [
+    'Stringa[1]',
+    'Stringa[2]',
+    'Stringa[3]',
+    'Stringa[4]',
+    'Stringa[5]',
+    'Stringa[6]',
+    'Stringa[7]',
+    'Stringa[8]',
+    'Stringa[9]',
+    'Stringa[10]',
+    'Stringa[11]',
+    'Stringa[12]',
+  ];
+
+  final List<String> badSolderingOptions = [
     'Stringa[1]',
     'Stringa[2]',
     'Stringa[3]',
@@ -259,6 +325,8 @@ class _FindPageState extends State<FindPage> {
   String? selectedOrderBy = 'Data';
   String? selectedLimit = '1000';
 
+  Map<String, List<String>> moduloIdToProductionIds = {};
+
   final List<String> orderOptions = [
     'Data',
     'Esito',
@@ -269,15 +337,47 @@ class _FindPageState extends State<FindPage> {
     'Tempo Ciclo',
   ];
 
-  final List<String> limitOptions = ['100', '500', '1000', '5000', '10000'];
+  final List<String> limitOptions = [
+    '100',
+    '500',
+    '1000',
+    '5000',
+    '10000',
+    '50000'
+  ];
   final orderDirections = ['Crescente', 'Decrescente']; // A-Z / Z-A
   String? selectedOrderDirection = 'Decrescente';
 
   final List<Map<String, dynamic>> results = [];
+  double _thresholdSeconds = 3;
+  bool _alwaysExportHistory = false;
 
   @override
   void initState() {
     super.initState();
+
+    _loadSettings();
+
+    /*rootBundle.load('assets/rive/logo_interaction.riv').then(
+      (data) async {
+        final file = RiveFile.import(data);
+        final artboard = file.mainArtboard;
+
+        final controller = StateMachineController.fromArtboard(
+          artboard,
+          'State Machine 1',
+        );
+
+        if (controller != null) {
+          artboard.addController(controller);
+          _boolInput = controller.findInput<bool>('hvr ic') as SMIBool?;
+        }
+
+        setState(() => _riveArtboard = artboard);
+      },
+    ).catchError((e) {
+      print('❌ Error loading Rive asset: $e');
+    });*/
 
     if (widget.initialFilters != null) {
       for (final filter in widget.initialFilters!) {
@@ -360,6 +460,23 @@ class _FindPageState extends State<FindPage> {
     }
   }
 
+  Future<void> _loadSettings() async {
+    try {
+      final settings = await ApiService.getAllSettings();
+      setState(() {
+        _alwaysExportHistory =
+            settings['always_export_history'] as bool? ?? false;
+        _thresholdSeconds = (settings['min_cycle_threshold'] as num)
+            .toDouble(); // we should set a global variable maybe
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Errore nel caricamento delle impostazioni: $e')),
+      );
+    }
+  }
+
   void _addFilter(selectedFilterType, filterValue) {
     if (selectedFilterType == null) return;
 
@@ -367,7 +484,14 @@ class _FindPageState extends State<FindPage> {
 
     if (selectedFilterType == 'Difetto') {
       if (selectedDifettoGroup == null) return;
-      compositeValue = selectedDifettoGroup!;
+      if (selectedDifettoGroup == 'VPF') {
+        compositeValue = selectedVPF!;
+      }
+      if (selectedDifettoGroup == 'AIN') {
+        compositeValue = selectedAIN!;
+      } else {
+        compositeValue = selectedDifettoGroup!;
+      }
 
       switch (selectedDifettoGroup) {
         case 'Generali':
@@ -399,6 +523,9 @@ class _FindPageState extends State<FindPage> {
           break;
         case 'Celle Rotte':
           compositeValue += ' > ${selectedCelleRotteStringa ?? ''}';
+          break;
+        case 'Bad Soldering':
+          compositeValue += ' > ${selectedBadSolderingStringa ?? ''}';
           break;
         case 'Lunghezza String Ribbon':
           compositeValue += ' > ${selectedLunghezzaStringa ?? ''}';
@@ -469,6 +596,18 @@ class _FindPageState extends State<FindPage> {
           'seconds': filterValue,
         });
       });
+    } else if (selectedFilterType == 'Eventi') {
+      if (selectedEventiCondition == null || filterValue.isEmpty) return;
+      compositeValue = '${selectedEventiCondition!} $filterValue eventi';
+
+      setState(() {
+        activeFilters.add({
+          'type': 'Eventi',
+          'value': compositeValue,
+          'condition': selectedEventiCondition!,
+          'eventi': filterValue,
+        });
+      });
     } else {
       if (filterValue.isEmpty) return;
 
@@ -488,6 +627,8 @@ class _FindPageState extends State<FindPage> {
       filterValue = '';
       selectedDifettoGroup = null;
       selectedGenerali = null;
+      selectedVPF = null;
+      selectedAIN = null;
       selectedSaldaturaStringa = null;
       selectedSaldaturaSide = null;
       selectedSaldaturaPin = null;
@@ -499,14 +640,17 @@ class _FindPageState extends State<FindPage> {
       selectedMancanzaRibbon = null;
       selectedMacchieECAStringa = null;
       selectedCelleRotteStringa = null;
+      selectedBadSolderingStringa = null;
       selectedLunghezzaStringa = null;
       selectedRange = null;
       pickedDate = null;
       selectedStartTime = null;
       selectedEndTime = null;
       selectedCycleTimeCondition = null;
+      selectedEventiCondition = null;
       _textController.clear();
       _numericController.clear();
+      _eventiController.clear();
     });
   }
 
@@ -594,21 +738,22 @@ class _FindPageState extends State<FindPage> {
     );
   }
 
+  // LINES //Should get from MySQL : production_lines
   Widget _buildDynamicInput() {
     switch (selectedFilterType) {
       case 'Linea':
         return _buildStyledDropdown(
           hint: 'Linea',
           value: filterValue.isNotEmpty ? filterValue : null,
-          items: ['Linea A', 'Linea B', 'Linea C'],
+          items: lineOptions,
           onChanged: (val) => setState(() => filterValue = val ?? ''),
         );
-
-      case 'Stazione':
+      // STATIONS //Should get from MySQL : stations
+      case 'Stazione': //
         return _buildStyledDropdown(
           hint: 'Stazione',
           value: filterValue.isNotEmpty ? filterValue : null,
-          items: ['M308', 'M309', 'M326'],
+          items: availableStations,
           onChanged: (val) => setState(() => filterValue = val ?? ''),
         );
 
@@ -647,6 +792,33 @@ class _FindPageState extends State<FindPage> {
           ],
         );
 
+      case 'Eventi':
+        return Row(
+          children: [
+            _buildStyledDropdown(
+              hint: 'Condizione',
+              value: selectedEventiCondition,
+              items: [
+                'Minore Di',
+                'Minore o Uguale a',
+                'Maggiore Di',
+                'Maggiore o Uguale a',
+                'Uguale A'
+              ],
+              onChanged: (val) => setState(() {
+                selectedEventiCondition = val;
+              }),
+            ),
+            const SizedBox(width: 8),
+            _buildStyledTextField(
+              controller: _eventiController,
+              hint: 'Eventi',
+              isNumeric: true,
+              onChanged: (val) => filterValue = val,
+            ),
+          ],
+        );
+
       case 'Difetto':
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -656,16 +828,19 @@ class _FindPageState extends State<FindPage> {
               hint: 'Gruppo Difetto',
               value: selectedDifettoGroup,
               items: [
-                'Generali',
-                'Saldatura',
-                'Disallineamento',
-                'Mancanza Ribbon',
-                'Macchie ECA',
+                'AIN',
+                'Altro',
+                'Bad Soldering',
                 'Celle Rotte',
+                'Disallineamento',
+                'Generali',
+                'Graffio su Cella',
                 'I Ribbon Leadwire',
                 'Lunghezza String Ribbon',
-                'Graffio su Cella',
-                'Altro',
+                'Macchie ECA',
+                'Mancanza Ribbon',
+                'Saldatura',
+                'VPF',
               ],
               onChanged: (val) {
                 setState(() {
@@ -683,10 +858,13 @@ class _FindPageState extends State<FindPage> {
                   selectedMancanzaRibbon = null;
                   selectedLeadwireRibbonSide = null;
                   selectedLeadwireRibbon = null;
+                  selectedBadSolderingStringa = null;
                   selectedMacchieECAStringa = null;
                   selectedCelleRotteStringa = null;
                   selectedLunghezzaStringa = null;
                   selectedGraffioSuCellaStringa = null;
+                  selectedVPF = null;
+                  selectedAIN = null;
                 });
               },
             ),
@@ -699,6 +877,24 @@ class _FindPageState extends State<FindPage> {
                 value: selectedGenerali,
                 items: generaliOptions,
                 onChanged: (val) => setState(() => selectedGenerali = val),
+              ),
+
+            // === VPF ===
+            if (selectedDifettoGroup == 'VPF')
+              _buildStyledDropdown(
+                hint: 'Seleziona difetto VPF',
+                value: selectedVPF,
+                items: vpfOptions,
+                onChanged: (val) => setState(() => selectedVPF = val),
+              ),
+
+            // === AIN ===
+            if (selectedDifettoGroup == 'AIN')
+              _buildStyledDropdown(
+                hint: 'Seleziona difetto AIN',
+                value: selectedAIN,
+                items: ainOptions,
+                onChanged: (val) => setState(() => selectedAIN = val),
               ),
 
             // === SALDATURA ===
@@ -844,6 +1040,16 @@ class _FindPageState extends State<FindPage> {
                 items: graffioSuCellaOptions,
                 onChanged: (val) =>
                     setState(() => selectedGraffioSuCellaStringa = val),
+              ),
+
+            // === BAD SOLDERING ===
+            if (selectedDifettoGroup == 'Bad Soldering')
+              _buildStyledDropdown(
+                hint: 'Stringa',
+                value: selectedBadSolderingStringa,
+                items: badSolderingOptions,
+                onChanged: (val) =>
+                    setState(() => selectedBadSolderingStringa = val),
               ),
           ],
         );
@@ -1002,6 +1208,41 @@ class _FindPageState extends State<FindPage> {
         ),
       ),
     );
+  }
+
+  String _translateExportStep(String step, int? current, int? total) {
+    if (step.startsWith('creating:')) {
+      final sheet = step.split(':').last;
+      final base = 'Creazione foglio $sheet...';
+      if (current != null && total != null) {
+        return '$current/$total - $base';
+      }
+      return base;
+    }
+    if (step.startsWith('finished:')) {
+      final sheet = step.split(':').last;
+      final base = 'Completato foglio $sheet';
+      if (current != null && total != null) {
+        return '$current/$total - $base';
+      }
+      return base;
+    }
+    const mapping = {
+      'init': 'Preparazione...',
+      'start_sheets': 'Inizio creazione fogli...',
+      'db_connect': 'Connessione al database...',
+      'objects': 'Caricamento oggetti...',
+      'productions': 'Caricamento produzioni...',
+      'defects': 'Caricamento difetti...',
+      'excel': 'Generazione Excel...',
+      'saving': 'Salvataggio file...',
+      'done': 'Completato.'
+    };
+    final base = mapping[step] ?? step;
+    if (current != null && total != null) {
+      return '$current/$total - $base';
+    }
+    return base;
   }
 
   Future<DateSelectionResult?> _showCustomCalendarPicker(
@@ -1192,7 +1433,9 @@ class _FindPageState extends State<FindPage> {
               filterValue = '';
               _textController.clear();
               selectedCycleTimeCondition = null;
+              selectedEventiCondition = null;
               _numericController.clear();
+              _eventiController.clear();
               selectedRibbonSide = null;
             });
           },
@@ -1262,16 +1505,24 @@ class _FindPageState extends State<FindPage> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(
+    String title, {
+    bool showToggle = false,
+    VoidCallback? onToggle,
+    int? activeCount,
+  }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
         children: [
+          const SizedBox(width: 8),
           Expanded(child: Divider(color: Colors.grey.shade400)),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
-              title,
+              activeCount != null && activeCount > 0
+                  ? '$title ($activeCount)'
+                  : title,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -1280,6 +1531,16 @@ class _FindPageState extends State<FindPage> {
             ),
           ),
           Expanded(child: Divider(color: Colors.grey.shade400)),
+          if (showToggle && onToggle != null)
+            IconButton(
+              icon: Icon(
+                showFilters
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+                color: Colors.grey.shade700,
+              ),
+              onPressed: onToggle,
+            ),
         ],
       ),
     );
@@ -1305,6 +1566,10 @@ class _FindPageState extends State<FindPage> {
 
   void _onSearchPressed() async {
     setState(() => results.clear());
+    setState(() {
+      _totalEvents = 0;
+    });
+    setState(() => searching = true);
 
     try {
       if (activeFilters.isEmpty) {
@@ -1317,16 +1582,34 @@ class _FindPageState extends State<FindPage> {
         orderBy: selectedOrderBy,
         orderDirection: selectedOrderDirection,
         limit: selectedLimit,
+        showAllEvents: isShowingAllEvents,
       );
 
       setState(() {
         results.addAll(data);
+        searching = false;
+
+        for (final row in results) {
+          final objectId = row['object_id'];
+          final productionIds =
+              (row['production_ids'] as List).map((e) => e.toString()).toList();
+          _totalEvents += productionIds.length;
+
+          if (objectId != null && productionIds.isNotEmpty) {
+            moduloIdToProductionIds[objectId] = productionIds;
+          }
+        }
 
         if (widget.onSearchCompleted != null) {
           widget.onSearchCompleted!();
         }
       });
     } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Errore nel caricamento dei risultati: $e')),
+      );
+      setState(() => searching = false);
+
       print("❌ Errore nel caricamento dei risultati: $e");
       // Show a Snackbar or Alert if needed
     }
@@ -1340,6 +1623,40 @@ class _FindPageState extends State<FindPage> {
         backgroundColor: Colors.white,
         scrolledUnderElevation: 0,
         elevation: 0,
+        leadingWidth:
+            140, // ✅ Adjust width based on how many buttons you include
+        leading: Row(
+          children: [
+            SizedBox(
+              width: 8,
+            ),
+            IconButton(
+              icon: Icon(Icons.settings, color: Colors.grey[800]),
+              tooltip: 'Impostazioni',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SettingsPage()),
+                );
+              },
+            ),
+            SizedBox(
+              width: 8,
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline, color: Colors.blue),
+              tooltip: 'Manuale',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ManualSelectionPage(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
         title: const Text(
           'Ricerca Dati',
           style: TextStyle(
@@ -1404,23 +1721,42 @@ class _FindPageState extends State<FindPage> {
                           return ExportConfirmationDialog(
                             selectedCount: selectedObjectIds.length,
                             activeFilters: activeFilters,
-                            onConfirm: () async {
+                            initialExportFullHistory: _alwaysExportHistory,
+                            onConfirm: (bool exportFullHistory) async {
                               final selectedIds = selectedObjectIds.toList();
 
-                              setState(
-                                () => isExporting = true,
-                              );
+                              final allProductionIds = <String>[];
+
+                              // 🔗 Collect production IDs only for the
+                              // modules actually selected by the user
+                              for (final id in selectedIds) {
+                                final productionIds =
+                                    moduloIdToProductionIds[id];
+                                if (productionIds != null) {
+                                  allProductionIds.addAll(productionIds);
+                                }
+                              }
+
+                              setState(() {
+                                isExporting = true;
+                                exportStatus = 'Preparazione...';
+                              });
 
                               final downloadUrl = await ApiService
                                   .exportSelectedObjectsAndGetDownloadUrl(
-                                objectIds:
-                                    selectedIds, // <‑‑ rename param in ApiService too
+                                productionIds: allProductionIds,
+                                moduloIds: selectedIds,
                                 filters: activeFilters,
+                                fullHistory: exportFullHistory,
+                                onProgress: (step, current, total) {
+                                  setState(() {
+                                    exportStatus = _translateExportStep(
+                                        step, current, total);
+                                  });
+                                },
                               );
 
                               if (downloadUrl != null) {
-                                print(
-                                    "📁 File pronto per il download: $downloadUrl");
                                 setState(
                                   () => isSelecting = false,
                                 );
@@ -1441,7 +1777,10 @@ class _FindPageState extends State<FindPage> {
                                           "Errore durante l'esportazione")),
                                 );
                               }
-                              isExporting = false;
+                              setState(() {
+                                isExporting = false;
+                                exportStatus = '';
+                              });
                             },
                           );
                         },
@@ -1469,29 +1808,32 @@ class _FindPageState extends State<FindPage> {
               ]
             : null,
       ),
-      body: isExporting
-          ? Positioned.fill(
+      body: Stack(
+        children: [
+          // A) Main content or loading overlay
+          if (isExporting)
+            Positioned.fill(
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 4.0, sigmaY: 4.0),
                 child: Container(
                   color: Colors.black.withOpacity(0.3),
                   alignment: Alignment.center,
                   child: Container(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.2),
-                          blurRadius: 20,
+                          blurRadius: 24,
                           offset: const Offset(0, 6),
                         ),
                       ],
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
+                      children: [
                         SizedBox(
                           width: 48,
                           height: 48,
@@ -1500,20 +1842,22 @@ class _FindPageState extends State<FindPage> {
                             color: Color(0xFF007AFF),
                           ),
                         ),
-                        SizedBox(height: 20),
+                        SizedBox(height: 16),
                         Text(
                           "Esportazione in corso...",
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 24,
                             fontWeight: FontWeight.w600,
                             color: Colors.black87,
                           ),
                         ),
                         SizedBox(height: 8),
                         Text(
-                          "Attendere qualche secondo...",
-                          style: TextStyle(
-                            fontSize: 14,
+                          exportStatus.isEmpty
+                              ? 'Preparazione...'
+                              : exportStatus,
+                          style: const TextStyle(
+                            fontSize: 16,
                             color: Colors.black54,
                           ),
                         ),
@@ -1523,16 +1867,27 @@ class _FindPageState extends State<FindPage> {
                 ),
               ),
             )
-          : Padding(
-              padding: const EdgeInsets.all(20),
+          else
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildFilterRowCard(),
                   if (activeFilters.isNotEmpty)
-                    _buildSectionTitle("Filtri Attivi"),
-                  if (activeFilters.isNotEmpty) _buildFilterChips(),
-                  const SizedBox(height: 20),
+                    _buildSectionTitle(
+                      "Filtri Attivi",
+                      showToggle: true,
+                      onToggle: () {
+                        setState(() {
+                          showFilters = !showFilters;
+                        });
+                      },
+                      activeCount: activeFilters.length,
+                    ),
+                  if (activeFilters.isNotEmpty && showFilters)
+                    _buildFilterChips(),
+                  const SizedBox(height: 16),
 
                   LayoutBuilder(
                     builder: (context, constraints) {
@@ -1578,7 +1933,7 @@ class _FindPageState extends State<FindPage> {
                           icon: const Icon(
                             Icons.search,
                             color: Colors.white,
-                            size: 25,
+                            size: 24,
                           ),
                           label: const Text("Cerca"),
                           style: ElevatedButton.styleFrom(
@@ -1600,14 +1955,50 @@ class _FindPageState extends State<FindPage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    '${results.length} Moduli Visualizzati',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 20,
-                                      color: Colors.black87,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '${results.length} Moduli Visualizzati',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 24,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            isShowingAllEvents =
+                                                !isShowingAllEvents;
+                                          });
+
+                                          _onSearchPressed();
+                                        },
+                                        child: Tooltip(
+                                          message: isShowingAllEvents
+                                              ? 'Nascondi eventi che non rispettano i filtri'
+                                              : 'Mostra tutti gli eventi',
+                                          child: Icon(
+                                            isShowingAllEvents
+                                                ? Icons.visibility_off
+                                                : Icons.remove_red_eye,
+                                            color: Colors.black54,
+                                            size: 24,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                                  if (!isSelecting)
+                                    Text(
+                                      '$_totalEvents Eventi Visualizzati',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 16,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
                                   if (isSelecting)
                                     Text(
                                       '${selectedObjectIds.length} Moduli Selezionati',
@@ -1629,7 +2020,7 @@ class _FindPageState extends State<FindPage> {
                             countLabel,
                             const Spacer(),
                             ...controls.map((w) => Padding(
-                                  padding: const EdgeInsets.only(left: 12),
+                                  padding: const EdgeInsets.only(left: 16),
                                   child: w,
                                 )),
                           ],
@@ -1642,8 +2033,8 @@ class _FindPageState extends State<FindPage> {
                                 alignment: Alignment.centerLeft,
                                 child: countLabel),
                             Wrap(
-                              spacing: 12,
-                              runSpacing: 12,
+                              spacing: 8,
+                              runSpacing: 8,
                               alignment: WrapAlignment.end,
                               children: controls,
                             ),
@@ -1659,13 +2050,15 @@ class _FindPageState extends State<FindPage> {
                   Expanded(
                     child: results.isEmpty
                         ? Center(
-                            child: Text(
-                              'Nessun dato da mostrare',
-                              style: TextStyle(
-                                color: Colors.grey.shade500,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
+                            child: searching
+                                ? const CircularProgressIndicator()
+                                : Text(
+                                    'Nessun dato da mostrare',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
                           )
                         : ListView.builder(
                             itemCount: results.length,
@@ -1699,22 +2092,36 @@ class _FindPageState extends State<FindPage> {
                                       final allEvents = [latest, ...history];
 
                                       if (allEvents.length == 1) {
-                                        // just one → show the existing detail page
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                ProductionDetailPage(
-                                                    data: latest),
-                                          ),
-                                        );
+                                        if (latest['station_name']
+                                            .contains('ELL')) {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  MBJDetailPage(data: latest),
+                                            ),
+                                          );
+                                        } else {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  ProductionDetailPage(
+                                                      data: latest,
+                                                      minCycleTimeThreshold:
+                                                          _thresholdSeconds),
+                                            ),
+                                          );
+                                        }
                                       } else {
                                         // multiple → push a new “multi” detail screen
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
                                             builder: (_) => ObjectdetailsPage(
-                                                events: allEvents),
+                                                events: allEvents,
+                                                minCycleTimeThreshold:
+                                                    _thresholdSeconds),
                                           ),
                                         );
                                       }
@@ -1735,6 +2142,8 @@ class _FindPageState extends State<FindPage> {
                                               data: history.first,
                                               isSelectable: false,
                                               isSelected: false,
+                                              minCycleTimeThreshold:
+                                                  _thresholdSeconds,
                                             ),
                                           ),
                                         ),
@@ -1745,6 +2154,8 @@ class _FindPageState extends State<FindPage> {
                                         isSelectable: isSelecting,
                                         isSelected: isSelected,
                                         productionIdsCount: count,
+                                        minCycleTimeThreshold:
+                                            _thresholdSeconds,
                                       ),
                                     ],
                                   ),
@@ -1756,6 +2167,32 @@ class _FindPageState extends State<FindPage> {
                 ],
               ),
             ),
+          /*if (_riveArtboard != null)
+            Positioned(
+              right: 20,
+              bottom: 20,
+              child: MouseRegion(
+                onEnter: (_) => _boolInput?.value = true,
+                onExit: (_) => _boolInput?.value = false,
+                child: GestureDetector(
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      barrierColor: Colors.black.withOpacity(0.3),
+                      builder: (context) => const AIHelperChat(),
+                    );
+                  },
+                  child: SizedBox(
+                    height: 100,
+                    width: 100,
+                    child: Rive(artboard: _riveArtboard!),
+                  ),
+                ),
+              ),
+            ),*/
+          if (!isSelecting || !isExporting) const AnimatedAIButton(),
+        ],
+      ),
     );
   }
 }
@@ -1765,4 +2202,111 @@ class DateSelectionResult {
   final DateTimeRange? range;
 
   const DateSelectionResult({this.singleDate, this.range});
+}
+
+class AnimatedAIButton extends StatefulWidget {
+  const AnimatedAIButton({super.key});
+
+  @override
+  State<AnimatedAIButton> createState() => _AnimatedAIButtonState();
+}
+
+class _AnimatedAIButtonState extends State<AnimatedAIButton>
+    with TickerProviderStateMixin {
+  late AnimationController _gradientController;
+  bool _isHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _gradientController = AnimationController(
+      duration: const Duration(seconds: 6),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _gradientController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 20,
+      bottom: 20,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () {
+            showDialog(
+              context: context,
+              barrierColor: Colors.black.withOpacity(0.3),
+              builder: (context) => const AIHelperChat(),
+            );
+          },
+          child: Tooltip(
+            message: 'Assistente Simix (Beta)',
+            textStyle: const TextStyle(color: Colors.white),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade900,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            waitDuration: const Duration(milliseconds: 300),
+            child: AnimatedBuilder(
+              animation: _gradientController,
+              builder: (context, child) {
+                final t = _gradientController.value;
+                final begin = Alignment(
+                  math.cos(2 * math.pi * t),
+                  math.sin(2 * math.pi * t),
+                );
+                final end = Alignment(
+                  -math.cos(2 * math.pi * t),
+                  -math.sin(2 * math.pi * t),
+                );
+
+                return AnimatedScale(
+                  scale: _isHovered ? 1.12 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    height: 64,
+                    width: 64,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: begin,
+                        end: end,
+                        colors: [
+                          Colors.blue.withOpacity(0.6),
+                          Colors.purple.withOpacity(0.4),
+                        ],
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 6,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: const Icon(
+                        Icons.bubble_chart_rounded,
+                        size: 36,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

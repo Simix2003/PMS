@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../shared/models/globals.dart';
 import '../shared/services/api_service.dart';
 import '../shared/services/socket_service.dart';
 import 'settings_page.dart';
@@ -19,14 +20,8 @@ class _WarningsPageState extends State<WarningsPage> {
   final WebSocketService socketService = WebSocketService();
   List<Map<String, dynamic>> warnings = [];
 
-  // LINES
+  // LINES //Should get from MySQL : production_lines
   String selectedLine = "Linea2";
-  final List<String> availableLines = ["Linea1", "Linea2", "Linea3"];
-  final Map<String, String> lineDisplayNames = {
-    'Linea1': 'Linea A',
-    'Linea2': 'Linea B',
-    'Linea3': 'Linea C',
-  };
 
   Timer? _reconnectTimer;
 

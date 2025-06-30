@@ -1,0 +1,86 @@
+{
+  "Generali": {
+    "description": "Difetti Generali.",
+    "image": ""
+  },
+  "Non Lavorato Poe Scaduto": {
+    "description": "POE utilizzato oltre la data di scadenza.",
+    "image": ""
+  },
+  "No Good da Bussing": {
+    "description": "No Good da Bussing.",
+    "image": ""
+  },
+  "Materiale Esterno su Celle": {
+    "description": "Presenza di materiale esterno, carta o altro materiale sulla superficie di una cella.",
+    "image": ""
+  },
+  "Bad Soldering": {
+    "description": "Saldatura non corretta.",
+    "image": "assets/images/bad_soldering.jpg"
+  },
+  "Passthrough al Bussing": {
+    "description": "Modulo passato al Bussing senza essere correttamente lavorato.",
+    "image": ""
+  },
+  "Poe in Eccesso": {
+    "description": "Quantità eccessiva di POE.",
+    "image": "assets/images/poe_eccesso.jpg"
+  },
+  "Solo Poe": {
+    "description": "Solo il POE è presente.",
+    "image": "assets/images/solo_poe.jpg"
+  },
+  "Solo Vetro": {
+    "description": "Solo il vetro è presente.",
+    "image": "assets/images/solo_vetro.jpg"
+  },
+  "Matrice Incompleta": {
+    "description": "Una o più celle mancanti nella matrice.",
+    "image": "assets/images/matrice_incompleta.jpg"
+  },
+  "Molteplici Bus Bar": {
+    "description": "Rilevati più Bus Bar del previsto sul modulo.",
+    "image": "assets/images/molteplici_bus_bar.jpg"
+  },
+  "Test": {
+    "description": "Difetto di prova per testare il sistema.",
+    "image": ""
+  },
+  "Saldatura": {
+    "description": "Errore nei PIN di saldatura.",
+    "image": "assets/images/saldatura.jpg"
+  },
+  "Disallineamento": {
+    "description": "Ribbon o stringhe disallineate sul modulo.",
+    "image": "assets/images/disallineamento.jpg"
+  },
+  "Mancanza Ribbon": {
+    "description": "Assenza di uno o più ribbon nel modulo.",
+    "image": "assets/images/mancanza_ribbon.jpg"
+  },
+  "I Ribbon Leadwire": {
+    "description": "I ribbon leadwire a contatto oppure piegati.",
+    "image": "assets/images/leadwire.jpg"
+  },
+  "Macchie ECA": {
+    "description": "Macchie di ECA rilevate sulle celle.",
+    "image": "assets/images/macchie_eca.jpg"
+  },
+  "Celle Rotte": {
+    "description": "Una o più celle risultano crepate o rotte.",
+    "image": "assets/images/cella_rotta.jpg"
+  },
+  "Lunghezza String Ribbon": {
+    "description": "String Ribbon troppo lunghi.",
+    "image": "assets/images/lunghezza_ribbon.jpg"
+  },
+  "Graffio su Cella": {
+    "description": "Graffio visibile sulla superficie di una cella.",
+    "image": "assets/images/graffio_cella.jpg"
+  },
+  "Altro": {
+    "description": "Difetto non classificabile. Inserire descrizione manuale.",
+    "image": ""
+  }
+}

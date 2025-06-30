@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:ix_monitor/pages/loading_Screen/home_loading_screen.dart';
+import 'package:ix_monitor/pages/loading_Screen/loading_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +15,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('Building MyApp');
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'PMS',
@@ -34,7 +33,7 @@ class MyApp extends StatelessWidget {
         Locale('it', 'IT'), // 🇮🇹 Italian
       ],
       locale: const Locale('it', 'IT'), // 👈 Force Italian everywhere
-      home: HomeLoadingScreen(),
+      home: LoadingScreen(targetPage: 'Home'),
     );
   }
 }

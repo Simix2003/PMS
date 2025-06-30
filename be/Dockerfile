@@ -21,7 +21,6 @@ ENV PYTHONPATH=/app/service
 RUN mkdir -p /app/images/
 RUN mkdir -p /app/ix-monitor/
 RUN mkdir -p /app/ix-monitor/images
-RUN mkdir -p /app/ix-monitor/images_submitted
 
 EXPOSE 8001
 

@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:simple_web_camera/simple_web_camera.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class TakePicturePage extends StatefulWidget {
   const TakePicturePage({super.key});
@@ -46,17 +45,8 @@ class _TakePicturePageState extends State<TakePicturePage>
 
   Future<String> compressBase64Image(String base64) async {
     Uint8List decoded = base64Decode(base64);
-
-    final compressed = await FlutterImageCompress.compressWithList(
-      decoded,
-      minWidth: 1280,
-      minHeight: 960,
-      quality: 70,
-      format: CompressFormat.jpeg,
-      keepExif: false,
-    );
-
-    return base64Encode(compressed);
+    //WAS COMPRESSING HERE BUT SWITCHED TO BACKEND
+    return base64Encode(decoded);
   }
 
   void openCamera() async {

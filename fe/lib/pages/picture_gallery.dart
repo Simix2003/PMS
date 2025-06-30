@@ -1,15 +1,19 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../shared/utils/helpers.dart';
+import 'big_picture_page.dart';
 
 class PictureGalleryPage extends StatefulWidget {
   final List<Map<String, String>> images;
   final void Function(int index)? onDelete;
+  // we should add a bool to know that the images are preloaded :
+  final bool isPreloaded;
 
   const PictureGalleryPage({
-    Key? key,
+    super.key,
     required this.images,
     this.onDelete,
-  }) : super(key: key);
+    required this.isPreloaded,
+  });
 
   @override
   State<PictureGalleryPage> createState() => _PictureGalleryPageState();
@@ -51,61 +55,72 @@ class _PictureGalleryPageState extends State<PictureGalleryPage> {
               ),
               itemBuilder: (context, index) {
                 final image = galleryImages[index];
-                return Card(
-                  elevation: 3,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: Image.memory(
-                          base64Decode(image['image']!),
-                          fit: BoxFit.cover,
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FullImagePage(
+                          image: image['image']!,
+                          defect: image['defect'] ?? '',
                         ),
                       ),
-                      Positioned(
-                        bottom: 8,
-                        left: 8,
-                        child: Container(
-                          color: Colors.black.withOpacity(0.6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          child: Text(
-                            image['defect'] ?? '',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
+                    );
+                  },
+                  child: Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Image.memory(
+                            decodeImage(image['image']!),
+                            fit: BoxFit.cover,
                           ),
                         ),
-                      ),
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: GestureDetector(
-                          onTap: () => _deleteImage(index),
+                        Positioned(
+                          bottom: 8,
+                          left: 8,
                           child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.all(4.0),
-                              child: Icon(Icons.close,
-                                  color: Colors.white, size: 20),
+                            color: Colors.black.withOpacity(0.6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            child: Text(
+                              image['defect'] ?? '',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                        if (!widget.isPreloaded)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: GestureDetector(
+                              onTap: () => _deleteImage(index),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(4.0),
+                                  child: Icon(Icons.close,
+                                      color: Colors.white, size: 20),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 );
-              },
-            ),
+              }),
     );
   }
 }

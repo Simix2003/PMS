@@ -2,11 +2,14 @@
 
 import 'package:flutter/material.dart';
 import '../../shared/widgets/object_result_card.dart';
+import 'mbjDetails_page.dart';
 import 'productionDetails_page.dart';
 
 class ObjectdetailsPage extends StatefulWidget {
   final List<Map<String, dynamic>> events;
-  const ObjectdetailsPage({super.key, required this.events});
+  final double minCycleTimeThreshold;
+  const ObjectdetailsPage(
+      {super.key, required this.events, required this.minCycleTimeThreshold});
 
   @override
   _ObjectdetailsPageState createState() => _ObjectdetailsPageState();
@@ -73,8 +76,16 @@ class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
     // Sort events by end_time
     final ascending = selectedOrderDirection == 'Crescente';
     widget.events.sort((a, b) {
-      final da = DateTime.parse(a['end_time']);
-      final db = DateTime.parse(b['end_time']);
+      final aEnd = a['end_time'];
+      final bEnd = b['end_time'];
+
+      // Treat nulls as "latest" when sorting descending (or "earliest" if ascending)
+      if (aEnd == null && bEnd == null) return 0;
+      if (aEnd == null) return ascending ? 1 : -1;
+      if (bEnd == null) return ascending ? -1 : 1;
+
+      final da = DateTime.parse(aEnd);
+      final db = DateTime.parse(bEnd);
       return ascending ? da.compareTo(db) : db.compareTo(da);
     });
 
@@ -100,7 +111,6 @@ class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
               });
             },
           ),
-          
         ],
       ),
       body: ListView(
@@ -136,13 +146,25 @@ class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
         data: event,
         isSelectable: false,
         productionIdsCount: 1,
+        minCycleTimeThreshold: widget.minCycleTimeThreshold,
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProductionDetailPage(data: event),
-            ),
-          );
+          if (event['station_name'].contains('ELL')) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MBJDetailPage(data: event),
+              ),
+            );
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProductionDetailPage(
+                    data: event,
+                    minCycleTimeThreshold: widget.minCycleTimeThreshold),
+              ),
+            );
+          }
         },
       ),
     );

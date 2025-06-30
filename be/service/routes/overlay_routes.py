@@ -2,16 +2,14 @@ from fastapi import APIRouter, Request, Query
 from fastapi.responses import JSONResponse
 import json
 import os
-import sys
-from pathlib import Path
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.routes.station_routes import get_station_for_object
+from service.config.config import debug, IMAGES_DIR
 
 router = APIRouter()
 
-# Usa una variabile d'ambiente o default a /app/images
-BASE_IMAGE_PATH = os.environ.get("IMAGES_PATH", "/app/images")
+def get_config_path(line_name: str, station: str):
+    return os.path.join(IMAGES_DIR, line_name, station, "overlay_config.json")
 
 @router.get("/api/overlay_config")
 async def get_overlay_config(
@@ -20,51 +18,42 @@ async def get_overlay_config(
     station: str = Query(...),
     object_id: str = Query(...)
 ):
-    config_file = Path(BASE_IMAGE_PATH) / line_name / station / "overlay_config.json"
-    if station == "M326":
-        if object_id:
-            comes_from = get_station_for_object(object_id)
-            config_file = Path(BASE_IMAGE_PATH) / line_name / "M308" / "overlay_config.json"
-            if comes_from == 'M309':
-                config_file = Path(BASE_IMAGE_PATH) / line_name / "M309" / "overlay_config.json"
+    comes_from = None
+    target_station = station
+    if station == "RMI01" and object_id:
+        station_info = await get_station_for_object(object_id)
+        comes_from = station_info["station"]
+        target_station = comes_from if comes_from in ["MIN01", "MIN02"] else "MIN01"
 
-    print(f"Requested overlay config for path: '{path}' (line: {line_name}, station: {station})")
-    print(f"Looking for config file at: {config_file}")
+    config_file = get_config_path(line_name, target_station)
 
-    if not config_file.exists():
-        print(f"Config file not found.")
+    if not os.path.exists(config_file):
+        print(f"❌ Config file not found: {config_file}")
         return JSONResponse(status_code=417, content={"error": f"Overlay config not found for {line_name}/{station}"})
 
     try:
         with open(config_file, "r") as f:
             all_configs = json.load(f)
-            print(f"Loaded overlay_config.json with keys: {list(all_configs.keys())}")
     except json.JSONDecodeError as e:
-        print(f"JSON decode error: {e}")
+        print(f"❌ JSON decode error: {e}")
         all_configs = {}
 
     for image_name, config in all_configs.items():
         config_path = config.get("path", "")
-        print(f"Checking config: image = '{image_name}', path = '{config_path}'")
-
         if config_path.lower() == path.lower():
-            image_url = f"https://172.16.250.33:8050/images/{line_name}/{station}/{image_name}"
-            if station == "M326":
-                if object_id:
-                    image_url = f"https://172.16.250.33:8050/images/{line_name}/M308/{image_name}"
-                    if comes_from == 'M309':
-                        image_url = f"https://172.16.250.33:8050/images/{line_name}/M309/{image_name}"
+            image_url = f"/images/{line_name}/{target_station}/{image_name}"
+            if not debug:
+                image_url = f"https://172.16.250.33:8050{image_url}"
+            else:
+                image_url = f"http://localhost:8001{image_url}"
 
             return {
                 "image_url": image_url,
                 "rectangles": config.get("rectangles", [])
             }
 
-    print(f"No matching path found. Returning fallback with empty image URL.")
-    return {
-        "image_url": "",
-        "rectangles": []
-    }
+    print("⚠️ No matching path found. Returning fallback with empty image URL.")
+    return {"image_url": "", "rectangles": []}
 
 
 @router.post("/api/update_overlay_config")
@@ -75,23 +64,18 @@ async def update_overlay_config(request: Request):
     line_name = data.get("line_name")
     station = data.get("station")
 
-    if not path or not new_rectangles or not line_name or not station:
+    if not all([path, new_rectangles, line_name, station]):
         return JSONResponse(status_code=400, content={"error": "Missing path, rectangles, line_name, or station"})
 
-    config_file = Path(BASE_IMAGE_PATH) / line_name / station / "overlay_config.json"
+    config_file = get_config_path(line_name, station)
 
-    if not config_file.exists():
+    if not os.path.exists(config_file):
         return JSONResponse(status_code=404, content={"error": f"Config file not found for {line_name}/{station}"})
 
     with open(config_file, "r") as f:
         config = json.load(f)
 
-    image_to_update = None
-    for image_name, entry in config.items():
-        if entry.get("path") == path:
-            image_to_update = image_name
-            break
-
+    image_to_update = next((name for name, c in config.items() if c.get("path") == path), None)
     if not image_to_update:
         return JSONResponse(status_code=404, content={"error": "Path not found in config"})
 
@@ -104,24 +88,18 @@ async def update_overlay_config(request: Request):
 
 
 @router.get("/api/available_overlay_paths")
-async def available_overlay_paths(
-    line_name: str = Query(...),
-    station: str = Query(...)
-):
-    config_file = Path(BASE_IMAGE_PATH) / line_name / station / "overlay_config.json"
+async def available_overlay_paths(line_name: str = Query(...), station: str = Query(...)):
+    config_file = get_config_path(line_name, station)
 
-    if not config_file.exists():
+    if not os.path.exists(config_file):
         return JSONResponse(status_code=404, content={"error": f"Config file not found for {line_name}/{station}"})
 
     with open(config_file, "r") as f:
         all_configs = json.load(f)
 
-    result = []
-    for image_name, config in all_configs.items():
-        path = config.get("path")
-        if path:
-            result.append({
-                "image": image_name,
-                "path": path
-            })
+    result = [
+        {"image": name, "path": config.get("path")}
+        for name, config in all_configs.items()
+        if config.get("path")
+    ]
     return result

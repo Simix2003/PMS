@@ -1,3 +1,4 @@
+import logging
 import asyncio
 from fastapi import WebSocket
 
@@ -5,16 +6,18 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.config.config import debug, debugModulo
+from service.config.config import debug
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
 from service.state.global_state import subscriptions
+import service.state.global_state as global_state
+
+logger = logging.getLogger(__name__)
 
 async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connection: PLCConnection, line_name: str):
     paths = get_channel_config(line_name, channel_id)
     
     if paths is None:
-        print(f"❌ Invalid config for line={line_name}, channel={channel_id}")
         await websocket.send_json({"error": "Invalid line/channel combination"})
         return
 
@@ -29,13 +32,14 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
     stringatrice = ""
     outcome = None
     issues_submitted = False
+    full_id = f"{line_name}.{channel_id}"
 
     if trigger_value:
         id_mod_conf = paths["id_modulo"]
 
         ###############################################################################################################################
         if debug:
-            object_id = debugModulo
+            object_id = global_state.debug_moduli.get(full_id)
         else:
             object_id = await asyncio.to_thread(
                 plc_connection.read_string,
@@ -43,8 +47,7 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
             )
         ###############################################################################################################################
 
-        # 🔁 FIX THIS LINE – it was still accessing CHANNELS by only channel_id!
-        str_conf = paths["stringatrice"]  # ✅ Use `paths` here
+        str_conf = paths["stringatrice"]
         values = [
             await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
             for i in range(str_conf["length"])
@@ -104,6 +107,31 @@ async def broadcast(line_name: str, channel_id: str, message: dict):
         except Exception:
             subscriptions[summary_key].remove(ws)
 
+# Initialize this once (preferably in your global_state)
+if not hasattr(global_state, "last_sent"):
+    global_state.last_sent = {}
+
+async def broadcast_zone_update(line_name: str, zone: str, payload: dict):
+    logger.debug(f"📢 Broadcasting {zone} update to {line_name}")
+    key = f"{line_name}.visual.{zone}"
+    ws_set = subscriptions.get(key, set()).copy()
+
+    # 🚫 Skip if identical to last payload sent
+    if global_state.last_sent.get(key) == payload:
+        return
+
+    global_state.last_sent[key] = payload  # 💾 Cache latest payload
+
+    for ws in ws_set:
+        try:
+            if getattr(ws, "client_state", None) and ws.client_state.name != "CONNECTED":
+                raise ConnectionError("WebSocket not connected")
+            await ws.send_json(payload)
+        except Exception as e:
+            logger.warning(f"❌ WebSocket broadcast failed ({key}): {e}")
+            subscriptions[key].discard(ws)
+
+
 async def broadcast_stringatrice_warning(line_name: str, warning: dict):
     """
     Send a warning packet to every subscriber of /ws/warnings/{line_name}
@@ -114,4 +142,17 @@ async def broadcast_stringatrice_warning(line_name: str, warning: dict):
         try:
             await ws.send_json(warning)
         except Exception:
+            subscriptions[key].discard(ws)
+
+async def broadcast_export_progress(progress_id: str, payload: dict):
+    """Broadcast export progress updates to subscribers."""
+    key = f"export.{progress_id}"
+    websockets = subscriptions.get(key, set()).copy()
+    for ws in websockets:
+        try:
+            if getattr(ws, "client_state", None) and ws.client_state.name != "CONNECTED":
+                raise ConnectionError("WebSocket not connected")
+            await ws.send_json(payload)
+        except Exception as e:
+            logger.warning(f"❌ WebSocket broadcast failed ({key}): {e}")
             subscriptions[key].discard(ws)

@@ -1,0 +1,43 @@
+{
+  "min_cycle_threshold": 10.0,
+  "include_nc_in_yield": true,
+  "exclude_saldatura_from_yield": false,
+  "thresholds": {
+    "Macchie ECA": 5,
+    "Lunghezza String-Ribbon": 5,
+    "Celle Rotte": 5,
+    "No Good da Bussing": 5,
+    "Bad Soldering": 5
+  },
+  "moduli_window": {
+    "Macchie ECA": 10,
+    "Lunghezza String-Ribbon": 10,
+    "Celle Rotte": 10,
+    "No Good da Bussing": 10,
+    "Bad Soldering": 10
+  },
+  "enable_consecutive_ko": {
+    "Macchie ECA": true,
+    "Lunghezza String-Ribbon": false,
+    "Celle Rotte": false,
+    "No Good da Bussing": false,
+    "Bad Soldering": false
+  },
+  "consecutive_ko_limit": {
+    "Macchie ECA": 2,
+    "Lunghezza String-Ribbon": 2,
+    "Celle Rotte": 2,
+    "No Good da Bussing": 1,
+    "Bad Soldering": 1
+  },
+  "always_export_history": false,
+  "export_mbj_image": true,
+  "mbj_fields": {
+    "Mostra Ribbon": true,
+    "Gap Orizzontali tra Celle": false,
+    "Gap Verticali tra Celle": false,
+    "Distanza Vetro-Cella": false,
+    "Distanza Vetro-Ribbon": false,
+    "Mostra Warnings": false
+  }
+}

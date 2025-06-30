@@ -1,8 +1,10 @@
-\# plc.py
+# plc.py
 import asyncio
 import snap7.client as c
 import snap7.util as u
 import logging
+
+logger = logging.getLogger(__name__)
 import time
 from threading import Lock
 
@@ -23,20 +25,20 @@ class PLCConnection:
             self.client.connect(self.ip_address, self.rack, self.slot)
             if self.client.get_connected():
                 self.connected = True
-                logging.info(f"🟢 Connected to PLC at {self.ip_address}")
+                logger.debug(f"🟢 Connected to PLC at {self.ip_address}")
             else:
                 self.connected = False
-                logging.error(f"❌ PLC at {self.ip_address} refused connection.")
+                logger.error(f"❌ PLC at {self.ip_address} refused connection.")
         except Exception as e:
             self.connected = False
-            logging.error(f"❌ Failed to connect to PLC at {self.ip_address}: {str(e)}")
+            logger.error(f"❌ Failed to connect to PLC at {self.ip_address}: {str(e)}")
 
     def is_connected(self):
         """Check the current connection status using the Snap7 client."""
         try:
             return self.client.get_connected()
         except Exception as e:
-            logging.error(f"❌ Error checking connection: {str(e)}")
+            logger.error(f"❌ Error checking connection: {str(e)}")
             return False
 
     def _ensure_connection(self):
@@ -44,7 +46,7 @@ class PLCConnection:
            If not, attempt to reconnect.
         """
         if not self.connected or not self.is_connected():
-            logging.info("Connection lost, attempting to reconnect...")
+            logger.warning("Connection lost, attempting to reconnect...")
             self.reconnect()
 
     def reconnect(self, retries=999, delay=5):
@@ -55,7 +57,7 @@ class PLCConnection:
         self.connected = False
 
         for attempt in range(retries):
-            logging.warning(f"🔄 Reconnection attempt {attempt + 1} to {self.ip_address}")
+            logger.warning(f"🔄 Reconnection attempt {attempt + 1} to {self.ip_address}")
 
             try:
                 self.client.disconnect()
@@ -71,16 +73,16 @@ class PLCConnection:
                 if self.client.get_connected():
                     self._safe_callback("CONNECTED")
                     self.connected = True
-                    logging.info(f"✅ Successfully reconnected on attempt {attempt + 1}")
+                    logger.debug(f"✅ Successfully reconnected on attempt {attempt + 1}")
                     return True
                 else:
-                    logging.warning("❌ Client not connected even after connect()")
+                    logger.warning("❌ Client not connected even after connect()")
             except Exception as e:
-                logging.error(f"❌ Exception during reconnect: {str(e)}")
+                logger.error(f"❌ Exception during reconnect: {str(e)}")
 
             time.sleep(delay)
 
-        logging.error(f"🚫 All reconnection attempts failed for PLC at {self.ip_address}")
+        logger.error(f"🚫 All reconnection attempts failed for PLC at {self.ip_address}")
         return False
 
     def _safe_callback(self, status):
@@ -93,7 +95,7 @@ class PLCConnection:
                 try:
                     asyncio.run(self.status_callback(status))
                 except Exception as e:
-                    logging.error(f"❌ Failed to run status callback: {e}")
+                    logger.error(f"❌ Failed to run status callback: {e}")
 
     def disconnect(self):
         """Disconnects from the PLC safely."""
@@ -102,11 +104,11 @@ class PLCConnection:
                 try:
                     self.client.disconnect()
                     self.connected = False
-                    logging.info(f"🔴 Disconnected from PLC at {self.ip_address}")
+                    logger.debug(f"🔴 Disconnected from PLC at {self.ip_address}")
                 except Exception as e:
-                    logging.error(f"Error during disconnect: {str(e)}")
+                    logger.error(f"Error during disconnect: {str(e)}")
             else:
-                logging.info(f"PLC at {self.ip_address} was already disconnected")
+                logger.debug(f"PLC at {self.ip_address} was already disconnected")
 
     # ---------- READ/WRITE METHODS WITH RETRY LOGIC ----------
 
@@ -117,14 +119,14 @@ class PLCConnection:
                 byte_array = self.client.db_read(db_number, byte_index, 1)
                 return u.get_bool(byte_array, 0, bit_index)
             except Exception as e:
-                logging.warning(f"⚠️ Error reading BOOL (first try) DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
+                logger.warning(f"⚠️ Error reading BOOL (first try) DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
                 self.connected = False
                 self.reconnect()
                 try:
                     byte_array = self.client.db_read(db_number, byte_index, 1)
                     return u.get_bool(byte_array, 0, bit_index)
                 except Exception as e2:
-                    logging.error(f"❌ Retry failed: BOOL DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e2)}")
+                    logger.error(f"❌ Retry failed: BOOL DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e2)}")
                     self.connected = False
                     return None
 
@@ -136,7 +138,7 @@ class PLCConnection:
                 u.set_bool(byte_array, 0, bit_index, value)
                 self.client.db_write(db_number, byte_index, byte_array)
             except Exception as e:
-                logging.warning(f"⚠️ Error writing BOOL (first try) DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
+                logger.warning(f"⚠️ Error writing BOOL (first try) DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
                 self.connected = False
                 self.reconnect()
                 try:
@@ -144,7 +146,7 @@ class PLCConnection:
                     u.set_bool(byte_array, 0, bit_index, value)
                     self.client.db_write(db_number, byte_index, byte_array)
                 except Exception as e2:
-                    logging.error(f"❌ Retry failed: BOOL write DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e2)}")
+                    logger.error(f"❌ Retry failed: BOOL write DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e2)}")
                     self.connected = False
 
     def read_integer(self, db_number, byte_index):
@@ -154,14 +156,14 @@ class PLCConnection:
                 byte_array = self.client.db_read(db_number, byte_index, 2)
                 return u.get_int(byte_array, 0)
             except Exception as e:
-                logging.warning(f"⚠️ Error reading INT (first try) DB{db_number}, byte {byte_index}: {str(e)}")
+                logger.warning(f"⚠️ Error reading INT (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
                 self.reconnect()
                 try:
                     byte_array = self.client.db_read(db_number, byte_index, 2)
                     return u.get_int(byte_array, 0)
                 except Exception as e2:
-                    logging.error(f"❌ Retry failed: INT DB{db_number}, byte {byte_index}: {str(e2)}")
+                    logger.error(f"❌ Retry failed: INT DB{db_number}, byte {byte_index}: {str(e2)}")
                     self.connected = False
                     return None
 
@@ -173,7 +175,7 @@ class PLCConnection:
                 u.set_int(byte_array, 0, value)
                 self.client.db_write(db_number, byte_index, byte_array)
             except Exception as e:
-                logging.warning(f"⚠️ Error writing INT (first try) DB{db_number}, byte {byte_index}: {str(e)}")
+                logger.warning(f"⚠️ Error writing INT (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
                 self.reconnect()
                 try:
@@ -181,7 +183,7 @@ class PLCConnection:
                     u.set_int(byte_array, 0, value)
                     self.client.db_write(db_number, byte_index, byte_array)
                 except Exception as e2:
-                    logging.error(f"❌ Retry failed: INT write DB{db_number}, byte {byte_index}: {str(e2)}")
+                    logger.error(f"❌ Retry failed: INT write DB{db_number}, byte {byte_index}: {str(e2)}")
                     self.connected = False
 
     def read_string(self, db_number, byte_index, max_size):
@@ -193,7 +195,7 @@ class PLCConnection:
                 string_data = byte_array[2:2 + actual_size]
                 return ''.join(map(chr, string_data))
             except Exception as e:
-                logging.warning(f"⚠️ Error reading STRING (first try) DB{db_number}, byte {byte_index}: {str(e)}")
+                logger.warning(f"⚠️ Error reading STRING (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
                 self.reconnect()
                 try:
@@ -202,7 +204,7 @@ class PLCConnection:
                     string_data = byte_array[2:2 + actual_size]
                     return ''.join(map(chr, string_data))
                 except Exception as e2:
-                    logging.error(f"❌ Retry failed: STRING DB{db_number}, byte {byte_index}: {str(e2)}")
+                    logger.error(f"❌ Retry failed: STRING DB{db_number}, byte {byte_index}: {str(e2)}")
                     self.connected = False
                     return None
 
@@ -217,7 +219,7 @@ class PLCConnection:
                     byte_array[i + 2] = ord(c)
                 self.client.db_write(db_number, byte_index, byte_array)
             except Exception as e:
-                logging.warning(f"⚠️ Error writing STRING to DB{db_number}, byte {byte_index}: {str(e)}")
+                logger.warning(f"⚠️ Error writing STRING to DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
 
     def read_byte(self, db_number, byte_index):
@@ -227,14 +229,14 @@ class PLCConnection:
                 byte_array = self.client.db_read(db_number, byte_index, 1)
                 return byte_array[0]
             except Exception as e:
-                logging.warning(f"⚠️ Error reading BYTE (first try) DB{db_number}, byte {byte_index}: {str(e)}")
+                logger.warning(f"⚠️ Error reading BYTE (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
                 self.reconnect()
                 try:
                     byte_array = self.client.db_read(db_number, byte_index, 1)
                     return byte_array[0]
                 except Exception as e2:
-                    logging.error(f"❌ Retry failed: BYTE DB{db_number}, byte {byte_index}: {str(e2)}")
+                    logger.error(f"❌ Retry failed: BYTE DB{db_number}, byte {byte_index}: {str(e2)}")
                     self.connected = False
                     return None
 
@@ -245,14 +247,14 @@ class PLCConnection:
                 byte_array = self.client.db_read(db_number, byte_index, 8)
                 return u.get_dt(byte_array, 0)
             except Exception as e:
-                logging.warning(f"⚠️ Error reading DATE TIME (first try) DB{db_number}, byte {byte_index}: {str(e)}")
+                logger.warning(f"⚠️ Error reading DATE TIME (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
                 self.reconnect()
                 try:
                     byte_array = self.client.db_read(db_number, byte_index, 8)
                     return u.get_dt(byte_array, 0)
                 except Exception as e2:
-                    logging.error(f"❌ Retry failed: DATE TIME DB{db_number}, byte {byte_index}: {str(e2)}")
+                    logger.error(f"❌ Retry failed: DATE TIME DB{db_number}, byte {byte_index}: {str(e2)}")
                     self.connected = False
                     return None
 
@@ -263,13 +265,29 @@ class PLCConnection:
                 byte_array = self.client.db_read(db_number, byte_index, 4)
                 return u.get_real(byte_array, 0)
             except Exception as e:
-                logging.warning(f"⚠️ Error reading REAL (first try) DB{db_number}, byte {byte_index}: {str(e)}")
+                logger.warning(f"⚠️ Error reading REAL (first try) DB{db_number}, byte {byte_index}: {str(e)}")
                 self.connected = False
                 self.reconnect()
                 try:
                     byte_array = self.client.db_read(db_number, byte_index, 4)
                     return u.get_real(byte_array, 0)
                 except Exception as e2:
-                    logging.error(f"❌ Retry failed: REAL DB{db_number}, byte {byte_index}: {str(e2)}")
+                    logger.error(f"❌ Retry failed: REAL DB{db_number}, byte {byte_index}: {str(e2)}")
                     self.connected = False
                     return None
+                
+    def db_read(self, db_number: int, start_byte: int, size: int) -> bytearray:
+        with self.lock:
+            self._ensure_connection()
+            try:
+                return self.client.db_read(db_number, start_byte, size)
+            except Exception as e:
+                logger.warning(f"⚠️ Error reading DB block {db_number} from byte {start_byte} (size {size}): {e}")
+                self.connected = False
+                self.reconnect()
+                try:
+                    return self.client.db_read(db_number, start_byte, size)
+                except Exception as e2:
+                    logger.error(f"❌ Retry failed: DB{db_number} [{start_byte}:{start_byte + size}]: {e2}")
+                    self.connected = False
+                    return bytearray(size)  # Return dummy buffer to avoid crash

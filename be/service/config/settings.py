@@ -16,6 +16,9 @@ class AllSettings(BaseModel):
     moduli_window: Dict[str, int]
     enable_consecutive_ko: Dict[str, bool]
     consecutive_ko_limit: Dict[str, int]
+    always_export_history: bool = False
+    export_mbj_image: bool = True
+    mbj_fields: Dict[str, bool] = {}
 
 def load_settings():
     if os.path.exists(SETTINGS_PATH):

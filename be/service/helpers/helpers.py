@@ -1,6 +1,12 @@
 from datetime import datetime, timedelta
 import re
 from typing import Dict, List, Optional, Union
+from PIL import Image
+import base64
+import io
+import logging
+
+logger = logging.getLogger(__name__)
 
 import os
 import sys
@@ -9,6 +15,29 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.config.config import CHANNELS
 
 
+def compress_base64_to_jpeg_blob(base64_str: str, quality: int = 70) -> Optional[bytes]:
+    """Return JPEG bytes from a base64 string.
+
+    The input may optionally include a ``data:image/...;base64,`` prefix. Any
+    image format supported by Pillow is accepted. If decoding fails ``None`` is
+    returned.
+    """
+    try:
+        if base64_str.startswith("data:image"):
+            base64_str = base64_str.split(",", 1)[1]
+        
+        raw = base64.b64decode(base64_str)
+        with Image.open(io.BytesIO(raw)) as img:
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+
+            out_io = io.BytesIO()
+            img.save(out_io, format="JPEG", quality=quality, optimize=True)
+            return out_io.getvalue()
+    except Exception as e:
+        logger.warning(f"⚠️ Compression failed: {e}")
+        return None
+    
 def get_channel_config(line_name: str, channel_id: str):
     return CHANNELS.get(line_name, {}).get(channel_id)
 
@@ -109,6 +138,12 @@ def parse_issue_path(path: str, category: str):
         str_match = re.search(r"Stringa\[(\d+)\]", path)
         if str_match:
             res["stringa"] = int(str_match.group(1))
+    
+    elif category == "Bad Soldering":
+        # e.g. "Bad Soldering.Stringa[5]"
+        str_match = re.search(r"Stringa\[(\d+)\]", path)
+        if str_match:
+            res["stringa"] = int(str_match.group(1))
 
     elif category == "Celle Rotte":
         # e.g. "Celle Rotte.Stringa[6]"
@@ -130,7 +165,6 @@ def parse_issue_path(path: str, category: str):
 
     elif category == "Altro":
         # Example: "Dati.Esito.Esito_Scarto.Difetti.Altro: Macchia sulla cella"
-        print('ALTRO Path: %s' % path)
         if ":" in path:
             res["extra_data"] = path.split(":", 1)[1].strip()
 
@@ -152,20 +186,36 @@ def generate_time_buckets(start: datetime, end: datetime, group_by: str) -> List
     if group_by == "hourly":
         delta = timedelta(hours=1)
         fmt = "%Y-%m-%d %H:00:00"
+        while current <= end:
+            buckets.append(current.strftime(fmt))
+            current += delta
+
     elif group_by == "daily":
         current = current.replace(hour=0)
         delta = timedelta(days=1)
         fmt = "%Y-%m-%d"
+        while current <= end:
+            buckets.append(current.strftime(fmt))
+            current += delta
+
     elif group_by == "weekly":
         current = current - timedelta(days=current.weekday())
         current = current.replace(hour=0)
         delta = timedelta(weeks=1)
         fmt = "%Y-%m-%d"
+        while current <= end:
+            buckets.append(current.strftime(fmt))
+            current += delta
+
+    elif group_by == "shifts":
+        current = datetime(start.year, start.month, start.day)
+        while current <= end:
+            date_str = current.strftime("%Y-%m-%d")
+            for shift in ["T1", "T2", "T3"]:
+                buckets.append(f"{date_str} {shift}")
+            current += timedelta(days=1)
+
     else:
         raise ValueError("Invalid group_by")
-
-    while current <= end:
-        buckets.append(current.strftime(fmt))
-        current += delta
 
     return buckets

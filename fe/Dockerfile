@@ -38,8 +38,10 @@ RUN if [ "$TARGET" = "home" ]; then \
         flutter build web --web-renderer html --release -t lib/main_data.dart -o build/web; \
     elif [ "$TARGET" = "stringatrici" ]; then \
         flutter build web --web-renderer html --release -t lib/main_stringatrici.dart -o build/web; \
+    elif [ "$TARGET" = "visual" ]; then \
+        flutter build web --web-renderer html --release -t lib/main_visual.dart -o build/web; \
     else \
-        echo "Invalid TARGET.  Must be home, data, or stringatrici"; \
+        echo "Invalid TARGET.  Must be home, data, stringatrici or visual."; \
         exit 1; \
     fi
 

@@ -4,11 +4,13 @@ import 'dart:async';
 import 'dart:html' as html;
 import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:flutter/material.dart';
+import '../../shared/models/globals.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/dialogs.dart';
 import '../../shared/widgets/object_card.dart';
 import '../../shared/services/api_service.dart';
 import '../issue_selector.dart';
+import '../manuali/manualSelection_page.dart';
 import '../picture_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -30,6 +32,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final Set<String> _issues = {};
   final WebSocketService webSocketService = WebSocketService();
   final WebSocketService warningswebSocketService = WebSocketService();
+  final ApiService apiService = ApiService();
   List<Map<String, dynamic>> warnings = [];
   final Set<String> shownWarningTimestamps = {};
   final List<Map<String, dynamic>> _warningDialogQueue = [];
@@ -40,26 +43,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool pezzoKO = false;
 
   bool canAdd = true;
+  bool canSubmit = false;
 
   String plcStatus = "CHECKING"; // or values like "CONNECTED", "DISCONNECTED"
 
-  // STATIONS
-  String selectedChannel = "M308"; // Default selection
-  final List<String> availableChannels = ["M308", "M309", "M326"];
-  final Map<String, String> stationDisplayNames = {
-    'M308': 'M308 - QG2 di M306',
-    'M309': 'M309 - QG2 di M307',
-    'M326': 'M326 - RW1',
+  // STATIONS //Should get from MySQL : stations
+  String selectedChannel = ""; // Force user to pick a channel
+  List<String> availableChannels = [""];
+  Map<String, String> stationDisplayNames = {
+    '': '🔧 Selezionare Stazione',
   };
 
-  // LINES
+  // LINES //Should get from MySQL : production_lines
   String selectedLine = "Linea2";
-  final List<String> availableLines = ["Linea1", "Linea2", "Linea3"];
-  final Map<String, String> lineDisplayNames = {
-    'Linea1': 'Linea A',
-    'Linea2': 'Linea B',
-    'Linea3': 'Linea C',
-  };
 
   List<Map<String, String>> _pictures = [];
 
@@ -69,6 +65,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       GlobalKey<IssueSelectorWidgetState>();
 
   final TextEditingController _objectIdController = TextEditingController();
+  Set<String> _previouslySelectedIssues = {};
 
   @override
   void initState() {
@@ -78,6 +75,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _startup() async {
+    final response = await apiService.getQGStations();
+    if (response != null && response["stations"] != null) {
+      final stations = response["stations"] as List<dynamic>;
+      setState(() {
+        for (var s in stations) {
+          final name = s["name"];
+          final displayName = s["display_name"];
+          availableChannels.add(name);
+          stationDisplayNames[name] = displayName;
+        }
+      });
+    }
+
+    if (selectedChannel.isEmpty) return;
     _connectWebSocket();
     _fetchPLCStatus();
   }
@@ -91,7 +102,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _connectWebSocket() {
-    print("🔄 Connecting to WebSocket...");
+    if (selectedChannel.isEmpty) return; // Prevent running on invalid selection
     setState(() {
       connectionStatus = ConnectionStatus.connecting;
     });
@@ -103,8 +114,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         setState(() {
           connectionStatus = ConnectionStatus.online;
         });
-
-        print('🔔 Message on $selectedChannel: $decoded');
 
         if (decoded.containsKey('plc_status')) {
           setState(() {
@@ -125,17 +134,29 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             _pictures.clear();
           });
 
-          if (selectedChannel == "M326" && newObjectId.isNotEmpty) {
+          if (selectedChannel == "RMI01" && newObjectId.isNotEmpty) {
             try {
-              final previouslySelected =
-                  await ApiService.fetchInitialIssuesForObject(newObjectId);
-              if (previouslySelected.isEmpty) {
-                canAdd = true;
-              } else {
-                canAdd = false;
-              }
+              final result = await ApiService.fetchInitialIssuesForObject(
+                  selectedLine, selectedChannel, newObjectId, true);
+              final previouslySelected = result['issue_paths'] as List<String>;
+              final preloadedPictures =
+                  result['pictures'] as List<Map<String, String>>;
+
+              _previouslySelectedIssues = previouslySelected.toSet();
+
               setState(() {
                 _issues.addAll(previouslySelected);
+                _pictures = preloadedPictures;
+
+                // Only allow submission if current issues differ from previous ones
+                canSubmit = selectedChannel == "RMI01" &&
+                        !_issues.containsAll(_previouslySelectedIssues) ||
+                    !_previouslySelectedIssues.containsAll(_issues);
+              });
+
+              setState(() {
+                _issues.addAll(previouslySelected);
+                _pictures = preloadedPictures;
               });
             } catch (e) {
               print("❌ Error fetching rework issues: $e");
@@ -191,17 +212,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void _onChannelChange(String? newChannel) {
     if (newChannel != null && newChannel != selectedChannel) {
       setState(() {
-        _fetchPLCStatus();
-        // Reset UI data when switching station
-        selectedChannel = newChannel;
+        selectedChannel = newChannel; // ✅ First update the state
         objectId = "";
         stringatrice = "";
         isObjectOK = false;
         hasBeenEvaluated = false;
         _issues.clear();
         issuesSubmitted = false;
-        _connectWebSocket();
       });
+
+      // ✅ Then call logic that depends on selectedChannel
+      _fetchPLCStatus();
+      _connectWebSocket();
     }
   }
 
@@ -214,29 +236,96 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final confirm = await showAddIssueConfirmationDialog(context);
     if (!confirm) return;
 
-    await ApiService.uploadImages(
-      objectId: objectId,
-      images: _pictures,
-    );
+    try {
+      final success = await ApiService.submitIssues(
+        selectedLine: selectedLine,
+        selectedChannel: selectedChannel,
+        objectId: objectId,
+        issues: _issues.map((path) {
+          final matching = _pictures.firstWhere(
+            (img) => img["defect"] == path,
+            orElse: () => {"image": ""},
+          );
 
-    final success = await ApiService.submitIssues(
-      selectedLine: selectedLine,
-      selectedChannel: selectedChannel,
-      objectId: objectId,
-      issues: _issues.toList(),
-    );
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Difetti inviati con successo")),
+          return {
+            "path": path,
+            "image_base64": matching["image"] ?? "",
+          };
+        }).toList(),
       );
-      setState(() {
-        _issues.clear();
-        issuesSubmitted = true;
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Errore durante l'invio dei difetti")),
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Difetti inviati con successo")),
+        );
+        setState(() {
+          _issues.clear();
+          issuesSubmitted = true;
+        });
+      }
+    } catch (e) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.error_outline, color: Colors.red),
+              SizedBox(width: 8),
+              Text("Errore"),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "C'è stato un problema durante l'invio dei difetti.",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: const [
+                  Icon(Icons.camera_alt_outlined, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      "La foto allegata potrebbe essere danneggiata.\nPer favore, scattala di nuovo.",
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton.icon(
+              icon: const Icon(Icons.replay, color: Colors.blue),
+              label: const Text("Ripeti foto"),
+              onPressed: () {
+                final regex = RegExp(r'Invalid image for defect path: (.+)$');
+                final match = regex.firstMatch(e.toString());
+
+                if (match != null) {
+                  final brokenDefect = match.group(1)?.trim();
+                  if (brokenDefect != null) {
+                    _pictures
+                        .removeWhere((img) => img["defect"] == brokenDefect);
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Foto rimossa per: $brokenDefect"),
+                      ),
+                    );
+                  }
+                }
+
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        ),
       );
     }
   }
@@ -433,7 +522,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
       _processNextWarningDialog();
 
-      print('connecting to stringatrice warnings');
       warningswebSocketService.connectToStringatriceWarnings(
         line: selectedLine,
         onMessage: (packet) async {
@@ -635,7 +723,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           tooltip: "Aggiorna",
           icon: const Icon(Icons.refresh, color: Colors.black87),
           onPressed: () {
-            _onChannelChange(selectedChannel);
+            _fetchPLCStatus();
+            _connectWebSocket(); // reconnect with new line(selectedChannel);
           },
         ),
         title: Row(
@@ -652,6 +741,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             const SizedBox(width: 12),
             _buildStatusBadge("PC", _getPCColor()),
             _buildStatusBadge("PLC", _getPLCColor()),
+            IconButton(
+              tooltip: "Manuale",
+              icon: const Icon(Icons.info_outline, color: Colors.blue),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ManualSelectionPage(),
+                  ),
+                );
+              },
+            ),
             /*_buildStatusBadge(
               "Ciclo Iniziato",
               cicloIniziato ? Colors.blue : Colors.grey,
@@ -821,7 +922,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 issuesSubmitted = false;
                               });
                             },
-                            reWork: selectedChannel == "M326",
+                            reWork: selectedChannel == "RMI01",
                           ),
                           const SizedBox(height: 24),
                         ] else ...[
@@ -861,6 +962,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 } else {
                                   _issues.add(issuePath);
                                 }
+
+                                canSubmit = selectedChannel == "RMI01" &&
+                                        (!_issues.containsAll(
+                                                _previouslySelectedIssues) ||
+                                            !_previouslySelectedIssues
+                                                .containsAll(_issues)) ||
+                                    selectedChannel != "RMI01";
                               });
                             },
                             onPicturesChanged: (pics) {
@@ -869,8 +977,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               });
                             },
                             canAdd: canAdd,
-                            isReworkMode: selectedChannel == "M326",
+                            isReworkMode: selectedChannel == "RMI01",
                             initiallySelectedIssues: _issues.toList(),
+                            initiallyCreatedPictures: _pictures.toList(),
                             objectId: objectId,
                           )
                         ] else if (hasBeenEvaluated &&
@@ -879,9 +988,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           const SizedBox(height: 40),
                           Center(
                             child: Text(
-                              selectedChannel == "M326"
-                                  ? 'ANDARE A PREMERE PULSANTE OK / KO SU HMI'
-                                  : 'ANDARE A PREMERE PULSANTE KO FISICO',
+                              selectedChannel == "RMI01"
+                                  ? 'Premere pulsante GOOD / NO GOOD su HMI'
+                                  : 'Premere pulsante NO GOOD fisico',
                               style: const TextStyle(fontSize: 36),
                               textAlign: TextAlign.center,
                             ),
@@ -895,8 +1004,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
               if (hasBeenEvaluated &&
                       !isObjectOK &&
-                      selectedChannel != "M326" ||
-                  canAdd)
+                      selectedChannel != "RMI01" ||
+                  canSubmit)
                 Padding(
                   padding: const EdgeInsets.only(top: 16),
                   child: Row(

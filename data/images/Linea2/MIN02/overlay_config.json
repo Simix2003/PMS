@@ -1,0 +1,2903 @@
+{
+    "saldatura.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura",
+        "rectangles": [
+            {
+                "x": 0.29202334630350194,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[1]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.29202334630350194,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[2]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[3]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[4]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[5]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[6]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.5058365758754864,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[7]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.5050276264591439,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[8]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.5938140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[9]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.5908140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[10]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[11]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11]",
+                "type": "Folder"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[12]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12]",
+                "type": "Folder"
+            }
+        ]
+    },
+    "saldatura_stringa_12.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[1].B"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[2].B"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[3].B"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[4].B"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[5].B"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[6].B"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[7].B"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[8].B"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[9].B"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[10].B"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[12].Pin[10].M"
+            }
+        ]
+    },
+    "saldatura_stringa_11.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[10].M"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[1].F"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[2].F"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[3].F"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[4].F"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[5].F"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[6].F"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[7].F"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[8].F"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[9].F"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[11].Pin[10].F"
+            }
+        ]
+    },
+    "saldatura_stringa_10.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[1].B"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[2].B"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[3].B"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[4].B"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[5].B"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[6].B"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[7].B"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[8].B"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[9].B"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[10].B"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[10].Pin[10].M"
+            }
+        ]
+    },
+    "saldatura_stringa_9.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[10].M"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[1].F"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[2].F"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[3].F"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[4].F"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[5].F"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[6].F"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[7].F"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[8].F"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[9].F"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[9].Pin[10].F"
+            }
+        ]
+    },
+    "saldatura_stringa_8.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[1].B"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[2].B"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[3].B"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[4].B"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[5].B"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[6].B"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[7].B"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[8].B"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[9].B"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[10].B"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[8].Pin[10].M"
+            }
+        ]
+    },
+    "saldatura_stringa_7.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[10].M"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[1].F"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[2].F"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[3].F"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[4].F"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[5].F"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[6].F"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[7].F"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[8].F"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[9].F"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[7].Pin[10].F"
+            }
+        ]
+    },
+    "saldatura_stringa_6.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[1].B"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[2].B"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[3].B"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[4].B"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[5].B"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[6].B"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[7].B"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[8].B"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[9].B"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[10].B"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[6].Pin[10].M"
+            }
+        ]
+    },
+    "saldatura_stringa_5.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[10].M"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[1].F"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[2].F"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[3].F"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[4].F"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[5].F"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[6].F"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[7].F"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[8].F"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[9].F"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[5].Pin[10].F"
+            }
+        ]
+    },
+    "saldatura_stringa_4.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[1].B"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[2].B"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[3].B"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[4].B"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[5].B"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[6].B"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[7].B"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[8].B"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[9].B"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[10].B"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[4].Pin[10].M"
+            }
+        ]
+    },
+    "saldatura_stringa_3.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[10].M"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[1].F"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[2].F"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[3].F"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[4].F"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[5].F"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[6].F"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[7].F"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[8].F"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[9].F"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[3].Pin[10].F"
+            }
+        ]
+    },
+    "saldatura_stringa_2.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[1].B"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[2].B"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[3].B"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[4].B"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[5].B"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[6].B"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[7].B"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[8].B"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[9].B"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[10].B"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[2].Pin[10].M"
+            }
+        ]
+    },
+    "saldatura_stringa_1.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1]",
+        "rectangles": [
+            {
+                "x": 0.1642926269579966,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[1].M"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[2].M"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[3].M"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[4].M"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[5].M"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[6].M"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.04533526823491156,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[7].M"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[8].M"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[9].M"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.04723460346758013,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[10].M"
+            },
+            {
+                "x": 0.1642926269579966,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[1] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[1].F"
+            },
+            {
+                "x": 0.23101832452027005,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[2] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[2].F"
+            },
+            {
+                "x": 0.3020175263560478,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[3] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[3].F"
+            },
+            {
+                "x": 0.3667020852040307,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[4] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[4].F"
+            },
+            {
+                "x": 0.4323594066979281,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[5] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[5].F"
+            },
+            {
+                "x": 0.5018038511423726,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[6] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[6].F"
+            },
+            {
+                "x": 0.5669747913133126,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[7] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[7].F"
+            },
+            {
+                "x": 0.6374876118261332,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[8] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[8].F"
+            },
+            {
+                "x": 0.7037269280654495,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[9] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[9].F"
+            },
+            {
+                "x": 0.7705960457614155,
+                "y": 0.8145660374656808,
+                "width": 0.0476743489973062,
+                "height": 0.13063169524907525,
+                "name": "Pin[10] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[1].Pin[10].F"
+            }
+        ]
+    },
+    "disallineamento.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento",
+        "rectangles": [
+            {
+                "x": 0.29202334630350194,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[1]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[1]"
+            },
+            {
+                "x": 0.29202334630350194,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[2]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[2]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[3]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[3]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[4]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[4]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[5]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[5]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[6]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[6]"
+            },
+            {
+                "x": 0.5058365758754864,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[7]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[7]"
+            },
+            {
+                "x": 0.5050276264591439,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[8]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[8]"
+            },
+            {
+                "x": 0.5938140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[9]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[9]"
+            },
+            {
+                "x": 0.5908140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[10]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[10]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[11]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[11]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[12]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[12]"
+            },
+            {
+                "x": 0.29202334630350194,
+                "y": 0.9244579550367489,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[1] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[1].F"
+            },
+            {
+                "x": 0.43832295719844356,
+                "y": 0.9244579550367489,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[2] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[2].F"
+            },
+            {
+                "x": 0.5960700389105058,
+                "y": 0.9244579550367489,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[3] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[3].F"
+            },
+            {
+                "x": 0.28801556420233463,
+                "y": 0.4747199524427151,
+                "width": 0.06121011673151751,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[1].M"
+            },
+            {
+                "x": 0.35235019455252918,
+                "y": 0.4747199524427151,
+                "width": 0.14299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[2].M"
+            },
+            {
+                "x": 0.50166926070038911,
+                "y": 0.4747199524427151,
+                "width": 0.14299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[3].M"
+            },
+            {
+                "x": 0.65028015564202335,
+                "y": 0.4747199524427151,
+                "width": 0.06121011673151751,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[4].M"
+            },
+            {
+                "x": 0.29202334630350194,
+                "y": 0.02552777777777778,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[1] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[1].B"
+            },
+            {
+                "x": 0.43832295719844356,
+                "y": 0.02552777777777778,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[2] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[2].B"
+            },
+            {
+                "x": 0.5960700389105058,
+                "y": 0.02552777777777778,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[3] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[3].B"
+            }
+        ]
+    },
+    "mancanza_ribbon.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon",
+        "rectangles": [
+            {
+                "x": 0.29202334630350194,
+                "y": 0.9244579550367489,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[1] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[1].F"
+            },
+            {
+                "x": 0.43832295719844356,
+                "y": 0.9244579550367489,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[2] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[2].F"
+            },
+            {
+                "x": 0.5960700389105058,
+                "y": 0.9244579550367489,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[3] - F",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[3].F"
+            },
+            {
+                "x": 0.28801556420233463,
+                "y": 0.4747199524427151,
+                "width": 0.06121011673151751,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[1].M"
+            },
+            {
+                "x": 0.35235019455252918,
+                "y": 0.4747199524427151,
+                "width": 0.14299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[2].M"
+            },
+            {
+                "x": 0.50166926070038911,
+                "y": 0.4747199524427151,
+                "width": 0.14299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[3].M"
+            },
+            {
+                "x": 0.65028015564202335,
+                "y": 0.4747199524427151,
+                "width": 0.06121011673151751,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[4].M"
+            },
+            {
+                "x": 0.29202334630350194,
+                "y": 0.02552777777777778,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[1] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[1].B"
+            },
+            {
+                "x": 0.43832295719844356,
+                "y": 0.02552777777777778,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[2] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[2].B"
+            },
+            {
+                "x": 0.5960700389105058,
+                "y": 0.02552777777777778,
+                "width": 0.11299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[3] - B",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[3].B"
+            }
+        ]
+    },
+    "i_ribbon_leadwire.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.I Ribbon Leadwire",
+        "rectangles": [
+            {
+                "x": 0.28801556420233463,
+                "y": 0.4747199524427151,
+                "width": 0.06121011673151751,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[1] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.I Ribbon Leadwire.Ribbon[1].M"
+            },
+            {
+                "x": 0.35235019455252918,
+                "y": 0.4747199524427151,
+                "width": 0.14299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[2] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.I Ribbon Leadwire.Ribbon[2].M"
+            },
+            {
+                "x": 0.50166926070038911,
+                "y": 0.4747199524427151,
+                "width": 0.14299610894941635,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[3] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.I Ribbon Leadwire.Ribbon[3].M"
+            },
+            {
+                "x": 0.65028015564202335,
+                "y": 0.4747199524427151,
+                "width": 0.06121011673151751,
+                "height": 0.052977518374405532,
+                "name": "Ribbon[4] - M",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.I Ribbon Leadwire.Ribbon[4].M"
+            }
+        ]
+    },
+    "macchie_eca.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA",
+        "rectangles": [
+            {
+                "x": 0.29202334630350194,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[1]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[1]"
+            },
+            {
+                "x": 0.29202334630350194,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[2]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[2]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[3]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[3]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[4]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[4]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[5]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[5]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[6]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[6]"
+            },
+            {
+                "x": 0.5058365758754864,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[7]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[7]"
+            },
+            {
+                "x": 0.5050276264591439,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[8]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[8]"
+            },
+            {
+                "x": 0.5938140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[9]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[9]"
+            },
+            {
+                "x": 0.5908140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[10]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[10]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[11]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[11]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[12]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Macchie ECA.Stringa[12]"
+            }
+        ]
+    },
+    "celle_rotte.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte",
+        "rectangles": [
+            {
+                "x": 0.29202334630350194,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[1]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[1]"
+            },
+            {
+                "x": 0.29202334630350194,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[2]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[2]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[3]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[3]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[4]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[4]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[5]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[5]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[6]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[6]"
+            },
+            {
+                "x": 0.5058365758754864,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[7]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[7]"
+            },
+            {
+                "x": 0.5050276264591439,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[8]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[8]"
+            },
+            {
+                "x": 0.5938140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[9]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[9]"
+            },
+            {
+                "x": 0.5908140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[10]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[10]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[11]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[11]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[12]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Celle Rotte.Stringa[12]"
+            }
+        ]
+    },
+    "lunghezza_string_ribbon.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon",
+        "rectangles": [
+            {
+                "x": 0.29202334630350194,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[1]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[1]"
+            },
+            {
+                "x": 0.29202334630350194,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[2]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[2]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[3]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[3]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[4]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[4]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[5]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[5]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[6]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[6]"
+            },
+            {
+                "x": 0.5058365758754864,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[7]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[7]"
+            },
+            {
+                "x": 0.5050276264591439,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[8]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[8]"
+            },
+            {
+                "x": 0.5938140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[9]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[9]"
+            },
+            {
+                "x": 0.5908140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[10]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[10]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[11]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[11]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[12]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Lunghezza String Ribbon.Stringa[12]"
+            }
+        ]
+    },
+    "graffio_su_cella.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella",
+        "rectangles": [
+            {
+                "x": 0.29202334630350194,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[1]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[1]"
+            },
+            {
+                "x": 0.29202334630350194,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[2]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[2]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[3]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[3]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[4]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[4]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[5]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[5]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[6]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[6]"
+            },
+            {
+                "x": 0.5058365758754864,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[7]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[7]"
+            },
+            {
+                "x": 0.5050276264591439,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[8]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[8]"
+            },
+            {
+                "x": 0.5938140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[9]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[9]"
+            },
+            {
+                "x": 0.5908140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[10]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[10]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[11]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[11]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[12]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Graffio su Cella.Stringa[12]"
+            }
+        ]
+    },
+    "bad_soldering.jpg": {
+        "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering",
+        "rectangles": [
+            {
+                "x": 0.29202334630350194,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[1]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[1]"
+            },
+            {
+                "x": 0.29202334630350194,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[2]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[2]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[3]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[3]"
+            },
+            {
+                "x": 0.354727626459144,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[4]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[4]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[5]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[5]"
+            },
+            {
+                "x": 0.43532295719844356,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[6]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[6]"
+            },
+            {
+                "x": 0.5058365758754864,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[7]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[7]"
+            },
+            {
+                "x": 0.5050276264591439,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[8]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[8]"
+            },
+            {
+                "x": 0.5938140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[9]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[9]"
+            },
+            {
+                "x": 0.5908140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[10]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[10]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.075061,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[11]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[11]"
+            },
+            {
+                "x": 0.6562140077821011,
+                "y": 0.5537402723735408,
+                "width": 0.05505836575875487,
+                "height": 0.38217898832684820,
+                "name": "Stringa[12]",
+                "path": "Dati.Esito.Esito_Scarto.Difetti.Bad Soldering.Stringa[12]"
+            }
+        ]
+    }
+}

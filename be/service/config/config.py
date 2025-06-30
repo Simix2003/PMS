@@ -1,220 +1,39 @@
 import os
-import configparser
 from pathlib import Path
+from dotenv import load_dotenv, find_dotenv
 
-debug = False
-debugModulo = "3SBHBGHC25407300"
+debug = True
 
-if not debug:
-    CHANNELS = {
-        "Linea1": {
-            "M308": {
-                "trigger": {"db": 19606, "byte": 0, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 2, "length": 20},
-                "id_utente": {"db": 19606, "byte": 24, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
-                "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
-                "stringatrice": {"db": 19606, "byte": 46, "length": 5},
-                "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
-            },
-            "M309": {
-                "trigger": {"db": 19606, "byte": 48, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 50, "length": 20},
-                "id_utente": {"db": 19606, "byte": 72, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
-                "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
-                "stringatrice": {"db": 19606, "byte": 94, "length": 5},
-                "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
-            },
-            "M326": {
-                "trigger": {"db": 19606, "byte": 96, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 98, "length": 20},
-                "id_utente": {"db": 19606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
-                "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
-                "stringatrice": {"db": 19606, "byte": 142, "length": 5},
-            },
-        },
-        "Linea2": {
-            "M308": {
-                "trigger": {"db": 19606, "byte": 0, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 2, "length": 20},
-                "id_utente": {"db": 19606, "byte": 24, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
-                "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
-                "stringatrice": {"db": 19606, "byte": 46, "length": 5},
-                "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
-            },
-            "M309": {
-                "trigger": {"db": 19606, "byte": 48, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 50, "length": 20},
-                "id_utente": {"db": 19606, "byte": 72, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
-                "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
-                "stringatrice": {"db": 19606, "byte": 94, "length": 5},
-                "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
-            },
-            "M326": {
-                "trigger": {"db": 19606, "byte": 96, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 98, "length": 20},
-                "id_utente": {"db": 19606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
-                "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
-                "stringatrice": {"db": 19606, "byte": 142, "length": 5},
-            },
-        },
-        "Linea3": {
-            "M308": {
-                "trigger": {"db": 19606, "byte": 0, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 2, "length": 20},
-                "id_utente": {"db": 19606, "byte": 24, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 0, "bit": 6},
-                "fine_scarto": {"db": 19606, "byte": 0, "bit": 7},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 0},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 3},
-                "stringatrice": {"db": 19606, "byte": 46, "length": 5},
-                "stazione_esclusa": {"db": 19606, "byte": 1, "bit": 3},
-            },
-            "M309": {
-                "trigger": {"db": 19606, "byte": 48, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 50, "length": 20},
-                "id_utente": {"db": 19606, "byte": 72, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 48, "bit": 6},
-                "fine_scarto": {"db": 19606, "byte": 48, "bit": 7},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 1},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 4},
-                "stringatrice": {"db": 19606, "byte": 94, "length": 5},
-                "stazione_esclusa": {"db": 19606, "byte": 49, "bit": 3},
-            },
-            "M326": {
-                "trigger": {"db": 19606, "byte": 96, "bit": 4},
-                "id_modulo": {"db": 19606, "byte": 98, "length": 20},
-                "id_utente": {"db": 19606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 19606, "byte": 96, "bit": 5},
-                "fine_scarto": {"db": 19606, "byte": 96, "bit": 6},
-                "esito_scarto_compilato": {"db": 19606, "byte": 144, "bit": 2},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 19606, "byte": 144, "bit": 5},
-                "stringatrice": {"db": 19606, "byte": 142, "length": 5},
-            },
-        },
-    }
-else:
-    CHANNELS = {
-        "Linea1": {
-            "M308": {
-                "trigger": {"db": 9606, "byte": 0, "bit": 4},
-                "id_modulo": {"db": 9606, "byte": 2, "length": 20},
-                "id_utente": {"db": 9606, "byte": 24, "length": 20},
-                "fine_buona": {"db": 9606, "byte": 0, "bit": 6},
-                "fine_scarto": {"db": 9606, "byte": 0, "bit": 7},
-                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 0},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 3},
-                "stringatrice": {"db": 9606, "byte": 46, "length": 5},
-                "stazione_esclusa": {"db": 9606, "byte": 1, "bit": 3},
-            },
-            "M309": {
-                "trigger": {"db": 9606, "byte": 48, "bit": 4},
-                "id_modulo": {"db": 9606, "byte": 50, "length": 20},
-                "id_utente": {"db": 9606, "byte": 72, "length": 20},
-                "fine_buona": {"db": 9606, "byte": 48, "bit": 6},
-                "fine_scarto": {"db": 9606, "byte": 48, "bit": 7},
-                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 1},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 4},
-                "stringatrice": {"db": 9606, "byte": 94, "length": 5},
-                "stazione_esclusa": {"db": 9606, "byte": 49, "bit": 3},
-            },
-            "M326": {
-                "trigger": {"db": 9606, "byte": 96, "bit": 4},
-                "id_modulo": {"db": 9606, "byte": 98, "length": 20},
-                "id_utente": {"db": 9606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 9606, "byte": 96, "bit": 5},
-                "fine_scarto": {"db": 9606, "byte": 96, "bit": 6},
-                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 2},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 5},
-                "stringatrice": {"db": 9606, "byte": 142, "length": 5},
-            },
-        },
-        "Linea2": {
-            "M308": {
-                "trigger": {"db": 9606, "byte": 0, "bit": 4},
-                "id_modulo": {"db": 9606, "byte": 2, "length": 20},
-                "id_utente": {"db": 9606, "byte": 24, "length": 20},
-                "fine_buona": {"db": 9606, "byte": 0, "bit": 6},
-                "fine_scarto": {"db": 9606, "byte": 0, "bit": 7},
-                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 0},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 3},
-                "stringatrice": {"db": 9606, "byte": 46, "length": 5},
-                "stazione_esclusa": {"db": 9606, "byte": 1, "bit": 3},
-            },
-            "M309": {
-                "trigger": {"db": 9606, "byte": 48, "bit": 4},
-                "id_modulo": {"db": 9606, "byte": 50, "length": 20},
-                "id_utente": {"db": 9606, "byte": 72, "length": 20},
-                "fine_buona": {"db": 9606, "byte": 48, "bit": 6},
-                "fine_scarto": {"db": 9606, "byte": 48, "bit": 7},
-                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 1},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 4},
-                "stringatrice": {"db": 9606, "byte": 94, "length": 5},
-                "stazione_esclusa": {"db": 9606, "byte": 49, "bit": 3},
-            },
-            "M326": {
-                "trigger": {"db": 9606, "byte": 96, "bit": 4},
-                "id_modulo": {"db": 9606, "byte": 98, "length": 20},
-                "id_utente": {"db": 9606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 9606, "byte": 96, "bit": 5},
-                "fine_scarto": {"db": 9606, "byte": 96, "bit": 6},
-                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 2},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 5},
-                "stringatrice": {"db": 9606, "byte": 142, "length": 5},
-            },
-        },
-        "Linea3": {
-            "M308": {
-                "trigger": {"db": 9606, "byte": 0, "bit": 4},
-                "id_modulo": {"db": 9606, "byte": 2, "length": 20},
-                "id_utente": {"db": 9606, "byte": 24, "length": 20},
-                "fine_buona": {"db": 9606, "byte": 0, "bit": 6},
-                "fine_scarto": {"db": 9606, "byte": 0, "bit": 7},
-                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 0},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 3},
-                "stringatrice": {"db": 9606, "byte": 46, "length": 5},
-                "stazione_esclusa": {"db": 9606, "byte": 1, "bit": 3},
-            },
-            "M309": {
-                "trigger": {"db": 9606, "byte": 48, "bit": 4},
-                "id_modulo": {"db": 9606, "byte": 50, "length": 20},
-                "id_utente": {"db": 9606, "byte": 72, "length": 20},
-                "fine_buona": {"db": 9606, "byte": 48, "bit": 6},
-                "fine_scarto": {"db": 9606, "byte": 48, "bit": 7},
-                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 1},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 4},
-                "stringatrice": {"db": 9606, "byte": 94, "length": 5},
-                "stazione_esclusa": {"db": 9606, "byte": 49, "bit": 3},
-            },
-            "M326": {
-                "trigger": {"db": 9606, "byte": 96, "bit": 4},
-                "id_modulo": {"db": 9606, "byte": 98, "length": 20},
-                "id_utente": {"db": 9606, "byte": 120, "length": 20},
-                "fine_buona": {"db": 9606, "byte": 96, "bit": 5},
-                "fine_scarto": {"db": 9606, "byte": 96, "bit": 6},
-                "esito_scarto_compilato": {"db": 9606, "byte": 144, "bit": 2},
-                "pezzo_salvato_su_DB_con_inizio_ciclo": {"db": 9606, "byte": 144, "bit": 5},
-                "stringatrice": {"db": 9606, "byte": 142, "length": 5},
-            },
-        },
-    }
+CHANNELS: dict = {}
+
+#TODO
+ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
+    "AIN": {
+        "station_1_in":     ["MIN01"],
+        "station_2_in":     ["MIN02"],
+        "station_1_out_ng": ["MIN01"], 
+        "station_2_out_ng": ["MIN02"]
+    },
+    "VPF": {
+        "station_1_in":     ["VPF01"],
+        "station_1_out_ng": ["VPF01"],
+    },
+    "ELL": {
+        "station_1_in":     ["ELL01"],
+        "station_2_in":     ["RMI01"],
+        "station_1_out_ng": ["ELL01"],
+        "station_2_out_ng": ["RMI01"],
+    },
+}
+
+# Default fallback values
+DEFAULT_TARGETS = {
+    "yield_target": 90,
+    "shift_target": 366
+}
+
+
+PLC_DB_RANGES: dict = {}  # {(ip, slot): {db_number: {"min": x, "max": y}}}
 
 ISSUE_TREE = {
     "Dati": {
@@ -225,9 +44,14 @@ ISSUE_TREE = {
                         "Non Lavorato Poe Scaduto": {}, 
                         "No Good da Bussing": {},
                         "Materiale Esterno su Celle": {},
-                        "Bad Soldering": {},
-                        "Passthroug": {},
-                        "Poe in Eccesso": {}
+                        "Passthrough al Bussing": {},
+                        "Poe in Eccesso": {},
+                        "Solo Poe": {},
+                        "Solo Vetro": {},
+                        "Matrice Incompleta": {},
+                        "Molteplici Bus Bar": {},
+                        "Test": {},
+                        "Transitato per Controllo": {},
                     },
                     "Saldatura": {
                         f"Stringa[{i}]": {
@@ -238,7 +62,7 @@ ISSUE_TREE = {
                             } for j in range(1, 21)
                         } for i in range(1, 13)
                     },
-                    "Disallineamento": {
+                   "Disallineamento": {
                         **{f"Stringa[{i}]": None for i in range(1, 13)},
                         **{f"Ribbon[{i}]": {
                             "F": None,
@@ -253,7 +77,7 @@ ISSUE_TREE = {
                             "B": None
                         } for i in range(1, 11)
                     },
-                    "I Ribbon Leadwire": {
+                     "I Ribbon Leadwire": {
                         f"Ribbon[{i}]": {
                             "M": None,
                         } for i in range(1, 5)
@@ -264,26 +88,75 @@ ISSUE_TREE = {
                     "Celle Rotte": {
                         f"Stringa[{i}]": None for i in range(1, 13)
                     },
-                    "Lunghezza String Ribbon": {
+                    "Bad Soldering": {
+                        f"Stringa[{i}]": None for i in range(1, 13)
+                    },
+                     "Lunghezza String Ribbon": {
                         f"Stringa[{i}]": None for i in range(1, 13)
                     },
                     "Graffio su Cella": {
                         f"Stringa[{i}]": None for i in range(1, 13)
                     },
+                    "Altro": {}
                 }
             }
         }
     }
 }
 
-BASE_DIR = Path(os.environ.get("IX_MONITOR_PATH", "/app/ix-monitor"))
+load_dotenv(find_dotenv())
+
+env_mode = os.getenv("ENV_MODE", "local")  # fallback to 'local' if not set
+
+if env_mode == "docker":
+    BASE_DIR = Path(os.getenv("BASE_DIR", "/data"))
+else:
+    BASE_DIR = Path(os.getenv("BASE_DIR", "C:/PMS"))
+
+ML_MODELS_DIR = BASE_DIR / "models"
+DEFECT_SIMILARITY_MODEL_PATH = ML_MODELS_DIR / "fine-tuned-defects_V2"
 TEMP_STORAGE_PATH = BASE_DIR / "temp_data.json"
 SETTINGS_PATH = BASE_DIR / "settings.json"
+TARGETS_FILE = BASE_DIR / "visual_targets.json"
+os.makedirs(os.path.dirname(TARGETS_FILE), exist_ok=True)
+LOG_PATH = BASE_DIR / "logs"
+# Create logs directory if missing
+os.makedirs(LOG_PATH, exist_ok=True)
+# Set log file path
+LOG_FILE = LOG_PATH / "pms.log"
 IMAGES_DIR = BASE_DIR / "images"
-STATIONS_CONFIG_PATH = BASE_DIR / "stations.ini"
+if debug:
+    XML_FOLDER_PATH = BASE_DIR / "xml"
+else:
+    XML_FOLDER_PATH = Path(r"\\192.168.32.205\ell01b\XML")
 
+KNOWN_DEFECTS = [
+    "Non Lavorato Poe Scaduto", 
+    "No Good da Bussing",
+    "Materiale Esterno su Celle",
+    "Passthrough al Bussing",
+    "Poe in Eccesso",
+    "Solo Poe",
+    "Solo Vetro",
+    "Matrice Incompleta",
+    "Molteplici Bus Bar",
+    "Test",
+    "Transitato per Controllo",
+    "Saldatura",
+    "Disallineamento Ribbon",
+    "Disallineamento Stringa",
+    "Mancanza Ribbon",
+    "I Ribbon Leadwire",
+    "Macchie ECA",
+    "Celle Rotte",
+    "Bad Soldering",
+    "Lunghezza String Ribbon",
+    "Graffio su Cella",
+]
+
+
+# In-memory cache
 REFRESHED_SETTINGS = {}
-SESSION_TIMEOUT = 600
 
 COLUMN_MAP = {
     "ID Modulo": "o.id_modulo",
@@ -294,26 +167,3 @@ COLUMN_MAP = {
     "Stazione": "s.name",
     "Tempo Ciclo": "p.cycle_time"
 }
-
-def load_station_configs(file_path):
-    config = configparser.ConfigParser()
-    config.read(file_path)
-    line_configs = {}
-    current_line = None
-    for section in config.sections():
-        if section.upper().startswith("LINEA"):
-            current_line = section
-            line_configs[current_line] = {
-                "PLC": {},
-                "PC": {},
-                "stations": []
-            }
-        elif section.upper() == "PLC" and current_line:
-            line_configs[current_line]["PLC"]["IP"] = config.get(section, "IP")
-            line_configs[current_line]["PLC"]["SLOT"] = config.getint(section, "SLOT")
-        elif section.upper() == "PC" and current_line:
-            line_configs[current_line]["PC"]["IP"] = config.get(section, "IP")
-            line_configs[current_line]["PC"]["PORT"] = config.getint(section, "PORT")
-        elif section.startswith("M") and current_line:
-            line_configs[current_line]["stations"].append(section)
-    return line_configs

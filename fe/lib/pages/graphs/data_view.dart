@@ -6,9 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:calendar_date_picker2/calendar_date_picker2.dart';
+import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
 import '../../shared/widgets/station_card.dart';
+import '../manuali/manualSelection_page.dart';
 import '../settings_page.dart';
 
 class DataViewPage extends StatefulWidget {
@@ -37,20 +39,18 @@ class _DataViewPageState extends State<DataViewPage> {
   TimeOfDay? selectedEndTime =
       TimeOfDay(hour: 23, minute: 59); // Default: 23:59
 
+  String percentageBase = 'NG'; // or 'FULL'
+
   // Using 0 to represent "Full Day" and 1, 2, 3 for the three shifts.
   // Default is full day.
   int selectedTurno = 0;
 
+  // LINES //Should get from MySQL : production_lines
   String selectedLine = "Linea2";
-  final List<String> availableLines = ["Linea1", "Linea2", "Linea3"];
-  final Map<String, String> lineDisplayNames = {
-    'Linea1': 'Linea A',
-    'Linea2': 'Linea B',
-    'Linea3': 'Linea C',
-  };
 
   Map<String, dynamic>? _fetchedData;
   double _thresholdSeconds = 3;
+  bool showAsPercentage = false;
 
   @override
   void initState() {
@@ -70,7 +70,8 @@ class _DataViewPageState extends State<DataViewPage> {
     try {
       final settings = await ApiService.getAllSettings();
       setState(() {
-        _thresholdSeconds = (settings['min_cycle_threshold'] as num).toDouble();
+        _thresholdSeconds = (settings['min_cycle_threshold'] as num)
+            .toDouble(); // we should set a global variable maybe
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -358,60 +359,135 @@ class _DataViewPageState extends State<DataViewPage> {
     "Saldatura",
     "Disallineamento",
     "Mancanza Ribbon",
+    "I Ribbon Leadwire",
     "Macchie ECA",
     "Celle Rotte",
-    "Lunghezza\nString Ribbon",
+    "Bad Soldering",
+    "Lunghezza String Ribbon",
+    "Graffio su Cella",
     "Altro",
-    "Generico",
+    "Senza Causale",
   ];
 
-  // iOS color palette - softer, more vibrant colors
   static const Map<String, Color> defectColors = {
     "Generali": Color(0xFF007AFF), // iOS Blue
     "Saldatura": Color(0xFFFF9500), // iOS Orange
     "Disallineamento": Color(0xFFFF3B30), // iOS Red
     "Mancanza Ribbon": Color(0xFFFF2D55), // iOS Pink
+    "I Ribbon Leadwire": Color(0xFF34C759), // iOS Green
     "Macchie ECA": Color(0xFFAF52DE), // iOS Purple
     "Celle Rotte": Color(0xFF5856D6), // iOS Indigo
+    "Bad Soldering": Color.fromARGB(255, 2, 54, 109), // iOS Dark Blue
     "Lunghezza String Ribbon": Color(0xFFA2845E), // iOS Brown
+    "Graffio su Cella": Color(0xFF5AC8FA), // iOS Light Blue
     "Altro": Color(0xFF8E8E93), // iOS Gray
-    "Generico": Color(0xFFFF3B30), // iOS Red
+    "Senza Causale": Color(0xFFFF3B30), // iOS Red
   };
+
+  String selectedZone = 'Zona Bussing'; // Default selected zone
+
+  final List<String> availableZones = ['Zona Bussing', 'Zona Stringatrici'];
+
+  final Map<String, String> zoneDisplayNames = {
+    'Zona Bussing': 'Zona Bussing',
+    'Zona Stringatrici': 'Zona Stringatrici',
+  };
+
+  /*void _onZoneChange(String? newZone) {
+    if (newZone != null && newZone != selectedZone) {
+      setState(() {
+        selectedZone = newZone;
+      });
+
+      // Optional: perform additional logic when zone changes
+      print('Zone changed to $newZone');
+    }
+  }*/
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-// Inside your Scaffold widget:
       appBar: AppBar(
         backgroundColor: Colors.white,
-        scrolledUnderElevation: 0,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.settings,
-            color: Colors.grey[800],
-          ),
-          tooltip: 'Impostazioni',
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SettingsPage()),
-            );
-          },
+        scrolledUnderElevation: 0,
+        leadingWidth: 100,
+        leading: Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            const SizedBox(width: 8),
+            IconButton(
+              icon: Icon(Icons.settings, color: Colors.grey[800]),
+              tooltip: 'Impostazioni',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SettingsPage()),
+                );
+              },
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.info_outline, color: Colors.blue),
+              tooltip: 'Manuale',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const ManualSelectionPage()),
+                );
+              },
+            ),
+          ],
         ),
-        title: const Text(
-          'Dati',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 20,
-            letterSpacing: -0.5,
-          ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Dati',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 20,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            /*Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF007AFF).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: DropdownButton<String>(
+                value: selectedZone,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF007AFF),
+                ),
+                underline: Container(),
+                borderRadius: BorderRadius.circular(16),
+                items: availableZones.map((zone) {
+                  return DropdownMenuItem(
+                    value: zone,
+                    child: Text(
+                      zoneDisplayNames[zone] ?? zone,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF007AFF),
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: _onZoneChange,
+              ),
+            ),*/
+          ],
         ),
         centerTitle: true,
         actions: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
                 Text(
@@ -422,7 +498,7 @@ class _DataViewPageState extends State<DataViewPage> {
                     color: Colors.grey[800],
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -436,7 +512,7 @@ class _DataViewPageState extends State<DataViewPage> {
                       Icons.keyboard_arrow_down_rounded,
                       color: Color(0xFF007AFF),
                     ),
-                    underline: Container(), // Remove the default underline
+                    underline: Container(),
                     borderRadius: BorderRadius.circular(16),
                     items: availableLines.map((line) {
                       return DropdownMenuItem(
@@ -458,7 +534,6 @@ class _DataViewPageState extends State<DataViewPage> {
           ),
         ],
       ),
-
       body: _fetchedData == null
           ? const Center(
               child: CircularProgressIndicator(
@@ -526,14 +601,22 @@ class _DataViewPageState extends State<DataViewPage> {
               : Builder(
                   builder: (context) {
                     final data = _fetchedData!;
-                    final stations = data['stations'].entries.toList();
 
+                    // 1) Take `data['stations']` (a LinkedHashMap<dynamic, dynamic>)
+                    //    and re‐cast it so Dart knows it’s Map<String, dynamic>.
+                    final rawStationsMap = data['stations'] as Map;
+                    final stationsMap = rawStationsMap.cast<String, dynamic>();
+                    final stations = stationsMap.entries.toList();
+
+                    // 2) When you go through each station entry, do a similar re‐cast for that nested map:
                     final maxY = stations.map((entry) {
-                          final counts = entry.value as Map<String, dynamic>;
+                          // entry.value is dynamic, but really it’s a Map<String, dynamic> underneath
+                          final counts =
+                              (entry.value as Map).cast<String, dynamic>();
                           return (counts['good_count'] as int) +
                               (counts['bad_count'] as int);
                         }).fold(0, (a, b) => a > b ? a : b) +
-                        20;
+                        20.toDouble();
 
                     return SingleChildScrollView(
                       padding: const EdgeInsets.all(20),
@@ -553,44 +636,74 @@ class _DataViewPageState extends State<DataViewPage> {
                             selectedTurno,
                           ),
                           const SizedBox(height: 24),
-                          ...['M308', 'M309', 'M326']
-                              .map((stationCode) {
-                                final entry = stations.firstWhere(
-                                  (e) => e.key == stationCode,
-                                  orElse: () => const MapEntry('', {}),
-                                );
+                          // Note how we re‐cast again before modifying stationData:
+                          ...['MIN01', 'MIN02', 'RMI01'].map((stationCode) {
+                            final entry = stations.firstWhere(
+                              (e) => e.key == stationCode,
+                              orElse: () => const MapEntry('', {}),
+                            );
+                            if (entry.key.isEmpty) return const SizedBox();
 
-                                if (entry.key.isEmpty) return const SizedBox();
+                            // Cast the `entry.value` into Map<String, dynamic> safely:
+                            final stationData = Map<String, dynamic>.from(
+                                (entry.value as Map).cast<String, dynamic>());
 
-                                final stationData = Map<String, dynamic>.from(
-                                    entry.value); // Clone to safely override
+                            if (stationCode == 'RMI01') {
+                              stationData['good_count'] =
+                                  stationData['ok_op_count'] ?? 0;
+                            }
+                            final visualName =
+                                stationData['display'] ?? entry.key;
 
-                                if (stationCode == 'M326') {
-                                  stationData['good_count'] =
-                                      stationData['ok_op_count'] ?? 0;
-                                }
-
-                                final visualName =
-                                    stationData['display'] ?? entry.key;
-
-                                return StationCard(
-                                  station: visualName,
-                                  stationData: stationData,
-                                  selectedDate: _selectedDate,
-                                  selectedRange: _selectedRange,
-                                  selectedStartTime: selectedStartTime,
-                                  selectedEndTime: selectedEndTime,
-                                  turno: selectedTurno,
-                                  thresholdSeconds: _thresholdSeconds,
-                                );
-                              })
-                              .whereType<Widget>() // removes nulls
-                              .toList(),
+                            return StationCard(
+                              station: visualName,
+                              stationData: stationData,
+                              selectedDate: _selectedDate,
+                              selectedRange: _selectedRange,
+                              selectedStartTime: selectedStartTime,
+                              selectedEndTime: selectedEndTime,
+                              turno: selectedTurno,
+                              thresholdSeconds: _thresholdSeconds,
+                            );
+                          }).whereType<Widget>()
                         ],
                       ),
                     );
                   },
                 ),
+    );
+  }
+
+  Widget _buildPercentageBaseButton(String value, String label) {
+    final isSelected = percentageBase == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            percentageBase = value;
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF007AFF) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF007AFF) : Colors.grey,
+              width: 1,
+            ),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? Colors.white : Colors.grey[700],
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -756,13 +869,13 @@ class _DataViewPageState extends State<DataViewPage> {
     TimeOfDay? selectedEndTime,
     int selectedTurno,
   ) {
-    final m308 = stations.firstWhere((e) => e.key == 'M308',
-        orElse: () => MapEntry('M308', {}));
-    final m309 = stations.firstWhere((e) => e.key == 'M309',
-        orElse: () => MapEntry('M309', {}));
+    final m308 = stations.firstWhere((e) => e.key == 'MIN01',
+        orElse: () => MapEntry('MIN01', {}));
+    final m309 = stations.firstWhere((e) => e.key == 'MIN02',
+        orElse: () => MapEntry('MIN02', {}));
 
-    final m308Data = m308.value as Map<String, dynamic>? ?? {};
-    final m309Data = m309.value as Map<String, dynamic>? ?? {};
+    final m308Data = Map<String, dynamic>.from(m308.value as Map);
+    final m309Data = Map<String, dynamic>.from(m309.value as Map);
 
     final m308Cycle = _parseCycleTime(m308Data['avg_cycle_time']);
     final m309Cycle = _parseCycleTime(m309Data['avg_cycle_time']);
@@ -783,7 +896,7 @@ class _DataViewPageState extends State<DataViewPage> {
 
     final koCount = (m308Data['bad_count'] ?? 0) + (m309Data['bad_count'] ?? 0);
 
-// ✅ Combine cycle times from both M308 and M309
+// ✅ Combine cycle times from both MIN01 and MIN02
     final m308Cycles = (m308Data['cycle_times'] as List?)?.cast<num>() ?? [];
     final m309Cycles = (m309Data['cycle_times'] as List?)?.cast<num>() ?? [];
     final allCycles = [...m308Cycles, ...m309Cycles];
@@ -831,8 +944,10 @@ class _DataViewPageState extends State<DataViewPage> {
       for (var key in allDefectCategories) key: (defects[key] ?? 0)
     };
 
-    final chartMaxY =
-        filledDefects.values.map((e) => e.toDouble()).fold<double>(0, max) + 5;
+    final chartMaxY = showAsPercentage
+        ? 100.0
+        : filledDefects.values.map((e) => e.toDouble()).fold<double>(0, max) +
+            5;
 
     final displayName = lineDisplayNames[selectedLine] ?? selectedLine;
 
@@ -861,7 +976,7 @@ class _DataViewPageState extends State<DataViewPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$displayName,  QG2 ( M308 + M309 )',
+                '$displayName,  QG2 ( MIN01 + MIN02 )',
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.w700,
@@ -1006,13 +1121,58 @@ class _DataViewPageState extends State<DataViewPage> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Distribuzione Difetti',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.5,
-                      ),
+                    Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Distribuzione Difetti',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  showAsPercentage = !showAsPercentage;
+                                });
+                              },
+                              icon: const Icon(
+                                Icons.swap_horiz,
+                                color: Colors.black,
+                              ),
+                              label: Text(
+                                showAsPercentage
+                                    ? 'Mostra come Numero'
+                                    : 'Mostra come Percentuale',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (showAsPercentage)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              SizedBox(
+                                width: 190,
+                                child: Row(
+                                  children: [
+                                    _buildPercentageBaseButton('NG', 'Su NG'),
+                                    const SizedBox(width: 8),
+                                    _buildPercentageBaseButton(
+                                        'FULL', 'Su Totale'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     Container(
@@ -1036,7 +1196,9 @@ class _DataViewPageState extends State<DataViewPage> {
                                   const TextStyle(),
                                   children: [
                                     TextSpan(
-                                      text: rod.toY.toInt().toString(),
+                                      text: showAsPercentage
+                                          ? '${rod.toY.toStringAsFixed(1)}%'
+                                          : rod.toY.toInt().toString(),
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 12,
@@ -1109,7 +1271,18 @@ class _DataViewPageState extends State<DataViewPage> {
                           barGroups:
                               allDefectCategories.asMap().entries.map((entry) {
                             final name = entry.value;
-                            final count = filledDefects[name]!.toDouble();
+                            final rawCount = filledDefects[name]!.toDouble();
+
+                            final count = showAsPercentage
+                                ? percentageBase == 'FULL'
+                                    ? (total > 0
+                                        ? (rawCount / total * 100)
+                                        : 0.0)
+                                    : (koCount > 0
+                                        ? (rawCount / koCount * 100)
+                                        : 0.0)
+                                : rawCount;
+
                             final color = defectColors[name] ?? Colors.grey;
                             return BarChartGroupData(
                               x: entry.key,
@@ -1160,7 +1333,7 @@ class _DataViewPageState extends State<DataViewPage> {
 
   Widget _buildHeaderCard(
       double maxY, List<MapEntry<String, dynamic>> stations) {
-    const stationOrder = ['M308', 'M309', 'M326'];
+    const stationOrder = ['MIN01', 'MIN02', 'RMI01'];
 
     // Apply the order to the passed-in stations
     final orderedStations = stationOrder
@@ -1444,7 +1617,7 @@ class _DataViewPageState extends State<DataViewPage> {
               final stationEntry = stations[groupIndex];
               final stationName = stationEntry.key;
 
-              final isM326 = stationName == 'M326';
+              final isRework = stationName == 'RMI01';
 
               final filters = <Map<String, String>>[
                 {'type': 'Stazione', 'value': stationName},
@@ -1453,7 +1626,7 @@ class _DataViewPageState extends State<DataViewPage> {
               // Apply Esito + Tempo Ciclo logic
               if (rodIndex == 0) {
                 filters.add(
-                    {'type': 'Esito', 'value': isM326 ? 'G Operatore' : 'G'});
+                    {'type': 'Esito', 'value': isRework ? 'G Operatore' : 'G'});
                 filters.add({
                   'type': 'Tempo Ciclo',
                   'condition': 'Maggiore o Uguale a',
@@ -1461,8 +1634,8 @@ class _DataViewPageState extends State<DataViewPage> {
                 });
               } else if (rodIndex == 1) {
                 filters.add(
-                    {'type': 'Esito', 'value': isM326 ? 'G Operatore' : 'G'});
-                !isM326
+                    {'type': 'Esito', 'value': isRework ? 'G Operatore' : 'G'});
+                !isRework
                     ? filters.add({'type': 'Esito', 'value': 'Escluso'})
                     : null;
 

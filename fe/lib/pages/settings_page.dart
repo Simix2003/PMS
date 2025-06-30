@@ -27,11 +27,25 @@ class _SettingsPageState extends State<SettingsPage> {
   final Map<String, bool> _enableConsecutiveKO = {};
   final Map<String, int> _consecutiveKOLimit = {};
 
+  bool _alwaysExportHistory = true;
+  bool _exportMBJImage = true;
+
+// MBJ fields toggle map (feel free to customize names)
+  final Map<String, bool> _mbjFields = {
+    "Mostra Ribbon": false, // showRibbons
+    "Gap Orizzontali tra Celle": false, // showHorizontalGaps
+    "Gap Verticali tra Celle": false, // showVerticalGaps
+    "Distanza Vetro-Cella": false, // showGlassCell
+    "Distanza Vetro-Ribbon": false, // showGlassRibbon
+    "Mostra Warnings": false, // showWarnings
+  };
+
   // Yield Settings
   bool _includeNCInYield = true;
   bool _excludeSaldaturaDefects = false;
 
   bool _loading = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -48,6 +62,16 @@ class _SettingsPageState extends State<SettingsPage> {
         _includeNCInYield = settings['include_nc_in_yield'] as bool? ?? true;
         _excludeSaldaturaDefects =
             settings['exclude_saldatura_from_yield'] as bool? ?? false;
+
+        _alwaysExportHistory =
+            settings['always_export_history'] as bool? ?? true;
+        _exportMBJImage = settings['export_mbj_image'] as bool? ?? true;
+
+        final mbjExportFields =
+            settings['mbj_fields'] as Map<String, dynamic>? ?? {};
+        for (final entry in _mbjFields.entries) {
+          _mbjFields[entry.key] = mbjExportFields[entry.key] ?? entry.value;
+        }
 
         for (final defect in _stringaDefects) {
           _thresholds[defect] = settings['thresholds']?[defect] ?? 3;
@@ -70,6 +94,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _saveSettings() async {
+    setState(() => _isSaving = true);
+
     final settings = {
       'min_cycle_threshold': _minCycleSeconds,
       'include_nc_in_yield': _includeNCInYield,
@@ -78,90 +104,45 @@ class _SettingsPageState extends State<SettingsPage> {
       'moduli_window': _moduliWindow,
       'enable_consecutive_ko': _enableConsecutiveKO,
       'consecutive_ko_limit': _consecutiveKOLimit,
+      'always_export_history': _alwaysExportHistory,
+      'export_mbj_image': _exportMBJImage,
+      'mbj_fields': _mbjFields,
     };
 
     try {
       await ApiService.setAllSettings(settings);
       await ApiService.refreshBackendSettings();
 
-      // ✅ Show lightweight Cupertino-style confirmation at the bottom
-      showCupertinoModalPopup(
-        context: context,
-        barrierDismissible: true,
-        builder: (BuildContext context) => SafeArea(
-          child: Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemGrey6,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 10,
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(CupertinoIcons.check_mark_circled,
-                    color: CupertinoColors.activeGreen, size: 24),
-                SizedBox(width: 12),
-                Text(
-                  'Impostazioni salvate',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: CupertinoColors.black),
-                ),
-              ],
-            ),
+      // ✅ Success Snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('✅ Impostazioni salvate correttamente'),
+            backgroundColor: Colors.green.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 2),
           ),
-        ),
-      );
-
-      // Auto dismiss after 1.5 seconds
-      await Future.delayed(const Duration(milliseconds: 1500));
-      Navigator.pop(context);
+        );
+      }
     } catch (e) {
-      // ❌ Clean, native error popup
-      showCupertinoDialog(
-        context: context,
-        builder: (_) => CupertinoAlertDialog(
-          title: const Text('Errore'),
-          content: Text('Impossibile salvare le impostazioni:\n$e'),
-          actions: [
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              child: const Text('OK'),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, top: 24, bottom: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: CupertinoColors.systemGrey),
-          const SizedBox(width: 8),
-          Text(
-            title.toUpperCase(),
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
-              color: CupertinoColors.systemGrey,
-            ),
+      // ❌ Error Snackbar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Errore durante il salvataggio:\n$e'),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 3),
           ),
-        ],
-      ),
-    );
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   Widget _buildCard(Widget child) {
@@ -213,117 +194,268 @@ class _SettingsPageState extends State<SettingsPage> {
         child: ListView(
           children: [
             // Cycle Time Section
-            _buildSectionHeader('Tempo Ciclo', CupertinoIcons.timer),
-            _buildCard(
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Tempo Ciclo Minimo',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                      ),
+            ExpansionTile(
+              initiallyExpanded: false,
+              title: Row(
+                children: const [
+                  Icon(CupertinoIcons.timer,
+                      size: 20, color: CupertinoColors.systemGrey),
+                  SizedBox(width: 8),
+                  Text(
+                    'TEMPO CICLO QUALITY GATE',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8,
+                      color: CupertinoColors.systemGrey,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Minimo tempo (in secondi) per considerare un ciclo come "Controllato"',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
+                  ),
+                ],
+              ),
+              children: [
+                _buildCard(
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: CupertinoSlider(
-                            value: _minCycleSeconds,
-                            min: 1,
-                            max: 60,
-                            divisions: 59,
-                            onChanged: (val) {
-                              setState(() => _minCycleSeconds = val);
-                            },
+                        const Text(
+                          'Tempo Ciclo Minimo al Quality Gate',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE9E9EB),
-                            borderRadius: BorderRadius.circular(6),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Minimo tempo (in secondi) per considerare un ciclo come "Controllato"',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
                           ),
-                          child: Text(
-                            '${_minCycleSeconds.round()}s',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w500,
-                              fontSize: 15,
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: CupertinoSlider(
+                                value: _minCycleSeconds,
+                                min: 1,
+                                max: 60,
+                                divisions: 59,
+                                onChanged: (val) {
+                                  setState(() => _minCycleSeconds = val);
+                                },
+                              ),
                             ),
-                          ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE9E9EB),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '${_minCycleSeconds.round()}s',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
 
             // Stringatrice Section
-            _buildSectionHeader(
-                'Stringatrice', CupertinoIcons.exclamationmark_triangle),
-            _buildCard(
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Configurazione Difetti',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                      ),
+            ExpansionTile(
+              initiallyExpanded: false,
+              title: Row(
+                children: const [
+                  Icon(CupertinoIcons.exclamationmark_triangle,
+                      size: 20, color: CupertinoColors.systemGrey),
+                  SizedBox(width: 8),
+                  Text(
+                    'STRINGATRICE',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8,
+                      color: CupertinoColors.systemGrey,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Configura soglie per allarmi specifici a difetto',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ..._stringaDefects.map((defect) => Container(
-                          margin: const EdgeInsets.only(bottom: 20),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF9F9FB),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFE5E5EA)),
+                  ),
+                ],
+              ),
+              children: [
+                _buildCard(
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Configurazione Difetti',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                defect,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Configura soglie per allarmi specifici a difetto',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ..._stringaDefects.map((defect) => Container(
+                              margin: const EdgeInsets.only(bottom: 20),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9F9FB),
+                                borderRadius: BorderRadius.circular(10),
+                                border:
+                                    Border.all(color: const Color(0xFFE5E5EA)),
                               ),
-                              const SizedBox(height: 16),
-                              Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    child: Column(
+                                  Text(
+                                    defect,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Range di Moduli',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            CupertinoTextField(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 12),
+                                              placeholder: 'Moduli',
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              decoration: BoxDecoration(
+                                                color: CupertinoColors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                    color: const Color(
+                                                        0xFFD1D1D6)),
+                                              ),
+                                              controller: TextEditingController(
+                                                  text: _moduliWindow[defect]
+                                                      ?.toString()),
+                                              onChanged: (val) {
+                                                final parsed =
+                                                    int.tryParse(val);
+                                                if (parsed != null) {
+                                                  setState(() =>
+                                                      _moduliWindow[defect] =
+                                                          parsed);
+                                                }
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Numero NG',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            CupertinoTextField(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 12),
+                                              placeholder: 'Soglia',
+                                              keyboardType:
+                                                  TextInputType.number,
+                                              decoration: BoxDecoration(
+                                                color: CupertinoColors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                    color: const Color(
+                                                        0xFFD1D1D6)),
+                                              ),
+                                              controller: TextEditingController(
+                                                  text: _thresholds[defect]
+                                                      ?.toString()),
+                                              onChanged: (val) {
+                                                final parsed =
+                                                    int.tryParse(val);
+                                                if (parsed != null) {
+                                                  setState(() =>
+                                                      _thresholds[defect] =
+                                                          parsed);
+                                                }
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    children: [
+                                      const Text(
+                                        'Abilita avviso su NG consecutivi',
+                                        style: TextStyle(fontSize: 15),
+                                      ),
+                                      CupertinoSwitch(
+                                        value: _enableConsecutiveKO[defect] ??
+                                            false,
+                                        activeColor: const Color(0xFF007AFF),
+                                        onChanged: (val) {
+                                          setState(() =>
+                                              _enableConsecutiveKO[defect] =
+                                                  val);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                  if (_enableConsecutiveKO[defect] == true) ...[
+                                    const SizedBox(height: 16),
+                                    Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Range di Moduli',
+                                          'Numero NG Consecutivi',
                                           style: TextStyle(
                                             fontSize: 13,
                                             color: Colors.grey.shade600,
@@ -333,7 +465,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                         CupertinoTextField(
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 12, vertical: 12),
-                                          placeholder: 'Moduli',
+                                          placeholder: 'NG Consecutivi',
                                           keyboardType: TextInputType.number,
                                           decoration: BoxDecoration(
                                             color: CupertinoColors.white,
@@ -343,125 +475,156 @@ class _SettingsPageState extends State<SettingsPage> {
                                                 color: const Color(0xFFD1D1D6)),
                                           ),
                                           controller: TextEditingController(
-                                              text: _moduliWindow[defect]
+                                              text: _consecutiveKOLimit[defect]
                                                   ?.toString()),
                                           onChanged: (val) {
                                             final parsed = int.tryParse(val);
                                             if (parsed != null) {
                                               setState(() =>
-                                                  _moduliWindow[defect] =
+                                                  _consecutiveKOLimit[defect] =
                                                       parsed);
                                             }
                                           },
                                         ),
                                       ],
                                     ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Numero NG',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: Colors.grey.shade600,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        CupertinoTextField(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 12),
-                                          placeholder: 'Soglia',
-                                          keyboardType: TextInputType.number,
-                                          decoration: BoxDecoration(
-                                            color: CupertinoColors.white,
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            border: Border.all(
-                                                color: const Color(0xFFD1D1D6)),
-                                          ),
-                                          controller: TextEditingController(
-                                              text: _thresholds[defect]
-                                                  ?.toString()),
-                                          onChanged: (val) {
-                                            final parsed = int.tryParse(val);
-                                            if (parsed != null) {
-                                              setState(() =>
-                                                  _thresholds[defect] = parsed);
-                                            }
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  const Text(
-                                    'Abilita avviso su NG consecutivi',
-                                    style: TextStyle(fontSize: 15),
-                                  ),
-                                  CupertinoSwitch(
-                                    value:
-                                        _enableConsecutiveKO[defect] ?? false,
-                                    activeColor: const Color(0xFF007AFF),
-                                    onChanged: (val) {
-                                      setState(() =>
-                                          _enableConsecutiveKO[defect] = val);
-                                    },
-                                  ),
-                                ],
-                              ),
-                              if (_enableConsecutiveKO[defect] == true) ...[
-                                const SizedBox(height: 16),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Numero NG Consecutivi',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    CupertinoTextField(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 12),
-                                      placeholder: 'NG Consecutivi',
-                                      keyboardType: TextInputType.number,
-                                      decoration: BoxDecoration(
-                                        color: CupertinoColors.white,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: const Color(0xFFD1D1D6)),
-                                      ),
-                                      controller: TextEditingController(
-                                          text: _consecutiveKOLimit[defect]
-                                              ?.toString()),
-                                      onChanged: (val) {
-                                        final parsed = int.tryParse(val);
-                                        if (parsed != null) {
-                                          setState(() =>
-                                              _consecutiveKOLimit[defect] =
-                                                  parsed);
-                                        }
-                                      },
-                                    ),
                                   ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        )),
-                  ],
+                                ],
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
                 ),
+              ],
+            ),
+
+            ExpansionTile(
+              initiallyExpanded: false,
+              title: Row(
+                children: const [
+                  Icon(Icons.download,
+                      size: 20, color: CupertinoColors.systemGrey),
+                  SizedBox(width: 8),
+                  Text(
+                    'ESPORTAZIONE',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8,
+                      color: CupertinoColors.systemGrey,
+                    ),
+                  ),
+                ],
               ),
+              children: [
+                // 📦 GENERALI
+                _buildCard(
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Generali',
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Impostazioni generali di esportazione',
+                          style: TextStyle(
+                              fontSize: 14, color: Colors.grey.shade600),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Esporta sempre tutta la storia del Modulo',
+                              style: TextStyle(fontSize: 15),
+                            ),
+                            CupertinoSwitch(
+                              value: _alwaysExportHistory,
+                              activeColor: const Color(0xFF007AFF),
+                              onChanged: (val) {
+                                setState(() => _alwaysExportHistory = val);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 📷 MBJ
+                _buildCard(
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'MBJ',
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Seleziona cosa esportare per l'MBJ",
+                          style: TextStyle(
+                              fontSize: 14, color: Colors.grey.shade600),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Esporta immagine',
+                                style: TextStyle(fontSize: 15)),
+                            CupertinoSwitch(
+                              value: _exportMBJImage,
+                              activeColor: const Color(0xFF007AFF),
+                              onChanged: (val) {
+                                setState(() => _exportMBJImage = val);
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        const Divider(),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Misure da esportare',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Loop over all MBJ fields
+                        ..._mbjFields.keys.map((field) {
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                field,
+                                style: const TextStyle(fontSize: 15),
+                              ),
+                              CupertinoSwitch(
+                                value: _mbjFields[field]!,
+                                activeColor: const Color(0xFF007AFF),
+                                onChanged: (val) {
+                                  setState(() => _mbjFields[field] = val);
+                                },
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
 
             // Yield Calculation Section
@@ -535,9 +698,18 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _saveSettings,
-        backgroundColor: const Color(0xFF007AFF), // Apple blue
-        child: const Icon(Icons.save, color: Colors.white),
+        onPressed: _isSaving ? null : _saveSettings,
+        backgroundColor: const Color(0xFF007AFF),
+        child: _isSaving
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.5,
+                ),
+              )
+            : const Icon(Icons.save, color: Colors.white),
       ),
     );
   }

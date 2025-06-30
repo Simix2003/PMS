@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/picture_gallery.dart';
 import 'package:ix_monitor/pages/picture_page.dart';
 import '../../shared/services/api_service.dart';
+import '../shared/services/info_service.dart';
+import '../shared/widgets/AI.dart';
 
 class IssueSelectorWidget extends StatefulWidget {
   final String selectedLine;
@@ -12,6 +14,7 @@ class IssueSelectorWidget extends StatefulWidget {
   final bool canAdd;
   final bool isReworkMode; // defaults to false
   final List<String> initiallySelectedIssues; // used in rework
+  final List<Map<String, String>> initiallyCreatedPictures; // used in rework
   final String objectId;
 
   const IssueSelectorWidget({
@@ -23,6 +26,7 @@ class IssueSelectorWidget extends StatefulWidget {
     this.canAdd = true,
     this.isReworkMode = false,
     this.initiallySelectedIssues = const [],
+    this.initiallyCreatedPictures = const [],
     required this.objectId,
   });
 
@@ -48,6 +52,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
   // Updated main groups to exactly match backend keys:
   final List<String> mainGroups = [
+    //Should get from MySQL : defects table
     "Saldatura",
     "Disallineamento",
     "Mancanza Ribbon",
@@ -57,8 +62,34 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     "I Ribbon Leadwire",
     "Lunghezza String Ribbon",
     "Graffio su Cella",
+    'Bad Soldering',
     "Altro",
   ];
+
+  // ignore: constant_identifier_names
+  static const Map<String, String> KNOWN_DEFECT_PATHS = {
+    "Non Lavorato Poe Scaduto": "Generali.Non Lavorato Poe Scaduto",
+    "No Good da Bussing": "Generali.No Good da Bussing",
+    "Materiale Esterno su Celle": "Generali.Materiale Esterno su Celle",
+    "Passthrough al Bussing": "Generali.Passthrough al Bussing",
+    "Poe in Eccesso": "Generali.Poe in Eccesso",
+    "Solo Poe": "Generali.Solo Poe",
+    "Solo Vetro": "Generali.Solo Vetro",
+    "Matrice Incompleta": "Generali.Matrice Incompleta",
+    "Molteplici Bus Bar": "Generali.Molteplici Bus Bar",
+    "Test": "Generali.Test",
+    "Transitato per Controllo": "Generali.Transitato per Controllo",
+    "Saldatura": "Saldatura",
+    "Disallineamento Ribbon": "Disallineamento",
+    "Disallineamento Stringa": "Disallineamento",
+    "Mancanza Ribbon": "Mancanza Ribbon",
+    "I Ribbon Leadwire": "I Ribbon Leadwire",
+    "Macchie ECA": "Macchie ECA",
+    "Celle Rotte": "Celle Rotte",
+    "Bad Soldering": "Bad Soldering",
+    "Lunghezza String Ribbon": "Lunghezza String Ribbon",
+    "Graffio su Cella": "Graffio su Cella",
+  };
 
   @override
   void initState() {
@@ -66,6 +97,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
     if (widget.isReworkMode) {
       selectedLeaves = widget.initiallySelectedIssues.toSet();
+      allPictures = widget.initiallyCreatedPictures;
 
       // Extract ALTRO issues from selectedLeaves
       for (final issue in widget.initiallySelectedIssues) {
@@ -102,7 +134,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         object_id: widget.objectId,
       );
 
-      // ⬇️ Use your overlay logic first, fallback to API-based image URL
       final fallbackUrl = await ApiService.buildOverlayImageUrl(
         line: widget.selectedLine,
         station: widget.channelId,
@@ -121,6 +152,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
 
       _updateActiveLeafDefectIfSelected();
     } catch (e) {
+      debugPrint("❌ Error in _fetchCurrentItems: $e");
+
       final fallbackUrl = await ApiService.buildOverlayImageUrl(
         line: widget.selectedLine,
         station: widget.channelId,
@@ -133,7 +166,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         currentRectangles = [];
         backgroundImageUrl = fallbackUrl;
       });
-      debugPrint("❌ Error in _fetchCurrentItems: $e");
     }
     setState(() => isLoading = false);
   }
@@ -160,7 +192,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
       }
     });
 
-    if (group != "Altro") {
+    if (group != "Altro" || (widget.isReworkMode && groupHasSelected(group))) {
       _fetchCurrentItems();
     }
   }
@@ -285,53 +317,54 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
               const SizedBox(width: 24),
 
               // Scatta Foto
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TextButton.icon(
-                  onPressed: () async {
-                    var res = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const TakePicturePage(),
-                      ),
-                    );
-
-                    if (res != null &&
-                        res is String &&
-                        activeLeafDefect != null) {
-                      setState(() {
-                        allPictures.add({
-                          'defect': activeLeafDefect!,
-                          'image': res,
-                        });
-
-                        // 🔁 Notifica al parent
-                        widget.onPicturesChanged?.call(allPictures);
-                      });
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("Foto aggiunta con successo!"),
+              if (!widget.isReworkMode || widget.isReworkMode && widget.canAdd)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      var res = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TakePicturePage(),
                         ),
                       );
-                    }
-                  },
-                  icon: const Icon(Icons.camera_alt, color: Colors.white),
-                  label: const Text(
-                    "Scatta Foto",
-                    style: TextStyle(color: Colors.white),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+
+                      if (res != null &&
+                          res is String &&
+                          activeLeafDefect != null) {
+                        setState(() {
+                          allPictures.add({
+                            'defect': activeLeafDefect!,
+                            'image': res,
+                          });
+
+                          // 🔁 Notifica al parent
+                          widget.onPicturesChanged?.call(allPictures);
+                        });
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Foto aggiunta con successo!"),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.camera_alt, color: Colors.white),
+                    label: const Text(
+                      "Scatta Foto",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ),
-              ),
 
               const SizedBox(width: 12),
 
@@ -355,6 +388,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                                 widget.onPicturesChanged?.call(allPictures);
                               });
                             },
+                            isPreloaded: widget.isReworkMode ? true : false,
                           ),
                         ),
                       );
@@ -395,42 +429,66 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                 final fullPath = "$apiPath.$name";
                 final bool isSelected = selectedLeaves.contains(fullPath);
 
-                return ElevatedButton(
-                  onPressed: widget.canAdd
-                      ? () {
-                          setState(() {
-                            if (isSelected) {
-                              selectedLeaves.remove(fullPath);
-                              if (activeLeafDefect == fullPath) {
-                                activeLeafDefect = null;
-                              }
-                            } else {
-                              selectedLeaves.add(fullPath);
-                              activeLeafDefect = fullPath;
+                return Stack(
+                  alignment: Alignment.topRight,
+                  children: [
+                    ElevatedButton(
+                      onPressed: widget.canAdd
+                          ? () {
+                              setState(() {
+                                if (isSelected) {
+                                  selectedLeaves.remove(fullPath);
+                                  if (activeLeafDefect == fullPath) {
+                                    activeLeafDefect = null;
+                                  }
+                                } else {
+                                  selectedLeaves.add(fullPath);
+                                  activeLeafDefect = fullPath;
+                                }
+                              });
+                              widget.onIssueSelected(fullPath);
                             }
-                          });
-                          widget.onIssueSelected(fullPath);
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        isSelected ? Colors.deepOrange.withOpacity(0.2) : null,
-                    foregroundColor: Colors.black,
-                    side: isSelected
-                        ? const BorderSide(color: Colors.deepOrange, width: 2)
-                        : null,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isSelected
+                            ? Colors.deepOrange.withOpacity(0.2)
+                            : null,
+                        foregroundColor: Colors.black,
+                        side: isSelected
+                            ? const BorderSide(
+                                color: Colors.deepOrange, width: 2)
+                            : null,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 40, vertical: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: isSelected ? 3 : 1,
+                      ),
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w500),
+                      ),
                     ),
-                    elevation: isSelected ? 3 : 1,
-                  ),
-                  child: Text(
-                    name,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
+
+                    // ℹ️ Info icon for the leaf (e.g., "Bad Soldering")
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.info_outline,
+                          size: 20,
+                          color: Colors.blue,
+                        ),
+                        splashRadius: 20,
+                        tooltip: 'Info',
+                        onPressed: () =>
+                            _showDefectInfo(name), // pass leaf name
+                      ),
+                    ),
+                  ],
                 );
               }).toList(),
             ),
@@ -479,13 +537,71 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
               const SizedBox(width: 12),
               ElevatedButton(
                 onPressed: widget.canAdd
-                    ? () {
+                    ? () async {
                         final text = altroController.text.trim();
-                        final fullPath =
-                            "Dati.Esito.Esito_Scarto.Difetti.Altro: $text";
+
+                        String chosenText = text;
+
                         if (text.isNotEmpty && !altroIssues.contains(text)) {
+                          // Send to backend for similarity check
+                          final result =
+                              await ApiService.checkDefectSimilarity(text);
+
+                          if (result != null &&
+                              result['suggested_defect'] != null) {
+                            final suggestion = result['suggested_defect']!;
+                            final confidence = result['confidence'];
+
+                            final useSuggestion = await showDialog<bool>(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (_) => IAConfirmationDialog(
+                                original: text,
+                                suggestion: suggestion,
+                                confidence: confidence,
+                              ),
+                            );
+
+                            if (useSuggestion == true) {
+                              final String suggestedLabel = result[
+                                  'suggested_defect']; // e.g. "Macchie ECA"
+
+                              final path = KNOWN_DEFECT_PATHS[suggestedLabel];
+
+                              if (path != null) {
+                                final parts = path.split('.');
+                                final String group = parts.first;
+
+                                // Simulate _onGroupSelected(group)
+                                setState(() {
+                                  pathStack = parts.length > 1
+                                      ? parts.sublist(0, parts.length - 1)
+                                      : [group];
+                                });
+
+                                await _fetchCurrentItems(); // Load UI for the group
+
+                                // For deep selections like "Generali.No Good da Bussing"
+                                if (parts.length > 1) {
+                                  final fullPath =
+                                      "Dati.Esito.Esito_Scarto.Difetti.$path";
+                                  setState(() {
+                                    selectedLeaves.add(fullPath);
+                                    activeLeafDefect = fullPath;
+                                    widget.onIssueSelected(fullPath);
+                                  });
+                                }
+
+                                altroController.clear();
+                                return;
+                              }
+                            }
+                          }
+                          final fullPath =
+                              "Dati.Esito.Esito_Scarto.Difetti.Altro: $chosenText";
+
                           setState(() {
-                            altroIssues.add(text);
+                            altroIssues.add(chosenText);
                             selectedLeaves.add(fullPath);
                             activeLeafDefect = fullPath;
                             widget.onIssueSelected(fullPath);
@@ -528,6 +644,68 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
     );
   }
 
+  Future<void> _showDefectInfo(String key) async {
+    final info = await DefectInfoService.get(key);
+    if (info == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Nessuna descrizione disponibile')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Title
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(key, style: Theme.of(context).textTheme.titleLarge),
+            ),
+
+            // Scrollable + zoomable content
+            Flexible(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    children: [
+                      if (info['image']!.isNotEmpty)
+                        SizedBox(
+                          height: 400,
+                          child: InteractiveViewer(
+                            panEnabled: true,
+                            minScale: 1,
+                            maxScale: 4,
+                            child: Image.asset(info['image']!,
+                                fit: BoxFit.contain),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      Text(info['description']!, textAlign: TextAlign.justify),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Close button
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Chiudi'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildGroupSelection() {
     return Padding(
       padding: const EdgeInsets.only(top: 60.0),
@@ -546,28 +724,51 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
               alignment: WrapAlignment.center,
               children: mainGroups.map((group) {
                 final bool selected = groupHasSelected(group);
-                return ElevatedButton(
-                  onPressed: () => _onGroupSelected(group),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: selected
-                        ? Colors.deepOrange.withOpacity(0.2)
-                        : null, // Default button color when not selected
-                    foregroundColor: Colors.black,
-                    side: selected
-                        ? const BorderSide(color: Colors.deepOrange, width: 2)
-                        : null,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 30, vertical: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                return Stack(
+                  alignment: Alignment.topRight,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => _onGroupSelected(group),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: selected
+                            ? Colors.deepOrange.withOpacity(0.2)
+                            : null,
+                        foregroundColor: Colors.black,
+                        side: selected
+                            ? const BorderSide(
+                                color: Colors.deepOrange, width: 2)
+                            : null,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 40, vertical: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: selected ? 3 : null,
+                      ),
+                      child: Text(
+                        group,
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w500),
+                      ),
                     ),
-                    elevation: selected ? 3 : null,
-                  ),
-                  child: Text(
-                    group,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w500),
-                  ),
+
+                    // ℹ️ Info button in the corner
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.info_outline,
+                          size: 20,
+                          color: Colors.blue,
+                        ),
+                        splashRadius: 20,
+                        tooltip: 'Info',
+                        onPressed: () =>
+                            _showDefectInfo(group), // You define this
+                      ),
+                    ),
+                  ],
                 );
               }).toList(),
             ),
@@ -650,7 +851,6 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         double targetWidth, targetHeight;
 
         if (maxWidth / maxHeight > imageAspectRatio) {
-          // screen is wider than image aspect ratio
           targetHeight = maxHeight;
           targetWidth = targetHeight * imageAspectRatio;
         } else {
@@ -665,8 +865,7 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
             child: Stack(
               children: [
                 ColorFiltered(
-                  colorFilter: ColorFilter.matrix(_desaturationMatrix(
-                      0.5)), // 0.0 = full color, 1.0 = grayscale
+                  colorFilter: ColorFilter.matrix(_desaturationMatrix(0.5)),
                   child: Image.network(
                     backgroundImageUrl,
                     key: _imageKey,
@@ -678,19 +877,29 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           final box = _imageKey.currentContext
                               ?.findRenderObject() as RenderBox?;
-                          if (box != null && imageSize != box.size) {
-                            setState(() {
-                              imageSize = box.size;
-                            });
+                          if (box != null) {
+                            if (imageSize != box.size) {
+                              setState(() {
+                                imageSize = box.size;
+                              });
+                            }
+                          } else {
+                            debugPrint("⚠️ RenderBox is null!");
                           }
                         });
+                      } else {
+                        debugPrint("⏳ Image still loading...");
                       }
                       return child;
                     },
+                    errorBuilder: (context, error, stackTrace) {
+                      debugPrint("❌ Image failed to load: $error");
+                      return const Center(
+                        child: Icon(Icons.error, size: 60, color: Colors.red),
+                      );
+                    },
                   ),
                 ),
-
-                // Rectangles overlay
                 if (imageSize != null)
                   ...currentRectangles
                       .where((rect) =>
@@ -734,18 +943,15 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                                     ),
                                   ]
                                 : [],
-                            borderRadius:
-                                BorderRadius.circular(8), // same as buttons
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Center(
-                              child: const SizedBox
-                                  .shrink() // Hide text when selected
-
-                              ),
+                          child: const SizedBox.shrink(),
                         ),
                       ),
                     );
                   }),
+                if (imageSize == null)
+                  const Center(child: CircularProgressIndicator()),
               ],
             ),
           ),
@@ -775,6 +981,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         hint = "Controlla le celle per possibili macchie da ECA.";
       } else if (pathStack.length == 1 && pathStack[0] == "Celle Rotte") {
         hint = "Ispeziona le celle segnalate come rotte.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Bad Soldering") {
+        hint = "Ispeziona le celle dove è presente il bad soldering.";
       } else if (pathStack.length == 1 &&
           pathStack[0] == "Lunghezza String Ribbon") {
         hint = "Controlla la lunghezza delle stringhe indicate.";
@@ -799,6 +1007,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
         hint = "Seleziona le Celle macchiate.";
       } else if (pathStack.length == 1 && pathStack[0] == "Celle Rotte") {
         hint = "Seleziona le Celle rotte.";
+      } else if (pathStack.length == 1 && pathStack[0] == "Bad Soldering") {
+        hint = "Seleziona le Celle dove è presente il bad soldering.";
       } else if (pathStack.length == 1 &&
           pathStack[0] == "Lunghezza String Ribbon") {
         hint = "Seleziona la Stringa interessata dal difetto di lunghezza.";

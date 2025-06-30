@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/api_service.dart';
+import 'AI.dart';
 
 class ObjectCard extends StatefulWidget {
   final String objectId;
@@ -34,6 +35,8 @@ class ObjectCard extends StatefulWidget {
 
 class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
   bool _isHoveringKO = false;
+  String? estimatedFixTime; // Example: "7 min"
+  bool maybeMBJ = false;
 
   void _sendOutcome(BuildContext context, String outcome) async {
     HapticFeedback.mediumImpact();
@@ -77,6 +80,32 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
   }
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.reWork) {
+      _fetchETAPrediction();
+    }
+  }
+
+  Future<void> _fetchETAPrediction() async {
+    final result = await ApiService.predictReworkETAByObject(widget.objectId);
+    final etaInfo = result['etaInfo'];
+    final noDefects = result['noDefectsFound'];
+
+    setState(() {
+      if (etaInfo != null) {
+        estimatedFixTime = etaInfo['eta_min'].toString();
+        print("ETA: ${etaInfo['eta_min']} min (${etaInfo['samples']} samples)");
+      } else {
+        estimatedFixTime = null;
+        if (noDefects == true) {
+          maybeMBJ = true;
+        }
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     Color? glowColor;
     if (widget.hasBeenEvaluated) {
@@ -105,6 +134,11 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (widget.reWork &&
+              !widget.hasBeenEvaluated &&
+              estimatedFixTime != null)
+            ShimmerRevealETA(estimatedFixTime: estimatedFixTime!),
+
           // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -114,7 +148,7 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Production Unit',
+                    'Modulo:',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w400,
@@ -125,7 +159,8 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.memory, color: Colors.blueGrey, size: 20),
+                      const Icon(Icons.memory,
+                          color: Colors.blueGrey, size: 20),
                       const SizedBox(width: 6),
                       Text(
                         widget.objectId,
@@ -165,13 +200,46 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
               ),
             ],
           ),
+          if (maybeMBJ) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade600.withOpacity(0.2),
+                  border: Border.all(color: Colors.red, width: 1.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize
+                      .min, // <-- THIS prevents Row from expanding horizontally
+                  children: const [
+                    Icon(Icons.warning_amber_rounded,
+                        color: Colors.red, size: 16),
+                    SizedBox(width: 4),
+                    Text(
+                      "Il modulo potrebbe essere NG dall'MBJ",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red,
+                      ),
+                      softWrap: true,
+                      overflow: TextOverflow.fade,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
 
           const SizedBox(height: 16),
 
           // Status text
           Text(
             widget.hasBeenEvaluated
-                ? (widget.isObjectOK ? "Status: Unità OK" : "Status: Unità KO")
+                ? (widget.isObjectOK ? "Status: Modulo G" : "Status: Modulo NG")
                 : "Status: Attesa validazione",
             style: TextStyle(
               fontSize: 14,

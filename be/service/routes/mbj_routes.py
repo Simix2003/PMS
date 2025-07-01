@@ -87,7 +87,7 @@ def get_mbj_details(modulo_id: str):
                 if 81 in defects:
                     count_bad_soldering += 1
 
-        has_el_defects = (count_crack + count_bad_soldering) > 0
+        has_el_defects = (count_crack + count_bad_soldering) == 0 and cell_defects["cell_defects"]
 
         has_backlight_defects = (
             check_any_value_below(ribbon_data["interconnection_ribbon"], *TOLERANCES["ribbon"]) or
@@ -120,6 +120,8 @@ def get_mbj_details(modulo_id: str):
             **cell_defects,
             'NG PMS Backlight': has_backlight_defects,
             'NG PMS Elettroluminescenza': has_el_defects,
+            'Count Crack': count_crack,
+            'Count Bad Solid': count_bad_soldering,
         }
 
     except Exception as e:

@@ -127,6 +127,7 @@ Versions:
 "2.3.3" - Visual Improvements, small fixes
 "2.3.4" - MBJ Defects and new Averages
 "2.4.0" - Visual Management for ELL
+"2.4.1" - Improvements on MBJ view
 
 ## OWASP dependency verification
 

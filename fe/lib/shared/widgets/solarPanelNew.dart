@@ -66,6 +66,17 @@ class DistancesSolarPanelWidget extends StatelessWidget {
     final height = (maxW / aspect < maxH) ? maxW / aspect : maxH;
     final width = height * aspect;
 
+    String formatDefectId(int id) {
+      switch (id) {
+        case 7:
+          return "Crack";
+        case 81:
+          return "Bad\nSoldering";
+        default:
+          return "$id";
+      }
+    }
+
     return Center(
       child: SizedBox(
         width: width,
@@ -167,15 +178,20 @@ class DistancesSolarPanelWidget extends StatelessWidget {
                               borderRadius: BorderRadius.circular(2),
                             ),
                             alignment: Alignment.center,
+                            // Inside your Positioned widget
                             child: Text(
-                              defectIds.join(", "),
+                              defectIds
+                                  .toSet() // Remove duplicates
+                                  .map((id) => formatDefectId(id))
+                                  .toSet() // In case the mapped text duplicates (e.g., multiple 7s)
+                                  .join("\n"),
                               textAlign: TextAlign.center,
                               style: const TextStyle(
-                                fontSize: 24,
+                                fontSize: 14,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.red,
                                 shadows: [
-                                  Shadow(blurRadius: 1, color: Colors.black)
+                                  Shadow(blurRadius: 1, color: Colors.black),
                                 ],
                               ),
                             ),

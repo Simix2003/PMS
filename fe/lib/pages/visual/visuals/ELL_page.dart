@@ -845,11 +845,6 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
 
                         Column(
                           children: [
-                            Text("Linea B",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 32)),
-                            const SizedBox(height: 24),
                             // Right side: Escalation button
                             EscalationButton(
                               last_n_shifts: widget.last_n_shifts,

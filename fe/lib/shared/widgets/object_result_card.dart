@@ -334,12 +334,17 @@ class ObjectResultCard extends StatelessWidget {
 
                       final mbjData = snapshot.data as Map<String, dynamic>;
                       final hasBacklight = mbjData['NG PMS Backlight'] == true;
-                      final hasEL =
-                          mbjData['NG PMS Elettroluminescenza'] == true;
+                      final hasEL = mbjData['NG PMS Elettroluminescenza'] == true;
+                      final crackCount = mbjData['Count Crack'] ?? 0;
+                      final badSolderCount = mbjData['Count Bad Solid'] ?? 0;
 
                       final tags = <String>[];
                       if (hasBacklight) tags.add('Backlight');
+                      if (crackCount > 0) tags.add('Crack ($crackCount)');
+                      if (badSolderCount > 0) tags.add('Bad Soldering ($badSolderCount)');
                       if (hasEL) tags.add('Elettroluminescenza');
+                      
+
 
                       if (tags.isEmpty) return const SizedBox.shrink();
 

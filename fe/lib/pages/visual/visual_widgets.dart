@@ -110,6 +110,27 @@ class _HeaderBoxState extends State<HeaderBox> {
           else if (widget.title == 'Pareto Shift')
             Row(
               children: [
+                if (widget.zone == 'ELL')
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        formattedDate,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        formattedTime,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                Text('Linea B', style: TextStyle(color: Colors.white)),
                 if (widget.zone == 'AIN')
                   Text(
                     "Difetti \nTot. QG2",

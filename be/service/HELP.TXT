@@ -20,10 +20,10 @@ flutter build web --web-renderer html --release -t lib/main_stringatrici.dart -o
 # Build for port 8053 (Visual)
 flutter build web --web-renderer html --release -t lib/main_visual.dart -o build/web_visual
 
-flutter run -d chrome --web-renderer html -t lib/main_home.dart
-flutter run -d chrome --web-renderer html -t lib/main_data.dart
-flutter run -d chrome --web-renderer html -t lib/main_stringatrici.dart
-flutter run -d chrome --web-renderer html -t lib/main_visual.dart
+flutter run -d web-server --web-renderer html -t lib/main_home.dart
+flutter run -d web-server --web-renderer html -t lib/main_data.dart
+flutter run -d web-server --web-renderer html -t lib/main_stringatrici.dart
+flutter run -d web-server --web-renderer html -t lib/main_visual.dart
 
 
 pyinstaller --onefile --add-binary="C:\Users\papar\Desktop\Prova_Comunicazione_PLC\Lib\site-packages\snap7\lib\snap7.dll;." service.py  

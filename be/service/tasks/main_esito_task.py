@@ -17,7 +17,8 @@ from service.routes.broadcast import broadcast
 from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_string
-from service.helpers.visual_helper import refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
+from service.helpers.visual_helper import refresh_top_defects_ell, refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
+from service.routes.mbj_routes import get_mbj_details
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,12 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                             refresh_top_defects_vpf("AIN", timestamp)
                             refresh_vpf_defects_data(timestamp)
                         
+                        if success and channel_id == "ELL01" and fine_scarto:
+                            assert end_time and final_esito is not None
+                            timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
+                            await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_ell=True)
+                            refresh_top_defects_ell("ELL", timestamp)
+                        
                         if success and channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
                             await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_ain=True)
 
@@ -148,7 +155,12 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                 assert end_time and final_esito is not None
 
                                 timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
-                                reentered = bool(result.get("Re_entered_from_m506", False))
+                                if channel_id == "VPF01":
+                                    reentered = bool(result.get("Re_entered_from_m506", False))
+                                elif channel_id == "ELL01":
+                                    reentered = bool(result.get("Re_entered_from_m326", False))
+                                else:
+                                    reentered = False
 
                                 if zone:
                                     update_visual_data_on_new_module(
@@ -389,11 +401,17 @@ async def read_data(
             data["Tipo_NG_VPF"] = combined_vpf_values
             logger.debug(f"[{full_id}], VPF Defect flags: {combined_vpf_values}")
         
-        # Get the re-entered flag
-        re_entered_conf = config.get("re_entered_from_m506")
-        if re_entered_conf and channel_id == "VPF01":
-            reentered = extract_bool(buffer, re_entered_conf["byte"], re_entered_conf["bit"], start_byte)
+        # Get the re-entered flag for VPF
+        re_entered_conf506 = config.get("re_entered_from_m506")
+        if re_entered_conf506 and channel_id == "VPF01":
+            reentered = extract_bool(buffer, re_entered_conf506["byte"], re_entered_conf506["bit"], start_byte)
             data["Re_entered_from_m506"] = reentered
+
+        # Get the re-entered flag for VPF
+        re_entered_conf326 = config.get("re_entered_from_m326")
+        if re_entered_conf326 and channel_id == "ELL01":
+            reentered = extract_bool(buffer, re_entered_conf326["byte"], re_entered_conf326["bit"], start_byte)
+            data["Re_entered_from_m326"] = reentered
 
         # Step 11: Read Defect NG for AIN                
         ain_conf = config.get("difetti_ain")
@@ -409,6 +427,9 @@ async def read_data(
 
         # Step 12: Set NG flag
         data["Compilato_Su_Ipad_Scarto_Presente"] = richiesta_ko
+
+        if channel_id == "ELL01" and richiesta_ko:
+            data['MBJ_Defects'] = get_mbj_details(data["Id_Modulo"])
 
         return data
 

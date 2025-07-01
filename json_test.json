@@ -1,0 +1,82 @@
+{
+    "trigger": {
+        "db": 19606,
+        "bit": 4,
+        "byte": 200
+    },
+    "id_modulo": {
+        "db": 19606,
+        "byte": 202,
+        "length": 20
+    },
+    "id_utente": {
+        "db": 19606,
+        "byte": 224,
+        "length": 20
+    },
+    "fine_buona": {
+        "db": 19606,
+        "bit": 5,
+        "byte": 200
+    },
+    "fine_fermo": {
+        "db": 19102,
+        "bit": 0,
+        "byte": 30
+    },
+    "fine_scarto": {
+        "db": 19606,
+        "bit": 6,
+        "byte": 200
+    },
+    "evento_fermo": {
+        "db": 19102,
+        "bit": 0,
+        "byte": 40
+    },
+    "inizio_fermo": {
+        "db": 19102,
+        "bit": 0,
+        "byte": 22
+    },
+    "stringatrice": {
+        "db": 19606,
+        "byte": 246,
+        "length": 5
+    },
+    "stazione_fermo": {
+        "db": 19102,
+        "bit": 0,
+        "byte": 42
+    },
+    "id_utente_fermi": {
+        "db": 19102,
+        "byte": 0,
+        "length": 20
+    },
+    "dati_letti_fermi": {
+        "db": 19100,
+        "bit": 3,
+        "byte": 200
+    },
+    "dati_pronti_fermi": {
+        "db": 19100,
+        "bit": 2,
+        "byte": 200
+    },
+    "keepLive_fermi_PC": {
+        "db": 19100,
+        "bit": 1,
+        "byte": 200
+    },
+    "pezzo_salvato_su_DB_con_inizio_ciclo": {
+        "db": 19606,
+        "bit": 7,
+        "byte": 1000
+    },
+    "re_entered_from_m326": {
+        "db": 19606,
+        "bit": 3,
+        "byte": 201
+    }
+}

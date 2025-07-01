@@ -52,6 +52,11 @@ AIN_DEFECT_ID_MAP = {
         1: 26,
     }
 
+ELL_DEFECT_MAP = {
+    "NG PMS Elettroluminescenza": 6,  # 'Celle Rotte'
+    "NG PMS Backlight": 10,           # 'Bad Soldering'
+}
+
 def get_mysql_connection():
     """
     Always return a valid, live MySQL connection stored in global_state.
@@ -304,58 +309,123 @@ async def update_production_final(production_id, data, station_name, connection,
         logger.error(f"Error updating production {production_id}: {e}")
         return False, None, None
 
-async def insert_defects(data, production_id, channel_id, line_name, cursor, from_vpf: bool = False, from_ain: bool = False):
-    # 1. Get defects mapping from DB
+async def insert_defects(
+    data,
+    production_id,
+    channel_id,
+    line_name,
+    cursor,
+    from_vpf: bool = False,
+    from_ain: bool = False,
+    from_ell: bool = False
+):
+    # 1. Get defect categories mapping from DB
     cursor.execute("SELECT id, category FROM defects")
     cat_map = {row["category"]: row["id"] for row in cursor.fetchall()}
 
     # --- VPF Defects ---
     if from_vpf:
         flags = data.get("Tipo_NG_VPF", [])
-        if flags:
-            for idx, flag in enumerate(flags):
-                if not flag or idx not in VPF_DEFECT_ID_MAP:
-                    continue
-
-                defect_id = VPF_DEFECT_ID_MAP[idx]
-                cursor.execute("""
-                    INSERT INTO object_defects (
-                        production_id, defect_id, defect_type, stringa,
-                        s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    production_id,
-                    defect_id,
-                    f"VPF_NG_{idx+1}",
-                    None, None, None, None, None, None
-                ))
+        for idx, flag in enumerate(flags):
+            if not flag or idx not in VPF_DEFECT_ID_MAP:
+                continue
+            defect_id = VPF_DEFECT_ID_MAP[idx]
+            cursor.execute("""
+                INSERT INTO object_defects (
+                    production_id, defect_id, defect_type, stringa,
+                    s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                production_id,
+                defect_id,
+                f"VPF_NG_{idx+1}",
+                None, None, None, None, None, None
+            ))
         return
 
     # --- AIN Defects ---
     if from_ain:
-        flags = data.get("Tipo_NG_AIN", [])  # Only 2 values: bit3 and bit4
-        if flags:
-            for idx, flag in enumerate(flags):  # idx is 0 or 1
-                if not flag or idx not in AIN_DEFECT_ID_MAP:
-                    continue
-
-                defect_id = AIN_DEFECT_ID_MAP[idx]
-                defect_type = f"AIN_NG{idx + 2}"  # idx=0 → NG2, idx=1 → NG3
-
-                cursor.execute("""
-                    INSERT INTO object_defects (
-                        production_id, defect_id, defect_type, stringa,
-                        s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    production_id,
-                    defect_id,
-                    defect_type,
-                    None, None, None, None, None, None
-                ))
+        flags = data.get("Tipo_NG_AIN", [])
+        for idx, flag in enumerate(flags):
+            if not flag or idx not in AIN_DEFECT_ID_MAP:
+                continue
+            defect_id = AIN_DEFECT_ID_MAP[idx]
+            defect_type = f"AIN_NG{idx + 2}"  # NG2 or NG3
+            cursor.execute("""
+                INSERT INTO object_defects (
+                    production_id, defect_id, defect_type, stringa,
+                    s_ribbon, i_ribbon, ribbon_lato, extra_data, photo_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                production_id,
+                defect_id,
+                defect_type,
+                None, None, None, None, None, None
+            ))
         return
 
-    # --- Other fallback defects ---
+    # --- ELL Defects ---
+    if from_ell and data.get("MBJ_Defects"):
+        mbj = data["MBJ_Defects"]
+        defects_to_insert = []
+        cell_defects_data = mbj.get("cell_defects", {})
+        cracked_cells = []
+        bad_solder_cells = []
+
+        if isinstance(cell_defects_data, list):
+            for cell in cell_defects_data:
+                defects = set(cell.get("defects", []))
+                cell_index = f"x{cell.get('x', '?')}_y{cell.get('y', '?')}"
+                if 7 in defects:
+                    cracked_cells.append(cell_index)
+                if 81 in defects:
+                    bad_solder_cells.append(cell_index)
+
+        # ➤ Insert Celle Rotte (defect_id=6)
+        if cracked_cells:
+            defects_to_insert.append({
+                "production_id": production_id,
+                "defect_id": 6,
+                "defect_type": "ELL_MBJ",
+                "i_ribbon": None,
+                "stringa": None,
+                "ribbon_lato": None,
+                "s_ribbon": None,
+                "extra_data": f"Cells: {sorted(cracked_cells)}; Cracks: {mbj.get('Count Crack', len(cracked_cells))}",
+                "photo_id": None
+            })
+
+        # ➤ Insert Bad Soldering (defect_id=10)
+        if bad_solder_cells:
+            defects_to_insert.append({
+                "production_id": production_id,
+                "defect_id": 10,
+                "defect_type": "ELL_MBJ",
+                "i_ribbon": None,
+                "stringa": None,
+                "ribbon_lato": None,
+                "s_ribbon": None,
+                "extra_data": f"Cells: {sorted(bad_solder_cells)}; BadSolid: {mbj.get('Count Bad Solid', len(bad_solder_cells))}",
+                "photo_id": None
+            })
+
+        if defects_to_insert:
+            cursor.executemany("""
+                INSERT INTO object_defects (
+                    production_id, defect_id, defect_type, i_ribbon,
+                    stringa, ribbon_lato, s_ribbon, extra_data, photo_id
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, [
+                (
+                    d["production_id"], d["defect_id"], d["defect_type"], d["i_ribbon"],
+                    d["stringa"], d["ribbon_lato"], d["s_ribbon"], d["extra_data"], d["photo_id"]
+                )
+                for d in defects_to_insert
+            ])
+            cursor.connection.commit()
+        return
+
+    # --- Fallback: Vision-based Issues ---
     issues = get_latest_issues(line_name, channel_id)
     data["issues"] = issues
 

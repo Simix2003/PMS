@@ -350,21 +350,6 @@ class _VisualPageState extends State<VisualPage> {
           ellCounts.add(int.tryParse(defect['ell'].toString()) ?? 0);
         }
 
-        // Parse fermi data
-        final fermiRaw =
-            List<Map<String, dynamic>>.from(response['fermi_data'] ?? []);
-
-        dataFermi = []; // clear previous data
-
-        for (final entry in fermiRaw) {
-          dataFermi.add([
-            entry['causale']?.toString() ?? '',
-            entry['station']?.toString() ?? '',
-            entry['count']?.toString() ?? '0',
-            entry['time']?.toString() ?? '0'
-          ]);
-        }
-
         isLoading = false;
       });
     } catch (e) {
@@ -625,24 +610,10 @@ class _VisualPageState extends State<VisualPage> {
             min2Counts.add(int.tryParse(defect['min2'].toString()) ?? 0);
             ellCounts.add(int.tryParse(defect['ell'].toString()) ?? 0);
           }
-
-          // ─── Fermi Data ────────────────────────────────
-          final fermiRaw =
-              List<Map<String, dynamic>>.from(data['fermi_data'] ?? []);
-          dataFermi = [];
-
-          for (final entry in fermiRaw) {
-            dataFermi.add([
-              entry['causale']?.toString() ?? '',
-              entry['station']?.toString() ?? '',
-              entry['count']?.toString() ?? '0',
-              entry['time']?.toString() ?? '0'
-            ]);
-          }
         });
       },
-      onDone: () => print("🛑 Visual WebSocket closed"),
-      onError: (err) => print("❌ WebSocket error: $err"),
+      onDone: () => print("Visual WebSocket closed"),
+      onError: (err) => print("WebSocket error: $err"),
     );
 
     _isWebSocketConnected = true;

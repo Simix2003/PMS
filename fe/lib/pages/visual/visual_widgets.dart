@@ -86,6 +86,13 @@ class _HeaderBoxState extends State<HeaderBox> {
                       fontWeight: FontWeight.bold),
                 ),
               ],
+            ),
+          if (widget.title == 'UPTIME/DOWNTIME Shift')
+            const SizedBox(width: 32),
+          if (widget.title == 'UPTIME/DOWNTIME Shift')
+            Text(
+              'Linea B',
+              style: TextStyle(color: Colors.white, fontSize: 24),
             )
           else if (widget.title == 'Produzione Shift')
             Container(
@@ -130,7 +137,12 @@ class _HeaderBoxState extends State<HeaderBox> {
                       ),
                     ],
                   ),
-                Text('Linea B', style: TextStyle(color: Colors.white)),
+                if (widget.zone == 'ELL') const SizedBox(width: 32),
+                if (widget.zone == 'ELL')
+                  Text(
+                    'Linea B',
+                    style: TextStyle(color: Colors.white, fontSize: 24),
+                  ),
                 if (widget.zone == 'AIN')
                   Text(
                     "Difetti \nTot. QG2",
@@ -1017,6 +1029,252 @@ class HourlyBarChart extends StatelessWidget {
   final double target;
 
   const HourlyBarChart({
+    super.key,
+    required this.data,
+    required this.hourLabels,
+    required this.target,
+  });
+
+  double _calculateMaxY() {
+    final totals = data.map((e) => e['ok']! + e['ng']!).toList();
+    final maxData =
+        totals.isNotEmpty ? totals.reduce((a, b) => a > b ? a : b) : 0;
+    return maxData.toDouble() + 30; // Add some padding
+  }
+
+  List<BarChartGroupData> _buildBarGroups(double maxY) {
+    return List.generate(data.length, (index) {
+      final ok = data[index]['ok']!;
+      final ng = data[index]['ng']!;
+      final total = ok + ng;
+
+      return BarChartGroupData(
+        x: index,
+        showingTooltipIndicators: [0, 1],
+        barRods: [
+          BarChartRodData(
+            color: Colors.transparent,
+            fromY: 0,
+            toY: total.toDouble(),
+            width: 28,
+            rodStackItems: [
+              if (ok > 0) BarChartRodStackItem(0, ok.toDouble(), Colors.green),
+              if (ng > 0)
+                BarChartRodStackItem(
+                    ok.toDouble(), total.toDouble(), Colors.red),
+            ],
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
+          ),
+        ],
+      );
+    });
+  }
+
+  List<Map<String, dynamic>> computeShiftBandsFromLabels(
+      List<String> hourLabels) {
+    List<Map<String, dynamic>> bands = [];
+    int? startIdx;
+    String? currentShift;
+
+    String getShift(String hourStr) {
+      final hour = int.parse(hourStr.split(':')[0]);
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    for (int i = 0; i < hourLabels.length; i++) {
+      String shift = getShift(hourLabels[i]);
+      if (shift != currentShift) {
+        if (startIdx != null) {
+          bands.add({'start': startIdx, 'end': i - 1, 'shift': currentShift});
+        }
+        startIdx = i;
+        currentShift = shift;
+      }
+    }
+
+    if (startIdx != null && currentShift != null) {
+      bands.add({
+        'start': startIdx,
+        'end': hourLabels.length - 1,
+        'shift': currentShift
+      });
+    }
+
+    return bands;
+  }
+
+  String getCurrentShiftLabel() {
+    final now = TimeOfDay.now();
+    final hour = now.hour;
+    if (hour >= 6 && hour < 14) return 'S1';
+    if (hour >= 14 && hour < 22) return 'S2';
+    return 'S3';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bands = computeShiftBandsFromLabels(hourLabels);
+    final currentShift = getCurrentShiftLabel();
+
+    final maxY = _calculateMaxY();
+
+    return Card(
+      color: Colors.white,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Throughput Cumulativo',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'Target: $target',
+                  style: TextStyle(
+                    color: Colors.orangeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final barSpacing = constraints.maxWidth / hourLabels.length;
+
+                  return Stack(
+                    children: [
+                      // SHIFT BACKGROUND BANDS
+                      for (var band in bands)
+                        Positioned(
+                          left: band['start'] * barSpacing,
+                          width: (band['end'] - band['start'] + 1) * barSpacing,
+                          top: 0,
+                          bottom: 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: band['shift'] == currentShift
+                                  ? Colors.white.withOpacity(0.0)
+                                  : Colors.grey.withOpacity(0.18),
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(8),
+                                bottom: Radius.circular(8),
+                              ),
+                            ),
+                            alignment: Alignment.topLeft,
+                            padding: const EdgeInsets.only(top: 4, left: 8),
+                            child: Text(
+                              switch (band['shift']) {
+                                'S1' => 'Shift 1',
+                                'S2' => 'Shift 2',
+                                'S3' => 'Shift 3',
+                                _ => '',
+                              },
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      // BAR CHART ON TOP
+                      BarChart(
+                        BarChartData(
+                          alignment: BarChartAlignment.spaceAround,
+                          maxY: maxY,
+                          barTouchData: BarTouchData(
+                            enabled: true,
+                            touchTooltipData: BarTouchTooltipData(
+                              getTooltipColor: (_) => Colors.transparent,
+                              tooltipPadding: EdgeInsets.zero,
+                              tooltipMargin: 0,
+                              fitInsideHorizontally: true,
+                              fitInsideVertically: true,
+                              getTooltipItem:
+                                  (group, groupIndex, rod, rodIndex) {
+                                final value = rod.toY.toString();
+                                return BarTooltipItem(
+                                  value,
+                                  const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          titlesData: FlTitlesData(
+                            leftTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            rightTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            topTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (value, meta) {
+                                  final i = value.toInt();
+                                  if (i >= 0 && i < hourLabels.length) {
+                                    return Text(
+                                      hourLabels[i],
+                                      style: const TextStyle(fontSize: 16),
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                },
+                              ),
+                            ),
+                          ),
+                          gridData: FlGridData(show: false),
+                          borderData: FlBorderData(show: false),
+                          barGroups: _buildBarGroups(maxY),
+                          extraLinesData: ExtraLinesData(horizontalLines: [
+                            HorizontalLine(
+                              y: target,
+                              color: Colors.orangeAccent,
+                              strokeWidth: 2,
+                              dashArray: [8, 4],
+                            ),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class HourlyELLBarChart extends StatelessWidget {
+  final List<Map<String, int>> data;
+  final List<String> hourLabels;
+  final double target;
+
+  const HourlyELLBarChart({
     super.key,
     required this.data,
     required this.hourLabels,
@@ -2391,58 +2649,53 @@ class YieldLineChart extends StatelessWidget {
   }
 }
 
-class YieldELLLineChart_RWK extends StatelessWidget {
-  final List<Map<String, dynamic>> hourlyData1;
+class YieldELLLineChart extends StatelessWidget {
+  final List<Map<String, dynamic>> hourlyData_FPY;
+  final List<Map<String, dynamic>> hourlyData_RWK;
   final double target;
 
-  const YieldELLLineChart_RWK({
+  const YieldELLLineChart({
     super.key,
-    required this.hourlyData1,
+    required this.hourlyData_FPY,
+    required this.hourlyData_RWK,
     required this.target,
   });
 
-  List<Map<String, dynamic>> computeShiftBands(
-      List<Map<String, dynamic>> data) {
-    List<Map<String, dynamic>> bands = [];
-    int? startIdx;
-    String? currentShift;
-
-    String getShift(String hourStr) {
-      final hour = int.parse(hourStr.split(':')[0]);
-      if (hour >= 6 && hour < 14) return 'S1';
-      if (hour >= 14 && hour < 22) return 'S2';
-      return 'S3';
-    }
-
-    for (int i = 0; i < data.length; i++) {
-      String shift = getShift(data[i]['hour']);
-      if (shift != currentShift) {
-        if (startIdx != null && currentShift != null) {
-          bands.add({
-            'start': startIdx,
-            'end': i - 1,
-            'shift': currentShift,
-          });
-        }
-        startIdx = i;
-        currentShift = shift;
-      }
-    }
-
-    if (startIdx != null && currentShift != null) {
-      bands.add({
-        'start': startIdx,
-        'end': data.length - 1,
-        'shift': currentShift,
-      });
-    }
-
-    return bands;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final int length = hourlyData1.length;
+    final length = hourlyData_FPY.length; // assume same length for both
+
+    List<Map<String, dynamic>> computeShiftBands(
+        List<Map<String, dynamic>> data) {
+      List<Map<String, dynamic>> bands = [];
+      int? startIdx;
+      String? currentShift;
+
+      String getShift(String hourStr) {
+        final hour = int.parse(hourStr.split(':')[0]);
+        if (hour >= 6 && hour < 14) return 'S1';
+        if (hour >= 14 && hour < 22) return 'S2';
+        return 'S3';
+      }
+
+      for (int i = 0; i < data.length; i++) {
+        String shift = getShift(data[i]['hour']);
+        if (shift != currentShift) {
+          if (startIdx != null && currentShift != null) {
+            bands.add({'start': startIdx, 'end': i - 1, 'shift': currentShift});
+          }
+          startIdx = i;
+          currentShift = shift;
+        }
+      }
+
+      if (startIdx != null && currentShift != null) {
+        bands.add(
+            {'start': startIdx, 'end': data.length - 1, 'shift': currentShift});
+      }
+
+      return bands;
+    }
 
     String getCurrentShiftLabel() {
       final now = TimeOfDay.now();
@@ -2453,13 +2706,14 @@ class YieldELLLineChart_RWK extends StatelessWidget {
     }
 
     final currentShift = getCurrentShiftLabel();
-    final shiftBands = computeShiftBands(hourlyData1);
+    final shiftBands =
+        computeShiftBands(hourlyData_FPY); // based on data1 timing
 
     final shiftAnnotations = shiftBands.map((band) {
       final isCurrent = band['shift'] == currentShift;
       final color = isCurrent
-          ? Colors.white.withOpacity(0.0) // no overlay = white background
-          : Colors.grey.withOpacity(0.15); // light grey overlay
+          ? Colors.white.withOpacity(0.0) // transparent for current shift
+          : Colors.grey.withOpacity(0.18); // light grey for others
 
       return VerticalRangeAnnotation(
         x1: band['start'].toDouble(),
@@ -2472,24 +2726,24 @@ class YieldELLLineChart_RWK extends StatelessWidget {
       isCurved: false,
       show: true,
       spots: List.generate(
-        hourlyData1.length,
-        (i) => FlSpot(i.toDouble(), (hourlyData1[i]['yield'] ?? 0).toDouble()),
+        hourlyData_FPY.length,
+        (i) =>
+            FlSpot(i.toDouble(), (hourlyData_FPY[i]['yield'] ?? 0).toDouble()),
       ),
       color: Colors.blue.shade900,
       barWidth: 2,
       dotData: FlDotData(show: true),
     );
 
-    final targetLine = LineChartBarData(
-      spots: List.generate(
-        length,
-        (i) => FlSpot(i.toDouble(), target),
-      ),
-      color: Colors.orange,
-      isStrokeCapRound: true,
-      barWidth: 2,
+    final line2 = LineChartBarData(
       isCurved: false,
-      dashArray: [6, 4],
+      spots: List.generate(
+        hourlyData_RWK.length,
+        (i) =>
+            FlSpot(i.toDouble(), (hourlyData_RWK[i]['yield'] ?? 0).toDouble()),
+      ),
+      color: Colors.lightBlue.shade200,
+      barWidth: 2,
       dotData: FlDotData(show: false),
     );
 
@@ -2507,13 +2761,13 @@ class YieldELLLineChart_RWK extends StatelessWidget {
                 children: [
                   const SizedBox(width: 8),
                   const Text(
-                    'Yield Oraria con ReWork',
+                    'Yield Oraria Cumulata',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
                   Text(
                     'Target: $target%',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.orangeAccent,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -2525,28 +2779,43 @@ class YieldELLLineChart_RWK extends StatelessWidget {
               Expanded(
                 child: LineChart(
                   LineChartData(
-                    minY: 0,
-                    maxY: 140,
                     rangeAnnotations: RangeAnnotations(
                       verticalRangeAnnotations: shiftAnnotations,
                     ),
+                    minY: 0,
+                    maxY: 140,
                     lineTouchData: LineTouchData(
                       enabled: true,
                       handleBuiltInTouches: false,
                       touchTooltipData: LineTouchTooltipData(
-                        getTooltipColor: (_) => Colors.transparent,
-                        tooltipRoundedRadius: 0,
+                        getTooltipColor: (_) =>
+                            Colors.transparent, // transparent background
+                        tooltipRoundedRadius: 0, // no border radius (optional)
                         tooltipPadding: EdgeInsets.zero,
                         tooltipMargin: 8,
                         getTooltipItems: (spots) {
                           return spots.map((spot) {
-                            if (spot.barIndex == 1) {
-                              return null; // skip target line
+                            if (spot.barIndex == 2) {
+                              // Skip the target line
+                              return null;
                             }
+
+                            Color color;
+                            switch (spot.barIndex) {
+                              case 0:
+                                color = Colors.blue.shade900;
+                                break;
+                              case 1:
+                                color = Colors.lightBlue.shade200;
+                                break;
+                              default:
+                                color = Colors.black;
+                            }
+
                             return LineTooltipItem(
                               '${spot.y.toInt()}%',
                               TextStyle(
-                                color: Colors.blue.shade900,
+                                color: color,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 10,
                               ),
@@ -2565,12 +2834,12 @@ class YieldELLLineChart_RWK extends StatelessWidget {
                           getTitlesWidget: (value, meta) {
                             final index = value.toInt();
                             if (index >= 0 &&
-                                index < hourlyData1.length &&
+                                index < hourlyData_FPY.length &&
                                 value == index.toDouble()) {
                               return SideTitleWidget(
                                 meta: meta,
                                 child: Text(
-                                  hourlyData1[index]['hour'],
+                                  hourlyData_FPY[index]['hour'],
                                   style: const TextStyle(fontSize: 12),
                                 ),
                               );
@@ -2579,12 +2848,10 @@ class YieldELLLineChart_RWK extends StatelessWidget {
                           },
                         ),
                       ),
-                      topTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
+                      topTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     ),
                     gridData: FlGridData(
                       show: true,
@@ -2602,263 +2869,69 @@ class YieldELLLineChart_RWK extends StatelessWidget {
                         bottom: BorderSide(),
                       ),
                     ),
-                    showingTooltipIndicators: List.generate(length, (index) {
-                      return ShowingTooltipIndicators([
-                        LineBarSpot(
-                          line1,
-                          0,
-                          FlSpot(
-                            index.toDouble(),
-                            (hourlyData1[index]['yield'] ?? 0).toDouble(),
+                    showingTooltipIndicators: [
+                      ...List.generate(length, (index) {
+                        return ShowingTooltipIndicators([
+                          LineBarSpot(
+                            line1,
+                            0,
+                            FlSpot(
+                              index.toDouble(),
+                              (hourlyData_FPY[index]['yield'] ?? 0).toDouble(),
+                            ),
                           ),
-                        ),
-                      ]);
-                    }),
+                          LineBarSpot(
+                            line2,
+                            1,
+                            FlSpot(
+                              index.toDouble(),
+                              (hourlyData_RWK[index]['yield'] ?? 0).toDouble(),
+                            ),
+                          ),
+                        ]);
+                      }),
+                    ],
                     lineBarsData: [
-                      line1, // barIndex 0
-                      targetLine, // barIndex 1
+                      LineChartBarData(
+                        isCurved: false,
+                        spots: List.generate(
+                          hourlyData_FPY.length,
+                          (i) => FlSpot(i.toDouble(),
+                              (hourlyData_FPY[i]['yield'] ?? 0).toDouble()),
+                        ),
+                        color: Colors.blue.shade900,
+                        barWidth: 2,
+                        dotData: FlDotData(show: true),
+                      ),
+                      LineChartBarData(
+                        isCurved: false,
+                        show: true,
+                        spots: List.generate(
+                          hourlyData_RWK.length,
+                          (i) => FlSpot(i.toDouble(),
+                              (hourlyData_RWK[i]['yield'] ?? 0).toDouble()),
+                        ),
+                        color: Colors.lightBlue.shade200,
+                        barWidth: 2,
+                        dotData: FlDotData(show: false),
+                      ),
+                      LineChartBarData(
+                        spots: List.generate(
+                          length,
+                          (i) => FlSpot(i.toDouble(), target),
+                        ),
+                        color: Colors.orange,
+                        isStrokeCapRound: true,
+                        barWidth: 2,
+                        isCurved: false,
+                        dashArray: [6, 4],
+                        dotData: FlDotData(show: false),
+                      ),
                     ],
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class YieldELLLineChart_FPY extends StatelessWidget {
-  final List<Map<String, dynamic>> hourlyData1;
-  final double target;
-
-  const YieldELLLineChart_FPY({
-    super.key,
-    required this.hourlyData1,
-    required this.target,
-  });
-
-  List<Map<String, dynamic>> computeShiftBands(
-      List<Map<String, dynamic>> data) {
-    List<Map<String, dynamic>> bands = [];
-    int? startIdx;
-    String? currentShift;
-
-    String getShift(String hourStr) {
-      final hour = int.parse(hourStr.split(':')[0]);
-      if (hour >= 6 && hour < 14) return 'S1';
-      if (hour >= 14 && hour < 22) return 'S2';
-      return 'S3';
-    }
-
-    for (int i = 0; i < data.length; i++) {
-      String shift = getShift(data[i]['hour']);
-      if (shift != currentShift) {
-        if (startIdx != null && currentShift != null) {
-          bands.add({
-            'start': startIdx,
-            'end': i - 1,
-            'shift': currentShift,
-          });
-        }
-        startIdx = i;
-        currentShift = shift;
-      }
-    }
-
-    if (startIdx != null && currentShift != null) {
-      bands.add({
-        'start': startIdx,
-        'end': data.length - 1,
-        'shift': currentShift,
-      });
-    }
-
-    return bands;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final int length = hourlyData1.length;
-
-    String getCurrentShiftLabel() {
-      final now = TimeOfDay.now();
-      final hour = now.hour;
-      if (hour >= 6 && hour < 14) return 'S1';
-      if (hour >= 14 && hour < 22) return 'S2';
-      return 'S3';
-    }
-
-    final currentShift = getCurrentShiftLabel();
-    final shiftBands = computeShiftBands(hourlyData1);
-
-    final shiftAnnotations = shiftBands.map((band) {
-      final isCurrent = band['shift'] == currentShift;
-      final color = isCurrent
-          ? Colors.white.withOpacity(0.0) // no overlay = white background
-          : Colors.grey.withOpacity(0.15); // light grey overlay
-
-      return VerticalRangeAnnotation(
-        x1: band['start'].toDouble(),
-        x2: band['end'].toDouble() + 1,
-        color: color,
-      );
-    }).toList();
-
-    final line1 = LineChartBarData(
-      isCurved: false,
-      show: true,
-      spots: List.generate(
-        hourlyData1.length,
-        (i) => FlSpot(i.toDouble(), (hourlyData1[i]['yield'] ?? 0).toDouble()),
-      ),
-      color: Colors.blue.shade900,
-      barWidth: 2,
-      dotData: FlDotData(show: true),
-    );
-
-    final targetLine = LineChartBarData(
-      spots: List.generate(
-        length,
-        (i) => FlSpot(i.toDouble(), target),
-      ),
-      color: Colors.orange,
-      isStrokeCapRound: true,
-      barWidth: 2,
-      isCurved: false,
-      dashArray: [6, 4],
-      dotData: FlDotData(show: false),
-    );
-
-    return Expanded(
-      child: Card(
-        color: Colors.white,
-        elevation: 6,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const SizedBox(width: 8),
-                  const Text(
-                    'FPY',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Target: $target%',
-                    style: const TextStyle(
-                      color: Colors.orangeAccent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: LineChart(
-                  LineChartData(
-                    minY: 0,
-                    maxY: 140,
-                    rangeAnnotations: RangeAnnotations(
-                      verticalRangeAnnotations: shiftAnnotations,
-                    ),
-                    lineTouchData: LineTouchData(
-                      enabled: true,
-                      handleBuiltInTouches: false,
-                      touchTooltipData: LineTouchTooltipData(
-                        getTooltipColor: (_) => Colors.transparent,
-                        tooltipRoundedRadius: 0,
-                        tooltipPadding: EdgeInsets.zero,
-                        tooltipMargin: 8,
-                        getTooltipItems: (spots) {
-                          return spots.map((spot) {
-                            if (spot.barIndex == 1) {
-                              return null; // skip target line
-                            }
-                            return LineTooltipItem(
-                              '${spot.y.toInt()}%',
-                              TextStyle(
-                                color: Colors.blue.shade900,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10,
-                              ),
-                            );
-                          }).toList();
-                        },
-                      ),
-                    ),
-                    titlesData: FlTitlesData(
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            final index = value.toInt();
-                            if (index >= 0 &&
-                                index < hourlyData1.length &&
-                                value == index.toDouble()) {
-                              return SideTitleWidget(
-                                meta: meta,
-                                child: Text(
-                                  hourlyData1[index]['hour'],
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ),
-                      topTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                    ),
-                    gridData: FlGridData(
-                      show: true,
-                      drawVerticalLine: true,
-                      horizontalInterval: 20,
-                      getDrawingHorizontalLine: (value) => FlLine(
-                        color: Colors.grey.withOpacity(0.2),
-                        strokeWidth: 1,
-                      ),
-                    ),
-                    borderData: FlBorderData(
-                      show: true,
-                      border: const Border(
-                        left: BorderSide(),
-                        bottom: BorderSide(),
-                      ),
-                    ),
-                    showingTooltipIndicators: List.generate(length, (index) {
-                      return ShowingTooltipIndicators([
-                        LineBarSpot(
-                          line1,
-                          0,
-                          FlSpot(
-                            index.toDouble(),
-                            (hourlyData1[index]['yield'] ?? 0).toDouble(),
-                          ),
-                        ),
-                      ]);
-                    }),
-                    lineBarsData: [
-                      line1, // barIndex 0
-                      targetLine, // barIndex 1
-                    ],
-                  ),
-                ),
-              ),
+              const SizedBox(height: 8),
             ],
           ),
         ),

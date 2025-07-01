@@ -573,9 +573,12 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                     ),
                     const SizedBox(height: 8),
                     // Second row with 1 card that fills all remaining space
-                    YieldELLLineChart_FPY(
-                      hourlyData1: widget.FPYLast8h,
-                      target: yield_target as double,
+                    Flexible(
+                      child: HourlyELLBarChart(
+                        data: widget.hourlyData,
+                        hourLabels: widget.hourLabels,
+                        target: hourly_shift_target,
+                      ),
                     ),
                   ],
                 ),
@@ -784,8 +787,9 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                     ),
                     const SizedBox(height: 8),
                     // Second row with 1 card that fills all remaining space
-                    YieldELLLineChart_RWK(
-                      hourlyData1: widget.RWKLast8h,
+                    YieldELLLineChart(
+                      hourlyData_FPY: widget.FPYLast8h,
+                      hourlyData_RWK: widget.RWKLast8h,
                       target: yield_target as double,
                     ),
                   ],
@@ -886,19 +890,8 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
         // ────── SECOND HEADER ROW ──────
         Row(
           children: [
-            // LEFT SIDE – UPTIME/DOWNTIME
-            Flexible(
-              flex: 2,
-              child: HeaderBox(
-                title: 'UPTIME/DOWNTIME Shift',
-                target: '',
-                icon: Icons.timer_outlined,
-              ),
-            ),
-
             // RIGHT SIDE – Pareto + NG Card
             Flexible(
-              flex: 3,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -922,93 +915,6 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
         Row(
           children: [
             Flexible(
-              flex: 2,
-              child: Container(
-                height: 400,
-                margin: const EdgeInsets.only(right: 6, bottom: 16),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Expanded(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  border:
-                                      Border.all(color: Colors.black, width: 1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Table(
-                                    border: TableBorder.all(
-                                        color: Colors.black, width: 0.5),
-                                    columnWidths: const {
-                                      0: FlexColumnWidth(2),
-                                      1: FlexColumnWidth(1),
-                                      2: FlexColumnWidth(1),
-                                      3: FlexColumnWidth(1),
-                                    },
-                                    children: [
-                                      const TableRow(
-                                        decoration:
-                                            BoxDecoration(color: Colors.white),
-                                        children: [
-                                          Padding(
-                                            padding: EdgeInsets.all(8),
-                                            child: Text("Tipo \nFermata",
-                                                style: TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                          ),
-                                          Padding(
-                                            padding: EdgeInsets.all(8),
-                                            child: Text("Macchina",
-                                                style: TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                          ),
-                                          Padding(
-                                            padding: EdgeInsets.all(4),
-                                            child: Text("Frequenza",
-                                                style: TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                          ),
-                                          Padding(
-                                            padding: EdgeInsets.all(8),
-                                            child: Text("Fermo Cumulato (min)",
-                                                style: TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                          ),
-                                        ],
-                                      ),
-                                      ...buildCustomRows(widget.dataFermi),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Flexible(
-              flex: 3,
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: 400, // ← set your maximum height here
@@ -1038,9 +944,9 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            /*Expanded(
+                            Expanded(
                               child: BufferChart(),
-                            ),*/
+                            ),
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 4.0),
                               child: Text(

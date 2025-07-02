@@ -29,8 +29,8 @@ def extract_InterconnectionGlassDistance(root):
         right = distances_by_row[row]["right"]
 
         result[str(row)] = {
-            "left": mean(left) if left else None,
-            "right": mean(right) if right else None,
+            "left": round(mean(left), 1) if left else None,
+            "right": round(mean(right), 1) if right else None,
         }
     
     return {"interconnection_ribbon": result}
@@ -72,7 +72,7 @@ def extract_InterconnectionCellDistance(root: Element) -> dict:
         for key in ("y0", "y9", "y10", "y19"):
             vals = raw[row][key]
             row_dict[key] = {
-                "avg": round(mean(vals), 3) if vals else None
+                "avg": round(mean(vals), 1) if vals else None
             }
         result[str(row)] = row_dict
     
@@ -110,7 +110,7 @@ def extract_RelativeCellPosition(root: ET.Element) -> dict:
                 vertical[col][row_above].append(float(posX))
 
     def mean_all(vals: list[float]) -> float | None:
-        return round(mean(vals), 3) if vals else None
+        return round(mean(vals), 1) if vals else None
 
     horiz_result = {
         str(row): [mean_all(horizontal[row][col]) for col in range(20)]
@@ -171,7 +171,7 @@ def extract_GlassCellDistance(root: ET.Element) -> dict:
             continue
 
     def avg(vals: list[float]) -> float | None:
-        return round(mean(vals), 3) if vals else None
+        return round(mean(vals), 1) if vals else None
 
     top_row    = [avg(raw_top[c])    for c in range(20)]
     bottom_row = [avg(raw_bottom[c]) for c in range(20)]

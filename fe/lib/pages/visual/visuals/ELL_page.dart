@@ -1,6 +1,7 @@
 // ignore_for_file: must_be_immutable, non_constant_identifier_names, file_names
 
 import 'package:flutter/material.dart';
+import 'package:gauge_indicator/gauge_indicator.dart';
 import 'package:ix_monitor/pages/visual/visual_widgets.dart';
 import '../../../shared/services/api_service.dart';
 import '../escalation_visual.dart';
@@ -40,6 +41,7 @@ class EllVisualsPage extends StatefulWidget {
   final List<Map<String, dynamic>> FPY_yield_shifts;
   final List<Map<String, dynamic>> RWK_yield_shifs;
   final int last_n_shifts;
+  final List<Map<String, dynamic>> bufferDefectSummary;
 
   const EllVisualsPage({
     super.key,
@@ -77,6 +79,7 @@ class EllVisualsPage extends StatefulWidget {
     required this.FPY_yield_shifts,
     required this.RWK_yield_shifs,
     required this.last_n_shifts,
+    required this.bufferDefectSummary,
   });
 
   @override
@@ -890,8 +893,18 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
         // ────── SECOND HEADER ROW ──────
         Row(
           children: [
+            Flexible(
+              flex: 3,
+              child: HeaderBox(
+                title: 'Dettaglio ReWork',
+                target: '',
+                icon: Icons.emoji_people_sharp,
+              ),
+            ),
+
             // RIGHT SIDE – Pareto + NG Card
             Flexible(
+              flex: 4,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -930,6 +943,257 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                     children: [
                       Flexible(
                         flex: 3,
+                        child: Container(
+                          height: 400,
+                          margin: const EdgeInsets.only(right: 6, bottom: 16),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              // LEFT COLUMN (2 stacked rows)
+                              Flexible(
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Card(
+                                            elevation: 10,
+                                            color: Colors.white,
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Text(
+                                                    'Available \nTime\nAIN1',
+                                                    style: TextStyle(
+                                                      fontSize: 28,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.black87,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 16),
+                                                  Column(
+                                                    children: [
+                                                      SizedBox(
+                                                        width:
+                                                            200, // radius * 2
+                                                        child: Column(
+                                                          children: [
+                                                            AnimatedRadialGauge(
+                                                              duration:
+                                                                  const Duration(
+                                                                      milliseconds:
+                                                                          800),
+                                                              curve: Curves
+                                                                  .easeInOut,
+                                                              value:
+                                                                  26.0, //TODO
+                                                              radius: 100,
+                                                              axis: GaugeAxis(
+                                                                min: 0,
+                                                                max: 100,
+                                                                degrees: 180,
+                                                                style:
+                                                                    const GaugeAxisStyle(
+                                                                  thickness: 16,
+                                                                  background: Color(
+                                                                      0xFFDDDDDD),
+                                                                  segmentSpacing:
+                                                                      0,
+                                                                ),
+                                                                progressBar:
+                                                                    GaugeRoundedProgressBar(
+                                                                  color: () {
+                                                                    if (26.0 <=
+                                                                        50) {
+                                                                      return widget
+                                                                          .errorColor;
+                                                                    }
+                                                                    if (26.0 <=
+                                                                        75) {
+                                                                      return widget
+                                                                          .warningColor;
+                                                                    }
+                                                                    return widget
+                                                                        .okColor;
+                                                                  }(),
+                                                                ),
+                                                              ),
+                                                              builder: (context,
+                                                                  child,
+                                                                  value) {
+                                                                return Center(
+                                                                  child: Text(
+                                                                    '${value.toInt()}%',
+                                                                    style:
+                                                                        const TextStyle(
+                                                                      fontSize:
+                                                                          32,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold,
+                                                                    ),
+                                                                  ),
+                                                                );
+                                                              },
+                                                            ),
+                                                            const SizedBox(
+                                                                height: 6),
+                                                            const Row(
+                                                              mainAxisAlignment:
+                                                                  MainAxisAlignment
+                                                                      .spaceBetween,
+                                                              children: [
+                                                                Text('0%',
+                                                                    style: TextStyle(
+                                                                        fontSize:
+                                                                            14)),
+                                                                Text('100%',
+                                                                    style: TextStyle(
+                                                                        fontSize:
+                                                                            14)),
+                                                              ],
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  )
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Flexible(
+                                          child: Card(
+                                            elevation: 10,
+                                            color: Colors.white,
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  const Text(
+                                                    'Available \nTime\nAIN2',
+                                                    style: TextStyle(
+                                                      fontSize: 28,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.black87,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 16),
+                                                  Column(
+                                                    children: [
+                                                      SizedBox(
+                                                        width:
+                                                            200, // radius * 2
+                                                        child: Column(
+                                                          children: [
+                                                            AnimatedRadialGauge(
+                                                              duration:
+                                                                  const Duration(
+                                                                      milliseconds:
+                                                                          800),
+                                                              curve: Curves
+                                                                  .easeInOut,
+                                                              value:
+                                                                  26.0, //TODO
+                                                              radius: 100,
+                                                              axis: GaugeAxis(
+                                                                min: 0,
+                                                                max: 100,
+                                                                degrees: 180,
+                                                                style:
+                                                                    const GaugeAxisStyle(
+                                                                  thickness: 16,
+                                                                  background: Color(
+                                                                      0xFFDDDDDD),
+                                                                  segmentSpacing:
+                                                                      0,
+                                                                ),
+                                                                progressBar:
+                                                                    GaugeRoundedProgressBar(
+                                                                  color: () {
+                                                                    if (26.0 <=
+                                                                        50) {
+                                                                      return widget
+                                                                          .errorColor;
+                                                                    }
+                                                                    if (26.0 <=
+                                                                        75) {
+                                                                      return widget
+                                                                          .warningColor;
+                                                                    }
+                                                                    return widget
+                                                                        .okColor;
+                                                                  }(),
+                                                                ),
+                                                              ),
+                                                              builder: (context,
+                                                                  child,
+                                                                  value) {
+                                                                return Center(
+                                                                  child: Text(
+                                                                    '${value.toInt()}%',
+                                                                    style:
+                                                                        const TextStyle(
+                                                                      fontSize:
+                                                                          32,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold,
+                                                                    ),
+                                                                  ),
+                                                                );
+                                                              },
+                                                            ),
+                                                            const SizedBox(
+                                                                height: 6),
+                                                            const Row(
+                                                              mainAxisAlignment:
+                                                                  MainAxisAlignment
+                                                                      .spaceBetween,
+                                                              children: [
+                                                                Text('0%',
+                                                                    style: TextStyle(
+                                                                        fontSize:
+                                                                            14)),
+                                                                Text('100%',
+                                                                    style: TextStyle(
+                                                                        fontSize:
+                                                                            14)),
+                                                              ],
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  )
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Flexible(
+                        flex: 4,
                         child: TopDefectsRMIHorizontalBarChart(
                           defectLabels: widget.defectLabels,
                           min1Counts: widget.min1Counts,
@@ -937,7 +1201,6 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                           ellCounts: widget.ellCounts,
                         ),
                       ),
-                      const SizedBox(width: 8),
                       // RIGHT COLUMN (1 full-height card)
                       Flexible(
                         flex: 2,
@@ -945,7 +1208,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Expanded(
-                              child: BufferChart(),
+                              child: BufferChart(widget.bufferDefectSummary),
                             ),
                             Padding(
                               padding: EdgeInsets.symmetric(horizontal: 4.0),

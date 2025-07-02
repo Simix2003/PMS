@@ -69,14 +69,20 @@
         "bit": 1,
         "byte": 200
     },
+    "re_entered_from_m326": {
+        "db": 19606,
+        "bit": 3,
+        "byte": 201
+    },
     "pezzo_salvato_su_DB_con_inizio_ciclo": {
         "db": 19606,
         "bit": 7,
         "byte": 1000
     },
-    "re_entered_from_m326": {
+    "reWorkBufferIds": {
         "db": 19606,
-        "bit": 3,
-        "byte": 201
+        "byte": 202,
+        "length": 21,
+        "string_length": 20
     }
 }

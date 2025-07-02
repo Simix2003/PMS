@@ -7,7 +7,7 @@ import sys
 import copy
 from collections import defaultdict
 from threading import RLock 
-from typing import Dict, DefaultDict, Any, Optional
+from typing import Dict, DefaultDict, Any, List, Optional
 import json
 from statistics import median
 
@@ -949,7 +949,8 @@ def update_visual_data_on_new_module(
     esito: int,
     ts: datetime,
     cycle_time: Optional[str] = None,
-    reentered: bool = False
+    reentered: bool = False,
+    bufferIds: List[str] = []
 ) -> None:
     if zone not in global_state.visual_data:
         global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
@@ -969,7 +970,7 @@ def update_visual_data_on_new_module(
         elif zone == "AIN":
             _update_snapshot_ain(data, station_name, esito, ts)
         elif zone == "ELL":
-            _update_snapshot_ell(data, ts)
+            _update_snapshot_ell(data, ts, bufferIds)
         else:
             logger.warning(f"Unknown zone: {zone}")
             return
@@ -1185,10 +1186,12 @@ def _update_snapshot_vpf(
         except Exception as e:
             logger.warning(f"Failed to parse cycle_time '{cycle_time}': {e}")
 
-def _update_snapshot_ell(data: dict, ts: datetime) -> None:
+def _update_snapshot_ell(data: dict, ts: datetime, bufferIds: List[str]) -> None:
     cfg = ZONE_SOURCES["ELL"]
     current_shift_start, current_shift_end = get_shift_window(ts)
     current_shift_label = get_shift_label(ts)
+
+    print('bufferIds', bufferIds)
 
     try:
         conn = get_mysql_connection()
@@ -1351,6 +1354,104 @@ def _update_snapshot_ell(data: dict, ts: datetime) -> None:
         cursor.execute(sql_reentered, (current_shift_start, current_shift_end))
         result = cursor.fetchone()
         data["station_1_re_entered"] = result["re_entered"] if result else 0
+
+        # === BUFFER ID DEFECT TRACE ===
+        if bufferIds:
+            print("🔍 Buffer IDs (id_modulo):", bufferIds)
+
+            # Step 1: Map id_modulo → objects.id
+            format_strings = ','.join(['%s'] * len(bufferIds))
+            sql_obj_ids = f"""
+                SELECT id, id_modulo
+                FROM objects
+                WHERE id_modulo IN ({format_strings})
+            """
+            cursor.execute(sql_obj_ids, bufferIds)
+            object_rows = cursor.fetchall()
+            print(f"🔄 Object ID Mapping from id_modulo ({len(object_rows)} found):")
+            for row in object_rows:
+                print("🧱", row)
+
+            modulo_to_oid = {row["id_modulo"]: row["id"] for row in object_rows}
+            object_ids = list(modulo_to_oid.values())
+
+            if object_ids:
+                # Step 2: Find recent production with esito = 6
+                format_strings = ','.join(['%s'] * len(object_ids))
+                sql_pids = f"""
+                    SELECT id, object_id
+                    FROM productions
+                    WHERE object_id IN ({format_strings})
+                    AND esito = 6
+                    ORDER BY start_time DESC
+                """
+                cursor.execute(sql_pids, object_ids)
+                production_rows = cursor.fetchall()
+                print(f"✅ Found {len(production_rows)} productions with esito=6")
+                for row in production_rows:
+                    print("➡️ Production Row:", row)
+
+                # Step 3: Build mapping: id_modulo → production_id
+                oid_to_modulo = {v: k for k, v in modulo_to_oid.items()}
+                buffer_productions = {
+                    oid_to_modulo[row["object_id"]]: row["id"]
+                    for row in production_rows
+                    if row["object_id"] in oid_to_modulo
+                }
+                print("🧭 Buffer Productions Mapping (id_modulo → production_id):", buffer_productions)
+
+                if buffer_productions:
+                    prod_ids = tuple(buffer_productions.values())
+                    print("📦 Production IDs for defect fetch:", prod_ids)
+
+                    sql_defects_buffer = f"""
+                        SELECT od.production_id, od.defect_id,
+                            COALESCE(
+                                CASE WHEN od.defect_id = 1 THEN od.defect_type ELSE d.category END,
+                                'Sconosciuto'
+                            ) AS defect_type,
+                            od.extra_data
+                        FROM object_defects od
+                        LEFT JOIN defects d ON od.defect_id = d.id
+                        WHERE od.production_id IN %s
+                    """
+                    cursor.execute(sql_defects_buffer, (prod_ids,))
+                    defect_rows = cursor.fetchall()
+                    print(f"🐞 Found {len(defect_rows)} defects")
+                    for row in defect_rows:
+                        print("⚠️ Defect Row:", row)
+
+                    # Step 4: Map back to id_modulo
+                    defect_by_object = defaultdict(list)
+                    pid_to_modulo = {v: k for k, v in buffer_productions.items()}
+
+                    for row in defect_rows:
+                        mid = pid_to_modulo.get(row["production_id"])
+                        if mid:
+                            defect_by_object[mid].append({
+                                "defect_id": row["defect_id"],
+                                "defect_type": row["defect_type"],
+                                "extra_data": row["extra_data"] or ""
+                            })
+
+                    data["buffer_defect_summary"] = [
+                        {
+                            "object_id": mid,
+                            "production_id": buffer_productions[mid],
+                            "defects": defect_by_object.get(mid, [])
+                        }
+                        for mid in buffer_productions.keys()
+                    ]
+                else:
+                    print("⚠️ No matching production rows found with esito=6")
+                    data["buffer_defect_summary"] = []
+            else:
+                print("⚠️ No matching object IDs found for bufferIds")
+                data["buffer_defect_summary"] = []
+
+            print("📋 Final buffer_defect_summary:")
+            for entry in data["buffer_defect_summary"]:
+                print(entry)
 
     except Exception as e:
         logger.warning(f"[ELL] Failed to refresh snapshot from DB: {e}")

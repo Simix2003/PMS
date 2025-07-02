@@ -905,6 +905,7 @@ class ApiService {
         'last_8h_throughput': data['last_8h_throughput'] ?? [],
         'fermi_data': data['fermi_data'] ?? [],
         'top_defects': data['top_defects'] ?? [],
+        'buffer_ids': data['buffer_ids'] ?? [],
       };
     } else {
       throw Exception('Failed to load ELL visual data');

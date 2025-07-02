@@ -6,6 +6,8 @@ import os
 import sys
 from typing import Optional
 
+from requests import get
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection, insert_defects, insert_initial_production_data, update_production_final
@@ -127,6 +129,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
 
             if (fine_buona or fine_scarto) and not passato_flags[full_station_id]:
                 data_inizio = trigger_timestamps.get(full_station_id)
+                bufferIds = []
                 result = await read_data(plc_connection, line_name, channel_id,
                                         richiesta_ok=fine_buona,
                                         richiesta_ko=fine_scarto,
@@ -136,8 +139,13 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                         )
                 
                 if result:
+                    bufferIds = result.get("bufferIds", [])
+                    #We should fake the buffer id with a MySQL query to find the module_id 
+                    bufferIds = ["3SBHBGHC25620697", "3SBHBGHC25614686", "3SBHBGHC25620697"]
+                    ###################################################################################################
                     passato_flags[full_station_id] = True
                     production_id = incomplete_productions.get(full_station_id)
+                    
                     if production_id:
                         conn = get_mysql_connection()
                         success, final_esito, end_time = await update_production_final(
@@ -178,7 +186,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                         esito=final_esito,
                                         ts=timestamp,
                                         cycle_time=result['Tempo_Ciclo'],
-                                        reentered=reentered
+                                        reentered=reentered,
+                                        bufferIds=bufferIds
                                     )
 
                                     if zone == "AIN" and fine_scarto:
@@ -450,6 +459,19 @@ async def read_data(
                 data['MBJ_Defects'] = mbj_details
             else:
                 logger.debug(f"[{full_id}] No MBJ XML found for {data['Id_Modulo']} — continuing without it")
+
+        # Step 13: Read the BufferIds for Rework (array of 21 strings)
+        rwk_id = config["reWorkBufferIds"]
+        base_byte = rwk_id["byte"]
+        num_strings = rwk_id["length"]
+        string_len = rwk_id.get("string_length", 20)  # default to 20 if not defined
+
+        values = [
+            extract_string(buffer, base_byte + i * (string_len + 2), string_len, start_byte)
+            for i in range(num_strings)
+        ]
+
+        data["BufferIds_Rework"] = values
 
         return data
 

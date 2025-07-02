@@ -85,6 +85,7 @@ class _VisualPageState extends State<VisualPage> {
   List<Map<String, dynamic>> defectsVPF = [];
   Map<String, Map<String, int>> eqDefects = {};
   List<int> VPFCounts = [];
+  List<Map<String, dynamic>> bufferDefectSummary = [];
 
   int In_2 = 0;
   int ngScrap = 0;
@@ -610,6 +611,9 @@ class _VisualPageState extends State<VisualPage> {
             min2Counts.add(int.tryParse(defect['min2'].toString()) ?? 0);
             ellCounts.add(int.tryParse(defect['ell'].toString()) ?? 0);
           }
+
+          bufferDefectSummary = List<Map<String, dynamic>>.from(
+            data['buffer_defect_summary'] ?? []);
         });
       },
       onDone: () => print("Visual WebSocket closed"),
@@ -776,6 +780,7 @@ class _VisualPageState extends State<VisualPage> {
                             FPY_yield_shifts: FPY_yield_shifts,
                             RWK_yield_shifs: RWK_yield_shifs,
                             last_n_shifts: last_n_shifts,
+                            bufferDefectSummary: bufferDefectSummary,
                           )
                         : const Center(
                             child: Text(

@@ -93,6 +93,37 @@ class _HeaderBoxState extends State<HeaderBox> {
             Text(
               'Linea B',
               style: TextStyle(color: Colors.white, fontSize: 24),
+            ),
+          if (widget.title == 'Dettaglio ReWork')
+            Row(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      formattedDate,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      formattedTime,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 32),
+                Text(
+                  'Linea B',
+                  style: const TextStyle(color: Colors.white, fontSize: 24),
+                ),
+              ],
             )
           else if (widget.title == 'Produzione Shift')
             Container(
@@ -117,32 +148,6 @@ class _HeaderBoxState extends State<HeaderBox> {
           else if (widget.title == 'Pareto Shift')
             Row(
               children: [
-                if (widget.zone == 'ELL')
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        formattedDate,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        formattedTime,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                if (widget.zone == 'ELL') const SizedBox(width: 32),
-                if (widget.zone == 'ELL')
-                  Text(
-                    'Linea B',
-                    style: TextStyle(color: Colors.white, fontSize: 24),
-                  ),
                 if (widget.zone == 'AIN')
                   Text(
                     "Difetti \nTot. QG2",
@@ -204,7 +209,8 @@ class _HeaderBoxState extends State<HeaderBox> {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.title != 'UPTIME/DOWNTIME Shift')
+              if (widget.title != 'UPTIME/DOWNTIME Shift' &&
+                  widget.title != "Dettaglio ReWork")
                 Text(
                   widget.title,
                   style: const TextStyle(
@@ -213,7 +219,7 @@ class _HeaderBoxState extends State<HeaderBox> {
                     fontSize: 32,
                   ),
                 )
-              else ...[
+              else if (widget.title == 'UPTIME/DOWNTIME Shift') ...[
                 const SizedBox(width: 12),
                 Text.rich(
                   TextSpan(
@@ -244,6 +250,25 @@ class _HeaderBoxState extends State<HeaderBox> {
                     ],
                   ),
                   textAlign: TextAlign.center,
+                ),
+              ] else if (widget.title == 'Dettaglio ReWork') ...[
+                Text.rich(
+                  TextSpan(
+                    style: const TextStyle(fontSize: 32),
+                    children: [
+                      const TextSpan(
+                        text: 'Dettaglio ',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                      const TextSpan(
+                        text: 'ReWork',
+                        style: TextStyle(
+                            color: Color.fromRGBO(229, 217, 57, 1),
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                 ),
               ],
               const SizedBox(width: 8),
@@ -3400,7 +3425,9 @@ class VPFDefectsHorizontalBarChart extends StatelessWidget {
 }
 
 class BufferChart extends StatefulWidget {
-  const BufferChart({super.key});
+  final List<Map<String, dynamic>> bufferDefectSummary;
+
+  const BufferChart(this.bufferDefectSummary, {super.key});
 
   @override
   State<BufferChart> createState() => _BufferChartState();
@@ -3409,19 +3436,30 @@ class BufferChart extends StatefulWidget {
 class _BufferChartState extends State<BufferChart> {
   final ScrollController _scrollController = ScrollController();
 
-  final List<Map<String, dynamic>> defects = List.generate(
-    21,
-    (index) => {
-      "id": index + 1,
-      "name": "Defect NG${index + 1}",
-      "eta": "${10 + index} min",
-      "rework": (index * 2) % 5 + 1,
-    },
-  );
+  late final List<Map<String, dynamic>> defects;
 
   @override
   void initState() {
     super.initState();
+
+    defects = widget.bufferDefectSummary.asMap().entries.map((entry) {
+      final index = entry.key;
+      final data = entry.value;
+
+      final objectId = data['object_id']?.toString() ?? 'N/A';
+      final eta = "${8 + index} min"; // optionally calculate ETA if needed
+      final defectsList =
+          List<Map<String, dynamic>>.from(data['defects'] ?? []);
+      final rework = defectsList.length;
+
+      return {
+        "id": index + 1,
+        "name": objectId,
+        "eta": eta,
+        "rework": rework,
+      };
+    }).toList();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
     });
@@ -3439,7 +3477,7 @@ class _BufferChartState extends State<BufferChart> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "Buffer Difetti",
+              "ReWork Buffer Difetti",
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),

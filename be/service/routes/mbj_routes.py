@@ -45,10 +45,10 @@ def parse_mbj_details(modulo_id: str) -> dict | None:
         esito = 1 if raw_esito == 0 else 6 if raw_esito == 4 else 10
 
         TOLERANCES = {
-            "ribbon": (12.0, 2),
+            "ribbon": (11.9999, 2),
             "cell": (1.0, 2),
             "gap": (1.0, 2),
-            "glass": (12.0, 2),
+            "glass": (11.9999, 2),
         }
 
         count_crack = 0
@@ -72,7 +72,6 @@ def parse_mbj_details(modulo_id: str) -> dict | None:
         cell_gap_data = extract_RelativeCellPosition(root)
         glass_cell_data = extract_GlassCellDistance(root)
         cell_defects = extract_CellDefects(root)
-
         if isinstance(cell_defects, dict):
             for cell in cell_defects.get("cell_defects", []):
                 defects = set(cell.get("defects", []))
@@ -81,14 +80,15 @@ def parse_mbj_details(modulo_id: str) -> dict | None:
                 if 81 in defects:
                     count_bad_soldering += 1
 
+
         has_el_defects = (count_crack + count_bad_soldering) == 0 and bool(cell_defects.get("cell_defects"))
-        has_backlight_defects = (
-            check_any_value_below(ribbon_data["interconnection_ribbon"], *TOLERANCES["ribbon"]) or
-            check_any_value_below(cell_data["interconnection_cell"], *TOLERANCES["cell"]) or
-            check_any_value_below(cell_gap_data["horizontal_cell_mm"], *TOLERANCES["gap"]) or
-            check_any_value_below(cell_gap_data["vertical_cell_mm"], *TOLERANCES["gap"]) or
-            check_any_value_below(glass_cell_data["glass_cell_mm"], *TOLERANCES["glass"])
-        )
+
+        b1 = check_any_value_below(ribbon_data["interconnection_ribbon"], *TOLERANCES["ribbon"])
+        b2 = check_any_value_below(cell_data["interconnection_cell"], *TOLERANCES["cell"])
+        b3 = check_any_value_below(cell_gap_data["horizontal_cell_mm"], *TOLERANCES["gap"])
+        b4 = check_any_value_below(cell_gap_data["vertical_cell_mm"], *TOLERANCES["gap"])
+        b5 = check_any_value_below(glass_cell_data["glass_cell_mm"], *TOLERANCES["glass"])
+        has_backlight_defects = b1 or b2 or b3 or b4 or b5
 
         return {
             "id_modulo": modulo_id,

@@ -33,19 +33,27 @@ class DebugTriggerRequest(BaseModel):
     station: str         # e.g. "LineaB.M309"
     trigger: bool        # True or False
     id_modulo: str | None = None
-    ko_fisico: bool
+    NG: bool
+    G: bool
+    reEntry_m326: bool
 
 @router.post("/api/debug_trigger")
 async def set_debug_trigger(payload: DebugTriggerRequest):
-    global_state.debug_triggers[payload.station] = payload.trigger
-    if payload.id_modulo:
-        global_state.debug_moduli[payload.station] = payload.id_modulo
-    global_state.debug_triggers_fisici[payload.station] = payload.ko_fisico
+    station = payload.station
 
-    logger.debug(f"Trigger set for {payload.station}: {payload.trigger}")
+    global_state.debug_triggers[station] = payload.trigger
+    global_state.debug_trigger_NG[station] = payload.NG
+    global_state.debug_trigger_G[station] = payload.G
+    global_state.reentryDebug[station] = payload.reEntry_m326
+
+    if payload.id_modulo:
+        global_state.debug_moduli[station] = payload.id_modulo
+
     return {
-        "station": payload.station,
-        "trigger": global_state.debug_triggers[payload.station],
-        "id_modulo": global_state.debug_moduli.get(payload.station),
-        "ko_fisico": global_state.debug_triggers_fisici.get(payload.station),
+        "station": station,
+        "trigger": global_state.debug_triggers[station],
+        "id_modulo": global_state.debug_moduli.get(station),
+        "NG": global_state.debug_trigger_NG.get(station),
+        "G": global_state.debug_trigger_G.get(station),
+        "reEntry_m326": global_state.reentryDebug.get(station)
     }

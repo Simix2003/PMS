@@ -52,6 +52,15 @@ def get_shift_window(now: datetime):
             end   = now.replace(hour=6, minute=0, second=0, microsecond=0)
     return start, end
 
+def get_shift_label(now: datetime) -> str:
+    hour = now.hour
+    if 6 <= hour < 14:
+        return "S1"
+    elif 14 <= hour < 22:
+        return "S2"
+    else:
+        return "S3"
+
 def count_unique_objects(cursor, station_names, start, end, esito_filter):
     placeholders = ", ".join(["%s"] * len(station_names))
     params = station_names + [start, end]
@@ -960,8 +969,7 @@ def update_visual_data_on_new_module(
         elif zone == "AIN":
             _update_snapshot_ain(data, station_name, esito, ts)
         elif zone == "ELL":
-            print('not updating snapshot for ell for the moment')
-            #_update_snapshot_ell(data, station_name, esito, ts, reentered)
+            _update_snapshot_ell(data, ts)
         else:
             logger.warning(f"Unknown zone: {zone}")
             return
@@ -1177,154 +1185,175 @@ def _update_snapshot_vpf(
         except Exception as e:
             logger.warning(f"Failed to parse cycle_time '{cycle_time}': {e}")
 
-def _update_snapshot_ell(
-    data: dict,
-    station_name: str,
-    esito: int,
-    ts: datetime,
-    reentered: bool = False
-) -> None:
+def _update_snapshot_ell(data: dict, ts: datetime) -> None:
     cfg = ZONE_SOURCES["ELL"]
+    current_shift_start, current_shift_end = get_shift_window(ts)
+    current_shift_label = get_shift_label(ts)
 
-    current_shift_start, _ = get_shift_window(ts)
-    current_shift_label = (
-        "S1" if 6 <= current_shift_start.hour < 14 else
-        "S2" if 14 <= current_shift_start.hour < 22 else
-        "S3"
-    )
+    try:
+        conn = get_mysql_connection()
+        cursor = conn.cursor()
 
-    is_in_station_1 = station_name in cfg["station_1_in"]
-    is_in_station_2 = station_name in cfg["station_2_in"]
-    is_out_ng_1 = station_name in cfg["station_1_out_ng"]
-    is_out_ng_2 = station_name in cfg["station_2_out_ng"]
+        # === FIRST PASS METRICS ===
+        s1_in = count_unique_objects(cursor, cfg["station_1_in"], current_shift_start, current_shift_end, "all")
+        s1_in_r0 = count_unique_objects_r0(cursor, cfg["station_1_in"], current_shift_start, current_shift_end, "all")
+        s1_ng = count_unique_objects(cursor, cfg["station_1_out_ng"], current_shift_start, current_shift_end, "ng")
+        s1_ng_r0 = count_unique_objects_r0(cursor, cfg["station_1_out_ng"], current_shift_start, current_shift_end, "ng")
+        s1_g = s1_in - s1_ng
+        s1_g_r0 = s1_in_r0 - s1_ng_r0
 
-    # Ensure needed keys
-    data.setdefault("station_1_r0_in", 0)
-    data.setdefault("station_1_r0_ng", 0)
+        s2_in = count_unique_objects(cursor, cfg["station_2_in"], current_shift_start, current_shift_end, "all")
+        s2_ng = count_unique_objects(cursor, cfg["station_2_out_ng"], current_shift_start, current_shift_end, "ng")
 
-    if reentered:
-        data["station_1_re_entered"] += 1
+        data["station_1_in"] = s1_in
+        data["station_2_in"] = s2_in
+        data["station_1_out_ng"] = s1_ng
+        data["station_2_out_ng"] = s2_ng
+        data["station_1_r0_in"] = s1_in_r0
+        data["station_1_r0_ng"] = s1_ng_r0
 
-    # 1. Update counters
-    if is_in_station_1:
-        data["station_1_in"] += 1
-        if not reentered:
-            data["station_1_r0_in"] += 1
+        fpy_yield = compute_yield(s1_g_r0, s1_ng_r0)
+        rwk_yield = compute_yield(s1_g, s2_in)
 
-    elif is_in_station_2:
-        data["station_2_in"] += 1
+        data["FPY_yield"] = fpy_yield
+        data["RWK_yield"] = rwk_yield
 
-    if is_out_ng_1:
-        if esito == 6:
-            data["station_1_out_ng"] += 1
-            if not reentered:
-                data["station_1_r0_ng"] += 1
-        elif reentered:
-            data["station_1_out_ng"] = max(0, data["station_1_out_ng"] - 1)
-            data["station_1_r0_ng"] = max(0, data["station_1_r0_ng"] - 1)
-
-    elif is_out_ng_2:
-        if esito == 6:
-            data["station_2_out_ng"] += 1
-
-    # 2. Recompute FPY & RWK yields
-    s1_g_r0 = data["station_1_r0_in"] - data["station_1_r0_ng"]
-    data["FPY_yield"] = compute_yield(s1_g_r0, data["station_1_r0_ng"])
-
-    s1_g = data["station_1_in"] - data["station_1_out_ng"]
-    rwk_ng = data["station_2_in"]
-    data["RWK_yield"] = compute_yield(s1_g, rwk_ng)
-
-    # 3. Update shift throughput
-    for shift in data["shift_throughput"]:
-        if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-            if is_in_station_1 or is_in_station_2:
-                shift["total"] += 1
-            if esito == 6 and (is_out_ng_1 or is_out_ng_2):
-                shift["ng"] += 1
-                if is_out_ng_2:
-                    shift["scrap"] += 1
-            break
-
-    # 4. Update shift yields
-    def update_yield_shift(lst, is_r0_only=False):
-        if is_r0_only and reentered:
-            return None
-        for shift in lst:
+        # === UPDATE FPY & RWK SHIFT GRAPHS ===
+        for shift in data.get("FPY_yield_shifts", []):
             if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-                if esito == 6:
-                    shift["ng"] += 1
-                else:
-                    shift["good"] += 1
-                shift["yield"] = compute_yield(shift["good"], shift["ng"])
-                return shift
-        return None
+                shift.update({
+                    "good": s1_g_r0,
+                    "ng": s1_ng_r0,
+                    "yield": fpy_yield
+                })
 
-    if is_in_station_1:
-        update_yield_shift(data["FPY_yield_shifts"], is_r0_only=True)
+        for shift in data.get("RWK_yield_shifts", []):
+            if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                shift.update({
+                    "good": s1_g,
+                    "ng": s2_in,
+                    "yield": rwk_yield
+                })
 
-    if is_in_station_1 or is_in_station_2:
-        update_yield_shift(data["RWK_yield_shifts"], is_r0_only=False)
+        # === UPDATE THROUGHPUT FOR SHIFT ===
+        for shift in data.get("shift_throughput", []):
+            if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                shift.update({
+                    "total": s1_in + s2_in,
+                    "ng": s1_ng,
+                    "scrap": s2_ng
+                })
 
-    # 5. Update hourly bins
-    hour_start = ts.replace(minute=0, second=0, microsecond=0)
-    hour_label = hour_start.strftime("%H:%M")
+        # === UPDATE LAST 8H THROUGHPUT + YIELDS ===
+        for hour, h_start, h_end in get_last_8h_bins(ts):
+            if any(h["hour"] == hour for h in data.get("last_8h_throughput", [])):
+                s1_in_ = count_unique_objects(cursor, cfg["station_1_in"], h_start, h_end, "all") or 0
+                s1_ng_ = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
+                s1_g_ = s1_in_ - s1_ng_
 
-    def _touch_hourly(list_key: str):
-        if list_key == "FPY_yield_last_8h" and reentered:
-            return
+                s2_in_ = count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all") or 0
+                s2_ng_ = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
+                s2_g_ = s2_in_ - s2_ng_
 
-        lst = data[list_key]
-        for entry in lst:
-            if entry["hour"] == hour_label:
-                if list_key == "last_8h_throughput":
-                    entry["total"] += 1
-                    if esito == 6:
-                        entry["ng"] += 1
-                        if is_out_ng_2:
-                            entry["scrap"] += 1
-                else:
-                    if esito == 6:
-                        entry["ng"] += 1
-                    else:
-                        entry["good"] += 1
+                s1_in_r0 = count_unique_objects_r0(cursor, cfg["station_1_in"], h_start, h_end, "all") or 0
+                s1_ng_r0 = count_unique_objects_r0(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
+                s1_g_r0 = s1_in_r0 - s1_ng_r0
 
-                    if list_key == "FPY_yield_last_8h":
-                        entry["yield"] = compute_yield(entry["good"], entry["ng"])
-                    elif list_key == "RWK_yield_last_8h":
-                        entry["yield"] = compute_yield(entry["good"], entry["ng"])
-                return
+                # last_8h_throughput
+                for row in data.get("last_8h_throughput", []):
+                    if row["hour"] == hour:
+                        row.update({
+                            "total": s1_in_ + s2_in_,
+                            "ng": s1_ng_,
+                            "scrap": s2_ng_
+                        })
 
-        # New entry
-        good = 0 if esito == 6 else 1
-        ng = 1 if esito == 6 else 0
-        new_entry: Dict[str, Any] = {
-            "hour": hour_label,
-            "start": hour_start.isoformat(),
-            "end": (hour_start + timedelta(hours=1)).isoformat(),
-        }
+                # FPY_yield_last_8h
+                for row in data.get("FPY_yield_last_8h", []):
+                    if row["hour"] == hour:
+                        row.update({
+                            "good": s1_g_r0,
+                            "ng": s1_ng_r0,
+                            "yield": compute_yield(s1_g_r0, s1_ng_r0)
+                        })
 
-        if list_key == "last_8h_throughput":
-            new_entry.update({
-                "total": 1,
-                "ng": ng,
-                "scrap": 1 if esito == 6 and is_out_ng_2 else 0,
+                # RWK_yield_last_8h
+                for row in data.get("RWK_yield_last_8h", []):
+                    if row["hour"] == hour:
+                        row.update({
+                            "good": s1_g_,
+                            "ng": s2_in_,
+                            "yield": compute_yield(s1_g_, s2_in_)
+                        })
+
+        # === TOP DEFECTS ===
+        sql_productions = """
+            SELECT id, station_id FROM productions
+            WHERE esito = 6
+              AND station_id IN (1, 2, 9)
+              AND start_time BETWEEN %s AND %s
+            ORDER BY start_time DESC
+            LIMIT 300
+        """
+        cursor.execute(sql_productions, (current_shift_start, current_shift_end))
+        rows = cursor.fetchall()
+        production_ids_1 = [r["id"] for r in rows if r["station_id"] == 1]
+        production_ids_2 = [r["id"] for r in rows if r["station_id"] == 2]
+        production_ids_9 = [r["id"] for r in rows if r["station_id"] == 9]
+        all_ids = tuple(production_ids_1 + production_ids_2 + production_ids_9) or (0,)
+
+        sql_defects = """
+            SELECT od.production_id, od.defect_id, d.category
+            FROM object_defects od
+            JOIN defects d ON od.defect_id = d.id
+            WHERE od.production_id IN %s
+            LIMIT 200
+        """
+        cursor.execute(sql_defects, (all_ids,))
+        rows = cursor.fetchall()
+
+        station_map = {pid: 1 for pid in production_ids_1}
+        station_map.update({pid: 2 for pid in production_ids_2})
+        station_map.update({pid: 9 for pid in production_ids_9})
+
+        defect_counter = defaultdict(lambda: {1: set(), 2: set(), 9: set()})
+        for row in rows:
+            pid = row["production_id"]
+            cat = row["category"]
+            sid = station_map.get(pid)
+            if sid:
+                defect_counter[cat][sid].add(pid)
+
+        top_defects = []
+        for category, group in defect_counter.items():
+            top_defects.append({
+                "label": category,
+                "min1": len(group[1]),
+                "min2": len(group[2]),
+                "ell": len(group[9]),
+                "total": len(group[1]) + len(group[2]) + len(group[9]),
             })
-        else:
-            new_entry.update({"good": good, "ng": ng})
-            new_entry["yield"] = compute_yield(good, ng)
+        top_defects = sorted(top_defects, key=lambda x: x["total"], reverse=True)[:5]
+        data["top_defects"] = [{k: r[k] for k in ("label", "min1", "min2", "ell")} for r in top_defects]
 
-        lst.append(new_entry)
-        lst[:] = lst[-8:]
+        # === RE-ENTERED MODULES ===
+        sql_reentered = """
+            SELECT COUNT(*) AS re_entered
+            FROM (
+                SELECT object_id
+                FROM productions
+                WHERE station_id IN (9, 3)
+                  AND start_time BETWEEN %s AND %s
+                GROUP BY object_id
+                HAVING COUNT(DISTINCT station_id) > 1
+            ) sub
+        """
+        cursor.execute(sql_reentered, (current_shift_start, current_shift_end))
+        result = cursor.fetchone()
+        data["station_1_re_entered"] = result["re_entered"] if result else 0
 
-    if is_in_station_1 or is_in_station_2 or (esito == 6 and (is_out_ng_1 or is_out_ng_2)):
-        _touch_hourly("last_8h_throughput")
-
-    if is_in_station_1:
-        _touch_hourly("FPY_yield_last_8h")
-
-    if is_in_station_1 or is_in_station_2:
-        _touch_hourly("RWK_yield_last_8h")
+    except Exception as e:
+        logger.warning(f"[ELL] Failed to refresh snapshot from DB: {e}")
 
 def refresh_fermi_data(zone: str, ts: datetime) -> None:
     """
@@ -1757,97 +1786,3 @@ def refresh_vpf_defects_data(now: datetime) -> None:
 
     except Exception as e:
         logger.exception(f"refresh_vpf_defects_data() FAILED: {e}")
-
-def refresh_top_defects_ell(zone: str, ts: datetime) -> None:
-    """
-    Refresh top_defects for ELL zone based on esito=6 in stations (1, 2, 9)
-    and defects joined via object_defects → defects, categorized per station.
-    Updates global_state.visual_data[zone]["top_defects"].
-    """
-    try:
-        with _update_lock:
-            if zone not in global_state.visual_data:
-                logger.warning(f"Cannot refresh top_defects_ell for unknown zone: {zone}")
-                return
-
-            data = global_state.visual_data[zone]
-            shift_start, shift_end = get_shift_window(ts)
-
-            conn = get_mysql_connection()
-            cursor = conn.cursor()
-
-            # 1️⃣ Get NG production rows for station_id in (1, 2, 9)
-            sql_productions = """
-                SELECT id, station_id
-                FROM productions
-                WHERE esito = 6
-                AND station_id IN (1, 2, 9)
-                AND start_time BETWEEN %s AND %s
-            """
-            cursor.execute(sql_productions, (shift_start, shift_end))
-            rows = cursor.fetchall()
-
-            production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
-            production_ids_2 = [row['id'] for row in rows if row['station_id'] == 2]
-            production_ids_9 = [row['id'] for row in rows if row['station_id'] == 9]
-
-            all_production_ids = tuple(production_ids_1 + production_ids_2 + production_ids_9)
-            if not all_production_ids:
-                data["top_defects"] = []
-                return
-
-            # 2️⃣ Fetch defects for those production_ids
-            sql_defects = """
-                SELECT od.production_id, d.category
-                FROM object_defects od
-                JOIN defects d ON od.defect_id = d.id
-                WHERE od.production_id IN %s
-            """
-            cursor.execute(sql_defects, (all_production_ids,))
-            rows = cursor.fetchall()
-
-            # 3️⃣ Build mapping production_id → station_id
-            production_station_map = {pid: 1 for pid in production_ids_1}
-            production_station_map.update({pid: 2 for pid in production_ids_2})
-            production_station_map.update({pid: 9 for pid in production_ids_9})
-
-            # 4️⃣ Count category occurrences per station
-            defect_counter = defaultdict(lambda: {1: set(), 2: set(), 9: set()})
-            for row in rows:
-                pid = row["production_id"]
-                category = row["category"]
-                station = production_station_map.get(pid)
-                if station:
-                    defect_counter[category][station].add(pid)
-
-            full_results = []
-            for category, stations in defect_counter.items():
-                min1 = len(stations[1])
-                min2 = len(stations[2])
-                ell  = len(stations[9])
-                total = min1 + min2 + ell
-                full_results.append({
-                    "label": category,
-                    "min1": min1,
-                    "min2": min2,
-                    "ell": ell,
-                    "total": total
-                })
-
-            top5 = sorted(full_results, key=lambda x: x["total"], reverse=True)[:5]
-            data["top_defects"] = [
-                {"label": r["label"], "min1": r["min1"], "min2": r["min2"], "ell": r["ell"]}
-                for r in top5
-            ]
-
-            # 5️⃣ Push update via WebSocket
-            loop = asyncio.get_running_loop()
-            payload = copy.deepcopy(data)
-            loop.call_soon_threadsafe(
-                lambda: asyncio.create_task(
-                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
-                )
-            )
-
-    except Exception as e:
-        logger.exception(f"Exception in refresh_top_defects_ell: {e}")

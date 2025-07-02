@@ -365,8 +365,8 @@ async def insert_defects(
         return
 
     # --- ELL Defects ---
-    if from_ell and data.get("MBJ_Defects"):
-        mbj = data["MBJ_Defects"]
+    mbj = data.get("MBJ_Defects")
+    if from_ell and isinstance(mbj, dict):
         defects_to_insert = []
         cell_defects_data = mbj.get("cell_defects", {})
         cracked_cells = []

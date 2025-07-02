@@ -1,53 +1,25 @@
 import requests
-import pymysql
-import re
+import json
 
 OLLAMA_API_URL = "http://localhost:11434/api/chat"
 MODEL_NAME = "gemma3n:e2b"
 
-# === Load schema.sql ===
-with open("D:/Imix/Lavori/2025/3SUN/IX-Monitor/pms/be/service/schema.sql", "r", encoding="utf-8") as f:
-    schema_content = f.read()
-
-# === System prompt ===
-SYSTEM_PROMPT = f"""
+SYSTEM_PROMPT = """
 Sei Simix, un assistente AI esperto nel monitoraggio della produzione industriale.
 Parli esclusivamente in italiano. Ragiona in modo logico e strutturato.
-Hai accesso a uno schema SQL del database PMS, che è il seguente:
+Hai accesso a uno schema SQL del database che descrive il sistema produttivo (PMS).
+Quando rispondi, sii chiaro, sintetico e tecnico. Fornisci analisi, insight o risposte basate sui dati.
 
-{schema_content}
-
-Quando ricevi una domanda basata sui dati, scrivi una query SQL tra i tag <sql></sql>.
-Esempio:
-<sql>
-SELECT COUNT(*) FROM productions WHERE status = 'NG';
-</sql>
+Se non hai abbastanza contesto, chiedi informazioni aggiuntive prima di rispondere.
 """
 
-# === MySQL connector ===
-def run_query(sql):
-    conn = pymysql.connect(
-        host="localhost",
-        user="root",
-        password="Master36!",   # ← Change this
-        database="ix_monitor"             # ← Change this
-    )
-    cur = conn.cursor()
-    cur.execute(sql)
-    rows = cur.fetchall()
-    columns = [desc[0] for desc in cur.description]
-    cur.close()
-    conn.close()
-    return columns, rows
-
-# === Extract SQL block from response ===
-def extract_sql(text):
-    match = re.search(r"<sql>(.*?)</sql>", text, re.DOTALL | re.IGNORECASE)
-    return match.group(1).strip() if match else None
-
-# === Main chat loop ===
 def chat_with_simix():
     print("🇮🇹 Chatta con Simix (scrivi 'esci' per uscire)\n")
+
+    # Optional: Check if model exists
+    resp = requests.get("http://localhost:11434/api/tags")
+    tags = resp.json()
+    print("✅ Modelli disponibili:", [t["name"] for t in tags.get("models", [])], "\n")
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT}
@@ -60,41 +32,28 @@ def chat_with_simix():
 
         messages.append({"role": "user", "content": user_input})
 
-        response = requests.post(OLLAMA_API_URL, json={
+        print("\nSimix: ", end="", flush=True)
+
+        # Send request with stream=True
+        with requests.post(OLLAMA_API_URL, json={
             "model": MODEL_NAME,
             "messages": messages,
-            "stream": False
-        }, timeout=30)
+            "stream": True
+        }, stream=True) as response:
+            if response.status_code != 200:
+                print("\n❌ Errore:", response.text)
+                break
 
-        if response.status_code != 200:
-            print("❌ Errore nella comunicazione con Simix:", response.text)
-            break
+            full_reply = ""
+            for line in response.iter_lines():
+                if line:
+                    data = json.loads(line)
+                    chunk = data.get("message", {}).get("content", "")
+                    full_reply += chunk
+                    print(chunk, end="", flush=True)
 
-        reply = response.json()["message"]["content"]
-        messages.append({"role": "assistant", "content": reply})
-        print(f"\nSimix:\n{reply}\n")
-
-        # Detect and run SQL
-        sql_code = extract_sql(reply)
-        if sql_code:
-            print("📥 SQL rilevato. Esecuzione in corso...\n")
-            try:
-                columns, rows = run_query(sql_code)
-                print("📊 Risultato SQL:")
-                print(" | ".join(columns))
-                for row in rows:
-                    print(" | ".join(map(str, row)))
-                # Feed results back to Simix
-                messages.append({
-                    "role": "user",
-                    "content": f"Risultati della query SQL:\n{columns}\n{rows}"
-                })
-            except Exception as e:
-                print("❌ Errore SQL:", e)
-                messages.append({
-                    "role": "user",
-                    "content": f"Errore nell'esecuzione della query: {e}"
-                })
+            print("\n")
+            messages.append({"role": "assistant", "content": full_reply})
 
 if __name__ == "__main__":
     chat_with_simix()

@@ -17,8 +17,8 @@ from service.routes.broadcast import broadcast
 from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_string
-from service.helpers.visual_helper import refresh_top_defects_ell, refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
-from service.routes.mbj_routes import get_mbj_details
+from service.helpers.visual_helper import refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
+from service.routes.mbj_routes import parse_mbj_details
 
 logger = logging.getLogger(__name__)
 
@@ -103,8 +103,19 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             fb_conf = paths["fine_buona"]
             fs_conf = paths["fine_scarto"]
             if debug:
-                fine_buona = False
-                fine_scarto = global_state.debug_triggers_fisici.get(full_station_id, False)
+                # fallback to trigger flag if specific G/NG not enabled
+                force_ng = global_state.debug_trigger_NG.get(full_station_id, False)
+                force_g  = global_state.debug_trigger_G.get(full_station_id, False)
+
+                if force_g:
+                    fine_buona = True
+                    fine_scarto = False
+                elif force_ng:
+                    fine_buona = False
+                    fine_scarto = True
+                else:
+                    fine_buona = False
+                    fine_scarto = False
             else:
                 #fine_buona = await asyncio.to_thread(plc_connection.read_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"])
                 #fine_scarto = await asyncio.to_thread(plc_connection.read_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"])
@@ -142,9 +153,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                         
                         if success and channel_id == "ELL01" and fine_scarto:
                             assert end_time and final_esito is not None
-                            timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
                             await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_ell=True)
-                            refresh_top_defects_ell("ELL", timestamp)
                         
                         if success and channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
                             await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_ain=True)
@@ -407,11 +416,18 @@ async def read_data(
             reentered = extract_bool(buffer, re_entered_conf506["byte"], re_entered_conf506["bit"], start_byte)
             data["Re_entered_from_m506"] = reentered
 
-        # Get the re-entered flag for VPF
+        # Get the re-entered flag for ELL
         re_entered_conf326 = config.get("re_entered_from_m326")
         if re_entered_conf326 and channel_id == "ELL01":
             reentered = extract_bool(buffer, re_entered_conf326["byte"], re_entered_conf326["bit"], start_byte)
             data["Re_entered_from_m326"] = reentered
+
+        # Override with debug flag if present
+        if debug:
+            full_station_id = f"{line_name}.{channel_id}"
+            reentrydebug = global_state.reentryDebug.get(full_station_id)
+            if reentrydebug is not None:
+                data["Re_entered_from_m326"] = reentrydebug
 
         # Step 11: Read Defect NG for AIN                
         ain_conf = config.get("difetti_ain")
@@ -429,7 +445,11 @@ async def read_data(
         data["Compilato_Su_Ipad_Scarto_Presente"] = richiesta_ko
 
         if channel_id == "ELL01" and richiesta_ko:
-            data['MBJ_Defects'] = get_mbj_details(data["Id_Modulo"])
+            mbj_details = parse_mbj_details(data["Id_Modulo"])
+            if mbj_details:
+                data['MBJ_Defects'] = mbj_details
+            else:
+                logger.debug(f"[{full_id}] No MBJ XML found for {data['Id_Modulo']} — continuing without it")
 
         return data
 

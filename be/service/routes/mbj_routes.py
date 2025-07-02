@@ -1,9 +1,8 @@
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException
 import glob
 from datetime import datetime, timedelta
 from xml.etree import ElementTree as ET
-from fastapi.responses import JSONResponse
+import logging
 
 import os
 import sys
@@ -13,31 +12,30 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.helpers.mbj_xml import extract_CellDefects, extract_GlassCellDistance, extract_InterconnectionCellDistance, extract_InterconnectionGlassDistance, extract_RelativeCellPosition
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-@router.get("/api/mbj_events/{modulo_id}")
-def get_mbj_details(modulo_id: str):
+def parse_mbj_details(modulo_id: str) -> dict | None:
     pattern = os.path.join(XML_FOLDER_PATH, f"{modulo_id}_*.xml")
     matching_files = glob.glob(pattern)
 
     if not matching_files:
-        # Try fallback: match contains id_modulo anywhere
         pattern_fallback = os.path.join(XML_FOLDER_PATH, f"*{modulo_id}*.xml")
         matching_files = glob.glob(pattern_fallback)
 
     if not matching_files:
-        return JSONResponse(status_code=404, content={"detail": "No XML file found for this modulo"})
+        logger.debug(f"[MBJ] No XML file found for modulo {modulo_id}")
+        return None
 
-    # Sort by modified time or filename for latest
     latest_file = max(matching_files, key=os.path.getmtime)
 
     try:
         tree = ET.parse(latest_file)
         root = tree.getroot()
 
-        # Extract InspectionTime
         inspection_time_str = root.findtext("InspectionTime")
         if not inspection_time_str:
-            return JSONResponse(status_code=422, content={"detail": "Missing InspectionTime in XML"})
+            logger.warning(f"[MBJ] Missing InspectionTime in XML for {modulo_id}")
+            return None
 
         inspection_time = datetime.fromisoformat(inspection_time_str.split("+")[0])
         inspection_end_time = inspection_time + timedelta(seconds=60)
@@ -52,26 +50,21 @@ def get_mbj_details(modulo_id: str):
             "gap": (1.0, 2),
             "glass": (12.0, 2),
         }
+
         count_crack = 0
         count_bad_soldering = 0
 
-        def check_any_value_below(data, threshold, precision, depth=0):
+        def check_any_value_below(data, threshold, precision):
             if isinstance(data, dict):
-                for value in data.values():
-                    if isinstance(value, (int, float)):
-                        if round(value, precision) < threshold:
-                            return True
-                    elif isinstance(value, (dict, list)):
-                        if check_any_value_below(value, threshold, precision, depth + 1):
-                            return True
-            elif isinstance(data, list):
-                for value in data:
-                    if isinstance(value, (int, float)):
-                        if round(value, precision) < threshold:
-                            return True
-                    elif isinstance(value, (dict, list)):
-                        if check_any_value_below(value, threshold, precision, depth + 1):
-                            return True
+                return any(
+                    check_any_value_below(v, threshold, precision) for v in data.values()
+                )
+            if isinstance(data, list):
+                return any(
+                    check_any_value_below(v, threshold, precision) for v in data
+                )
+            if isinstance(data, (int, float)):
+                return round(data, precision) < threshold
             return False
 
         ribbon_data = extract_InterconnectionGlassDistance(root)
@@ -79,6 +72,7 @@ def get_mbj_details(modulo_id: str):
         cell_gap_data = extract_RelativeCellPosition(root)
         glass_cell_data = extract_GlassCellDistance(root)
         cell_defects = extract_CellDefects(root)
+
         if isinstance(cell_defects, dict):
             for cell in cell_defects.get("cell_defects", []):
                 defects = set(cell.get("defects", []))
@@ -87,8 +81,7 @@ def get_mbj_details(modulo_id: str):
                 if 81 in defects:
                     count_bad_soldering += 1
 
-        has_el_defects = (count_crack + count_bad_soldering) == 0 and cell_defects["cell_defects"]
-
+        has_el_defects = (count_crack + count_bad_soldering) == 0 and bool(cell_defects.get("cell_defects"))
         has_backlight_defects = (
             check_any_value_below(ribbon_data["interconnection_ribbon"], *TOLERANCES["ribbon"]) or
             check_any_value_below(cell_data["interconnection_cell"], *TOLERANCES["cell"]) or
@@ -118,11 +111,20 @@ def get_mbj_details(modulo_id: str):
             **cell_gap_data,
             **glass_cell_data,
             **cell_defects,
-            'NG PMS Backlight': has_backlight_defects,
-            'NG PMS Elettroluminescenza': has_el_defects,
-            'Count Crack': count_crack,
-            'Count Bad Solid': count_bad_soldering,
+            "NG PMS Backlight": has_backlight_defects,
+            "NG PMS Elettroluminescenza": has_el_defects,
+            "Count Crack": count_crack,
+            "Count Bad Solid": count_bad_soldering,
         }
 
     except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": f"Failed to parse XML: {e}"})
+        logger.exception(f"[MBJ] Error parsing XML for {modulo_id}")
+        return None
+
+
+@router.get("/api/mbj_events/{modulo_id}")
+def get_mbj_details(modulo_id: str):
+    data = parse_mbj_details(modulo_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="No valid XML data found")
+    return data

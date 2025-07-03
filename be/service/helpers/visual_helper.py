@@ -1462,6 +1462,30 @@ def _update_snapshot_ell(
                 }
                 print(f"buffer_productions={buffer_productions}")
 
+                # --- Count RWK entries (station_id = 3, esito = 6) per object_id ---
+                placeholders = ",".join(["%s"] * len(object_ids))
+                sql_rwk_counts = (
+                    f"SELECT object_id, COUNT(*) AS rwk_count "
+                    f"FROM productions "
+                    f"WHERE object_id IN ({placeholders}) "
+                    f"AND station_id = 3 "
+                    f"GROUP BY object_id"
+                )
+                cursor.execute(sql_rwk_counts, object_ids)
+                rwk_rows = cursor.fetchall()
+                print(f"rwk_rows={rwk_rows}")
+
+                # Map object_id → rwk_count
+                rwk_counts_by_oid = {r["object_id"]: r["rwk_count"] for r in rwk_rows}
+
+                # Translate back to id_modulo for frontend
+                rwk_counts_by_modulo = {
+                    oid_to_modulo[oid]: count
+                    for oid, count in rwk_counts_by_oid.items()
+                    if oid in oid_to_modulo
+                }
+                print(f"rwk_counts_by_modulo={rwk_counts_by_modulo}")
+
                 if buffer_productions:
                     prod_ids = tuple(buffer_productions.values())
                     placeholders = ",".join(["%s"] * len(prod_ids))
@@ -1496,6 +1520,7 @@ def _update_snapshot_ell(
                         {
                             "object_id": mid,
                             "production_id": buffer_productions[mid],
+                            "rework_count": rwk_counts_by_modulo.get(mid, 0),
                             "defects": defect_by_object.get(mid, []),
                         }
                         for mid in buffer_productions.keys()

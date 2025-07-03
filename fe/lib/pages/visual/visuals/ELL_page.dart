@@ -571,7 +571,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                               ],
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 4),
                           ThroughputELLBarChart(
                             data: widget.throughputDataEll,
                             labels: widget.shiftLabels,
@@ -580,7 +580,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     // Second row with 1 card that fills all remaining space
                     Flexible(
                       child: HourlyELLBarChart(
@@ -680,7 +680,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                             12),
                                                   ),
                                                   padding: const EdgeInsets
-                                                      .symmetric(vertical: 12),
+                                                      .symmetric(vertical: 6),
                                                   child: Center(
                                                     child: Text(
                                                       '${widget.currentFPYYield.toString()}%',
@@ -759,7 +759,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                             12),
                                                   ),
                                                   padding: const EdgeInsets
-                                                      .symmetric(vertical: 12),
+                                                      .symmetric(vertical: 6),
                                                   child: Center(
                                                     child: Text(
                                                       '${widget.currentRWKYield.toString()}%',
@@ -783,7 +783,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                               ],
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 4),
                           Flexible(
                             flex: 3,
                             child: YieldComparisonELLBarChart(
@@ -794,7 +794,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     // Second row with 1 card that fills all remaining space
                     YieldELLLineChart(
                       hourlyData_FPY: widget.FPYLast8h,
@@ -888,7 +888,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                             color: widget.okColor, role: 'Chiusi', time: ''),
                       ],
                     ),
-                    SizedBox(height: 16),
+                    SizedBox(height: 8),
                   ],
                 ),
               ),
@@ -928,7 +928,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
           ],
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
 
         // ────── SECOND ROW ──────
         Row(
@@ -951,7 +951,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                         flex: 3,
                         child: Container(
                           height: 400,
-                          margin: const EdgeInsets.only(right: 6, bottom: 16),
+                          margin: const EdgeInsets.only(right: 6, bottom: 0),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.white,
@@ -970,7 +970,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                             elevation: 10,
                                             color: Colors.white,
                                             child: Padding(
-                                              padding: const EdgeInsets.all(8),
+                                              padding: const EdgeInsets.all(4),
                                               child: Row(
                                                 mainAxisAlignment:
                                                     MainAxisAlignment.center,
@@ -1043,7 +1043,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                                     style:
                                                                         const TextStyle(
                                                                       fontSize:
-                                                                          32,
+                                                                          28,
                                                                       fontWeight:
                                                                           FontWeight
                                                                               .bold,
@@ -1053,7 +1053,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                               },
                                                             ),
                                                             const SizedBox(
-                                                                height: 6),
+                                                                height: 4),
                                                             const Row(
                                                               mainAxisAlignment:
                                                                   MainAxisAlignment
@@ -1157,7 +1157,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                                     style:
                                                                         const TextStyle(
                                                                       fontSize:
-                                                                          32,
+                                                                          28,
                                                                       fontWeight:
                                                                           FontWeight
                                                                               .bold,
@@ -1167,7 +1167,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                               },
                                                             ),
                                                             const SizedBox(
-                                                                height: 6),
+                                                                height: 3),
                                                             const Row(
                                                               mainAxisAlignment:
                                                                   MainAxisAlignment
@@ -1195,7 +1195,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(height: 4),
                                     Flexible(
                                       flex: 2,
                                       child: Column(
@@ -1206,7 +1206,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                             'Speed Ratio',
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              fontSize: 18,
+                                              fontSize: 16,
                                             ),
                                           ),
                                           Padding(
@@ -1225,6 +1225,14 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                             ),
                                           ),
                                         ],
+                                      ),
+                                    ),
+                                    Text(
+                                      'Sviluppato da 3SUN Process Eng, Capgemini, \nempowered by Bottero',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.grey.shade700,
                                       ),
                                     ),
                                   ],
@@ -1262,21 +1270,6 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                   Flexible(
                                     child:
                                         BufferChart(widget.bufferDefectSummary),
-                                  ),
-
-                                  const SizedBox(height: 4),
-
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 4.0),
-                                    child: Text(
-                                      'Sviluppato da 3SUN Process Eng, \nCapgemini, empowered by Bottero',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        color: Colors.grey.shade700,
-                                      ),
-                                    ),
                                   ),
                                 ],
                               ),

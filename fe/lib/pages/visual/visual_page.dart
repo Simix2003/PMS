@@ -626,6 +626,8 @@ class _VisualPageState extends State<VisualPage> {
           bufferDefectSummary = List<Map<String, dynamic>>.from(
               data['buffer_defect_summary'] ?? []);
 
+          print('VALUESS: $bufferDefectSummary');
+
           value_gauge_1 =
               double.tryParse(data['value_gauge_1'].toString()) ?? 0;
           value_gauge_2 =

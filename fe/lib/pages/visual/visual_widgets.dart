@@ -4,6 +4,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'dart:async';
 import 'package:intl/intl.dart';
 
+import '../../shared/services/api_service.dart';
+
 class HeaderBox extends StatefulWidget {
   final String title, target;
   final IconData icon;
@@ -3436,33 +3438,129 @@ class BufferChart extends StatefulWidget {
 class _BufferChartState extends State<BufferChart> {
   final ScrollController _scrollController = ScrollController();
 
-  late final List<Map<String, dynamic>> defects;
+  Map<String, String> etaByObjectId = {}; // objectId → ETA string
+  Set<String> loadingETAs = {}; // prevent duplicate fetches
 
   @override
-  void initState() {
-    super.initState();
+  void didUpdateWidget(covariant BufferChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
-    defects = widget.bufferDefectSummary.asMap().entries.map((entry) {
+    // Check for new items in bufferDefectSummary
+    for (final item in widget.bufferDefectSummary) {
+      final objectId = item['object_id']?.toString();
+      if (objectId != null &&
+          !etaByObjectId.containsKey(objectId) &&
+          !loadingETAs.contains(objectId)) {
+        loadingETAs.add(objectId);
+        debugPrint("🔄 Fetching ETA for $objectId");
+        _fetchEtaForObject(objectId);
+      }
+    }
+  }
+
+  Future<void> _fetchEtaForObject(String objectId) async {
+    debugPrint("🔄 Requesting ETA for objectId: $objectId");
+
+    final result = await ApiService.predictReworkETAByObject(objectId);
+
+    if (!mounted) return;
+
+    final etaMin = result['etaInfo']?['eta_min'];
+    final noDefects = result['noDefectsFound'] ?? false;
+
+    if (etaMin != null) {
+      debugPrint("✅ ETA for $objectId: ${etaMin.toStringAsFixed(2)} min");
+    } else if (noDefects) {
+      debugPrint("⚠️ No defects found for $objectId");
+    } else {
+      debugPrint("❌ ETA not available for $objectId");
+    }
+
+    final etaString = etaMin != null ? "${etaMin.round()} min" : "N/A";
+
+    setState(() {
+      etaByObjectId[objectId] = etaString;
+    });
+  }
+
+  List<Map<String, dynamic>> get defects {
+    return widget.bufferDefectSummary.asMap().entries.map((entry) {
       final index = entry.key;
       final data = entry.value;
 
       final objectId = data['object_id']?.toString() ?? 'N/A';
-      final eta = "${8 + index} min"; // optionally calculate ETA if needed
-      final defectsList =
-          List<Map<String, dynamic>>.from(data['defects'] ?? []);
-      final rework = defectsList.length;
+      final eta = etaByObjectId[objectId] ?? "⏳...";
+      final rawDefects = data['defects'];
+
+      List<Map<String, dynamic>> defectsList = [];
+      if (rawDefects is List) {
+        defectsList = rawDefects.whereType<Map<String, dynamic>>().toList();
+      }
+
+      final rework = data['rework_count'] ?? 0;
+
+      final defectTypes = defectsList
+          .map((d) => d['defect_type']?.toString())
+          .whereType<String>()
+          .toSet()
+          .toList();
 
       return {
         "id": index + 1,
         "name": objectId,
         "eta": eta,
         "rework": rework,
+        "defectTypes": defectTypes,
       };
     }).toList();
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-    });
+  void _showExpandedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: MediaQuery.of(context).size.height * 0.8,
+            child: Scaffold(
+              appBar: AppBar(
+                title: const Text("Buffer Difetti Espanso"),
+                automaticallyImplyLeading: false,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  )
+                ],
+              ),
+              body: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ListView.builder(
+                  itemCount: defects.length,
+                  itemBuilder: (context, index) {
+                    final defect = defects.reversed.toList()[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _DefectCard(
+                        number: defect["id"] as int,
+                        name: defect["name"] as String,
+                        eta: defect["eta"] as String,
+                        rework: defect["rework"] as int,
+                        defectTypes:
+                            (defect["defectTypes"] as List<String>?) ?? [],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -3476,10 +3574,21 @@ class _BufferChartState extends State<BufferChart> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "ReWork Buffer Difetti",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "ReWork Buffer Difetti",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.open_in_full),
+                  onPressed: _showExpandedDialog,
+                  tooltip: "Espandi",
+                ),
+              ],
             ),
+            const SizedBox(height: 12),
             const SizedBox(height: 12),
             Expanded(
               child: ListView.builder(
@@ -3494,6 +3603,8 @@ class _BufferChartState extends State<BufferChart> {
                       name: defect["name"] as String,
                       eta: defect["eta"] as String,
                       rework: defect["rework"] as int,
+                      defectTypes:
+                          (defect["defectTypes"] as List<String>?) ?? [],
                     ),
                   );
                 },
@@ -3511,12 +3622,14 @@ class _DefectCard extends StatelessWidget {
   final String name;
   final String eta;
   final int rework;
+  final List<String> defectTypes;
 
   const _DefectCard({
     required this.number,
     required this.name,
     required this.eta,
     required this.rework,
+    required this.defectTypes,
   });
 
   @override
@@ -3528,19 +3641,44 @@ class _DefectCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey.shade300),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("#$number", style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(width: 12),
-          Expanded(child: Text(name)),
-          Text("ETA: $eta", style: const TextStyle(color: Colors.orange)),
-          const SizedBox(width: 12),
           Row(
+            children: [
+              Text("#$number",
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 12),
+              Expanded(child: Text(name, style: const TextStyle(fontSize: 16))),
+              Text("ETA: $eta", style: const TextStyle(color: Colors.orange)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Icon(Icons.autorenew, size: 18, color: Colors.green),
               const SizedBox(width: 4),
               Text("x$rework",
                   style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              if (defectTypes.isNotEmpty)
+                Expanded(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: defectTypes
+                        .map((type) => Chip(
+                              label: Text(type,
+                                  style: const TextStyle(fontSize: 12)),
+                              backgroundColor: Colors.red.shade100,
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ))
+                        .toList(),
+                  ),
+                ),
             ],
           ),
         ],
@@ -3598,8 +3736,14 @@ class _SpeedBarState extends State<SpeedBar> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     gradient: const LinearGradient(
-                      colors: [Colors.green, Colors.yellow, Colors.red],
-                      stops: [0, 0.6, 0.9],
+                      colors: [
+                        Colors.red,
+                        Colors.yellow,
+                        Colors.green,
+                        Colors.yellow,
+                        Colors.red
+                      ],
+                      stops: [0, 0.3, 0.5, 0.7, 1],
                     ),
                     border: Border.all(color: Colors.black, width: 1),
                   ),
@@ -4204,7 +4348,7 @@ class ReWorkSpeedBar extends StatefulWidget {
     required this.medianSec,
     required this.currentSec,
     required this.maxSec,
-    this.barHeight = 64,
+    this.barHeight = 40,
     this.textColor = Colors.black,
     this.bgColor = Colors.grey,
     this.tickStep = 10,
@@ -4239,7 +4383,7 @@ class _ReWorkSpeedBarState extends State<ReWorkSpeedBar> {
     return Column(
       children: [
         SizedBox(
-          height: widget.barHeight + 39,
+          height: widget.barHeight + 43,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
@@ -4253,8 +4397,14 @@ class _ReWorkSpeedBarState extends State<ReWorkSpeedBar> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     gradient: const LinearGradient(
-                      colors: [Colors.green, Colors.yellow, Colors.red],
-                      stops: [0, 0.6, 0.9],
+                      colors: [
+                        Colors.red,
+                        Colors.yellow,
+                        Colors.green,
+                        Colors.yellow,
+                        Colors.red
+                      ],
+                      stops: [0, 0.3, 0.5, 0.7, 1],
                     ),
                     border: Border.all(color: Colors.black, width: 1),
                   ),
@@ -4287,9 +4437,9 @@ class _ReWorkSpeedBarState extends State<ReWorkSpeedBar> {
                           alignment: Alignment.center,
                           children: const [
                             Icon(Icons.arrow_drop_down,
-                                size: 85, color: Colors.white),
+                                size: 65, color: Colors.white),
                             Icon(Icons.arrow_drop_down,
-                                size: 80, color: Color(0xFF215F9A)),
+                                size: 60, color: Color(0xFF215F9A)),
                           ],
                         ),
                         Text(

@@ -139,10 +139,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                         )
                 
                 if result:
-                    bufferIds = result.get("bufferIds", [])
-                    #We should fake the buffer id with a MySQL query to find the module_id 
-                    bufferIds = ["3SBHBGHC25620697", "3SBHBGHC25614686", "3SBHBGHC25620697"]
-                    ###################################################################################################
+                    bufferIds = result.get("BufferIds_Rework", [])
                     passato_flags[full_station_id] = True
                     production_id = incomplete_productions.get(full_station_id)
                     
@@ -179,6 +176,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                 else:
                                     reentered = False
 
+                                print('bufferIds: ', bufferIds)
                                 if zone:
                                     update_visual_data_on_new_module(
                                         zone=zone,
@@ -461,15 +459,19 @@ async def read_data(
                 logger.debug(f"[{full_id}] No MBJ XML found for {data['Id_Modulo']} — continuing without it")
 
         # Step 13: Read the BufferIds for Rework (array of 21 strings)
-        rwk_id = config["reWorkBufferIds"]
-        base_byte = rwk_id["byte"]
-        num_strings = rwk_id["length"]
-        string_len = rwk_id.get("string_length", 20)  # default to 20 if not defined
+        rwk_id = config.get("reWorkBufferIds")
+        values = []
 
-        values = [
-            extract_string(buffer, base_byte + i * (string_len + 2), string_len, start_byte)
-            for i in range(num_strings)
-        ]
+        if rwk_id and not debug:
+            base_byte = rwk_id["byte"]
+            num_strings = rwk_id["length"]
+            string_len = rwk_id.get("string_length", 20)
+            values = [
+                extract_string(buffer, base_byte + i * (string_len + 2), string_len, start_byte)
+                for i in range(num_strings)
+            ]
+        elif debug:
+            values = ["3SBHBGHC25620697", "3SBHBGHC25614686", "3SBHBGHC25620697"]
 
         data["BufferIds_Rework"] = values
 

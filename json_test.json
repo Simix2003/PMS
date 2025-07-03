@@ -2,22 +2,22 @@
     "trigger": {
         "db": 19606,
         "bit": 4,
-        "byte": 200
+        "byte": 250
     },
     "id_modulo": {
         "db": 19606,
-        "byte": 202,
+        "byte": 252,
         "length": 20
     },
     "id_utente": {
         "db": 19606,
-        "byte": 224,
+        "byte": 274,
         "length": 20
     },
     "fine_buona": {
         "db": 19606,
         "bit": 5,
-        "byte": 200
+        "byte": 250
     },
     "fine_fermo": {
         "db": 19102,
@@ -27,7 +27,7 @@
     "fine_scarto": {
         "db": 19606,
         "bit": 6,
-        "byte": 200
+        "byte": 250
     },
     "evento_fermo": {
         "db": 19102,
@@ -41,7 +41,7 @@
     },
     "stringatrice": {
         "db": 19606,
-        "byte": 246,
+        "byte": 296,
         "length": 5
     },
     "stazione_fermo": {
@@ -69,19 +69,19 @@
         "bit": 1,
         "byte": 200
     },
-    "re_entered_from_m326": {
+    "esito_scarto_compilato": {
         "db": 19606,
-        "bit": 3,
-        "byte": 201
+        "bit": 2,
+        "byte": 1000
     },
     "pezzo_salvato_su_DB_con_inizio_ciclo": {
         "db": 19606,
-        "bit": 7,
-        "byte": 1000
+        "bit": 0,
+        "byte": 1001
     },
     "reWorkBufferIds": {
-        "db": 19606,
-        "byte": 202,
+        "db": 19603,
+        "byte": 0,
         "length": 21,
         "string_length": 20
     }

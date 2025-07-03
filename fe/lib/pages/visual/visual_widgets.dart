@@ -4197,3 +4197,143 @@ class DefectMatrixCard extends StatelessWidget {
     );
   }
 }
+
+class ReWorkSpeedBar extends StatefulWidget {
+  const ReWorkSpeedBar({
+    super.key,
+    required this.medianSec,
+    required this.currentSec,
+    required this.maxSec,
+    this.barHeight = 64,
+    this.textColor = Colors.black,
+    this.bgColor = Colors.grey,
+    this.tickStep = 10,
+  });
+
+  final double medianSec; // still in seconds
+  final double currentSec; // still in seconds
+  final double maxSec; // still in seconds
+  final double barHeight;
+  final Color textColor;
+  final Color bgColor;
+  final double tickStep;
+
+  @override
+  State<ReWorkSpeedBar> createState() => _ReWorkSpeedBarState();
+}
+
+class _ReWorkSpeedBarState extends State<ReWorkSpeedBar> {
+  @override
+  Widget build(BuildContext context) {
+    // still use seconds for alignment logic
+    final medianAlignX =
+        ((widget.medianSec / widget.maxSec).clamp(0, 1) * 2 - 1).toDouble();
+    final currentAlignX =
+        ((widget.currentSec / widget.maxSec).clamp(0, 1) * 2 - 1).toDouble();
+
+    // convert to minutes for display
+    final medianMin = widget.medianSec / 60;
+    final currentMin = widget.currentSec / 60;
+    final maxMin = widget.maxSec / 60;
+
+    return Column(
+      children: [
+        SizedBox(
+          height: widget.barHeight + 39,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // ── Background bar ──
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: widget.barHeight,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    gradient: const LinearGradient(
+                      colors: [Colors.green, Colors.yellow, Colors.red],
+                      stops: [0, 0.6, 0.9],
+                    ),
+                    border: Border.all(color: Colors.black, width: 1),
+                  ),
+                ),
+              ),
+
+              // ── Median line ──
+              if (widget.medianSec > 0)
+                Align(
+                  alignment: Alignment(medianAlignX, 1),
+                  child: Container(
+                    width: 2,
+                    height: widget.barHeight,
+                    color: Colors.black,
+                  ),
+                ),
+
+              // ── Animated Arrow ──
+              if (widget.currentSec > 0)
+                AnimatedAlign(
+                  alignment: Alignment(currentAlignX, 1),
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeOutCubic,
+                  child: Transform.translate(
+                    offset: const Offset(0, -5),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Stack(
+                          alignment: Alignment.center,
+                          children: const [
+                            Icon(Icons.arrow_drop_down,
+                                size: 85, color: Colors.white),
+                            Icon(Icons.arrow_drop_down,
+                                size: 80, color: Color(0xFF215F9A)),
+                          ],
+                        ),
+                        Text(
+                          '${currentMin.toStringAsFixed(1)} min',
+                          style:
+                              TextStyle(fontSize: 12, color: widget.textColor),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        // ── Axis labels ──
+        SizedBox(
+          width: double.infinity,
+          child: Stack(
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('0 min', style: TextStyle(color: widget.textColor)),
+              ),
+              if (widget.medianSec > 0)
+                Align(
+                  alignment: Alignment(medianAlignX, 0),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 20),
+                    child: Text(
+                      'Tempo medio: ${medianMin.toStringAsFixed(1)} min',
+                      style: TextStyle(color: widget.textColor),
+                    ),
+                  ),
+                ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text('${maxMin.toStringAsFixed(1)} min',
+                    style: TextStyle(color: widget.textColor)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}

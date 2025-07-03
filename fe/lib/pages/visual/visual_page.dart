@@ -98,6 +98,8 @@ class _VisualPageState extends State<VisualPage> {
   List<int> ellCounts = [];
   int currentFPYYield = 100;
   int currentRWKYield = 100;
+  double value_gauge_1 = 0;
+  double value_gauge_2 = 0;
 
   Map<String, int> calculateEscalationCounts(
       List<Map<String, dynamic>> escalations) {
@@ -350,6 +352,15 @@ class _VisualPageState extends State<VisualPage> {
           min2Counts.add(int.tryParse(defect['min2'].toString()) ?? 0);
           ellCounts.add(int.tryParse(defect['ell'].toString()) ?? 0);
         }
+
+        value_gauge_1 =
+            double.tryParse(response['value_gauge_1'].toString()) ?? 0;
+        value_gauge_2 =
+            double.tryParse(response['value_gauge_2'].toString()) ?? 0;
+
+        // ─── Speed Ratio Chart ──────────────────────────
+        speedRatioData =
+            List<Map<String, dynamic>>.from(response['speed_ratio'] ?? []);
 
         isLoading = false;
       });
@@ -613,7 +624,16 @@ class _VisualPageState extends State<VisualPage> {
           }
 
           bufferDefectSummary = List<Map<String, dynamic>>.from(
-            data['buffer_defect_summary'] ?? []);
+              data['buffer_defect_summary'] ?? []);
+
+          value_gauge_1 =
+              double.tryParse(data['value_gauge_1'].toString()) ?? 0;
+          value_gauge_2 =
+              double.tryParse(data['value_gauge_2'].toString()) ?? 0;
+
+          // ─── Speed Ratio Chart ──────────────────────────
+          speedRatioData =
+              List<Map<String, dynamic>>.from(data['speed_ratio'] ?? []);
         });
       },
       onDone: () => print("Visual WebSocket closed"),
@@ -781,6 +801,9 @@ class _VisualPageState extends State<VisualPage> {
                             RWK_yield_shifs: RWK_yield_shifs,
                             last_n_shifts: last_n_shifts,
                             bufferDefectSummary: bufferDefectSummary,
+                            value_gauge_1: value_gauge_1,
+                            value_gauge_2: value_gauge_2,
+                            speedRatioData: speedRatioData,
                           )
                         : const Center(
                             child: Text(

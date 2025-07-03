@@ -906,6 +906,8 @@ class ApiService {
         'fermi_data': data['fermi_data'] ?? [],
         'top_defects': data['top_defects'] ?? [],
         'buffer_ids': data['buffer_ids'] ?? [],
+        'value_gauge_1': data['value_gauge_1'] ?? 0,
+        'value_gauge_2': data['value_gauge_2'] ?? 0,
       };
     } else {
       throw Exception('Failed to load ELL visual data');

@@ -42,6 +42,9 @@ class EllVisualsPage extends StatefulWidget {
   final List<Map<String, dynamic>> RWK_yield_shifs;
   final int last_n_shifts;
   final List<Map<String, dynamic>> bufferDefectSummary;
+  final double value_gauge_1;
+  final double value_gauge_2;
+  final List<Map<String, dynamic>> speedRatioData;
 
   const EllVisualsPage({
     super.key,
@@ -80,6 +83,9 @@ class EllVisualsPage extends StatefulWidget {
     required this.RWK_yield_shifs,
     required this.last_n_shifts,
     required this.bufferDefectSummary,
+    required this.value_gauge_1,
+    required this.value_gauge_2,
+    required this.speedRatioData,
   });
 
   @override
@@ -898,7 +904,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
               child: HeaderBox(
                 title: 'Dettaglio ReWork',
                 target: '',
-                icon: Icons.emoji_people_sharp,
+                icon: Icons.engineering,
               ),
             ),
 
@@ -970,7 +976,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                     MainAxisAlignment.center,
                                                 children: [
                                                   const Text(
-                                                    'Available \nTime\nAIN1',
+                                                    '% Moduli\n Reworkati',
                                                     style: TextStyle(
                                                       fontSize: 28,
                                                       fontWeight:
@@ -993,8 +999,8 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                                           800),
                                                               curve: Curves
                                                                   .easeInOut,
-                                                              value:
-                                                                  26.0, //TODO
+                                                              value: widget
+                                                                  .value_gauge_1,
                                                               radius: 100,
                                                               axis: GaugeAxis(
                                                                 min: 0,
@@ -1011,12 +1017,14 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                                 progressBar:
                                                                     GaugeRoundedProgressBar(
                                                                   color: () {
-                                                                    if (26.0 <=
+                                                                    if (widget
+                                                                            .value_gauge_1 <=
                                                                         50) {
                                                                       return widget
                                                                           .errorColor;
                                                                     }
-                                                                    if (26.0 <=
+                                                                    if (widget
+                                                                            .value_gauge_1 <=
                                                                         75) {
                                                                       return widget
                                                                           .warningColor;
@@ -1082,7 +1090,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                     MainAxisAlignment.center,
                                                 children: [
                                                   const Text(
-                                                    'Available \nTime\nAIN2',
+                                                    '% Moduli\n G dopo\n ReWork',
                                                     style: TextStyle(
                                                       fontSize: 28,
                                                       fontWeight:
@@ -1105,8 +1113,8 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                                           800),
                                                               curve: Curves
                                                                   .easeInOut,
-                                                              value:
-                                                                  26.0, //TODO
+                                                              value: widget
+                                                                  .value_gauge_2,
                                                               radius: 100,
                                                               axis: GaugeAxis(
                                                                 min: 0,
@@ -1123,12 +1131,14 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                                 progressBar:
                                                                     GaugeRoundedProgressBar(
                                                                   color: () {
-                                                                    if (26.0 <=
+                                                                    if (widget
+                                                                            .value_gauge_2 <=
                                                                         50) {
                                                                       return widget
                                                                           .errorColor;
                                                                     }
-                                                                    if (26.0 <=
+                                                                    if (widget
+                                                                            .value_gauge_2 <=
                                                                         75) {
                                                                       return widget
                                                                           .warningColor;
@@ -1185,6 +1195,38 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                         ),
                                       ],
                                     ),
+                                    const SizedBox(height: 8),
+                                    Flexible(
+                                      flex: 2,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Speed Ratio',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 18,
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12.0),
+                                            child: ReWorkSpeedBar(
+                                              medianSec:
+                                                  widget.speedRatioData[0]
+                                                      ['medianSec'],
+                                              currentSec:
+                                                  widget.speedRatioData[0]
+                                                      ['currentSec'],
+                                              maxSec: widget.speedRatioData[0]
+                                                  ['maxSec'],
+                                              textColor: widget.textColor,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1194,29 +1236,49 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                       ),
                       Flexible(
                         flex: 4,
-                        child: TopDefectsRMIHorizontalBarChart(
-                          defectLabels: widget.defectLabels,
-                          min1Counts: widget.min1Counts,
-                          min2Counts: widget.min2Counts,
-                          ellCounts: widget.ellCounts,
-                        ),
-                      ),
-                      // RIGHT COLUMN (1 full-height card)
-                      Flexible(
-                        flex: 2,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Pareto chart (takes part of the space)
                             Expanded(
-                              child: BufferChart(widget.bufferDefectSummary),
+                              flex: 3,
+                              child: TopDefectsRMIHorizontalBarChart(
+                                defectLabels: widget.defectLabels,
+                                min1Counts: widget.min1Counts,
+                                min2Counts: widget.min2Counts,
+                                ellCounts: widget.ellCounts,
+                              ),
                             ),
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 4.0),
-                              child: Text(
-                                'Sviluppato da 3SUN Process Eng, \nCapgemini, empowered by Bottero',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontSize: 18, color: Colors.grey.shade700),
+
+                            const SizedBox(width: 8),
+
+                            // Buffer chart + footer text
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // ⚠️ Use Flexible (NOT Expanded) here if inside Column
+                                  Flexible(
+                                    child:
+                                        BufferChart(widget.bufferDefectSummary),
+                                  ),
+
+                                  const SizedBox(height: 4),
+
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 4.0),
+                                    child: Text(
+                                      'Sviluppato da 3SUN Process Eng, \nCapgemini, empowered by Bottero',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],

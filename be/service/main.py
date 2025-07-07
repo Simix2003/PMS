@@ -58,7 +58,7 @@ def configure_logging() -> dict:
             },
         },
         "root": {
-            "level": "INFO",
+            "level": "INFO", #Change to "DEBUG" for more verbose logging
             "handlers": ["default", "file"]
         },
         "loggers": {
@@ -108,6 +108,7 @@ if sys.platform.startswith("win"):
 from controllers.plc import PLCConnection
 from service.controllers.debug_plc import FakePLCConnection
 from service.config.config import CHANNELS, IMAGES_DIR, LOG_FILE, PLC_DB_RANGES, debug
+print(f"[DEBUG CHECK] debug from config: {debug}")
 from service.connections.mysql import get_mysql_connection, load_channels_from_db
 from service.tasks.main_esito_task import background_task, make_status_callback
 from service.tasks.main_fermi_task import fermi_task
@@ -226,6 +227,8 @@ async def start_background_tasks():
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.debug("FastAPI lifespan STARTUP")
+
+    logger.info("Debug value is set to {}".format(debug))
 
     # Fast connect check
     try:

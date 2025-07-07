@@ -1,4 +1,5 @@
 {
     "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.autoImportCompletions": true
+    "python.analysis.autoImportCompletions": true,
+    "cmake.sourceDirectory": "D:/Imix/Lavori/2025/3SUN/IX-Monitor/pms/fe/linux/runner"
 }

@@ -36,7 +36,7 @@ def get_zone_from_station(station: str) -> Optional[str]:
     return None
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
-    logger.debug(f"[{full_station_id}] Starting background task.")
+    logger.info(f"[{full_station_id}] Starting background task.")
     prev_trigger = False
 
     line_name, channel_id = full_station_id.split(".")
@@ -234,7 +234,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         return
 
     if val:
-        logger.debug(f"Inizio Ciclo on {full_id} TRUE ...")
+        logger.info(f"Inizio Ciclo on {full_id} TRUE ...")
         trigger_timestamps.pop(full_id, None)
 
         # Write FALSE to esito_scarto_compilato.

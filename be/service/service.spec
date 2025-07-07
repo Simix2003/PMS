@@ -3,7 +3,7 @@
 
 a = Analysis(
     ['main.py'],
-    pathex=['D:\\Imix\\Lavori\\2025\\3SUN\\IX-Monitor\\ix_monitor'],
+    pathex=['D:\\Imix\\Lavori\\2025\\3SUN\\IX-Monitor\\pms\\be'],
     binaries=[('C:\\Users\\papar\\Desktop\\Prova_Comunicazione_PLC\\Lib\\site-packages\\snap7\\lib\\snap7.dll', '.')],
     datas=[],
     hiddenimports = [

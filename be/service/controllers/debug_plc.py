@@ -7,7 +7,6 @@ logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.config.config import debug
 from service.controllers.plc import PLCConnection
 import service.state.global_state as global_state
 

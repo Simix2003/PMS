@@ -1,6 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
+import 'package:ix_monitor/pages/auth/login_page.dart';
 import 'package:ix_monitor/pages/dashboard/dashboard_visual.dart';
 import 'dart:ui';
 import 'dart:math' as math;
@@ -27,7 +28,7 @@ class _LoadingScreenState extends State<LoadingScreen>
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
   double _loadingProgress = 0.0;
-  String versionNumber = "2.4.1";
+  String versionNumber = "2.4.2";
 
   // For animated background blobs
   final List<Blob> _blobs = List.generate(
@@ -140,6 +141,14 @@ class _LoadingScreenState extends State<LoadingScreen>
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
                 builder: (_) => DashboardVisual(zone: widget.zone)),
+          );
+          break;
+        case 'MES':
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+                builder: (_) => LoginPage(
+                      targetPage: 'MES',
+                    )),
           );
           break;
       }

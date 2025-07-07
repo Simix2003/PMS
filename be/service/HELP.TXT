@@ -20,6 +20,9 @@ flutter build web --web-renderer html --release -t lib/main_stringatrici.dart -o
 # Build for port 8053 (Visual)
 flutter build web --web-renderer html --release -t lib/main_visual.dart -o build/web_visual
 
+# Build for port 8054 (MES)
+flutter build web --web-renderer html --release -t lib/main_mes.dart -o build/web_mes
+
 flutter run -d web-server --web-renderer html -t lib/main_home.dart
 flutter run -d web-server --web-renderer html -t lib/main_data.dart
 flutter run -d web-server --web-renderer html -t lib/main_stringatrici.dart

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ix_monitor/pages/dashboard/dashboard_mes.dart';
 
 import '../dashboard/dashboard_data.dart';
 import '../dashboard/dashboard_home.dart';
@@ -19,94 +20,140 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
 
   void _handleLogin() {
-    // TODO: Validate credentials here if needed
-    if (widget.targetPage == 'Home') {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const DashboardHome()),
-      );
-    } else if (widget.targetPage == 'Data') {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const DashboardData()),
-      );
-    } else if (widget.targetPage == 'Stringatrice') {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const DashboardStringatrice()),
-      );
+    switch (widget.targetPage) {
+      case 'Home':
+        Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardHome()));
+        break;
+      case 'Data':
+        Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardData()));
+        break;
+      case 'Stringatrice':
+        Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardStringatrice()));
+        break;
+      case 'MES':
+        Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardMES()));
+        break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final primaryColor = Colors.blue;
 
     return Scaffold(
-      backgroundColor: Colors.grey[200],
+      backgroundColor: const Color(0xFFF1F4FB),
       body: Center(
-        child: Card(
-          elevation: 8,
-          margin: const EdgeInsets.symmetric(horizontal: 24),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Accesso richiesto',
-                  style: theme.textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Effettua il login per accedere a: ${widget.targetPage}',
-                  style: theme.textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 24),
-                TextField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.email),
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility
-                            : Icons.visibility_off,
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480), // Wider card
+            child: Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(32)),
+              color: Colors.white,
+              elevation: 14,
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_outline, size: 60, color: primaryColor),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Accesso Richiesto',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
+                      textAlign: TextAlign.center,
                     ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _handleLogin,
-                    icon: const Icon(Icons.login),
-                    label: const Text('Entra'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: const TextStyle(fontSize: 16),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Effettua il login per accedere a:\nPMS: ${widget.targetPage}',
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: Colors.black54),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
+                    const SizedBox(height: 30),
+
+                    /// Email Input
+                    TextField(
+                      controller: _emailController,
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        prefixIcon: const Icon(Icons.email),
+                        filled: true,
+                        fillColor: const Color(0xFFF7F9FC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: primaryColor),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: primaryColor, width: 2),
+                        ),
+                      ),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 20),
+
+                    /// Password Input
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: const Icon(Icons.lock),
+                        filled: true,
+                        fillColor: const Color(0xFFF7F9FC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: primaryColor, width: 2),
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscurePassword
+                              ? Icons.visibility
+                              : Icons.visibility_off),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    /// Login Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: _handleLogin,
+                        label: const Text(
+                          'Entra',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          textStyle: const TextStyle(fontSize: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

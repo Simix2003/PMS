@@ -1294,7 +1294,7 @@ def _update_snapshot_ell(
         # ------------------------------------------------------------------ #
         # 1) FIRST-PASS METRICS
         # ------------------------------------------------------------------ #
-        print("\n[1] FIRST-PASS METRICS -----------------------------------------")
+        #print("\n[1] FIRST-PASS METRICS -----------------------------------------")
 
         station_names = [
             cfg["station_1_in"][0],
@@ -1437,11 +1437,11 @@ def _update_snapshot_ell(
             )
             cursor.execute(sql_obj_ids, bufferIds)
             object_rows = cursor.fetchall()
-            print(f"objects rows={object_rows}")
+            #print(f"objects rows={object_rows}")
 
             modulo_to_oid = {r["id_modulo"]: r["id"] for r in object_rows}
             object_ids = list(modulo_to_oid.values())
-            print(f"modulo_to_oid={modulo_to_oid}")
+            #print(f"modulo_to_oid={modulo_to_oid}")
 
             if object_ids:
                 placeholders = ",".join(["%s"] * len(object_ids))
@@ -1452,7 +1452,7 @@ def _update_snapshot_ell(
                 )
                 cursor.execute(sql_pids, object_ids)
                 production_rows = cursor.fetchall()
-                print(f"production_rows={production_rows}")
+                #print(f"production_rows={production_rows}")
 
                 oid_to_modulo = {v: k for k, v in modulo_to_oid.items()}
                 buffer_productions = {
@@ -1460,7 +1460,7 @@ def _update_snapshot_ell(
                     for r in production_rows
                     if r["object_id"] in oid_to_modulo
                 }
-                print(f"buffer_productions={buffer_productions}")
+                #print(f"buffer_productions={buffer_productions}")
 
                 # --- Count RWK entries (station_id = 3, esito = 6) per object_id ---
                 placeholders = ",".join(["%s"] * len(object_ids))
@@ -1473,7 +1473,7 @@ def _update_snapshot_ell(
                 )
                 cursor.execute(sql_rwk_counts, object_ids)
                 rwk_rows = cursor.fetchall()
-                print(f"rwk_rows={rwk_rows}")
+                #print(f"rwk_rows={rwk_rows}")
 
                 # Map object_id → rwk_count
                 rwk_counts_by_oid = {r["object_id"]: r["rwk_count"] for r in rwk_rows}
@@ -1484,7 +1484,7 @@ def _update_snapshot_ell(
                     for oid, count in rwk_counts_by_oid.items()
                     if oid in oid_to_modulo
                 }
-                print(f"rwk_counts_by_modulo={rwk_counts_by_modulo}")
+                #print(f"rwk_counts_by_modulo={rwk_counts_by_modulo}")
 
                 if buffer_productions:
                     prod_ids = tuple(buffer_productions.values())
@@ -1500,7 +1500,7 @@ def _update_snapshot_ell(
                     )
                     cursor.execute(sql_defects_buffer, prod_ids)
                     defect_rows = cursor.fetchall()
-                    print(f"defect_rows={defect_rows}")
+                    #print(f"defect_rows={defect_rows}")
 
                     defect_by_object = defaultdict(list)
                     pid_to_modulo = {v: k for k, v in buffer_productions.items()}
@@ -1514,7 +1514,7 @@ def _update_snapshot_ell(
                                     "extra_data": r["extra_data"] or "",
                                 }
                             )
-                    print(f"defect_by_object={dict(defect_by_object)}")
+                    #print(f"defect_by_object={dict(defect_by_object)}")
 
                     data["buffer_defect_summary"] = [
                         {
@@ -1681,7 +1681,7 @@ def _update_snapshot_ell(
                     #print(f"filtered range {lower:.1f}–{upper:.1f}; kept {len(cycle_times)}")
                 else:
                     cycle_times = cycle_times_all
-                    print("using all cycle times")
+                    #print("using all cycle times")
 
                 if cycle_times:
                     median_sec = median(cycle_times)
@@ -1700,13 +1700,13 @@ def _update_snapshot_ell(
                 ]
                 #print(f"speed_ratio={data['speed_ratio']}")
         except Exception as e:
-            print(f"[WARN] speed_ratio calculation failed: {e}")
+            logger.warning(f"[WARN] speed_ratio calculation failed: {e}")
 
-        print("\n=== [_update_snapshot_ell] END OK ===============================\n")
+        #print("\n=== [_update_snapshot_ell] END OK ===============================\n")
 
     except Exception as e:
         # This is where we still catch *any* unhashable-list or other bugs
-        print(f"[ERR] [_update_snapshot_ell] failed: {e}")
+        logger.error(f"[ERR] [_update_snapshot_ell] failed: {e}")
         # Re-raise so the caller can still handle/log if needed
         raise
 

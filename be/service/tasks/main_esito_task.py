@@ -18,7 +18,7 @@ from service.config.config import PLC_DB_RANGES, ZONE_SOURCES, debug
 from service.routes.broadcast import broadcast
 from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
-from service.helpers.buffer_plc_extract import extract_bool, extract_string
+from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string
 from service.helpers.visual_helper import refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
 from service.routes.mbj_routes import parse_mbj_details
 
@@ -463,11 +463,19 @@ async def read_data(
         values = []
 
         if rwk_id and not debug:
+            db_number = rwk_id["db"]
             base_byte = rwk_id["byte"]
             num_strings = rwk_id["length"]
             string_len = rwk_id.get("string_length", 20)
+            string_size = string_len + 2  # fixed size for S7 STRING[20]
+
+            total_bytes = num_strings * string_size
+
+            # ✅ Read the correct DB block directly
+            rwk_buffer = await asyncio.to_thread(plc_connection.db_read, db_number, base_byte, total_bytes)
+
             values = [
-                extract_string(buffer, base_byte + i * (string_len + 2), string_len, start_byte)
+                extract_s7_string(rwk_buffer, i * string_size)
                 for i in range(num_strings)
             ]
         elif debug:

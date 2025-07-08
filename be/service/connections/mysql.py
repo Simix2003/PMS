@@ -391,7 +391,7 @@ async def insert_defects(
                 "stringa": None,
                 "ribbon_lato": None,
                 "s_ribbon": None,
-                "extra_data": f"Cells: {sorted(cracked_cells)}; Cracks: {mbj.get('Count Crack', len(cracked_cells))}",
+                "extra_data": None,
                 "photo_id": None
             })
 
@@ -405,7 +405,7 @@ async def insert_defects(
                 "stringa": None,
                 "ribbon_lato": None,
                 "s_ribbon": None,
-                "extra_data": f"Cells: {sorted(bad_solder_cells)}; BadSolid: {mbj.get('Count Bad Solid', len(bad_solder_cells))}",
+                "extra_data": None,
                 "photo_id": None
             })
 

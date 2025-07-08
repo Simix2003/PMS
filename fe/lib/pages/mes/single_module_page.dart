@@ -14,7 +14,6 @@ class _SingleModulePageState extends State<SingleModulePage> {
   String? _scannedCode;
 
   // Mock user name
-  final String _userName = "Simone Paparo";
 
   void _handleScan() {
     final code = _scanController.text.trim();
@@ -230,24 +229,14 @@ class _SingleModulePageState extends State<SingleModulePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F4FB),
+      appBar: AppBar(
+        backgroundColor: Colors.blue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text('Modulo Singolo'),
+      ),
       body: Stack(
         children: [
-          /// Top-right user info
-          Positioned(
-            top: 30,
-            right: 40,
-            child: Row(
-              children: [
-                const Icon(Icons.account_circle, size: 34, color: Colors.grey),
-                const SizedBox(width: 16),
-                Text(
-                  _userName,
-                  style: const TextStyle(fontSize: 24),
-                ),
-              ],
-            ),
-          ),
-
           /// Main content
           _scannedCode == null
               ? _buildScanInput(context)

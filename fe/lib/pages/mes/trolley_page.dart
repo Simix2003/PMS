@@ -1,3 +1,6 @@
+// ignore_for_file: use_build_context_synchronously
+
+import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:flutter/material.dart';
 
 class TrolleyPage extends StatefulWidget {
@@ -30,16 +33,20 @@ class _TrolleyPageState extends State<TrolleyPage> {
     }
 
     if (!isValidInZone(moduleId, _selectedZone!)) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-          '❌ Il modulo "$moduleId" non può essere rilavorato in zona $_selectedZone',
-          style: const TextStyle(fontSize: 16),
-        ),
-        backgroundColor: Colors.red.shade600,
-      ));
+      AwesomeDialog(
+        width: 450,
+        context: context,
+        dialogType: DialogType.error,
+        animType: AnimType.bottomSlide,
+        title: 'Modulo non valido',
+        desc:
+            '❌ Il modulo "$moduleId" non può essere rilavorato in zona $_selectedZone',
+        btnOkText: 'Chiudi',
+        btnOkOnPress: () {},
+        btnOkColor: Colors.red.shade600,
+      ).show();
       return;
     }
-
     if (_acceptedModules.contains(moduleId)) {
       _scanController.clear();
       return;
@@ -121,8 +128,14 @@ class _TrolleyPageState extends State<TrolleyPage> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
-                icon: const Icon(Icons.add),
-                label: const Text('Aggiungi Modulo'),
+                icon: const Icon(
+                  Icons.add,
+                  color: Colors.white,
+                ),
+                label: const Text(
+                  'Aggiungi Modulo',
+                  style: TextStyle(color: Colors.white),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryColor,
                   textStyle: const TextStyle(fontSize: 18),
@@ -136,7 +149,7 @@ class _TrolleyPageState extends State<TrolleyPage> {
 
             /// Lista moduli accettati
             const Text(
-              'Moduli accettati:',
+              'Moduli Selezionati:',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -171,24 +184,54 @@ class _TrolleyPageState extends State<TrolleyPage> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton.icon(
-                    icon: const Icon(Icons.check_circle_outline),
-                    label: const Text('Conferma Carrello'),
+                    icon: const Icon(Icons.check_circle_outline,
+                        color: Colors.white),
+                    label: const Text('Conferma Trolley',
+                        style: TextStyle(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       textStyle: const TextStyle(fontSize: 18),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
-                    onPressed: () {
-                      // TODO: invio finale se serve
+                    onPressed: () async {
                       debugPrint('Carrello confermato con: $_acceptedModules');
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: const Text('Carrello confermato ✅'),
-                        backgroundColor: Colors.green.shade600,
-                      ));
-                      setState(() {
-                        _acceptedModules.clear();
-                      });
+
+                      // Step 1: Show loading dialog
+                      final loadingDialog = AwesomeDialog(
+                        context: context,
+                        dialogType: DialogType.noHeader,
+                        animType: AnimType.scale,
+                        dismissOnTouchOutside: false,
+                        dismissOnBackKeyPress: false,
+                        width: 450,
+                        title: 'Comunicazione in corso',
+                        desc: '💬 Comunicazione con il MES...',
+                        showCloseIcon: false,
+                      )..show();
+
+                      // Simulate async operation (e.g. API call)
+                      await Future.delayed(const Duration(seconds: 2));
+
+                      // Close the loading dialog
+                      loadingDialog.dismiss();
+
+                      // Step 2: Show success dialog
+                      AwesomeDialog(
+                        width: 450,
+                        context: context,
+                        dialogType: DialogType.success,
+                        animType: AnimType.topSlide,
+                        title: 'Conferma riuscita',
+                        desc: '✅ Comunicazione completata con successo',
+                        btnOkText: 'OK',
+                        btnOkOnPress: () {
+                          setState(() {
+                            _acceptedModules.clear();
+                          });
+                        },
+                        btnOkColor: Colors.green,
+                      ).show();
                     },
                   ),
                 ),

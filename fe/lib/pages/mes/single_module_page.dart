@@ -1,5 +1,9 @@
+// ignore_for_file: use_build_context_synchronously
+
+import 'dart:async';
 import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:flutter/material.dart';
+import 'package:ix_monitor/shared/widgets/mes_card.dart';
 
 class SingleModulePage extends StatefulWidget {
   const SingleModulePage({super.key});
@@ -12,8 +16,14 @@ class _SingleModulePageState extends State<SingleModulePage> {
   final TextEditingController _scanController = TextEditingController();
   String? _errorText;
   String? _scannedCode;
+  Map<String, dynamic>? _moduleData;
+  bool _isReworkMode = false;
+  String? _selectedStage;
+  String? _selectedNewClass;
 
-  // Mock user name
+  final stages = ['PRE VPF', 'PRE FRAMING', 'PRE JBX', 'POST CURING'];
+  final qcOrder = ['A', 'B', 'C'];
+  final _userName = 'Simone Paparo';
 
   void _handleScan() {
     final code = _scanController.text.trim();
@@ -22,10 +32,19 @@ class _SingleModulePageState extends State<SingleModulePage> {
       return;
     }
 
-    debugPrint('Scanned code: $code');
+    final randomNG = 'NG${2 + (DateTime.now().millisecond % 9)}';
+    final randomQC = ['A', 'B', 'C'][DateTime.now().second % 3];
 
     setState(() {
       _scannedCode = code;
+      _moduleData = {
+        'latest_event': {
+          'id_modulo': code,
+          'esito': 6,
+          'defect_categories': randomNG,
+          'classe_qc': randomQC,
+        }
+      };
       _scanController.clear();
       _errorText = null;
     });
@@ -33,65 +52,88 @@ class _SingleModulePageState extends State<SingleModulePage> {
 
   void _handleScrap(String? moduleId) {
     if (moduleId == null) return;
-
     AwesomeDialog(
       context: context,
-      width: 600,
       dialogType: DialogType.warning,
       animType: AnimType.bottomSlide,
-      title: 'Conferma eliminazione',
-      desc:
-          'Sei sicuro di voler marcare il modulo "$moduleId" come SCRAP?\n\nQuesta azione è irreversibile.',
+      width: 750,
+      title: 'Conferma SCRAP',
+      desc: 'Marcare "$moduleId" come SCRAP?\nAzione irreversibile.',
       btnCancelText: 'Annulla',
-      btnCancelOnPress: () {},
       btnOkText: 'Conferma',
-      btnOkOnPress: () {
-        debugPrint('Modulo $moduleId marcato come SCRAP');
-        // TODO: call API or update DB here
-        setState(() {
-          _scannedCode = null;
-        });
-      },
-      btnCancelColor: Colors.grey.shade400,
       btnOkColor: Colors.red.shade700,
-      buttonsBorderRadius: const BorderRadius.all(Radius.circular(12)),
+      btnCancelColor: Colors.grey.shade700,
+      btnCancelOnPress: () {},
+      btnOkOnPress: () {
+        setState(() => _scannedCode = null);
+      },
     ).show();
   }
 
-  Widget _buildScanInput(BuildContext context) {
-    final theme = Theme.of(context);
-    const primaryColor = Colors.blue;
+  Widget _bigChoice({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+    Color selectedColor = Colors.blue,
+    IconData? icon,
+    Color? iconColor,
+  }) {
+    final buttonStyle = ElevatedButton.styleFrom(
+      backgroundColor: selected ? selectedColor : Colors.white,
+      foregroundColor: selected ? Colors.white : Colors.black,
+      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 26),
+      textStyle: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      side: selected
+          ? BorderSide.none
+          : const BorderSide(color: Colors.black54, width: 2),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    );
 
+    return icon != null
+        ? ElevatedButton.icon(
+            onPressed: onTap,
+            icon: Icon(icon, size: 32, color: iconColor ?? Colors.black),
+            label: Text(label),
+            style: buttonStyle,
+          )
+        : ElevatedButton(
+            onPressed: onTap,
+            style: buttonStyle,
+            child: Text(label),
+          );
+  }
+
+  Widget _buildScanView() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32.0),
+        padding: const EdgeInsets.all(32),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: Card(
+            elevation: 18,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-            elevation: 18,
             child: Padding(
-              padding: const EdgeInsets.all(40.0),
+              padding: const EdgeInsets.all(40),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(Icons.qr_code_scanner,
-                      size: 80, color: primaryColor),
+                      size: 80, color: Colors.blue),
                   const SizedBox(height: 24),
-                  Text(
-                    'Scansiona ID Modulo',
-                    style: theme.textTheme.headlineMedium
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
+                  Text('Scansiona ID Modulo',
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineMedium!
+                          .copyWith(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   Text(
-                    'Inserisci o scansiona il codice del modulo per iniziare.',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(color: Colors.black54),
-                    textAlign: TextAlign.center,
-                  ),
+                      'Inserisci o scansiona il codice del modulo per iniziare.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium!
+                          .copyWith(color: Colors.black54),
+                      textAlign: TextAlign.center),
                   const SizedBox(height: 36),
                   TextField(
                     controller: _scanController,
@@ -103,15 +145,8 @@ class _SingleModulePageState extends State<SingleModulePage> {
                       filled: true,
                       fillColor: const Color(0xFFF7F9FC),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide:
-                            const BorderSide(color: primaryColor, width: 2),
-                      ),
+                          borderRadius: BorderRadius.circular(20)),
                     ),
-                    style: const TextStyle(fontSize: 18),
                   ),
                   const SizedBox(height: 28),
                   SizedBox(
@@ -122,17 +157,17 @@ class _SingleModulePageState extends State<SingleModulePage> {
                       icon: const Icon(Icons.check, color: Colors.white),
                       label: const Text(
                         'Conferma',
-                        style: TextStyle(color: Colors.white),
+                        style: TextStyle(
+                          color: Colors.white,
+                        ),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        textStyle: const TextStyle(fontSize: 16),
+                        backgroundColor: Colors.blue,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16)),
                       ),
                     ),
-                  ),
+                  )
                 ],
               ),
             ),
@@ -142,86 +177,175 @@ class _SingleModulePageState extends State<SingleModulePage> {
     );
   }
 
-  Widget _buildDetailView(BuildContext context) {
+  Widget _buildReworkForm(Map<String, dynamic> latest) {
+    final currentIdx = qcOrder.indexOf(latest['classe_qc']);
+    final allowedQCs = qcOrder.sublist(currentIdx);
+
+    _selectedStage ??= stages.first;
+    _selectedNewClass ??= latest['classe_qc'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back, size: 30),
+          onPressed: () => setState(() => _isReworkMode = false),
+        ),
+        MesCard(data: latest),
+        const SizedBox(height: 24),
+        const Text('Seleziona zona Ingresso',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 24,
+          runSpacing: 24,
+          children: stages
+              .map((s) => _bigChoice(
+                    label: s,
+                    selected: _selectedStage == s,
+                    onTap: () => setState(() => _selectedStage = s),
+                    selectedColor: Colors.blue,
+                  ))
+              .toList(),
+        ),
+        const SizedBox(height: 40),
+        const Text('Nuova Classe QC',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 24,
+          runSpacing: 24,
+          children: qcOrder.map((c) {
+            final isAllowed = allowedQCs.contains(c);
+            final isSelected = _selectedNewClass == c;
+
+            final textColor = isSelected
+                ? Colors.white
+                : isAllowed
+                    ? Colors.black
+                    : Colors.grey;
+
+            return ElevatedButton(
+              onPressed: isAllowed
+                  ? () => setState(() => _selectedNewClass = c)
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isSelected
+                    ? Colors.blue
+                    : isAllowed
+                        ? Colors.white
+                        : Colors.grey.shade300,
+                foregroundColor: textColor,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 26),
+                textStyle:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: Text(c),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 50),
+        Center(
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.check_circle, color: Colors.white, size: 30),
+            label: const Text('Conferma Ingresso',
+                style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 26),
+              textStyle: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+            ),
+            onPressed: () async {
+              AwesomeDialog(
+                context: context,
+                dialogType: DialogType.noHeader,
+                dismissOnTouchOutside: false,
+                dismissOnBackKeyPress: false,
+                width: 750,
+                animType: AnimType.scale,
+                title: "Comunicazione con il MES...",
+                desc: "Allineamento in corso...",
+              ).show();
+
+              await Future.delayed(const Duration(seconds: 2));
+
+              Navigator.of(context).pop(); // close loading dialog
+
+              AwesomeDialog(
+                context: context,
+                dialogType: DialogType.success,
+                width: 750,
+                autoDismiss: true,
+                autoHide: const Duration(seconds: 5),
+                title: "Modulo Allineato",
+                desc: 'Modulo pronto per il rientro in "${_selectedStage}"',
+              ).show();
+
+              setState(() {
+                _isReworkMode = false;
+                _scannedCode = null;
+              });
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailView() {
+    final latest = _moduleData!['latest_event'] as Map<String, dynamic>;
+
     return Padding(
       padding: const EdgeInsets.all(32),
-      child: Column(
-        children: [
-          /// Top Row: Back + ID
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, size: 30),
-                onPressed: () {
-                  setState(() {
-                    _scannedCode = null; // Return to scan view
-                  });
-                },
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.memory_rounded, size: 30),
-              const SizedBox(width: 8),
-              Text(
-                _scannedCode ?? '',
-                style:
-                    const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const SizedBox(height: 38),
-
-          /// Action buttons
-          Center(
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 40,
-              runSpacing: 20,
+      child: _isReworkMode
+          ? _buildReworkForm(latest)
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                /// ReWork
-                ElevatedButton.icon(
-                  onPressed: () {
-                    // TODO: handle ReWork
-                  },
-                  icon: const Icon(Icons.build, size: 36, color: Colors.blue),
-                  label: const Text(
-                    'ReWork',
-                    style: TextStyle(color: Colors.blue),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 48, vertical: 32),
-                    textStyle: const TextStyle(fontSize: 24),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: const BorderSide(color: Colors.blue, width: 2),
-                    ),
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, size: 30),
+                  onPressed: () => setState(() {
+                    _scannedCode = null;
+                    _moduleData = null;
+                    _isReworkMode = false;
+                  }),
                 ),
-
-                /// Scrap
-                ElevatedButton.icon(
-                  onPressed: () => _handleScrap(_scannedCode),
-                  icon: const Icon(Icons.delete_forever,
-                      size: 36, color: Colors.white),
-                  label: const Text(
-                    'Scrap',
-                    style: TextStyle(color: Colors.white),
+                MesCard(data: latest),
+                const SizedBox(height: 36),
+                Center(
+                  child: Wrap(
+                    spacing: 40,
+                    runSpacing: 20,
+                    children: [
+                      _bigChoice(
+                        label: 'Scrap',
+                        selected: false,
+                        icon: Icons.delete_forever,
+                        iconColor: Colors.red,
+                        selectedColor: Colors.red,
+                        onTap: () => _handleScrap(_scannedCode),
+                      ),
+                      _bigChoice(
+                        label: 'ReWork',
+                        selected: false,
+                        icon: Icons.build,
+                        iconColor: Colors.blue,
+                        onTap: () => setState(() => _isReworkMode = true),
+                      ),
+                    ],
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 48, vertical: 32),
-                    textStyle: const TextStyle(fontSize: 24),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
-                  ),
-                ),
+                )
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -229,18 +353,20 @@ class _SingleModulePageState extends State<SingleModulePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F4FB),
-      appBar: AppBar(
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text('Modulo Singolo'),
-      ),
       body: Stack(
         children: [
-          /// Main content
-          _scannedCode == null
-              ? _buildScanInput(context)
-              : _buildDetailView(context),
+          Positioned(
+            top: 30,
+            right: 40,
+            child: Row(
+              children: [
+                const Icon(Icons.account_circle, size: 34, color: Colors.grey),
+                const SizedBox(width: 12),
+                Text(_userName, style: const TextStyle(fontSize: 24)),
+              ],
+            ),
+          ),
+          _scannedCode == null ? _buildScanView() : _buildDetailView(),
         ],
       ),
     );

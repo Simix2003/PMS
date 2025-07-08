@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/graphs/find_page.dart';
-import '../mes/choose_scan_mode_page.dart';
+import 'package:ix_monitor/pages/mes/single_module_page.dart';
 
 class DashboardMES extends StatefulWidget {
   const DashboardMES({super.key});
@@ -15,7 +15,7 @@ class _DashboardMESState extends State<DashboardMES> {
   bool autoSearch = false;
 
   List<Widget> get _pages => [
-        ChooseScanModePage(), // 👈 sostituito
+        SingleModulePage(),
         FindPage(
           initialFilters: filtersForFindPage,
           autoSearch: autoSearch,

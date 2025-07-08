@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ix_monitor/pages/visual/visuals/STR_page.dart';
 import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
 import '../../shared/services/socket_service.dart';
@@ -123,6 +124,8 @@ class _VisualPageState extends State<VisualPage> {
       await fetchVpfZoneData();
     } else if (widget.zone == "ELL") {
       await fetchEllZoneData();
+    } else if (widget.zone == "STR") {
+      await fetchStrZoneData();
     } else {
       print('Cannote fetch zone data Unknown zone: $widget.zone');
     }
@@ -372,6 +375,119 @@ class _VisualPageState extends State<VisualPage> {
     }
   }
 
+  Future<void> fetchStrZoneData() async {
+    try {
+      final response = await ApiService.fetchVisualDataForAin();
+      setState(() {
+        bussingIn_1 = response['station_1_in'] ?? 0;
+        bussingIn_2 = response['station_2_in'] ?? 0;
+        ng_bussingOut_1 = response['station_1_out_ng'] ?? 0;
+        ng_bussingOut_2 = response['station_2_out_ng'] ?? 0;
+        currentYield_1 = response['station_1_yield'] ?? 100;
+        currentYield_2 = response['station_2_yield'] ?? 100;
+
+        yieldLast8h_1 = List<Map<String, dynamic>>.from(
+            response['station_1_yield_last_8h'] ?? []);
+        yieldLast8h_2 = List<Map<String, dynamic>>.from(
+            response['station_2_yield_last_8h'] ?? []);
+        shiftThroughput =
+            List<Map<String, dynamic>>.from(response['shift_throughput'] ?? []);
+        hourlyThroughput = List<Map<String, dynamic>>.from(
+            response['last_8h_throughput'] ?? []);
+        station1Shifts = List<Map<String, dynamic>>.from(
+            response['station_1_yield_shifts'] ?? []);
+        station2Shifts = List<Map<String, dynamic>>.from(
+            response['station_2_yield_shifts'] ?? []);
+
+        mergedShiftData = List.generate(station1Shifts.length, (index) {
+          return {
+            'shift': station1Shifts[index]['label'],
+            'bussing1': station1Shifts[index]['yield'],
+            'bussing2': station2Shifts[index]['yield'],
+          };
+        });
+
+        throughputData = shiftThroughput.map<Map<String, int>>((e) {
+          final total = (e['total'] ?? 0) as int;
+          final ng = (e['ng'] ?? 0) as int;
+          return {'ok': total - ng, 'ng': ng};
+        }).toList();
+
+        shiftLabels =
+            shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
+
+        hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+          final total = (e['total'] ?? 0) as int;
+          final ng = (e['ng'] ?? 0) as int;
+          return {'ok': total - ng, 'ng': ng};
+        }).toList();
+
+        hourLabels =
+            hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
+        // Parse Top Defects QG2
+        final topDefectsRaw =
+            List<Map<String, dynamic>>.from(response['top_defects_qg2'] ?? []);
+
+        defectLabels = [];
+        ain1Counts = [];
+        ain2Counts = [];
+
+        for (final defect in topDefectsRaw) {
+          defectLabels.add(defect['label']?.toString() ?? '');
+          ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+          ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+        }
+
+        qg2_defects_value = response['total_defects_qg2'];
+
+        // Parse Top Defects VPF
+        final topDefectsVPF =
+            List<Map<String, dynamic>>.from(response['top_defects_vpf'] ?? []);
+
+        defectVPFLabels = [];
+        ain1VPFCounts = [];
+        ain2VPFCounts = [];
+
+        for (final defect in topDefectsVPF) {
+          defectVPFLabels.add(defect['label']?.toString() ?? '');
+          ain1VPFCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+          ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+        }
+
+        // Parse fermi data
+        final fermiRaw =
+            List<Map<String, dynamic>>.from(response['fermi_data'] ?? []);
+
+        dataFermi = []; // clear previous data
+
+        for (final entry in fermiRaw) {
+          if (entry.containsKey("Available_Time_1")) {
+            availableTime_1 =
+                int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
+          } else if (entry.containsKey("Available_Time_2")) {
+            availableTime_2 =
+                int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
+          } else {
+            dataFermi.add([
+              entry['causale']?.toString() ?? '',
+              entry['station']?.toString() ?? '',
+              entry['count']?.toString() ?? '0',
+              entry['time']?.toString() ?? '0'
+            ]);
+          }
+        }
+
+        isLoading = false;
+      });
+    } catch (e) {
+      print("❌ Error fetching zone data: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
   Future<void> _initializeWebSocket() async {
     if (widget.zone == "AIN") {
       _initializeAinWebSocket();
@@ -379,6 +495,8 @@ class _VisualPageState extends State<VisualPage> {
       _initializeVpfWebSocket();
     } else if (widget.zone == "ELL") {
       _initializeEllWebSocket();
+    } else if (widget.zone == "STR") {
+      _initializeStrWebSocket();
     } else {
       print('Cannot initialize websocket Unknown zone: $widget.zone');
     }
@@ -645,6 +763,122 @@ class _VisualPageState extends State<VisualPage> {
     _isWebSocketConnected = true;
   }
 
+  void _initializeStrWebSocket() {
+    if (_isWebSocketConnected) return;
+
+    _webSocketService.connectToVisual(
+      line: 'Linea2',
+      zone: widget.zone,
+      onMessage: (data) {
+        if (!mounted) return;
+
+        setState(() {
+          // ─── Main station metrics ─────────────────────
+          bussingIn_1 = data['station_1_in'] ?? 0;
+          bussingIn_2 = data['station_2_in'] ?? 0;
+          ng_bussingOut_1 = data['station_1_out_ng'] ?? 0;
+          ng_bussingOut_2 = data['station_2_out_ng'] ?? 0;
+          currentYield_1 = data['station_1_yield'] ?? 100;
+          currentYield_2 = data['station_2_yield'] ?? 100;
+
+          // ─── Yield + Throughput 8h & shift ────────────
+          yieldLast8h_1 = List<Map<String, dynamic>>.from(
+              data['station_1_yield_last_8h'] ?? []);
+          yieldLast8h_2 = List<Map<String, dynamic>>.from(
+              data['station_2_yield_last_8h'] ?? []);
+          shiftThroughput =
+              List<Map<String, dynamic>>.from(data['shift_throughput'] ?? []);
+          hourlyThroughput =
+              List<Map<String, dynamic>>.from(data['last_8h_throughput'] ?? []);
+          station1Shifts = List<Map<String, dynamic>>.from(
+              data['station_1_yield_shifts'] ?? []);
+          station2Shifts = List<Map<String, dynamic>>.from(
+              data['station_2_yield_shifts'] ?? []);
+
+          mergedShiftData = List.generate(station1Shifts.length, (index) {
+            return {
+              'shift': station1Shifts[index]['label'],
+              'bussing1': station1Shifts[index]['yield'],
+              'bussing2': station2Shifts[index]['yield'],
+            };
+          });
+
+          throughputData = shiftThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            return {'ok': total - ng, 'ng': ng};
+          }).toList();
+
+          shiftLabels =
+              shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
+
+          hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            return {'ok': total - ng, 'ng': ng};
+          }).toList();
+
+          hourLabels =
+              hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
+          // ─── Fermi Data ───────────────────────────────
+          final fermiRaw =
+              List<Map<String, dynamic>>.from(data['fermi_data'] ?? []);
+          dataFermi = [];
+
+          for (final entry in fermiRaw) {
+            if (entry.containsKey("Available_Time_1")) {
+              availableTime_1 =
+                  int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
+            } else if (entry.containsKey("Available_Time_2")) {
+              availableTime_2 =
+                  int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
+            } else {
+              dataFermi.add([
+                entry['causale']?.toString() ?? '',
+                entry['station']?.toString() ?? '',
+                entry['count']?.toString() ?? '0',
+                entry['time']?.toString() ?? '0'
+              ]);
+            }
+          }
+
+          // ─── QG2 Defects ──────────────────────────────
+          final topDefectsQG2 =
+              List<Map<String, dynamic>>.from(data['top_defects_qg2'] ?? []);
+          defectLabels = [];
+          ain1Counts = [];
+          ain2Counts = [];
+
+          for (final defect in topDefectsQG2) {
+            defectLabels.add(defect['label']?.toString() ?? '');
+            ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+            ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+          }
+
+          qg2_defects_value = data['total_defects_qg2'] ?? 0;
+
+          // ─── VPF Defects ───────────────────────────────
+          final topDefectsVPF =
+              List<Map<String, dynamic>>.from(data['top_defects_vpf'] ?? []);
+          defectVPFLabels = [];
+          ain1VPFCounts = [];
+          ain2VPFCounts = [];
+
+          for (final defect in topDefectsVPF) {
+            defectVPFLabels.add(defect['label']?.toString() ?? '');
+            ain1VPFCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+            ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+          }
+        });
+      },
+      onDone: () => print("🛑 Visual WebSocket closed"),
+      onError: (err) => print("❌ WebSocket error: $err"),
+    );
+
+    _isWebSocketConnected = true;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -807,13 +1041,55 @@ class _VisualPageState extends State<VisualPage> {
                             value_gauge_2: value_gauge_2,
                             speedRatioData: speedRatioData,
                           )
-                        : const Center(
-                            child: Text(
-                              'ZONA non trovata',
-                              style: TextStyle(
-                                  fontSize: 24, fontWeight: FontWeight.bold),
-                            ),
-                          ),
+                        : widget.zone == 'STR'
+                            ? StrVisualsPage(
+                                shift_target: shift_target,
+                                hourly_shift_target: hourly_shift_target,
+                                yield_target: yield_target,
+                                circleSize: circleSize,
+                                station_1_status: station_1_status,
+                                station_2_status: station_2_status,
+                                errorColor: errorColor,
+                                okColor: okColor,
+                                textColor: textColor,
+                                warningColor: warningColor,
+                                redColor: redColor,
+                                ng_bussingOut_1: ng_bussingOut_1,
+                                ng_bussingOut_2: ng_bussingOut_2,
+                                bussingIn_1: bussingIn_1,
+                                bussingIn_2: bussingIn_2,
+                                currentYield_1: currentYield_1,
+                                currentYield_2: currentYield_2,
+                                throughputData: throughputData,
+                                shiftLabels: shiftLabels,
+                                hourlyData: hourlyData,
+                                hourLabels: hourLabels,
+                                dataFermi: dataFermi,
+                                station1Shifts: station1Shifts,
+                                station2Shifts: station2Shifts,
+                                mergedShiftData: mergedShiftData,
+                                yieldLast8h_1: yieldLast8h_1,
+                                yieldLast8h_2: yieldLast8h_2,
+                                counts: counts,
+                                availableTime_1: availableTime_1,
+                                availableTime_2: availableTime_2,
+                                defectLabels: defectLabels,
+                                defectVPFLabels: defectVPFLabels,
+                                ain1Counts: ain1Counts,
+                                ain1VPFCounts: ain1VPFCounts,
+                                ain2Counts: ain2Counts,
+                                ain2VPFCounts: ain2VPFCounts,
+                                last_n_shifts: last_n_shifts,
+                                qg2_defects_value: qg2_defects_value,
+                              )
+                            : const Center(
+                                child: Text(
+                                  'ZONA non trovata',
+                                  style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
       ),
     );
   }

@@ -57,6 +57,10 @@ async def search_results(request: Request):
 
                     parts = value.split(" > ")
                     defect_category = parts[0]
+                    # Handle VPF and AIN top-level filters
+                    if defect_category == "VPF" and len(parts) > 1:
+                        defect_category = parts[1]
+                    
                     clause_parts = ["d.category = %s"]
                     clause_params = [defect_category]
 

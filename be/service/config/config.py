@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
-debug = False
+debug = True
 
 CHANNELS: dict = {}
 

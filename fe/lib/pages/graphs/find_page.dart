@@ -485,9 +485,8 @@ class _FindPageState extends State<FindPage> {
     if (selectedFilterType == 'Difetto') {
       if (selectedDifettoGroup == null) return;
       if (selectedDifettoGroup == 'VPF') {
-        compositeValue = selectedVPF!;
-      }
-      if (selectedDifettoGroup == 'AIN') {
+        compositeValue += 'VPF > ${selectedVPF ?? ''}';
+      } else if (selectedDifettoGroup == 'AIN') {
         compositeValue = selectedAIN!;
       } else {
         compositeValue = selectedDifettoGroup!;
@@ -885,7 +884,9 @@ class _FindPageState extends State<FindPage> {
                 hint: 'Seleziona difetto VPF',
                 value: selectedVPF,
                 items: vpfOptions,
-                onChanged: (val) => setState(() => selectedVPF = val),
+                onChanged: (val) {
+                  setState(() => selectedVPF = val);
+                },
               ),
 
             // === AIN ===

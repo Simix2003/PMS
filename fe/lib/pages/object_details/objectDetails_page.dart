@@ -16,6 +16,7 @@ class ObjectdetailsPage extends StatefulWidget {
 }
 
 class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
+  bool groupByStation = false;
   final orderDirections = ['Crescente', 'Decrescente']; // A-Z / Z-A
   String? selectedOrderDirection = 'Decrescente';
 
@@ -110,28 +111,59 @@ class _ObjectdetailsPageState extends State<ObjectdetailsPage> {
                 selectedOrderDirection = val;
               });
             },
+            description: 'Ordina',
+          ),
+          const SizedBox(width: 12),
+          Row(
+            children: [
+              const Text("Raggruppa",
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              Switch(
+                activeColor: Colors.blue,
+                value: groupByStation,
+                onChanged: (val) {
+                  setState(() {
+                    groupByStation = val;
+                  });
+                },
+              ),
+            ],
           ),
         ],
       ),
-      body: ListView(
-        children: byStation.entries.map((entry) {
-          return _buildStationSection(entry.key, entry.value);
-        }).toList(),
-      ),
+      body: groupByStation
+          ? ListView(
+              children: byStation.entries
+                  .map((entry) =>
+                      _buildStationSection(entry.key, entry.value, true))
+                  .toList(),
+            )
+          : ListView(
+              children: widget.events.map((e) {
+                final station = e['station_name'] ?? 'Booh';
+                return _buildStationSection(station, [e], false);
+              }).toList(),
+            ),
     );
   }
 
   Widget _buildStationSection(
-      String station, List<Map<String, dynamic>> events) {
+      String station, List<Map<String, dynamic>> events, bool showNumber) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '$station (${events.length})',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          if (showNumber)
+            Text(
+              '$station (${events.length})',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            )
+          else
+            Text(
+              station,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
           const SizedBox(height: 8),
           ...events.map((e) => _buildEventCard(e)).toList(),
         ],

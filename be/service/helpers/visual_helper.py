@@ -1049,7 +1049,7 @@ def update_visual_data_on_new_module(
         elif zone == "AIN":
             _update_snapshot_ain(data, station_name, esito, ts)
         elif zone == "ELL":
-            _update_snapshot_ell(data, ts, cycle_time, bufferIds)
+            _update_snapshot_ell(data, station_name, ts, cycle_time, bufferIds)
         else:
             logger.warning(f"Unknown zone: {zone}")
             return
@@ -1267,6 +1267,7 @@ def _update_snapshot_vpf(
 
 def _update_snapshot_ell(
     data: dict,
+    station_name: str,
     ts: datetime,
     cycle_time: Optional[str],
     bufferIds: List[str],
@@ -1429,7 +1430,8 @@ def _update_snapshot_ell(
         # ------------------------------------------------------------------ #
         #print("\n[4] BUFFER-ID DEFECT TRACE -------------------------------------")
         #print(f"bufferIds={bufferIds}")
-
+        # Filter out empty or whitespace-only entries
+        bufferIds = [b for b in bufferIds if b and b.strip()]
         if bufferIds:
             placeholders = ",".join(["%s"] * len(bufferIds))
             sql_obj_ids = (
@@ -1657,7 +1659,7 @@ def _update_snapshot_ell(
         # ------------------------------------------------------------------ #
         #print("\n[5] SPEED RATIO --------------------------------------------------")
         try:
-            if cycle_time:
+            if cycle_time and station_name in cfg["station_2_in"]:
                 h, m, s = cycle_time.split(":")
                 current_sec = int(h) * 3600 + int(m) * 60 + float(s)
 

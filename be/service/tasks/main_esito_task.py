@@ -176,7 +176,6 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                 else:
                                     reentered = False
 
-                                print('bufferIds: ', bufferIds)
                                 if zone:
                                     update_visual_data_on_new_module(
                                         zone=zone,

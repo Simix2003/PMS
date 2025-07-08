@@ -293,31 +293,31 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                 'STR G',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
-                                                  fontSize: 18,
+                                                  fontSize: 16,
                                                 ),
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 40),
+                                          const SizedBox(width: 18),
                                           Flexible(
                                             child: Center(
                                               child: Text(
                                                 'STR NG',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
-                                                  fontSize: 18,
+                                                  fontSize: 16,
                                                 ),
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 40),
+                                          const SizedBox(width: 18),
                                           Flexible(
                                             child: Center(
                                               child: Text(
                                                 'CELL SCRAP',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
-                                                  fontSize: 18,
+                                                  fontSize: 16,
                                                 ),
                                               ),
                                             ),
@@ -375,7 +375,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -407,7 +407,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -440,7 +440,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -501,7 +501,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -533,7 +533,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -566,7 +566,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -628,7 +628,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -660,7 +660,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -693,7 +693,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -755,7 +755,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -787,7 +787,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -820,7 +820,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -882,7 +882,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -914,7 +914,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -947,7 +947,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -965,7 +965,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          ThroughputBarChart(
+                          ThroughputSTRBarChart(
                             data: widget.throughputData,
                             labels: widget.shiftLabels,
                             globalTarget: shift_target.toDouble(),
@@ -974,14 +974,6 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Second row with 1 card that fills all remaining space
-                    /*Flexible(
-                      child: HourlyBarChart(
-                        data: widget.hourlyData,
-                        hourLabels: widget.hourLabels,
-                        target: hourly_shift_target,
-                      ),
-                    ),*/
                   ],
                 ),
               ),
@@ -1079,7 +1071,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -1090,6 +1082,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                           ],
                                         ),
                                       ),
+                                      const SizedBox(height: 8),
 
                                       // Second row of cards
                                       Flexible(
@@ -1141,7 +1134,199 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 32,
+                                                        fontSize: 24,
+                                                        color: widget.textColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+
+                                      // Third row of cards
+                                      Flexible(
+                                        child: Row(
+                                          children: [
+                                            // Circle
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: widget.currentYield_1 ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getYieldColor(
+                                                        widget.currentYield_1,
+                                                        yield_target),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      widget.currentYield_1 == 0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
+                                              ),
+                                            ),
+
+                                            const SizedBox(
+                                              width: 8,
+                                            ),
+
+                                            Flexible(
+                                              child: Card(
+                                                color: Colors.white,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: widget.textColor,
+                                                      width: 1,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(vertical: 12),
+                                                  child: Center(
+                                                    child: Text(
+                                                      '${widget.currentYield_1.toString()}%',
+                                                      style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 24,
+                                                        color: widget.textColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+
+                                      // Fourth row of cards
+                                      Flexible(
+                                        child: Row(
+                                          children: [
+                                            // Circle
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: widget.currentYield_1 ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getYieldColor(
+                                                        widget.currentYield_1,
+                                                        yield_target),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      widget.currentYield_1 == 0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
+                                              ),
+                                            ),
+
+                                            const SizedBox(
+                                              width: 8,
+                                            ),
+
+                                            Flexible(
+                                              child: Card(
+                                                color: Colors.white,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: widget.textColor,
+                                                      width: 1,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(vertical: 12),
+                                                  child: Center(
+                                                    child: Text(
+                                                      '${widget.currentYield_1.toString()}%',
+                                                      style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 24,
+                                                        color: widget.textColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+
+                                      // Fifth row of cards
+                                      Flexible(
+                                        child: Row(
+                                          children: [
+                                            // Circle
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: widget.currentYield_1 ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getYieldColor(
+                                                        widget.currentYield_1,
+                                                        yield_target),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      widget.currentYield_1 == 0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
+                                              ),
+                                            ),
+
+                                            const SizedBox(
+                                              width: 8,
+                                            ),
+
+                                            Flexible(
+                                              child: Card(
+                                                color: Colors.white,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: widget.textColor,
+                                                      width: 1,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(vertical: 12),
+                                                  child: Center(
+                                                    child: Text(
+                                                      '${widget.currentYield_1.toString()}%',
+                                                      style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 24,
                                                         color: widget.textColor,
                                                       ),
                                                     ),
@@ -1160,21 +1345,26 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                           ),
                           const SizedBox(width: 8),
                           Flexible(
-                            flex: 3,
-                            child: YieldComparisonBarChart(
-                              data: widget.mergedShiftData,
-                              target: yield_target as double,
-                            ),
-                          ),
+                              flex: 3,
+                              child: Column(
+                                children: [
+                                  Flexible(
+                                    child: YieldComparisonSTRBarChart(
+                                      data: widget.mergedShiftData,
+                                      target: yield_target as double,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Second row with 1 card that fills all remaining space
+                                  Yield2LineChart(
+                                    hourlyData1: widget.yieldLast8h_1,
+                                    hourlyData2: widget.yieldLast8h_2,
+                                    target: yield_target as double,
+                                  ),
+                                ],
+                              ))
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    // Second row with 1 card that fills all remaining space
-                    Yield2LineChart(
-                      hourlyData1: widget.yieldLast8h_1,
-                      hourlyData2: widget.yieldLast8h_2,
-                      target: yield_target as double,
                     ),
                   ],
                 ),
@@ -1266,7 +1456,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
           ],
         ),
 
-        const SizedBox(height: 48),
+        const SizedBox(height: 8),
         // ────── SECOND HEADER ROW ──────
         Row(
           children: [
@@ -1301,7 +1491,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
           ],
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
 
         // ────── SECOND ROW ──────
         Row(

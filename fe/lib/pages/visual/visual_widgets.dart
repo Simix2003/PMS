@@ -1050,6 +1050,250 @@ class ThroughputELLBarChart extends StatelessWidget {
   }
 }
 
+class ThroughputSTRBarChart extends StatelessWidget {
+  final List<Map<String, int>> data;
+  final List<String> labels;
+  final double globalTarget;
+
+  const ThroughputSTRBarChart({
+    super.key,
+    required this.data,
+    required this.labels,
+    this.globalTarget = 360,
+  });
+
+  double _calculateSmartMaxY(int maxTotal, bool showTarget) {
+    if (!showTarget) {
+      return maxTotal + (maxTotal * 0.1).clamp(20, 100);
+    }
+    final base = globalTarget > maxTotal ? globalTarget : maxTotal.toDouble();
+    final padding = (base * 0.1).clamp(20, 100);
+    return base + padding;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxTotal =
+        data.map((e) => e['ok']! + e['ng']!).reduce((a, b) => a > b ? a : b);
+    final bool showTarget = maxTotal >= globalTarget * 0.5;
+    final double maxY = _calculateSmartMaxY(maxTotal, showTarget);
+
+    return Expanded(
+      flex: 2,
+      child: Card(
+        color: Colors.white,
+        elevation: 10,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'Throughput',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Target: ${globalTarget.toInt()}',
+                    style: const TextStyle(
+                      color: Colors.orangeAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: Stack(
+                  children: [
+                    BarChart(
+                      BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY: maxY,
+                        barTouchData: BarTouchData(
+                          enabled: true,
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) => Colors.transparent,
+                            tooltipPadding: EdgeInsets.zero,
+                            tooltipMargin: 0,
+                            fitInsideHorizontally: true,
+                            fitInsideVertically: true,
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              final value = rod.toY.toString();
+                              return BarTooltipItem(
+                                value,
+                                const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        titlesData: FlTitlesData(
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                final index = value.toInt();
+                                if (index >= 0 && index < labels.length) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Text(
+                                      labels[index],
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ),
+                        ),
+                        gridData: FlGridData(show: false),
+                        borderData: FlBorderData(show: false),
+                        barGroups: _buildBarGroups(data),
+                        extraLinesData: ExtraLinesData(
+                          horizontalLines: [
+                            HorizontalLine(
+                              y: globalTarget,
+                              color: Colors.orangeAccent,
+                              strokeWidth: 2,
+                              dashArray: [6, 3],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final chartWidth = constraints.maxWidth;
+                          final chartHeight = constraints.maxHeight;
+                          final barCount = data.length;
+                          final groupSpace = chartWidth / (barCount * 2);
+
+                          return Stack(
+                            children: List.generate(barCount, (index) {
+                              final ok = data[index]['ok']!;
+                              if (ok <= 0) {
+                                return const SizedBox();
+                              }
+
+                              final barCenterX = (2 * index + 1) * groupSpace;
+                              final okHeight = chartHeight * (ok / maxY);
+
+                              final topOfGreenBar = chartHeight - okHeight;
+
+                              final topOffset = okHeight >= 40
+                                  ? topOfGreenBar // inside the green bar
+                                  : okHeight >= 20
+                                      ? (topOfGreenBar - 16)
+                                          .clamp(0.0, chartHeight - 16)
+                                      : (topOfGreenBar - 32)
+                                          .clamp(0.0, chartHeight - 32);
+
+                              final text = '$ok';
+                              final offset = text.length == 1
+                                  ? 4
+                                  : text.length == 2
+                                      ? 8
+                                      : 12;
+
+                              return Positioned(
+                                left: barCenterX - offset,
+                                top: topOffset,
+                                child: Text(
+                                  text,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    shadows: [
+                                      Shadow(
+                                          offset: Offset(0, 0),
+                                          blurRadius: 2,
+                                          color: Colors.black),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 20,
+                children: [
+                  LegendItem(color: Colors.green, label: 'STR G'),
+                  LegendItem(color: Colors.orange, label: 'STR NG'),
+                  LegendItem(color: Colors.red, label: 'CELL SCRAP'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<BarChartGroupData> _buildBarGroups(List<Map<String, int>> data) {
+    return List.generate(data.length, (index) {
+      final ok = data[index]['ok']!;
+      final ng = data[index]['ng']!;
+      final total = ok + ng;
+
+      return BarChartGroupData(
+        x: index,
+        barRods: [
+          BarChartRodData(
+            color: Colors.transparent,
+            fromY: 0,
+            toY: total.toDouble(),
+            width: 64,
+            rodStackItems: [
+              if (ok > 0) BarChartRodStackItem(0, ok.toDouble(), Colors.green),
+              if (ng > 0)
+                BarChartRodStackItem(
+                    ok.toDouble(), (ok + ng).toDouble(), Colors.red),
+            ],
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
+          ),
+        ],
+        showingTooltipIndicators: [0, 1],
+      );
+    });
+  }
+}
+
 class HourlyBarChart extends StatelessWidget {
   final List<Map<String, int>> data;
   final List<String> hourLabels;
@@ -1976,6 +2220,189 @@ class YieldComparisonELLBarChart extends StatelessWidget {
                 LegendItem(
                     color: Colors.lightBlue.shade200,
                     label: 'Yield con ReWork'),
+                LegendItem(
+                    color: Colors.orange, label: 'Target', isDashed: true),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class YieldComparisonSTRBarChart extends StatelessWidget {
+  final List<Map<String, dynamic>> data;
+  final double target;
+
+  const YieldComparisonSTRBarChart({
+    super.key,
+    required this.data,
+    this.target = 90,
+  });
+
+  String _getCurrentShift() {
+    final hour = DateTime.now().hour;
+    if (hour >= 6 && hour < 14) return 'S1';
+    if (hour >= 14 && hour < 22) return 'S2';
+    return 'S3';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentShift = _getCurrentShift();
+    final orderedData = reorderShifts(data, currentShift);
+
+    return Card(
+      color: Colors.white,
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const SizedBox(width: 8),
+                const Text(
+                  'Yield per Shift',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                Text(
+                  'Target: $target%',
+                  style: TextStyle(
+                    color: Colors.orangeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100,
+              child: Stack(
+                children: [
+                  // 🔹 Chart
+                  BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: 100,
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          getTooltipColor: (_) => Colors.grey
+                              .withOpacity(0.8), // 🔹 semi-transparent grey
+                          tooltipPadding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
+                          tooltipMargin: 6,
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            final value = rod.toY.toStringAsFixed(0);
+
+                            return BarTooltipItem(
+                              '$value%',
+                              const TextStyle(
+                                color: Colors.white, // 🔸 white text
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              int i = value.toInt();
+                              return Text(orderedData[i]['shift']);
+                            },
+                          ),
+                        ),
+                        topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                      ),
+                      gridData: FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      barGroups: List.generate(orderedData.length, (index) {
+                        final item = orderedData[index];
+                        if (item['bussing1'] == null ||
+                            item['bussing2'] == null) {
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: 0,
+                                width: 40,
+                                color: Colors.blue.shade900,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: 0,
+                                width: 40,
+                                color: Colors.lightBlue.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 6,
+                          );
+                        } else {
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: item['bussing1'],
+                                width: 40,
+                                color: Colors.blue.shade900,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: item['bussing2'],
+                                width: 40,
+                                color: Colors.lightBlue.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 6,
+                          );
+                        }
+                      }),
+                      extraLinesData: ExtraLinesData(horizontalLines: [
+                        HorizontalLine(
+                          y: target,
+                          color: Colors.orange,
+                          strokeWidth: 2,
+                          dashArray: [8, 4],
+                        ),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 20,
+              children: [
+                LegendItem(color: Colors.blue.shade900, label: 'Yield STR'),
+                LegendItem(
+                    color: Colors.lightBlue.shade200, label: 'Yield Overall'),
                 LegendItem(
                     color: Colors.orange, label: 'Target', isDashed: true),
               ],

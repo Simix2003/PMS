@@ -1,4 +1,5 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import os
 import sys
 import logging
@@ -7,7 +8,6 @@ import json
 import time
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor
 
 import uvicorn
 from fastapi import FastAPI
@@ -113,7 +113,7 @@ from service.connections.mysql import get_mysql_connection, load_channels_from_d
 from service.tasks.main_esito_task import background_task, make_status_callback
 from service.tasks.main_fermi_task import fermi_task
 from service.helpers.visual_helper import refresh_median_cycle_time_vpf
-from service.state.global_state import plc_connections, stop_threads, passato_flags
+from service.state.global_state import plc_connections, stop_threads, inizio_passato_flags, fine_passato_flags
 from service.routes.plc_routes import router as plc_router
 from service.routes.issue_routes import router as issue_router
 from service.routes.warning_routes import router as warning_router
@@ -136,12 +136,14 @@ logger = logging.getLogger(__name__)
 # ---------------- INIT GLOBAL FLAGS ----------------
 def init_global_flags():
     stop_threads.clear()
-    passato_flags.clear()
+    inizio_passato_flags.clear()
+    fine_passato_flags.clear()
     for line, stations in CHANNELS.items():
         for station in stations:
             key = f"{line}.{station}"
             stop_threads[key] = False
-            passato_flags[key] = False
+            inizio_passato_flags[key] = False
+            fine_passato_flags[key] = False
 
 # ---------------- FAST STARTUP ----------------
 _executor = ThreadPoolExecutor(max_workers=10)

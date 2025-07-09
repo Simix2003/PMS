@@ -986,18 +986,30 @@ def update_visual_data_on_new_module(
         elif zone == "ELL":
             _update_snapshot_ell(data, station_name, ts, cycle_time, bufferIds)
         else:
-            logger.warning(f"Unknown zone: {zone}")
+            logger.info(f"Unknown zone: {zone}")
             return
 
-        # Push via WebSocket
         try:
-            loop = asyncio.get_running_loop()
             payload = copy.deepcopy(data)
-            loop.call_soon_threadsafe(
-                lambda: asyncio.create_task(
-                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.call_soon_threadsafe(
+                    lambda: asyncio.create_task(
+                        broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                    )
                 )
-            )
+            else:
+                # fallback: run from outside loop (e.g., background thread)
+                asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+        except RuntimeError as e:
+            # This happens if there's no loop at all (e.g., in a thread without asyncio)
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+                loop.close()
+            except Exception as e2:
+                logger.warning(f"Failed to run broadcast_zone_update for {zone} in fallback loop: {e2}")
         except Exception as e:
             logger.warning(f"Could not schedule WebSocket update for {zone}: {e}")
 
@@ -1719,13 +1731,26 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                     # Save and broadcast
                     data["fermi_data"] = fermi_data
 
-                    loop = asyncio.get_running_loop()
                     payload = copy.deepcopy(data)
-                    loop.call_soon_threadsafe(
-                        lambda: asyncio.create_task(
-                            broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
-                        )
-                    )
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            loop.call_soon_threadsafe(
+                                lambda: asyncio.create_task(
+                                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                                )
+                            )
+                        else:
+                            asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+                    except RuntimeError:
+                        # No loop in current thread — create one manually
+                        try:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+                            loop.close()
+                        except Exception as e:
+                            logger.warning(f"[refresh_fermi_data] fallback WebSocket update failed for {zone}: {e}")
 
                 except Exception as e:
                     logger.exception(f"Error refreshing fermi_data for zone={zone}: {e}")
@@ -1804,13 +1829,27 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
                     top5 = sorted(full_results, key=lambda r: r["total"], reverse=True)[:5]
                     data["top_defects_qg2"] = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in top5]
 
-                    loop = asyncio.get_running_loop()
                     payload = copy.deepcopy(data)
-                    loop.call_soon_threadsafe(
-                        lambda: asyncio.create_task(
-                            broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
-                        )
-                    )
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            loop.call_soon_threadsafe(
+                                lambda: asyncio.create_task(
+                                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                                )
+                            )
+                        else:
+                            asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+                    except RuntimeError:
+                        # No loop in current thread — create one manually
+                        try:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+                            loop.close()
+                        except Exception as e:
+                            logger.warning(f"[refresh_top_defects_qg2] fallback WebSocket update failed for {zone}: {e}")
+
 
     except Exception as e:
         logger.exception(f"Exception in refresh_top_defects_qg2: {e}")
@@ -1892,14 +1931,26 @@ def refresh_top_defects_vpf(zone: str, ts: datetime) -> None:
                         for r in top5
                     ]
 
-                    # 5️⃣ WebSocket push
-                    loop = asyncio.get_running_loop()
                     payload = copy.deepcopy(data)
-                    loop.call_soon_threadsafe(
-                        lambda: asyncio.create_task(
-                            broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
-                        )
-                    )
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            loop.call_soon_threadsafe(
+                                lambda: asyncio.create_task(
+                                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                                )
+                            )
+                        else:
+                            asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+                    except RuntimeError:
+                        # No loop in current thread — create one manually
+                        try:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+                            loop.close()
+                        except Exception as e:
+                            logger.warning(f"[refresh_fermi_data] fallback WebSocket update failed for {zone}: {e}")
 
     except Exception as e:
         logger.exception(f"Exception in refresh_top_defects_vpf: {e}")
@@ -2065,13 +2116,27 @@ def refresh_vpf_defects_data(now: datetime) -> None:
                     data["eq_defects"] = eq_defects
 
                     # --- Broadcast update ---
-                    loop = asyncio.get_running_loop()
                     payload = copy.deepcopy(data)
-                    loop.call_soon_threadsafe(
-                        lambda: asyncio.create_task(
-                            broadcast_zone_update(line_name="Linea2", zone="VPF", payload=payload)
-                        )
-                    )
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            loop.call_soon_threadsafe(
+                                lambda: asyncio.create_task(
+                                    broadcast_zone_update(line_name="Linea2", zone="VPF", payload=payload)
+                                )
+                            )
+                        else:
+                            asyncio.run(broadcast_zone_update(line_name="Linea2", zone="VPF", payload=payload))
+                    except RuntimeError:
+                        # No loop in current thread — create one manually
+                        try:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone="VPF", payload=payload))
+                            loop.close()
+                        except Exception as e:
+                            logger.warning(f"[VPF] fallback WebSocket update failed for VPF: {e}")
+
 
     except Exception as e:
         logger.exception(f"refresh_vpf_defects_data() FAILED: {e}")

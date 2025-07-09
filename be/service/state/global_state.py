@@ -1,7 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
 import os
 from threading import Lock
 from dotenv import load_dotenv, find_dotenv
-from concurrent.futures import ThreadPoolExecutor
 from pymysql.cursors import DictCursor
 from pymysqlpool import ConnectionPool
 
@@ -44,7 +44,8 @@ subscriptions = {}
 trigger_timestamps = {}
 incomplete_productions = {}
 stop_threads = {}
-passato_flags = {}
+fine_passato_flags = {}
+inizio_passato_flags = {}
 
 # Debug tools
 debug_triggers = {}

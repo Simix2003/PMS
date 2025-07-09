@@ -16,7 +16,7 @@ from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
 from service.config.config import PLC_DB_RANGES, ZONE_SOURCES, debug
 from service.routes.broadcast import broadcast
-from service.state.global_state import passato_flags, trigger_timestamps, incomplete_productions
+from service.state.global_state import inizio_passato_flags, fine_passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string
 from service.helpers.visual_helper import refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
@@ -85,9 +85,12 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
 
             if trigger_value is None:
                 raise Exception("Trigger read returned None")
+            
+            if not trigger_value:
+                inizio_passato_flags[full_station_id] = False
 
-            if trigger_value != prev_trigger:
-                prev_trigger = trigger_value
+            if trigger_value and not inizio_passato_flags[full_station_id]:
+                inizio_passato_flags[full_station_id] = True,
                 await on_trigger_change(
                     plc_connection,
                     line_name,
@@ -127,8 +130,11 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
 
             if fine_buona is None or fine_scarto is None:
                 raise Exception("Outcome read returned None")
+            
+            if not fine_buona and not fine_scarto:
+                fine_passato_flags[full_station_id] = False
 
-            if (fine_buona or fine_scarto) and not passato_flags[full_station_id]:
+            if (fine_buona or fine_scarto) and not fine_passato_flags[full_station_id]:
                 data_inizio = trigger_timestamps.get(full_station_id)
                 bufferIds = []
                 result = await read_data(plc_connection, line_name, channel_id,
@@ -141,7 +147,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 
                 if result:
                     bufferIds = result.get("BufferIds_Rework", [])
-                    passato_flags[full_station_id] = True
+                    fine_passato_flags[full_station_id] = True
                     production_id = incomplete_productions.get(full_station_id)
 
                     if production_id:
@@ -214,6 +220,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                 else:
                                     logger.error(f"Failed to update production in DB, skipping visual update.")
                     else:
+                        pezzo_archivia_conf = paths["pezzo_archiviato"]
                         logger.warning(f"No initial production record found for {full_station_id}; skipping update, Writing PEZZO ARCHIVIATO Anyway")
                         await asyncio.to_thread(plc_connection.write_bool, pezzo_archivia_conf["db"], pezzo_archivia_conf["byte"], pezzo_archivia_conf["bit"], True)
 
@@ -319,8 +326,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         })
 
     else:
-        logger.debug(f"Inizio Ciclo on {full_id} FALSE ...")
-        passato_flags[full_id] = False
+        logger.info(f"Inizio Ciclo on {full_id} FALSE ...")
         await broadcast(line_name, channel_id, {
             "trigger": False,
             "objectId": None,

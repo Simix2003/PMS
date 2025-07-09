@@ -34,7 +34,7 @@ EXCEL_DEFECT_COLUMNS = {
 }
 
 SHEET_NAMES = [
-    "Metadata", "Risolutivo", "Eventi", #"MBJ", "Rework",
+    "Metadata", "Risolutivo", #"Eventi", #"MBJ", "Rework",
     "NG Generali", "NG Saldature", "NG Disall. Ribbon",
     "NG Disall. Stringa", "NG Mancanza Ribbon", "NG I_Ribbon Leadwire", "NG Macchie ECA", "NG Celle Rotte", "NG Lunghezza String Ribbon", "NG Graffio su Cella", "NG Bad Soldering", "NG Altro"
 ]
@@ -2821,7 +2821,7 @@ def ng_altro_sheet(ws, data: dict, progress=None) -> bool:
 SHEET_FUNCTIONS = {
     "Metadata": metadata_sheet,
     "Risolutivo": risolutivo_sheet,
-    "Eventi": eventi_sheet,
+    #"Eventi": eventi_sheet,
     #"Rework": rework_sheet,
     #"MBJ": mbj_sheet,
     "NG Generali": ng_generali_sheet,

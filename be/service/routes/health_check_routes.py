@@ -35,9 +35,9 @@ def get_uptime() -> str:
 
 def check_database_connection() -> Dict[str, str]:
     try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT 1")
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
         return {"status": "ok", "message": "MySQL OK"}
     except Exception as e:
         logger.error(f"MySQL health check failed: {e}")

@@ -66,11 +66,10 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
     send_progress("db_connect")
 
     # ----------- 2. DB CONNECTION --------------------------------------------------
-    conn = get_mysql_connection()
-    if not conn:
-        return JSONResponse(status_code=500,
-                            content={"error": "MySQL connection not available"})
-
+    with get_mysql_connection() as conn:
+        if not conn:
+            return JSONResponse(status_code=500,
+                                content={"error": "MySQL connection not available"})
     try:
         export_data = {
             "filters":          filters,
@@ -226,18 +225,18 @@ def daily_export(background_tasks: BackgroundTasks, data: dict = Body(...)):
     end_dt = datetime.combine(now.date(), dt_time(hour=5, minute=59, second=59))
 
 
-    conn = get_mysql_connection()
-    with conn.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT p.id AS production_id, o.id_modulo
-            FROM productions p
-            JOIN objects o ON p.object_id = o.id
-            WHERE p.start_time >= %s AND p.start_time <= %s
-            """,
-            (start_dt, end_dt),
-        )
-        rows = cursor.fetchall()
+    with get_mysql_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT p.id AS production_id, o.id_modulo
+                FROM productions p
+                JOIN objects o ON p.object_id = o.id
+                WHERE p.start_time >= %s AND p.start_time <= %s
+                """,
+                (start_dt, end_dt),
+            )
+            rows = cursor.fetchall()
 
     if not rows:
         logger.info("Daily export: no data found for %s - %s", start_dt, end_dt)

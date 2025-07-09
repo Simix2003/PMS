@@ -113,8 +113,8 @@ async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, ch
         data = await read_fermi_data(plc_connection, line_name, channel_id)
         
         # Salvare i dati su MySQL
-        conn = get_mysql_connection()
-        await insert_fermo_data(data, conn)
+        with get_mysql_connection() as conn:
+            await insert_fermo_data(data, conn)
 
         try:
             zone = "AIN"

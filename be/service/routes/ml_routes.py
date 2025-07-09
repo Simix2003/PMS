@@ -131,37 +131,37 @@ def filter_outliers(values, factor=1.5):
 
 async def run_eta_prediction(production_id: int):
     try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            # Step 1: Get defects for this production_id
-            cursor.execute("""
-                SELECT defect_id FROM object_defects WHERE production_id = %s
-            """, (production_id,))
-            current_defects_raw = cursor.fetchall()
-            current_defects = Counter(row["defect_id"] for row in current_defects_raw)
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                # Step 1: Get defects for this production_id
+                cursor.execute("""
+                    SELECT defect_id FROM object_defects WHERE production_id = %s
+                """, (production_id,))
+                current_defects_raw = cursor.fetchall()
+                current_defects = Counter(row["defect_id"] for row in current_defects_raw)
 
-            if not current_defects:
-                return JSONResponse(
-                    status_code=419,
-                    content={
-                        "error": f"No DEFECTS found for production_id {production_id}",
-                        "reason": "no_defects"
-                    }
-                )
+                if not current_defects:
+                    return JSONResponse(
+                        status_code=419,
+                        content={
+                            "error": f"No DEFECTS found for production_id {production_id}",
+                            "reason": "no_defects"
+                        }
+                    )
 
 
 
-            # Step 2: Get historical rework station defects and cycle times
-            cursor.execute("""
-                SELECT od.production_id, od.defect_id, p.cycle_time
-                FROM object_defects od
-                JOIN productions p ON od.production_id = p.id
-                JOIN stations s ON p.station_id = s.id
-                WHERE s.type = 'rework'
-                  AND p.start_time >= NOW() - INTERVAL 90 DAY
-                  AND p.cycle_time IS NOT NULL
-            """)
-            rows = cursor.fetchall()
+                # Step 2: Get historical rework station defects and cycle times
+                cursor.execute("""
+                    SELECT od.production_id, od.defect_id, p.cycle_time
+                    FROM object_defects od
+                    JOIN productions p ON od.production_id = p.id
+                    JOIN stations s ON p.station_id = s.id
+                    WHERE s.type = 'rework'
+                    AND p.start_time >= NOW() - INTERVAL 90 DAY
+                    AND p.cycle_time IS NOT NULL
+                """)
+                rows = cursor.fetchall()
 
         # Step 3: Group by production_id
         history = defaultdict(DefectHistory)
@@ -238,34 +238,34 @@ async def predict_eta(req: PredictionRequest):
 @router.post("/api/ml/predict_eta_by_id_modulo")
 async def predict_eta_by_id_modulo(req: EtaByModuloRequest):
     try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            # Step 1: Resolve id_modulo → object.id
-            cursor.execute("""
-                SELECT id FROM objects WHERE id_modulo = %s
-            """, (req.id_modulo,))
-            object_row = cursor.fetchone()
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                # Step 1: Resolve id_modulo → object.id
+                cursor.execute("""
+                    SELECT id FROM objects WHERE id_modulo = %s
+                """, (req.id_modulo,))
+                object_row = cursor.fetchone()
 
-            if not object_row:
-                return JSONResponse(status_code=404, content={"error": f"id_modulo '{req.id_modulo}' not found in object table"})
+                if not object_row:
+                    return JSONResponse(status_code=404, content={"error": f"id_modulo '{req.id_modulo}' not found in object table"})
 
-            object_id = object_row["id"]
+                object_id = object_row["id"]
 
-            # Step 2: Find latest QC production for this object
-            cursor.execute("""
-                SELECT p.id AS production_id
-                FROM productions p
-                JOIN stations s ON p.station_id = s.id
-                WHERE p.object_id = %s AND s.type = 'qc'
-                ORDER BY p.start_time DESC
-                LIMIT 1
-            """, (object_id,))
-            prod_row = cursor.fetchone()
+                # Step 2: Find latest QC production for this object
+                cursor.execute("""
+                    SELECT p.id AS production_id
+                    FROM productions p
+                    JOIN stations s ON p.station_id = s.id
+                    WHERE p.object_id = %s AND s.type = 'qc'
+                    ORDER BY p.start_time DESC
+                    LIMIT 1
+                """, (object_id,))
+                prod_row = cursor.fetchone()
 
-            if not prod_row:
-                return JSONResponse(status_code=404, content={"error": f"No production at QC for object_id {object_id}"})
+                if not prod_row:
+                    return JSONResponse(status_code=404, content={"error": f"No production at QC for object_id {object_id}"})
 
-            production_id = prod_row["production_id"]
+                production_id = prod_row["production_id"]
 
         return await run_eta_prediction(production_id)
 

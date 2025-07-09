@@ -54,42 +54,33 @@ async def set_issues(request: Request):
         return JSONResponse(status_code=404, content={"error": "esito_scarto_compilato not found in mapping"})
 
     production_id = incomplete_productions.get(full_id)
-    conn = None
-    cursor = None
 
     if production_id:
         try:
-            conn = get_mysql_connection()
-            cursor = conn.cursor()
+            with get_mysql_connection() as conn:
+                with conn.cursor() as cursor:
+                    result = {
+                        "Id_Modulo": object_id,
+                        "Compilato_Su_Ipad_Scarto_Presente": True,
+                        "issues": issues
+                    }
 
-            result = {
-                "Id_Modulo": object_id,
-                "Compilato_Su_Ipad_Scarto_Presente": True,
-                "issues": issues
-            }
+                    await insert_defects(result, production_id, channel_id, line_name, cursor=cursor)
+                    await update_esito(6, production_id, cursor=cursor, connection=conn)
 
-            await insert_defects(result, production_id, channel_id, line_name, cursor=cursor)
-            await update_esito(6, production_id, cursor=cursor, connection=conn)
-            conn.commit()
-            cursor.close()
+                conn.commit()
 
-            await check_stringatrice_warnings(line_name, conn, get_current_settings())
+            # You can call this outside the context manager if it doesn't use the same `conn`
+            await check_stringatrice_warnings(line_name, None, get_current_settings())
 
         except ValueError as e:
-            if conn:
-                conn.rollback()
-            if cursor:
-                cursor.close()
             return JSONResponse(status_code=400, content={"error": str(e)})
 
         except Exception as e:
-            if conn:
-                conn.rollback()
-            if cursor:
-                cursor.close()
             logger.error(f"❌ Unexpected error inserting defects for {full_id}: {e}")
             return JSONResponse(status_code=500, content={"error": "Errore interno del server"})
 
+    # ✅ Write confirmation back to PLC
     target = paths["esito_scarto_compilato"]
     await asyncio.to_thread(plc_connection.write_bool, target["db"], target["byte"], target["bit"], True)
 
@@ -135,148 +126,121 @@ async def get_issue_tree(
     return {"items": items}
 
 @router.get("/api/issues/for_object")
-async def get_issues_for_object(line_name: str, channel_id: str, id_modulo: str, production_id: int = Query(None), write_to_plc: bool = False):
+async def get_issues_for_object(
+    line_name: str,
+    channel_id: str,
+    id_modulo: str,
+    production_id: int = Query(None),
+    write_to_plc: bool = False
+):
     try:
-        if write_to_plc:
-            full_id = f"{line_name}.{channel_id}"
+        full_id = f"{line_name}.{channel_id}"
 
+        if write_to_plc:
             paths = get_channel_config(line_name, channel_id)
             if not paths or "esito_scarto_compilato" not in paths:
                 return JSONResponse(status_code=404, content={"error": "esito_scarto_compilato not found in mapping"})
-        
             target = paths["esito_scarto_compilato"]
 
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            # 1. Trova l'object_id
-            cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
-            obj = cursor.fetchone()
-            if not obj:
-                raise HTTPException(status_code=404, detail="Oggetto non trovato.")
-            object_id = obj["id"]
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                # 1. Trova l'object_id
+                cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
+                obj = cursor.fetchone()
+                if not obj:
+                    raise HTTPException(status_code=404, detail="Oggetto non trovato.")
+                object_id = obj["id"]
 
-            # 2. Se non c'è un production_id, trova il più recente da una stazione QC
-            if production_id is None:
-                # Step 1: Get most recent production
+                # 2. Se production_id è None, trova quello giusto
+                if production_id is None:
+                    cursor.execute("""
+                        SELECT p.id, s.type AS station_type
+                        FROM productions p
+                        JOIN stations s ON p.station_id = s.id
+                        WHERE p.object_id = %s
+                        ORDER BY p.end_time DESC
+                        LIMIT 1
+                    """, (object_id,))
+                    latest_prod = cursor.fetchone()
+
+                    if not latest_prod:
+                        return {"issue_paths": [], "pictures": []}
+                    if latest_prod["station_type"] == "rework":
+                        logger.debug("Latest production is rework → skipping defect extraction.")
+                        return {"issue_paths": [], "pictures": []}
+
+                    cursor.execute("""
+                        SELECT p.id
+                        FROM productions p
+                        JOIN stations s ON p.station_id = s.id
+                        WHERE p.object_id = %s AND s.type = 'qc'
+                        ORDER BY p.end_time DESC
+                        LIMIT 1
+                    """, (object_id,))
+                    qc_prod = cursor.fetchone()
+
+                    if not qc_prod:
+                        return {"issue_paths": [], "pictures": []}
+                    production_id = qc_prod["id"]
+                else:
+                    logger.debug(f'Using provided ProductionId: {production_id}')
+
+                # 3. Estrai difetti + foto
                 cursor.execute("""
-                    SELECT p.id, s.type AS station_type
-                    FROM productions p
-                    JOIN stations s ON p.station_id = s.id
-                    WHERE p.object_id = %s
-                    ORDER BY p.end_time DESC
-                    LIMIT 1
-                """, (object_id,))
-                latest_prod = cursor.fetchone()
+                    SELECT d.category, od.defect_type, od.i_ribbon, od.stringa, 
+                           od.ribbon_lato, od.s_ribbon, od.extra_data, p.photo
+                    FROM object_defects od
+                    JOIN defects d ON od.defect_id = d.id
+                    LEFT JOIN photos p ON od.photo_id = p.id
+                    WHERE od.production_id = %s
+                """, (production_id,))
 
-                if not latest_prod:
-                    return {"issue_paths": [], "pictures": []}
+                defects = cursor.fetchall()
 
-                if latest_prod["station_type"] == "rework":
-                    logger.debug("Latest production is rework → skipping defect extraction.")
-                    return {"issue_paths": [], "pictures": []}
+        # 4. Fuori dal context → costruzione risposte
+        issue_paths, pictures = [], []
+        plc_connection = plc_connections.get(full_id) if write_to_plc else None
 
-                # Step 2: Get latest QC production instead
-                cursor.execute("""
-                    SELECT p.id
-                    FROM productions p
-                    JOIN stations s ON p.station_id = s.id
-                    WHERE p.object_id = %s AND s.type = 'qc'
-                    ORDER BY p.end_time DESC
-                    LIMIT 1
-                """, (object_id,))
-                qc_prod = cursor.fetchone()
+        for row in defects:
+            cat = row["category"]
+            base64_photo = (
+                f"data:image/jpeg;base64,{base64.b64encode(row['photo']).decode()}"
+                if row.get("photo") else None
+            )
 
-                if not qc_prod:
-                    return {"issue_paths": [], "pictures": []}
+            def maybe_add(path):
+                issue_paths.append(path)
+                if base64_photo:
+                    pictures.append({"defect": path, "image": base64_photo})
 
-                production_id = qc_prod["id"]
+            if cat == "Generali" and row["defect_type"]:
+                maybe_add(f"Dati.Esito.Esito_Scarto.Difetti.Generali.{row['defect_type']}")
+            elif cat == "Altro" and row["extra_data"]:
+                maybe_add(f"Dati.Esito.Esito_Scarto.Difetti.Altro: {row['extra_data']}")
+            elif cat == "Saldatura":
+                maybe_add(f"Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[{row['stringa']}].Pin[{row['s_ribbon']}].{row['ribbon_lato']}")
+            elif cat == "Disallineamento":
+                if row["stringa"]:
+                    maybe_add(f"Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[{row['stringa']}]")
+                elif row["i_ribbon"] and row["ribbon_lato"]:
+                    maybe_add(f"Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}")
+            elif cat == "Mancanza Ribbon":
+                maybe_add(f"Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}")
+            elif cat == "I_Ribbon Leadwire":
+                maybe_add(f"Dati.Esito.Esito_Scarto.Difetti.I_Ribbon Leadwire.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}")
+            elif cat in ["Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella", "Bad Soldering"]:
+                maybe_add(f"Dati.Esito.Esito_Scarto.Difetti.{cat}.Stringa[{row['stringa']}]")
             else:
-                logging.debug('Using provided ProductionId:', production_id)
+                maybe_add(f"Dati.Esito.Esito_Scarto.Difetti.{cat}")
 
-            # 3. Estrai i difetti associati con join alle foto
-            cursor.execute("""
-                SELECT d.category, od.defect_type, od.i_ribbon, od.stringa, 
-                       od.ribbon_lato, od.s_ribbon, od.extra_data, p.photo
-                FROM object_defects od
-                JOIN defects d ON od.defect_id = d.id
-                LEFT JOIN photos p ON od.photo_id = p.id
-                WHERE od.production_id = %s
-            """, (production_id,))
+        # 5. Scrittura su PLC se richiesto
+        if defects and write_to_plc and plc_connection:
+            if debug:
+                logger.debug(f"Writing to PLC for {full_id}")
+            else:
+                await asyncio.to_thread(plc_connection.write_bool, target["db"], target["byte"], target["bit"], True)
 
-            defects = cursor.fetchall()
-            issue_paths = []
-            pictures = []
-
-            if write_to_plc:
-                plc_connection = plc_connections.get(full_id)
-                if not plc_connection:
-                    return JSONResponse(status_code=404, content={"error": f"No PLC connection for {full_id}."})
-
-            for row in defects:
-                cat = row["category"]
-                base64_photo = None
-                if row.get("photo"):
-                    base64_photo = f"data:image/jpeg;base64,{base64.b64encode(row['photo']).decode()}"
-
-                if cat == "Generali":
-                    if row["defect_type"]:
-                        path = f"Dati.Esito.Esito_Scarto.Difetti.Generali.{row['defect_type']}"
-                        issue_paths.append(path)
-                        if base64_photo:
-                            pictures.append({"defect": path, "image": base64_photo})
-
-                elif cat == "Altro":
-                    if row["extra_data"]:
-                        path = f"Dati.Esito.Esito_Scarto.Difetti.Altro: {row['extra_data']}"
-                        issue_paths.append(path)
-
-                elif cat == "Saldatura":
-                    path = f"Dati.Esito.Esito_Scarto.Difetti.Saldatura.Stringa[{row['stringa']}].Pin[{row['s_ribbon']}].{row['ribbon_lato']}"
-                    issue_paths.append(path)
-                    if base64_photo:
-                        pictures.append({"defect": path, "image": base64_photo})
-
-                elif cat == "Disallineamento":
-                    if row["stringa"]:
-                        path = f"Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Stringa[{row['stringa']}]"
-                    elif row["i_ribbon"] and row["ribbon_lato"]:
-                        path = f"Dati.Esito.Esito_Scarto.Difetti.Disallineamento.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
-                    else:
-                        continue
-                    issue_paths.append(path)
-                    if base64_photo:
-                        pictures.append({"defect": path, "image": base64_photo})
-
-                elif cat == "Mancanza Ribbon":
-                    path = f"Dati.Esito.Esito_Scarto.Difetti.Mancanza Ribbon.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
-                    issue_paths.append(path)
-                    if base64_photo:
-                        pictures.append({"defect": path, "image": base64_photo})
-
-                elif cat == "I_Ribbon Leadwire":
-                    path = f"Dati.Esito.Esito_Scarto.Difetti.I_Ribbon Leadwire.Ribbon[{row['i_ribbon']}].{row['ribbon_lato']}"
-                    issue_paths.append(path)
-                    if base64_photo:
-                        pictures.append({"defect": path, "image": base64_photo})
-
-                elif cat in ["Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella", "Bad Soldering"]:
-                    path = f"Dati.Esito.Esito_Scarto.Difetti.{cat}.Stringa[{row['stringa']}]"
-                    issue_paths.append(path)
-                    if base64_photo:
-                        pictures.append({"defect": path, "image": base64_photo})
-                else:
-                    path = f"Dati.Esito.Esito_Scarto.Difetti.{cat}"
-                    issue_paths.append(path)
-                    if base64_photo:
-                        pictures.append({"defect": path, "image": base64_photo})
-            
-            if defects and write_to_plc:
-                if debug: 
-                    logger.debug(f"Writing to PLC for {full_id}")
-                else:
-                    await asyncio.to_thread(plc_connection.write_bool, target["db"], target["byte"], target["bit"], True)
-
-            return {"issue_paths": issue_paths, "pictures": pictures}
+        return {"issue_paths": issue_paths, "pictures": pictures}
 
     except Exception as e:
         logger.error(f"❌ Errore nel recupero dei difetti per id_modulo={id_modulo}: {e}")

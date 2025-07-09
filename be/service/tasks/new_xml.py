@@ -52,15 +52,14 @@ def handle_new_xml_file(file_path: str):
         fine_buona = (esito == 1)
         fine_scarto = (esito == 6)
 
-        conn = get_mysql_connection()
-        #print(id_modulo, station_name, data_inizio, esito)
-        # Check if this event already exists
-        if check_existing_production(id_modulo, station_name, data_inizio, conn):
-            logging.info(f"⚠️ Skipping duplicate production for {id_modulo} at {station_name}")
-            return
-        else:
-            last_station_id = get_last_station_id_from_productions(id_modulo, conn)
-
+        with get_mysql_connection() as conn:
+            #print(id_modulo, station_name, data_inizio, esito)
+            # Check if this event already exists
+            if check_existing_production(id_modulo, station_name, data_inizio, conn):
+                logging.info(f"⚠️ Skipping duplicate production for {id_modulo} at {station_name}")
+                return
+            else:
+                last_station_id = get_last_station_id_from_productions(id_modulo, conn)
 
     except Exception as e:
         logging.warning(f"⚠️ Failed to parse XML file {file_path}: {e}")
@@ -76,8 +75,8 @@ def handle_new_xml_file(file_path: str):
             "Last_Station": last_station_id,
         }
 
-        conn = get_mysql_connection()
-        production_id = asyncio.run(insert_initial_production_data(initial_data, station_name, conn, esito=2))
+        with get_mysql_connection() as conn:
+            production_id = asyncio.run(insert_initial_production_data(initial_data, station_name, conn, esito=2))
 
         if not production_id:
             logging.warning(f"❌ insert_initial_production_data failed for {id_modulo}")

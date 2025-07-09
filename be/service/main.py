@@ -230,14 +230,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     logger.info("Debug value is set to {}".format(debug))
 
-    # Fast connect check
-    try:
-        conn = get_mysql_connection()
-        logger.debug("MySQL connected")
-    except Exception as e:
-        logger.error(f"MySQL failed: {e}")
-        raise
-
     # Load channels + DB ranges
     try:
         CHANNELS.clear()
@@ -264,8 +256,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     finally:
         logger.debug("SHUTDOWN phase")
         try:
-            conn = get_mysql_connection()
-            conn.close()
+            with get_mysql_connection() as conn:
+                conn.close()
             logger.debug("MySQL disconnected")
         except Exception as e:
             logger.warning(f"MySQL close failed: {e}")

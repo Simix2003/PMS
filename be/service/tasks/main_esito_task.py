@@ -21,6 +21,7 @@ import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string
 from service.helpers.visual_helper import refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
 from service.routes.mbj_routes import parse_mbj_details
+from service.helpers.executor import run_in_thread
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             paths = get_channel_config(line_name, channel_id)
             if not paths:
                 logger.error(f"Invalid line/channel: {line_name}.{channel_id}")
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
                 continue  # Skip this cycle if config not found
 
             # Get full DB buffer once for this PLC
@@ -63,7 +64,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             db_range = PLC_DB_RANGES.get(plc_key, {}).get(db)
             if not db_range:
                 logger.error(f"No DB range defined for {plc_key} DB{db}")
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
                 continue
 
             start_byte = db_range["min"]
@@ -98,7 +99,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
 
             if not paths:
                 logger.error(f"Missing config for {line_name}.{channel_id}")
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
                 continue  # Or return / skip, depending on context
 
             # Now you're safe to use it:
@@ -142,80 +143,83 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     bufferIds = result.get("BufferIds_Rework", [])
                     passato_flags[full_station_id] = True
                     production_id = incomplete_productions.get(full_station_id)
-                    
+
                     if production_id:
-                        conn = get_mysql_connection()
-                        success, final_esito, end_time = await update_production_final(
-                            production_id, result, channel_id, conn, fine_buona, fine_scarto
-                        )
-                        if success and channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
-                            await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_vpf=True)
-                            assert end_time and final_esito is not None
-                            timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
-                            
-                            refresh_top_defects_vpf("AIN", timestamp)
-                            refresh_vpf_defects_data(timestamp)
-                        
-                        if success and channel_id == "ELL01" and fine_scarto:
-                            assert end_time and final_esito is not None
-                            await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_ell=True)
-                        
-                        if success and channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
-                            await insert_defects(result, production_id, channel_id, line_name, cursor=conn.cursor(), from_ain=True)
+                        with get_mysql_connection() as conn:
+                            with conn.cursor() as cursor:
+                                success, final_esito, end_time = await update_production_final(
+                                    production_id, result, channel_id, conn, fine_buona, fine_scarto
+                                )
 
-                        if success:
-                            try:
-                                zone = get_zone_from_station(channel_id)
-                                assert end_time and final_esito is not None
+                                if success and channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
+                                    await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_vpf=True)
+                                    assert end_time and final_esito is not None
+                                    timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
 
-                                timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
-                                if channel_id == "VPF01":
-                                    reentered = bool(result.get("Re_entered_from_m506", False))
-                                elif channel_id == "ELL01":
-                                    reentered = bool(result.get("Re_entered_from_m326", False))
+                                    await run_in_thread(refresh_top_defects_vpf, "AIN", timestamp)
+                                    await run_in_thread(refresh_vpf_defects_data, timestamp)
+
+                                if success and channel_id == "ELL01" and fine_scarto:
+                                    assert end_time and final_esito is not None
+                                    await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_ell=True)
+
+                                if success and channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
+                                    await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_ain=True)
+
+                                if success:
+                                    try:
+                                        zone = get_zone_from_station(channel_id)
+                                        assert end_time and final_esito is not None
+                                        timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
+
+                                        if channel_id == "VPF01":
+                                            reentered = bool(result.get("Re_entered_from_m506", False))
+                                        elif channel_id == "ELL01":
+                                            reentered = bool(result.get("Re_entered_from_m326", False))
+                                        else:
+                                            reentered = False
+
+                                        if zone:
+                                            await run_in_thread(
+                                                update_visual_data_on_new_module,
+                                                zone=zone,
+                                                station_name=channel_id,
+                                                esito=final_esito,
+                                                ts=timestamp,
+                                                cycle_time=result['Tempo_Ciclo'],
+                                                reentered=reentered,
+                                                bufferIds=bufferIds
+                                            )
+
+                                            if zone == "AIN" and fine_scarto:
+                                                await run_in_thread(refresh_top_defects_qg2, zone, timestamp)
+
+                                            logger.debug(f"Called update_visual_data_on_new_module ✅")
+                                        else:
+                                            logger.warning(f"Unknown zone for station {channel_id} — skipping visual update")
+
+                                    except Exception as vis_err:
+                                        logger.warning(f"Could not update visual_data for {channel_id}: {vis_err}")
+
+                                    incomplete_productions.pop(full_station_id)
+
+                                    esito_conf = paths.get("esito_scarto_compilato")
+                                    pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
+                                    pezzo_archivia_conf = paths["pezzo_archiviato"]
+
+                                    await asyncio.to_thread(plc_connection.write_bool, pezzo_archivia_conf["db"], pezzo_archivia_conf["byte"], pezzo_archivia_conf["bit"], True)
+                                    if esito_conf:
+                                        await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
+
                                 else:
-                                    reentered = False
-
-                                if zone:
-                                    update_visual_data_on_new_module(
-                                        zone=zone,
-                                        station_name=channel_id,
-                                        esito=final_esito,
-                                        ts=timestamp,
-                                        cycle_time=result['Tempo_Ciclo'],
-                                        reentered=reentered,
-                                        bufferIds=bufferIds
-                                    )
-
-                                    if zone == "AIN" and fine_scarto:
-                                        refresh_top_defects_qg2(zone, timestamp)
-
-                                    logger.debug(f"Called update_visual_data_on_new_module ✅")
-                                else:
-                                    logger.warning(f"Unknown zone for station {channel_id} — skipping visual update")
-
-                            except Exception as vis_err:
-                                logger.warning(f"Could not update visual_data for {channel_id}: {vis_err}")
-
-                            incomplete_productions.pop(full_station_id)
-
-                            esito_conf = paths.get("esito_scarto_compilato")
-                            pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
-                            
-                            await asyncio.to_thread(plc_connection.write_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"], False)
-                            await asyncio.to_thread(plc_connection.write_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"], False)
-                            await asyncio.to_thread(plc_connection.write_bool, trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"], False)
-                            await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False)
-                            if esito_conf:
-                                await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
-                            
-                        else:
-                            logger.error(f"Failed to update production in DB, skipping visual update.")
+                                    logger.error(f"Failed to update production in DB, skipping visual update.")
                     else:
-                        logger.warning(f"No initial production record found for {full_station_id}; skipping update.")
+                        logger.warning(f"No initial production record found for {full_station_id}; skipping update, Writing PEZZO ARCHIVIATO Anyway")
+                        await asyncio.to_thread(plc_connection.write_bool, pezzo_archivia_conf["db"], pezzo_archivia_conf["byte"], pezzo_archivia_conf["bit"], True)
+
                     remove_temp_issues(line_name, channel_id, result.get("Id_Modulo"))
 
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
 
         except Exception as e:
             logger.error(f"[{full_station_id}], Error in background task: {str(e)}")
@@ -293,8 +297,10 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
 
 
         esito = 4 if esclusione_attiva else 2
-        conn = get_mysql_connection()
-        prod_id = await insert_initial_production_data(initial_data, channel_id, conn, esito)
+
+        with get_mysql_connection() as conn:
+            prod_id = await insert_initial_production_data(initial_data, channel_id, conn, esito)
+
         if prod_id:
             incomplete_productions[full_id] = prod_id
 

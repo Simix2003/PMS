@@ -2,22 +2,22 @@
     "trigger": {
         "db": 19606,
         "bit": 4,
-        "byte": 250
+        "byte": 100
     },
     "id_modulo": {
         "db": 19606,
-        "byte": 252,
+        "byte": 102,
         "length": 20
     },
     "id_utente": {
         "db": 19606,
-        "byte": 274,
+        "byte": 124,
         "length": 20
     },
     "fine_buona": {
         "db": 19606,
-        "bit": 5,
-        "byte": 250
+        "bit": 6,
+        "byte": 100
     },
     "fine_fermo": {
         "db": 19102,
@@ -26,8 +26,8 @@
     },
     "fine_scarto": {
         "db": 19606,
-        "bit": 6,
-        "byte": 250
+        "bit": 7,
+        "byte": 100
     },
     "evento_fermo": {
         "db": 19102,
@@ -41,7 +41,7 @@
     },
     "stringatrice": {
         "db": 19606,
-        "byte": 296,
+        "byte": 146,
         "length": 5
     },
     "stazione_fermo": {
@@ -59,6 +59,16 @@
         "bit": 3,
         "byte": 200
     },
+    "pezzo_archiviato": {
+        "db": 19606,
+        "bit": 1,
+        "byte": 1002
+    },
+    "stazione_esclusa": {
+        "db": 19606,
+        "bit": 3,
+        "byte": 101
+    },
     "dati_pronti_fermi": {
         "db": 19100,
         "bit": 2,
@@ -71,18 +81,12 @@
     },
     "esito_scarto_compilato": {
         "db": 19606,
-        "bit": 2,
+        "bit": 0,
         "byte": 1000
     },
     "pezzo_salvato_su_DB_con_inizio_ciclo": {
         "db": 19606,
-        "bit": 0,
-        "byte": 1001
-    },
-    "reWorkBufferIds": {
-        "db": 19603,
-        "byte": 0,
-        "length": 21,
-        "string_length": 20
+        "bit": 5,
+        "byte": 1000
     }
 }

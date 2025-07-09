@@ -1,23 +1,61 @@
+import os
 from threading import Lock
-from pymysql.connections import Connection
-mysql_connection: Connection | None = None
+from dotenv import load_dotenv, find_dotenv
+from concurrent.futures import ThreadPoolExecutor
+from pymysql.cursors import DictCursor
+from pymysqlpool import ConnectionPool
 
+# Load .env variables
+load_dotenv(find_dotenv())
 
+# Environment-specific host
+MYSQL_HOST = os.getenv("MYSQL_HOST", "db" if os.getenv("ENV_MODE") == "docker" else "localhost")
+MYSQL_USER = os.getenv("MYSQL_USER", "root")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "Master36!")
+MYSQL_DB = os.getenv("MYSQL_DB", "ix_monitor")
+MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+
+# Pool config
+MYSQL_CONFIG = {
+    "host": MYSQL_HOST,
+    "user": MYSQL_USER,
+    "password": MYSQL_PASSWORD,
+    "database": MYSQL_DB,
+    "port": MYSQL_PORT,
+    "cursorclass": DictCursor,
+    "autocommit": False,
+}
+
+# Connection pool (5 initial, 10 max)
+mysql_pool = ConnectionPool(
+    name="ix_monitor_pool",
+    size=15,
+    maxsize=25,
+    pre_create_num=15,
+    **MYSQL_CONFIG
+)
+
+# Thread-safe DB executor
+executor = ThreadPoolExecutor(max_workers=10)
+
+# Global runtime state
 plc_connections = {}
 subscriptions = {}
 trigger_timestamps = {}
-incomplete_productions = {}  # Tracks production_id per station (e.g., "Linea1.MIN01")
+incomplete_productions = {}
 stop_threads = {}
 passato_flags = {}
-debug_triggers = {}  # Dict[str, bool], e.g., "LineaB.M309": True
-debug_trigger_NG = {}  # Dict[str, bool], e.g., "LineaB.M309": True
+
+# Debug tools
+debug_triggers = {}
+debug_trigger_NG = {}
 debug_trigger_G = {}
 reentryDebug = {}
-debug_moduli = {}    # Dict[str, str], e.g., "LineaB.M309": "3SBHBGHC25412345"
-expected_moduli = {}  # Dict[str, str] — stores expected Id_Modulo per full_station_id
-xml_index = {}  # key: id_modulo → value: list of dicts with start_time, file_path, etc.
+debug_moduli = {}
+expected_moduli = {}
+xml_index = {}
 
-visual_data: dict[str, dict] = {}        # ← new
-visual_data_lock = Lock()                # ← optional but recommended
-
-last_sent: dict[str, dict] = {}          # 🔁 Stores last broadcast payload per "Linea2.visual.AIN" etc.
+# Visual snapshot state
+visual_data: dict[str, dict] = {}
+visual_data_lock = Lock()
+last_sent: dict[str, dict] = {}

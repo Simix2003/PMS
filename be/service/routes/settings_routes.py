@@ -54,11 +54,11 @@ def get_refreshed_settings():
 
 @router.get("/api/lines")
 def get_production_lines():
-    conn = get_mysql_connection()
-    with conn.cursor() as cursor:
-        cursor.execute("SELECT name, display_name FROM production_lines ORDER BY id")
-        lines = cursor.fetchall()
-        logger.debug(lines)
+    with get_mysql_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT name, display_name FROM production_lines ORDER BY id")
+            lines = cursor.fetchall()
+            logger.debug(lines)
 
     # Corrected version: include everything except invalid dummy rows
     lines_list = []

@@ -337,89 +337,89 @@ async def search_results(request: Request):
                 MIN(od.extra_data) AS extra_data
             """
 
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            if show_all_events:
-                # First: Get object_ids that match filters
-                object_id_query = f"""
-                    SELECT DISTINCT o.id AS object_id
-                    FROM productions p
-                    JOIN objects o ON p.object_id = o.id
-                    JOIN stations s ON p.station_id = s.id
-                    LEFT JOIN stations ls ON p.last_station_id = ls.id
-                    {join_sql}
-                    LEFT JOIN production_lines pl ON s.line_id = pl.id
-                    {where_sql}
-                    LIMIT %s
-                """
-                cursor.execute(object_id_query, tuple(params + [limit]))
-                object_id_rows = cursor.fetchall()
-                object_ids = [r["object_id"] for r in object_id_rows]
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                if show_all_events:
+                    # First: Get object_ids that match filters
+                    object_id_query = f"""
+                        SELECT DISTINCT o.id AS object_id
+                        FROM productions p
+                        JOIN objects o ON p.object_id = o.id
+                        JOIN stations s ON p.station_id = s.id
+                        LEFT JOIN stations ls ON p.last_station_id = ls.id
+                        {join_sql}
+                        LEFT JOIN production_lines pl ON s.line_id = pl.id
+                        {where_sql}
+                        LIMIT %s
+                    """
+                    cursor.execute(object_id_query, tuple(params + [limit]))
+                    object_id_rows = cursor.fetchall()
+                    object_ids = [r["object_id"] for r in object_id_rows]
 
-                if not object_ids:
-                    return {"results": []}
+                    if not object_ids:
+                        return {"results": []}
 
-                # Second: Fetch all productions with those object_ids
-                full_query = f"""
-                    SELECT {select_fields}
-                    FROM productions p
-                    JOIN objects o ON p.object_id = o.id
-                    JOIN stations s ON p.station_id = s.id
-                    LEFT JOIN stations ls ON p.last_station_id = ls.id
-                    {join_sql}
-                    LEFT JOIN production_lines pl ON s.line_id = pl.id
-                    WHERE o.id IN ({','.join(['%s'] * len(object_ids))})
-                    GROUP BY p.id
-                    {order_clause}
-                """
-                cursor.execute(full_query, tuple(object_ids))
-                rows = cursor.fetchall()
-            else:
-                # Old query logic (no show_all_events mode)
-                query = f"""
-                    SELECT {select_fields}
-                    FROM productions p
-                    JOIN objects o ON p.object_id = o.id
-                    JOIN stations s ON p.station_id = s.id
-                    LEFT JOIN stations ls ON p.last_station_id = ls.id
-                    {join_sql}
-                    LEFT JOIN production_lines pl ON s.line_id = pl.id
-                    {where_sql}
-                    GROUP BY p.id
-                    {order_clause}
-                    LIMIT %s
-                """
-                params.append(limit)
-                cursor.execute(query, tuple(params))
-                rows = cursor.fetchall()
+                    # Second: Fetch all productions with those object_ids
+                    full_query = f"""
+                        SELECT {select_fields}
+                        FROM productions p
+                        JOIN objects o ON p.object_id = o.id
+                        JOIN stations s ON p.station_id = s.id
+                        LEFT JOIN stations ls ON p.last_station_id = ls.id
+                        {join_sql}
+                        LEFT JOIN production_lines pl ON s.line_id = pl.id
+                        WHERE o.id IN ({','.join(['%s'] * len(object_ids))})
+                        GROUP BY p.id
+                        {order_clause}
+                    """
+                    cursor.execute(full_query, tuple(object_ids))
+                    rows = cursor.fetchall()
+                else:
+                    # Old query logic (no show_all_events mode)
+                    query = f"""
+                        SELECT {select_fields}
+                        FROM productions p
+                        JOIN objects o ON p.object_id = o.id
+                        JOIN stations s ON p.station_id = s.id
+                        LEFT JOIN stations ls ON p.last_station_id = ls.id
+                        {join_sql}
+                        LEFT JOIN production_lines pl ON s.line_id = pl.id
+                        {where_sql}
+                        GROUP BY p.id
+                        {order_clause}
+                        LIMIT %s
+                    """
+                    params.append(limit)
+                    cursor.execute(query, tuple(params))
+                    rows = cursor.fetchall()
 
-            # Group rows by id_modulo (i.e. unique object)
-            grouped = defaultdict(list)
-            for row in rows:
-                grouped[row["id_modulo"]].append(row)
+                # Group rows by id_modulo (i.e. unique object)
+                grouped = defaultdict(list)
+                for row in rows:
+                    grouped[row["id_modulo"]].append(row)
 
-            results = []
+                results = []
 
-            for object_id, events in grouped.items():
-                if not events:
-                    continue
+                for object_id, events in grouped.items():
+                    if not events:
+                        continue
 
-                events.sort(
-                    key=lambda x: x["start_time"] if x["start_time"] is not None else datetime.max,
-                    reverse=True
-                )
+                    events.sort(
+                        key=lambda x: x["start_time"] if x["start_time"] is not None else datetime.max,
+                        reverse=True
+                    )
 
-                latest = events[0]
-                history = events[1:]
+                    latest = events[0]
+                    history = events[1:]
 
-                results.append({
-                    "object_id": object_id,
-                    "latest_event": latest,
-                    "history": history,
-                    "event_count": len(events),
-                    "production_ids": [e["production_id"] for e in events if "production_id" in e]
-                })
-            return {"results": results}
+                    results.append({
+                        "object_id": object_id,
+                        "latest_event": latest,
+                        "history": history,
+                        "event_count": len(events),
+                        "production_ids": [e["production_id"] for e in events if "production_id" in e]
+                    })
+                return {"results": results}
 
     except Exception as e:
         logger.error(f"Search API Error: {e}")

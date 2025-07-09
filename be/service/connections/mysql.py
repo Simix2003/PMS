@@ -1,4 +1,5 @@
 import base64
+from calendar import c
 from datetime import datetime, timedelta
 import json
 import logging
@@ -7,7 +8,6 @@ logger = logging.getLogger(__name__)
 from typing import Optional
 import pymysql
 from pymysql.cursors import DictCursor
-from dotenv import load_dotenv, find_dotenv
 
 import os
 import sys
@@ -19,17 +19,6 @@ from service.routes.broadcast import broadcast_stringatrice_warning
 from service.state import global_state
 
 # ---------------- MYSQL ----------------
-load_dotenv(find_dotenv())
-
-if os.getenv("ENV_MODE") == "docker":
-    MYSQL_HOST = os.getenv("MYSQL_HOST", "db")
-else:
-    MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
-MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "Master36!")
-MYSQL_DB = os.getenv("MYSQL_DB", "ix_monitor")
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
-
 VPF_DEFECT_ID_MAP = {
         0: 11,  # NG1
         1: 13,  # NG2
@@ -57,45 +46,28 @@ ELL_DEFECT_MAP = {
     "NG PMS Backlight": 10,           # 'Bad Soldering'
 }
 
-def get_mysql_connection():
-    """
-    Always return a valid, live MySQL connection stored in global_state.
-
-    • Creates the connection on first call
-    • Reconnects if the existing one is dead (e.g. MySQL timeout)
-    """
+def log_pool_status(tag: str = ""):
+    pool = global_state.mysql_pool
     try:
-        conn = global_state.mysql_connection
-
-        if conn is None or not conn.open:
-            raise RuntimeError("No active MySQL connection")
-
-        conn.ping(reconnect=True)
-        return conn
-
+        total = pool.total_num      # total number of connections in the pool
+        available = pool.available_num  # number of available (free) connections
+        used = total - available    # number of used connections
+        logger.info(f"[POOL] {tag} → used={used}, available={available}, total={total}")
     except Exception as e:
-        logger.warning(f"MySQL connection lost or not available. Reconnecting… ({e})")
-        conn = pymysql.connect(
-            host=MYSQL_HOST,
-            user=MYSQL_USER,
-            password=MYSQL_PASSWORD,
-            database=MYSQL_DB,
-            port=MYSQL_PORT,
-            cursorclass=DictCursor,
-            autocommit=False,
-            charset="utf8mb4"
-        )
-        global_state.mysql_connection = conn
-        logger.debug("✅ MySQL reconnected")
-        return conn
+        logger.warning(f"[POOL] Failed to log status: {e}")
+
+def get_mysql_connection():
+    conn = global_state.mysql_pool.get_connection()
+    #log_pool_status("GET")
+    return conn
 
 def get_line_name(line_id: int):
     """Return the production line name for a given ID."""
-    conn = get_mysql_connection()
-    with conn.cursor() as cursor:
-        cursor.execute("SELECT name FROM production_lines WHERE id = %s", (line_id,))
-        row = cursor.fetchone()
-        return row["name"] if row else None
+    with get_mysql_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT name FROM production_lines WHERE id = %s", (line_id,))
+            row = cursor.fetchone()
+            return row["name"] if row else None
 
 def load_channels_from_db() -> tuple[dict, dict]:
     """
@@ -103,10 +75,11 @@ def load_channels_from_db() -> tuple[dict, dict]:
     1. CHANNELS dict: {line_name: {station_name: config_dict}}
     2. PLC DB RANGES dict: {(ip, slot): {db_number: {'min': x, 'max': y}}}
     """
-    conn = get_mysql_connection()
-    with conn.cursor() as cursor:
-        cursor.execute("SELECT id, line_id, name, config, plc FROM stations")
-        rows = cursor.fetchall()
+    # ✅ Use connection pool (automatically reused and closed)
+    with get_mysql_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT id, line_id, name, config, plc FROM stations")
+            rows = cursor.fetchall()
 
     channels: dict = {}
     plc_db_ranges: dict[tuple[str, int], dict[int, dict[str, int]]] = {}
@@ -135,7 +108,7 @@ def load_channels_from_db() -> tuple[dict, dict]:
         # Save config
         channels.setdefault(line_name, {})[row["name"]] = cfg
 
-        # Collect DB range info if PLC and config present
+        # Build DB range info
         plc = cfg.get("plc")
         if not plc:
             continue
@@ -147,22 +120,21 @@ def load_channels_from_db() -> tuple[dict, dict]:
                 db = field["db"]
                 byte = field["byte"]
 
-                # Compute extra bytes safely
+                # Estimate memory size
                 if "length" in field:
                     extra_bytes = field["length"] + 2
-                elif key in ["inizio_fermo", "fine_fermo"]:
-                    extra_bytes = 8  # datetime size
-                elif key in ["evento_fermo", "stazione_fermo"]:
-                    extra_bytes = 2  # int size
+                elif key in {"inizio_fermo", "fine_fermo"}:
+                    extra_bytes = 8
+                elif key in {"evento_fermo", "stazione_fermo"}:
+                    extra_bytes = 2
                 else:
-                    extra_bytes = 1  # bool
+                    extra_bytes = 1
 
                 db_range = plc_db_ranges.setdefault(plc_key, {}).setdefault(db, {"min": byte, "max": byte})
                 db_range["min"] = min(db_range["min"], byte)
                 db_range["max"] = max(db_range["max"], byte + extra_bytes)
 
     logger.debug(f"PLC_DB_RANGES: {plc_db_ranges}")
-
     return channels, plc_db_ranges
 
 async def insert_initial_production_data(data, station_name, connection, esito):
@@ -740,19 +712,18 @@ def get_last_station_id_from_productions(id_modulo, connection):
 
 def check_existing_production(id_modulo, station: str, timestamp: datetime, conn) -> bool:
     """Check if a production record for this module, station, and time already exists."""
-    cursor = conn.cursor() 
-    query = """
-        SELECT 1 FROM productions p
-        JOIN stations s ON p.last_station_id = s.id
-        JOIN objects o ON p.object_id = o.id
-        WHERE o.id_modulo = %s
-          AND s.name = %s
-          AND ABS(TIMESTAMPDIFF(SECOND, p.start_time, %s)) < 10
-        LIMIT 1;
-    """
-    cursor.execute(query, (id_modulo, station, timestamp))
-    result = cursor.fetchone()
-    cursor.close()
+    with conn.cursor() as cursor:
+        query = """
+            SELECT 1 FROM productions p
+            JOIN stations s ON p.last_station_id = s.id
+            JOIN objects o ON p.object_id = o.id
+            WHERE o.id_modulo = %s
+            AND s.name = %s
+            AND ABS(TIMESTAMPDIFF(SECOND, p.start_time, %s)) < 10
+            LIMIT 1;
+        """
+        cursor.execute(query, (id_modulo, station, timestamp))
+        result = cursor.fetchone()
     return result is not None
 
 # Create full stop + first level entry
@@ -768,25 +739,23 @@ def create_stop(
     conn
 ) -> int:
     """Insert a new stop and its initial status level."""
-    cursor = conn.cursor()
+    with conn.cursor() as cursor:
+        # Insert stop
+        query_stop = """
+            INSERT INTO stops (station_id, start_time, end_time, operator_id, type, reason, status, linked_production_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(query_stop, (station_id, start_time, end_time, operator_id, stop_type, reason, status, linked_production_id))
+        stop_id = cursor.lastrowid
 
-    # Insert stop
-    query_stop = """
-        INSERT INTO stops (station_id, start_time, end_time, operator_id, type, reason, status, linked_production_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    cursor.execute(query_stop, (station_id, start_time, end_time, operator_id, stop_type, reason, status, linked_production_id))
-    stop_id = cursor.lastrowid
-
-    # Insert first status level
-    query_level = """
-        INSERT INTO stop_status_changes (stop_id, status, changed_at, operator_id)
-        VALUES (%s, %s, %s, %s)
-    """
-    cursor.execute(query_level, (stop_id, status, start_time, operator_id))
+        # Insert first status level
+        query_level = """
+            INSERT INTO stop_status_changes (stop_id, status, changed_at, operator_id)
+            VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(query_level, (stop_id, status, start_time, operator_id))
 
     conn.commit()
-    cursor.close()
     return stop_id
 
 def update_stop_status(stop_id, new_status, changed_at, operator_id, conn):
@@ -862,42 +831,40 @@ def get_stops_for_station(station_id: int, conn, shifts_back: int = 3):
     current_shift_start = get_shift_start(now)
     target_start_time = current_shift_start - timedelta(hours=SHIFT_DURATION_HOURS * (shifts_back-1))
 
-    cursor = conn.cursor()
-    query = """
-    SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
-    FROM stops
-    WHERE station_id = %s AND type = %s AND start_time >= %s
-    ORDER BY start_time DESC
-    """
-    params = (station_id, "ESCALATION", target_start_time)
-    cursor.execute(query, params)
-    results = cursor.fetchall()
-    cursor.close()
+    with conn.cursor() as cursor:
+        query = """
+        SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
+        FROM stops
+        WHERE station_id = %s AND type = %s AND start_time >= %s
+        ORDER BY start_time DESC
+        """
+        params = (station_id, "ESCALATION", target_start_time)
+        cursor.execute(query, params)
+        results = cursor.fetchall()
     return results
 
 # Get full stop with escalation levels
 def get_stop_with_levels(stop_id: int, conn):
     """Fetch stop info + all its levels."""
-    cursor = conn.cursor()
+    with conn.cursor() as cursor:
 
-    stop_query = """
-        SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
-        FROM stops
-        WHERE id = %s
-    """
-    cursor.execute(stop_query, (stop_id,))
-    stop_data = cursor.fetchone()
+        stop_query = """
+            SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
+            FROM stops
+            WHERE id = %s
+        """
+        cursor.execute(stop_query, (stop_id,))
+        stop_data = cursor.fetchone()
 
-    levels_query = """
-        SELECT id, status, changed_at, operator_id, created_at
-        FROM stop_status_changes
-        WHERE stop_id = %s
-        ORDER BY changed_at ASC
-    """
-    cursor.execute(levels_query, (stop_id,))
-    levels_data = cursor.fetchall()
+        levels_query = """
+            SELECT id, status, changed_at, operator_id, created_at
+            FROM stop_status_changes
+            WHERE stop_id = %s
+            ORDER BY changed_at ASC
+        """
+        cursor.execute(levels_query, (stop_id,))
+        levels_data = cursor.fetchall()
 
-    cursor.close()
     return {
         "stop": stop_data,
         "levels": levels_data
@@ -906,8 +873,7 @@ def get_stop_with_levels(stop_id: int, conn):
 # Delete stop fully
 def delete_stop(stop_id: int, conn):
     """Delete stop and its levels (full cleanup)."""
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM stop_status_changes WHERE stop_id = %s", (stop_id,))
-    cursor.execute("DELETE FROM stops WHERE id = %s", (stop_id,))
-    conn.commit()
-    cursor.close()
+    with conn.cursor() as cursor:
+        cursor.execute("DELETE FROM stop_status_changes WHERE stop_id = %s", (stop_id,))
+        cursor.execute("DELETE FROM stops WHERE id = %s", (stop_id,))
+        conn.commit()

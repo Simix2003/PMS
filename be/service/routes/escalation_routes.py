@@ -29,19 +29,18 @@ async def api_create_stop(payload: Dict[str, Any]):
     - station_id, start_time, operator_id, stop_type, reason, status, linked_production_id
     """
     try:
-        conn = get_mysql_connection()
-
-        stop_id = create_stop(
-            station_id = payload["station_id"],
-            start_time = payload["start_time"],
-            end_time = payload.get("end_time"),
-            operator_id = payload["operator_id"],
-            stop_type = payload["stop_type"],
-            reason = payload["reason"],
-            status = payload["status"],
-            linked_production_id = payload.get("linked_production_id"),
-            conn = conn
-        )
+        with get_mysql_connection() as conn:
+            stop_id = create_stop(
+                station_id = payload["station_id"],
+                start_time = payload["start_time"],
+                end_time = payload.get("end_time"),
+                operator_id = payload["operator_id"],
+                stop_type = payload["stop_type"],
+                reason = payload["reason"],
+                status = payload["status"],
+                linked_production_id = payload.get("linked_production_id"),
+                conn = conn
+            )
         return {"status": "ok", "stop_id": stop_id}
     except Exception as e:
         logger.error(f"Error creating stop: {e}")
@@ -58,15 +57,14 @@ async def api_update_status(payload: Dict[str, Any]):
     - stop_id, new_status, changed_at, operator_id
     """
     try:
-        conn = get_mysql_connection()
-
-        update_stop_status(
-            stop_id = payload["stop_id"],
-            new_status = payload["new_status"],
-            changed_at = payload["changed_at"],
-            operator_id = payload["operator_id"],
-            conn = conn
-        )
+        with get_mysql_connection() as conn:
+            update_stop_status(
+                stop_id = payload["stop_id"],
+                new_status = payload["new_status"],
+                changed_at = payload["changed_at"],
+                operator_id = payload["operator_id"],
+                conn = conn
+            )
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error updating stop status: {e}")
@@ -79,12 +77,12 @@ async def api_update_status(payload: Dict[str, Any]):
 async def api_update_reason(payload: Dict[str, Any]):
     """Update reason/title text for an existing stop."""
     try:
-        conn = get_mysql_connection()
-        update_stop_reason(
-            stop_id=payload["stop_id"],
-            reason=payload["reason"],
-            conn=conn,
-        )
+        with get_mysql_connection() as conn:
+            update_stop_reason(
+                stop_id=payload["stop_id"],
+                reason=payload["reason"],
+                conn=conn,
+            )
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error updating stop reason: {e}")
@@ -96,8 +94,8 @@ async def api_update_reason(payload: Dict[str, Any]):
 @router.get("/api/escalation/get_stops/{station_id}")
 async def api_get_stops(station_id: int, shifts_back: int = 3):
     try:
-        conn = get_mysql_connection()
-        stops = get_stops_for_station(station_id, conn, shifts_back)
+        with get_mysql_connection() as conn:
+            stops = get_stops_for_station(station_id, conn, shifts_back)
         return {"status": "ok", "stops": stops}
     except Exception as e:
         logger.error(f"Error fetching stops: {e}")
@@ -109,8 +107,8 @@ async def api_get_stops(station_id: int, shifts_back: int = 3):
 @router.get("/api/escalation/get_stop_details/{stop_id}")
 async def api_get_stop_details(stop_id: int):
     try:
-        conn = get_mysql_connection()
-        data = get_stop_with_levels(stop_id, conn)
+        with get_mysql_connection() as conn:
+            data = get_stop_with_levels(stop_id, conn)
         return {"status": "ok", "stop": data}
     except Exception as e:
         logger.error(f"Error fetching stop details: {e}")
@@ -119,15 +117,15 @@ async def api_get_stop_details(stop_id: int):
 @router.delete("/api/escalation/delete_stop/{stop_id}")
 async def api_delete_stop(stop_id: int):
     try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            # 1️⃣ First delete related status change records
-            cursor.execute("DELETE FROM stop_status_changes WHERE stop_id = %s", (stop_id,))
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                # 1️⃣ First delete related status change records
+                cursor.execute("DELETE FROM stop_status_changes WHERE stop_id = %s", (stop_id,))
 
-            # 2️⃣ Then delete the main stop entry
-            cursor.execute("DELETE FROM stops WHERE id = %s", (stop_id,))
-        
-        conn.commit()
+                # 2️⃣ Then delete the main stop entry
+                cursor.execute("DELETE FROM stops WHERE id = %s", (stop_id,))
+            
+            conn.commit()
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error deleting stop {stop_id}: {e}")

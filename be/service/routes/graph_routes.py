@@ -29,230 +29,201 @@ async def get_graph_data(request: Request):
     extra_filter = payload.get("extra_filter")
 
     logger.debug("\n--- API /graph_data called ---")
-    conn = get_mysql_connection()
-    result: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    with get_mysql_connection() as conn:
+        result: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
-    # ── Prepare date_format and shift SQL if needed ─────────────────────────
-    if group_by == "shifts":
-        # bucket_date is the calendar day; bucket_shift is T1/T2/T3
-        bucket_date = "DATE(p.end_time)"
-        bucket_shift = """
-          CASE
-            WHEN HOUR(p.end_time) BETWEEN 6 AND 13 THEN 'T1'
-            WHEN HOUR(p.end_time) BETWEEN 14 AND 21 THEN 'T2'
-            ELSE 'T3'
-          END
-        """
-        bucket_expr = f"CONCAT(DATE_FORMAT({bucket_date}, '%Y-%m-%d'), ' ', {bucket_shift})"
-        order_clause = "ORDER BY day, shift"
-    else:
-        # hourly or daily (or weekly)
-        date_format = {
-            "daily": "%Y-%m-%d",
-            "weekly": "%Y-%m-%d",
-        }.get(group_by, "%Y-%m-%d %H:00:00")
-        bucket_expr = "DATE_FORMAT(p.end_time, %s)"
-        order_clause = "ORDER BY bucket"
+        # ── Prepare date_format and shift SQL if needed ─────────────────────────
+        if group_by == "shifts":
+            # bucket_date is the calendar day; bucket_shift is T1/T2/T3
+            bucket_date = "DATE(p.end_time)"
+            bucket_shift = """
+            CASE
+                WHEN HOUR(p.end_time) BETWEEN 6 AND 13 THEN 'T1'
+                WHEN HOUR(p.end_time) BETWEEN 14 AND 21 THEN 'T2'
+                ELSE 'T3'
+            END
+            """
+            bucket_expr = f"CONCAT(DATE_FORMAT({bucket_date}, '%Y-%m-%d'), ' ', {bucket_shift})"
+            order_clause = "ORDER BY day, shift"
+        else:
+            # hourly or daily (or weekly)
+            date_format = {
+                "daily": "%Y-%m-%d",
+                "weekly": "%Y-%m-%d",
+            }.get(group_by, "%Y-%m-%d %H:00:00")
+            bucket_expr = "DATE_FORMAT(p.end_time, %s)"
+            order_clause = "ORDER BY bucket"
 
-    # ── Esito / Yield / CycleTime ──────────────────────────────────────────
-    if any(m in metrics for m in ("Esito", "Yield", "CycleTime")):
-        with conn.cursor() as cur:
-            logging.debug("\nRunning ESITO / CYCLE query...")
-            if group_by == "shifts":
-                sql = f"""
-                    SELECT
-                      {bucket_date} AS day,
-                      {bucket_shift} AS shift,
-                      p.esito,
-                      COUNT(*) AS count,
-                      AVG(TIMESTAMPDIFF(SECOND, p.start_time, p.end_time)) AS avg_cycle_time
-                    FROM productions p
-                    JOIN stations s ON p.station_id = s.id
-                    JOIN production_lines pl ON s.line_id = pl.id
-                    WHERE pl.display_name = %s
-                      AND s.name = %s
-                      AND p.end_time BETWEEN %s AND %s
-                    GROUP BY day, shift, p.esito
-                    {order_clause}
-                """
-                params = (line, station, start, end)
-            else:
-                sql = f"""
-                    SELECT
-                      {bucket_expr} AS bucket,
-                      p.esito,
-                      COUNT(*) AS count,
-                      AVG(TIMESTAMPDIFF(SECOND, p.start_time, p.end_time)) AS avg_cycle_time
-                    FROM productions p
-                    JOIN stations s ON p.station_id = s.id
-                    JOIN production_lines pl ON s.line_id = pl.id
-                    WHERE pl.display_name = %s
-                      AND s.name = %s
-                      AND p.end_time BETWEEN %s AND %s
-                    GROUP BY bucket, p.esito
-                    {order_clause}
-                """
-                params = (date_format, line, station, start, end)
+        # ── Esito / Yield / CycleTime ──────────────────────────────────────────
+        if any(m in metrics for m in ("Esito", "Yield", "CycleTime")):
+            with conn.cursor() as cur:
+                logging.debug("\nRunning ESITO / CYCLE query...")
+                if group_by == "shifts":
+                    sql = f"""
+                        SELECT
+                        {bucket_date} AS day,
+                        {bucket_shift} AS shift,
+                        p.esito,
+                        COUNT(*) AS count,
+                        AVG(TIMESTAMPDIFF(SECOND, p.start_time, p.end_time)) AS avg_cycle_time
+                        FROM productions p
+                        JOIN stations s ON p.station_id = s.id
+                        JOIN production_lines pl ON s.line_id = pl.id
+                        WHERE pl.display_name = %s
+                        AND s.name = %s
+                        AND p.end_time BETWEEN %s AND %s
+                        GROUP BY day, shift, p.esito
+                        {order_clause}
+                    """
+                    params = (line, station, start, end)
+                else:
+                    sql = f"""
+                        SELECT
+                        {bucket_expr} AS bucket,
+                        p.esito,
+                        COUNT(*) AS count,
+                        AVG(TIMESTAMPDIFF(SECOND, p.start_time, p.end_time)) AS avg_cycle_time
+                        FROM productions p
+                        JOIN stations s ON p.station_id = s.id
+                        JOIN production_lines pl ON s.line_id = pl.id
+                        WHERE pl.display_name = %s
+                        AND s.name = %s
+                        AND p.end_time BETWEEN %s AND %s
+                        GROUP BY bucket, p.esito
+                        {order_clause}
+                    """
+                    params = (date_format, line, station, start, end)
 
-            cur.execute(sql, params)
-            rows = cur.fetchall()
+                cur.execute(sql, params)
+                rows = cur.fetchall()
 
-        # aggregate counts
-        agg = defaultdict(lambda: {"G": 0, "NG": 0, "Escluso": 0, "In Produzione": 0, "G Operatore": 0, "total": 0, "avg_cycle_time": 0})
-        for r in rows:
-            if group_by == "shifts":
-                day = r["day"].strftime("%Y-%m-%d")
-                shift = r["shift"]
-                b = f"{day} {shift}"
-            else:
-                b = r["bucket"]
-            e, c, avg_ct = r["esito"], r["count"], r["avg_cycle_time"] or 0
+            # aggregate counts
+            agg = defaultdict(lambda: {"G": 0, "NG": 0, "Escluso": 0, "In Produzione": 0, "G Operatore": 0, "total": 0, "avg_cycle_time": 0})
+            for r in rows:
+                if group_by == "shifts":
+                    day = r["day"].strftime("%Y-%m-%d")
+                    shift = r["shift"]
+                    b = f"{day} {shift}"
+                else:
+                    b = r["bucket"]
+                e, c, avg_ct = r["esito"], r["count"], r["avg_cycle_time"] or 0
 
-            # map esito codes
-            if e == 1:   agg[b]["G"] += c
-            elif e == 6: agg[b]["NG"] += c
-            elif e == 0: agg[b]["Escluso"] += c
-            elif e == 2: agg[b]["In Produzione"] += c
-            elif e == 8: agg[b]["G Operatore"] += c
-            agg[b]["total"] += c
-            agg[b]["avg_cycle_time"] = avg_ct
+                # map esito codes
+                if e == 1:   agg[b]["G"] += c
+                elif e == 6: agg[b]["NG"] += c
+                elif e == 0: agg[b]["Escluso"] += c
+                elif e == 2: agg[b]["In Produzione"] += c
+                elif e == 8: agg[b]["G Operatore"] += c
+                agg[b]["total"] += c
+                agg[b]["avg_cycle_time"] = avg_ct
 
-        # build result entries
-        for b, v in agg.items():
-            # parse back into a datetime for ISO timestamp
-            if group_by == "shifts":
-                date_str, shift = b.split(" ")
-                hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
-                dt = datetime.fromisoformat(date_str)
-                if shift == "T3":
-                    dt += timedelta(days=1)  # Shift T3 belongs to the NEXT day
-                dt = dt.replace(hour=hour)
-            else:
-                dt = datetime.strptime(b, date_format)
+            # build result entries
+            for b, v in agg.items():
+                # parse back into a datetime for ISO timestamp
+                if group_by == "shifts":
+                    date_str, shift = b.split(" ")
+                    hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
+                    dt = datetime.fromisoformat(date_str)
+                    if shift == "T3":
+                        dt += timedelta(days=1)  # Shift T3 belongs to the NEXT day
+                    dt = dt.replace(hour=hour)
+                else:
+                    dt = datetime.strptime(b, date_format)
 
-            ts = dt.isoformat()
+                ts = dt.isoformat()
+
+                if "Esito" in metrics:
+                    if extra_filter:
+                        value = v.get(extra_filter, 0)
+                        result[extra_filter].append({"timestamp": ts, "value": value})
+                    else:
+                        result["Esito"].append({"timestamp": ts, "value": v["total"]})
+
+                if "Yield" in metrics:
+                    tot = v["G"] + v["NG"]
+                    pct = (v["G"] / tot) * 100 if tot > 0 else 0
+                    result["Yield"].append({"timestamp": ts, "value": round(pct, 1)})
+
+                if "CycleTime" in metrics:
+                    result["CycleTime"].append({"timestamp": ts, "value": v["avg_cycle_time"]})
+
+            # 🛠️ Add this HERE, not inside the "Difetto" block
+            expected = generate_time_buckets(start, end, group_by)
+            metrics_to_pad = []
 
             if "Esito" in metrics:
-                if extra_filter:
-                    value = v.get(extra_filter, 0)
-                    result[extra_filter].append({"timestamp": ts, "value": value})
-                else:
-                    result["Esito"].append({"timestamp": ts, "value": v["total"]})
-
+                metrics_to_pad.append(extra_filter if extra_filter else "Esito")
             if "Yield" in metrics:
-                tot = v["G"] + v["NG"]
-                pct = (v["G"] / tot) * 100 if tot > 0 else 0
-                result["Yield"].append({"timestamp": ts, "value": round(pct, 1)})
-
+                metrics_to_pad.append("Yield")
             if "CycleTime" in metrics:
-                result["CycleTime"].append({"timestamp": ts, "value": v["avg_cycle_time"]})
+                metrics_to_pad.append("CycleTime")
 
-        # 🛠️ Add this HERE, not inside the "Difetto" block
-        expected = generate_time_buckets(start, end, group_by)
-        metrics_to_pad = []
+            for key in metrics_to_pad:
+                existing = {item["timestamp"] for item in result[key]}
+                for bucket in expected:
+                    if group_by == "shifts":
+                        date_str, shift = bucket.split(" ")
+                        hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
+                        dt = datetime.fromisoformat(date_str)
+                        if shift == "T3":
+                            dt += timedelta(days=1)  # Shift T3 belongs to the NEXT day
+                        dt = dt.replace(hour=hour)
+                    else:
+                        dt = datetime.strptime(bucket, date_format)
 
-        if "Esito" in metrics:
-            metrics_to_pad.append(extra_filter if extra_filter else "Esito")
-        if "Yield" in metrics:
-            metrics_to_pad.append("Yield")
-        if "CycleTime" in metrics:
-            metrics_to_pad.append("CycleTime")
+                    ts = dt.isoformat()
+                    if ts not in existing:
+                        result[key].append({"timestamp": ts, "value": 0})
+                result[key].sort(key=lambda x: x["timestamp"])
 
-        for key in metrics_to_pad:
-            existing = {item["timestamp"] for item in result[key]}
-            for bucket in expected:
-                if group_by == "shifts":
-                    date_str, shift = bucket.split(" ")
-                    hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
-                    dt = datetime.fromisoformat(date_str)
-                    if shift == "T3":
-                        dt += timedelta(days=1)  # Shift T3 belongs to the NEXT day
-                    dt = dt.replace(hour=hour)
-                else:
-                    dt = datetime.strptime(bucket, date_format)
+        # ── Difetto ────────────────────────────────────────────────────────────
+        if "Difetto" in metrics and extra_filter:
+            category = extra_filter.strip()
+            logging.debug(f"Selected defect category: {category}")
 
-                ts = dt.isoformat()
-                if ts not in existing:
-                    result[key].append({"timestamp": ts, "value": 0})
-            result[key].sort(key=lambda x: x["timestamp"])
-
-    # ── Difetto ────────────────────────────────────────────────────────────
-    if "Difetto" in metrics and extra_filter:
-        category = extra_filter.strip()
-        logging.debug(f"Selected defect category: {category}")
-
-        if group_by == "shifts":
-            sql = f"""
-                SELECT
-                  DATE(p.end_time) AS day,
-                  {bucket_shift} AS shift,
-                  COUNT(DISTINCT p.object_id) AS count
-                FROM productions p
-                JOIN stations s ON p.station_id = s.id
-                JOIN production_lines pl ON s.line_id = pl.id
-                JOIN object_defects od ON p.id = od.production_id
-                JOIN defects d ON od.defect_id = d.id
-                WHERE pl.display_name = %s
-                  AND s.name = %s
-                  AND p.end_time BETWEEN %s AND %s
-                  AND d.category = %s
-                GROUP BY day, shift
-                ORDER BY day, shift
-            """
-            params = (line, station, start, end, category)
-        else:
-            sql = f"""
-                SELECT
-                  {bucket_expr} AS bucket,
-                  COUNT(DISTINCT p.object_id) AS count
-                FROM productions p
-                JOIN stations s ON p.station_id = s.id
-                JOIN production_lines pl ON s.line_id = pl.id
-                JOIN object_defects od ON p.id = od.production_id
-                JOIN defects d ON od.defect_id = d.id
-                WHERE pl.display_name = %s
-                  AND s.name = %s
-                  AND p.end_time BETWEEN %s AND %s
-                  AND d.category = %s
-                GROUP BY bucket
-                ORDER BY bucket
-            """
-            params = (date_format, line, station, start, end, category)
-
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-
-        for r in rows:
             if group_by == "shifts":
-                date_str, shift = bucket.split(" ")
-                hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
-                dt = datetime.fromisoformat(date_str)
-                if shift == "T3":
-                    dt += timedelta(days=1)  # Shift T3 belongs to the NEXT day
-                dt = dt.replace(hour=hour)
+                sql = f"""
+                    SELECT
+                    DATE(p.end_time) AS day,
+                    {bucket_shift} AS shift,
+                    COUNT(DISTINCT p.object_id) AS count
+                    FROM productions p
+                    JOIN stations s ON p.station_id = s.id
+                    JOIN production_lines pl ON s.line_id = pl.id
+                    JOIN object_defects od ON p.id = od.production_id
+                    JOIN defects d ON od.defect_id = d.id
+                    WHERE pl.display_name = %s
+                    AND s.name = %s
+                    AND p.end_time BETWEEN %s AND %s
+                    AND d.category = %s
+                    GROUP BY day, shift
+                    ORDER BY day, shift
+                """
+                params = (line, station, start, end, category)
             else:
-                dt = datetime.strptime(bucket, date_format)
+                sql = f"""
+                    SELECT
+                    {bucket_expr} AS bucket,
+                    COUNT(DISTINCT p.object_id) AS count
+                    FROM productions p
+                    JOIN stations s ON p.station_id = s.id
+                    JOIN production_lines pl ON s.line_id = pl.id
+                    JOIN object_defects od ON p.id = od.production_id
+                    JOIN defects d ON od.defect_id = d.id
+                    WHERE pl.display_name = %s
+                    AND s.name = %s
+                    AND p.end_time BETWEEN %s AND %s
+                    AND d.category = %s
+                    GROUP BY bucket
+                    ORDER BY bucket
+                """
+                params = (date_format, line, station, start, end, category)
 
-            result[category].append({
-                "timestamp": dt.isoformat(),
-                "value": r["count"]
-            })
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                rows = cur.fetchall()
 
-        # pad missing buckets for all metrics
-        expected = generate_time_buckets(start, end, group_by)
-        metrics_to_pad = []
-
-        if "Esito" in metrics:
-            metrics_to_pad.append(extra_filter if extra_filter else "Esito")
-        if "Yield" in metrics:
-            metrics_to_pad.append("Yield")
-        if "CycleTime" in metrics:
-            metrics_to_pad.append("CycleTime")
-
-        for key in metrics_to_pad:
-            existing = {item["timestamp"] for item in result[key]}
-            for bucket in expected:
+            for r in rows:
                 if group_by == "shifts":
                     date_str, shift = bucket.split(" ")
                     hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
@@ -262,10 +233,39 @@ async def get_graph_data(request: Request):
                     dt = dt.replace(hour=hour)
                 else:
                     dt = datetime.strptime(bucket, date_format)
-                ts = dt.isoformat()
-                if ts not in existing:
-                    result[key].append({"timestamp": ts, "value": 0})
-            result[key].sort(key=lambda x: x["timestamp"])
+
+                result[category].append({
+                    "timestamp": dt.isoformat(),
+                    "value": r["count"]
+                })
+
+            # pad missing buckets for all metrics
+            expected = generate_time_buckets(start, end, group_by)
+            metrics_to_pad = []
+
+            if "Esito" in metrics:
+                metrics_to_pad.append(extra_filter if extra_filter else "Esito")
+            if "Yield" in metrics:
+                metrics_to_pad.append("Yield")
+            if "CycleTime" in metrics:
+                metrics_to_pad.append("CycleTime")
+
+            for key in metrics_to_pad:
+                existing = {item["timestamp"] for item in result[key]}
+                for bucket in expected:
+                    if group_by == "shifts":
+                        date_str, shift = bucket.split(" ")
+                        hour = {"T1": 6, "T2": 14, "T3": 22}[shift]
+                        dt = datetime.fromisoformat(date_str)
+                        if shift == "T3":
+                            dt += timedelta(days=1)  # Shift T3 belongs to the NEXT day
+                        dt = dt.replace(hour=hour)
+                    else:
+                        dt = datetime.strptime(bucket, date_format)
+                    ts = dt.isoformat()
+                    if ts not in existing:
+                        result[key].append({"timestamp": ts, "value": 0})
+                result[key].sort(key=lambda x: x["timestamp"])
 
     return result
 
@@ -280,222 +280,222 @@ async def productions_summary(
     end_time: Optional[str] = Query(default=None),
 ):
     try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            params = []
-            where_clause = "WHERE 1=1"
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                params = []
+                where_clause = "WHERE 1=1"
 
-            if not turno and start_time and end_time:
-                try:
-                    _ = datetime.fromisoformat(start_time)
-                    _ = datetime.fromisoformat(end_time)
-                    where_clause += " AND p.end_time BETWEEN %s AND %s"
-                    params.extend([start_time, end_time])
-                except ValueError:
-                    return JSONResponse(status_code=400, content={"error": "start_time and end_time must be ISO 8601 formatted strings"})
+                if not turno and start_time and end_time:
+                    try:
+                        _ = datetime.fromisoformat(start_time)
+                        _ = datetime.fromisoformat(end_time)
+                        where_clause += " AND p.end_time BETWEEN %s AND %s"
+                        params.extend([start_time, end_time])
+                    except ValueError:
+                        return JSONResponse(status_code=400, content={"error": "start_time and end_time must be ISO 8601 formatted strings"})
 
-            if turno:
-                turno_times = {
-                    1: ("06:00:00", "13:59:59"),
-                    2: ("14:00:00", "21:59:59"),
-                    3: ("22:00:00", "05:59:59"),
-                }
-                if turno not in turno_times:
-                    return JSONResponse(status_code=400, content={"error": "Invalid turno number (must be 1, 2, or 3)"})
+                if turno:
+                    turno_times = {
+                        1: ("06:00:00", "13:59:59"),
+                        2: ("14:00:00", "21:59:59"),
+                        3: ("22:00:00", "05:59:59"),
+                    }
+                    if turno not in turno_times:
+                        return JSONResponse(status_code=400, content={"error": "Invalid turno number (must be 1, 2, or 3)"})
 
-                turno_start, turno_end = turno_times[turno]
+                    turno_start, turno_end = turno_times[turno]
 
-                if turno == 3:
-                    if date:
-                        shift_day = datetime.strptime(date, "%Y-%m-%d")
-                        next_day = shift_day + timedelta(days=1)
-                        where_clause += """
-                            AND (
-                                (DATE(p.end_time) = %s AND TIME(p.end_time) >= '22:00:00')
-                                OR
-                                (DATE(p.end_time) = %s AND TIME(p.end_time) <= '05:59:59')
-                            )
-                        """
-                        params.extend([shift_day.strftime("%Y-%m-%d"), next_day.strftime("%Y-%m-%d")])
-                    elif from_date and to_date:
-                        where_clause += """
-                            AND (
-                                TIME(p.end_time) >= '22:00:00'
-                                OR TIME(p.end_time) <= '05:59:59'
-                            )
-                        """
+                    if turno == 3:
+                        if date:
+                            shift_day = datetime.strptime(date, "%Y-%m-%d")
+                            next_day = shift_day + timedelta(days=1)
+                            where_clause += """
+                                AND (
+                                    (DATE(p.end_time) = %s AND TIME(p.end_time) >= '22:00:00')
+                                    OR
+                                    (DATE(p.end_time) = %s AND TIME(p.end_time) <= '05:59:59')
+                                )
+                            """
+                            params.extend([shift_day.strftime("%Y-%m-%d"), next_day.strftime("%Y-%m-%d")])
+                        elif from_date and to_date:
+                            where_clause += """
+                                AND (
+                                    TIME(p.end_time) >= '22:00:00'
+                                    OR TIME(p.end_time) <= '05:59:59'
+                                )
+                            """
+                        else:
+                            return JSONResponse(status_code=400, content={"error": "Missing 'date' or 'from' and 'to'"})
                     else:
-                        return JSONResponse(status_code=400, content={"error": "Missing 'date' or 'from' and 'to'"})
-                else:
-                    if date:
-                        shift_day = datetime.strptime(date, "%Y-%m-%d").strftime("%Y-%m-%d")
-                        where_clause += " AND DATE(p.end_time) = %s AND TIME(p.end_time) BETWEEN %s AND %s"
-                        params.extend([shift_day, turno_start, turno_end])
-                    elif from_date and to_date:
-                        from_dt = datetime.strptime(from_date, "%Y-%m-%d")
-                        to_dt = datetime.strptime(to_date, "%Y-%m-%d")
-                        days = [(from_dt + timedelta(days=i)).strftime("%Y-%m-%d") for i in range((to_dt - from_dt).days + 1)]
-                        placeholders = ", ".join(["%s"] * len(days))
-                        where_clause += f" AND DATE(p.end_time) IN ({placeholders}) AND TIME(p.end_time) BETWEEN %s AND %s"
-                        params.extend(days + [turno_start, turno_end])
-                    else:
-                        return JSONResponse(status_code=400, content={"error": "Missing 'date' for turno filtering"})
+                        if date:
+                            shift_day = datetime.strptime(date, "%Y-%m-%d").strftime("%Y-%m-%d")
+                            where_clause += " AND DATE(p.end_time) = %s AND TIME(p.end_time) BETWEEN %s AND %s"
+                            params.extend([shift_day, turno_start, turno_end])
+                        elif from_date and to_date:
+                            from_dt = datetime.strptime(from_date, "%Y-%m-%d")
+                            to_dt = datetime.strptime(to_date, "%Y-%m-%d")
+                            days = [(from_dt + timedelta(days=i)).strftime("%Y-%m-%d") for i in range((to_dt - from_dt).days + 1)]
+                            placeholders = ", ".join(["%s"] * len(days))
+                            where_clause += f" AND DATE(p.end_time) IN ({placeholders}) AND TIME(p.end_time) BETWEEN %s AND %s"
+                            params.extend(days + [turno_start, turno_end])
+                        else:
+                            return JSONResponse(status_code=400, content={"error": "Missing 'date' for turno filtering"})
 
-            if line_name:
-                try:
-                    where_clause += " AND pl.name = %s"
-                    params.append(line_name)
-                except ValueError:
-                    return JSONResponse(status_code=400, content={"error": "Invalid line_name format"})
+                if line_name:
+                    try:
+                        where_clause += " AND pl.name = %s"
+                        params.append(line_name)
+                    except ValueError:
+                        return JSONResponse(status_code=400, content={"error": "Invalid line_name format"})
 
-            query = f"""
-                SELECT
-                    s.name AS station_name,
-                    s.display_name AS station_display,
-                    SUM(CASE WHEN p.esito = 1 THEN 1 ELSE 0 END) AS good_count,
-                    SUM(CASE WHEN p.esito = 2 THEN 1 ELSE 0 END) AS in_prod_count,
-                    SUM(CASE WHEN p.esito = 4 THEN 1 ELSE 0 END) AS escluso_count,
-                    SUM(CASE WHEN p.esito = 5 THEN 1 ELSE 0 END) AS ok_op_count,
-                    SUM(CASE WHEN p.esito = 6 THEN 1 ELSE 0 END) AS bad_count,
-                    SEC_TO_TIME(AVG(TIME_TO_SEC(p.cycle_time))) AS avg_cycle_time
-                FROM (
-                    SELECT *
-                    FROM productions p
-                    WHERE (p.station_id, p.object_id, p.end_time) IN (
-                        SELECT station_id, object_id, MAX(end_time)
-                        FROM productions
-                        GROUP BY station_id, object_id
-                    )
-                ) p
-                JOIN stations s ON p.station_id = s.id
+                query = f"""
+                    SELECT
+                        s.name AS station_name,
+                        s.display_name AS station_display,
+                        SUM(CASE WHEN p.esito = 1 THEN 1 ELSE 0 END) AS good_count,
+                        SUM(CASE WHEN p.esito = 2 THEN 1 ELSE 0 END) AS in_prod_count,
+                        SUM(CASE WHEN p.esito = 4 THEN 1 ELSE 0 END) AS escluso_count,
+                        SUM(CASE WHEN p.esito = 5 THEN 1 ELSE 0 END) AS ok_op_count,
+                        SUM(CASE WHEN p.esito = 6 THEN 1 ELSE 0 END) AS bad_count,
+                        SEC_TO_TIME(AVG(TIME_TO_SEC(p.cycle_time))) AS avg_cycle_time
+                    FROM (
+                        SELECT *
+                        FROM productions p
+                        WHERE (p.station_id, p.object_id, p.end_time) IN (
+                            SELECT station_id, object_id, MAX(end_time)
+                            FROM productions
+                            GROUP BY station_id, object_id
+                        )
+                    ) p
+                    JOIN stations s ON p.station_id = s.id
 
-                LEFT JOIN production_lines pl ON s.line_id = pl.id
-                {where_clause}
-                GROUP BY s.name, s.display_name
-            """
-            cursor.execute(query, tuple(params))
-            stations = {}
-            for row in cursor.fetchall():
-                name = row['station_name']
-                stations[name] = {
-                    "display": row['station_display'],
-                    "good_count": int(row['good_count']),
-                    "bad_count": int(row['bad_count']),
-                    "escluso_count": int(row['escluso_count']),
-                    "in_prod_count": int(row['in_prod_count']),
-                    "ok_op_count": int(row['ok_op_count']),
-                    "avg_cycle_time": str(row['avg_cycle_time']),
-                    "last_cycle_time": "00:00:00"
-                }
+                    LEFT JOIN production_lines pl ON s.line_id = pl.id
+                    {where_clause}
+                    GROUP BY s.name, s.display_name
+                """
+                cursor.execute(query, tuple(params))
+                stations = {}
+                for row in cursor.fetchall():
+                    name = row['station_name']
+                    stations[name] = {
+                        "display": row['station_display'],
+                        "good_count": int(row['good_count']),
+                        "bad_count": int(row['bad_count']),
+                        "escluso_count": int(row['escluso_count']),
+                        "in_prod_count": int(row['in_prod_count']),
+                        "ok_op_count": int(row['ok_op_count']),
+                        "avg_cycle_time": str(row['avg_cycle_time']),
+                        "last_cycle_time": "00:00:00"
+                    }
 
-            query_time_cycles = f"""
-                SELECT s.name as station_code, TIME_TO_SEC(p.cycle_time) as cycle_seconds
-                FROM (
-                    SELECT *
-                    FROM productions p
-                    WHERE (p.station_id, p.object_id, p.end_time) IN (
-                        SELECT station_id, object_id, MAX(end_time)
-                        FROM productions
-                        GROUP BY station_id, object_id
-                    )
-                ) p
-                JOIN stations s ON p.station_id = s.id
-                LEFT JOIN production_lines pl ON s.line_id = pl.id
-                {where_clause} AND (
-                    p.esito = 1 OR (s.name = 'RMI01' AND p.esito = 5)
-                )
-            """
-            cursor.execute(query_time_cycles, tuple(params))
-            for row in cursor.fetchall():
-                station = row['station_code']
-                cycle = row['cycle_seconds']
-                if station in stations:
-                    stations[station].setdefault("cycle_times", []).append(float(cycle))
-
-            all_station_names = [station for line, stations_list in CHANNELS.items() if line == line_name or line_name is None for station in stations_list]
-            for station in all_station_names:
-                stations.setdefault(station, {
-                    "display": station,
-                    "good_count": 0,
-                    "bad_count": 0,
-                    "escluso_count": 0,
-                    "in_prod_count": 0,
-                    "ok_op_count": 0,
-                    "avg_cycle_time": "00:00:00",
-                    "last_cycle_time": "00:00:00",
-                    "cycle_times": []
-                })
-
-            def fetch_defect_summary(category_label, label):
-                q = f"""
-                    SELECT 
-                        s.name AS station_code, 
-                        d.category,
-                        COUNT(DISTINCT CONCAT(od.production_id, '-', d.category)) AS unique_defect_count
-                    FROM object_defects od
-                    JOIN defects d ON od.defect_id = d.id
-                    JOIN productions p ON p.id = od.production_id
+                query_time_cycles = f"""
+                    SELECT s.name as station_code, TIME_TO_SEC(p.cycle_time) as cycle_seconds
+                    FROM (
+                        SELECT *
+                        FROM productions p
+                        WHERE (p.station_id, p.object_id, p.end_time) IN (
+                            SELECT station_id, object_id, MAX(end_time)
+                            FROM productions
+                            GROUP BY station_id, object_id
+                        )
+                    ) p
                     JOIN stations s ON p.station_id = s.id
                     LEFT JOIN production_lines pl ON s.line_id = pl.id
-                    {where_clause} AND p.esito = 6
-                    GROUP BY s.name, d.category
-                """
-                cursor.execute(q, tuple(params))
-                for row in cursor.fetchall():
-                    station_code = row['station_code']
-                    category = row['category']
-                    count = int(row['unique_defect_count'])
-                    if station_code in stations:
-                        stations[station_code].setdefault("defects", {})[category] = count
-
-            for category in ["Mancanza Ribbon", "I_Ribbon Leadwire", "Saldatura", "Disallineamento", "Generali", "Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella", "Bad Soldering"]:
-                fetch_defect_summary(category, category)
-
-            for station, data in stations.items():
-                bad_count_val = int(data["bad_count"])
-                defects = data.get("defects", {})
-                total_defects = sum(defects.values())
-                generic = bad_count_val - total_defects
-                if generic > 0:
-                    stations[station].setdefault("defects", {})["Senza Causale"] = generic
-
-            query_last = f"""
-                SELECT s.name as station, o.id_modulo, p.esito, p.cycle_time, p.start_time, p.end_time
-                FROM (
-                    SELECT *
-                    FROM productions p
-                    WHERE (p.station_id, p.object_id, p.end_time) IN (
-                        SELECT station_id, object_id, MAX(end_time)
-                        FROM productions
-                        GROUP BY station_id, object_id
+                    {where_clause} AND (
+                        p.esito = 1 OR (s.name = 'RMI01' AND p.esito = 5)
                     )
-                ) p
-                JOIN stations s ON p.station_id = s.id
-                JOIN objects o ON p.object_id = o.id
-                LEFT JOIN production_lines pl ON s.line_id = pl.id
-                {where_clause}
-                ORDER BY p.end_time DESC
-            """
-            cursor.execute(query_last, tuple(params))
-            seen_stations = set()
-            for row in cursor.fetchall():
-                station = row['station']
-                if station not in seen_stations and station in stations:
-                    stations[station]["last_object"] = row["id_modulo"]
-                    stations[station]["last_esito"] = row["esito"]
-                    stations[station]["last_cycle_time"] = str(row["cycle_time"])
-                    stations[station]["last_in_time"] = str(row["start_time"])
-                    stations[station]["last_out_time"] = str(row["end_time"])
-                    seen_stations.add(station)
+                """
+                cursor.execute(query_time_cycles, tuple(params))
+                for row in cursor.fetchall():
+                    station = row['station_code']
+                    cycle = row['cycle_seconds']
+                    if station in stations:
+                        stations[station].setdefault("cycle_times", []).append(float(cycle))
 
-            return {
-                "good_count": sum(s["good_count"] for s in stations.values()),
-                "bad_count": sum(s["bad_count"] for s in stations.values()),
-                "escluso_count": sum(s["escluso_count"] for s in stations.values()),
-                "in_prod_count": sum(s["in_prod_count"] for s in stations.values()),
-                "ok_op_count": sum(s["ok_op_count"] for s in stations.values()),
-                "stations": stations,
-            }
+                all_station_names = [station for line, stations_list in CHANNELS.items() if line == line_name or line_name is None for station in stations_list]
+                for station in all_station_names:
+                    stations.setdefault(station, {
+                        "display": station,
+                        "good_count": 0,
+                        "bad_count": 0,
+                        "escluso_count": 0,
+                        "in_prod_count": 0,
+                        "ok_op_count": 0,
+                        "avg_cycle_time": "00:00:00",
+                        "last_cycle_time": "00:00:00",
+                        "cycle_times": []
+                    })
+
+                def fetch_defect_summary(category_label, label):
+                    q = f"""
+                        SELECT 
+                            s.name AS station_code, 
+                            d.category,
+                            COUNT(DISTINCT CONCAT(od.production_id, '-', d.category)) AS unique_defect_count
+                        FROM object_defects od
+                        JOIN defects d ON od.defect_id = d.id
+                        JOIN productions p ON p.id = od.production_id
+                        JOIN stations s ON p.station_id = s.id
+                        LEFT JOIN production_lines pl ON s.line_id = pl.id
+                        {where_clause} AND p.esito = 6
+                        GROUP BY s.name, d.category
+                    """
+                    cursor.execute(q, tuple(params))
+                    for row in cursor.fetchall():
+                        station_code = row['station_code']
+                        category = row['category']
+                        count = int(row['unique_defect_count'])
+                        if station_code in stations:
+                            stations[station_code].setdefault("defects", {})[category] = count
+
+                for category in ["Mancanza Ribbon", "I_Ribbon Leadwire", "Saldatura", "Disallineamento", "Generali", "Macchie ECA", "Celle Rotte", "Lunghezza String Ribbon", "Graffio su Cella", "Bad Soldering"]:
+                    fetch_defect_summary(category, category)
+
+                for station, data in stations.items():
+                    bad_count_val = int(data["bad_count"])
+                    defects = data.get("defects", {})
+                    total_defects = sum(defects.values())
+                    generic = bad_count_val - total_defects
+                    if generic > 0:
+                        stations[station].setdefault("defects", {})["Senza Causale"] = generic
+
+                query_last = f"""
+                    SELECT s.name as station, o.id_modulo, p.esito, p.cycle_time, p.start_time, p.end_time
+                    FROM (
+                        SELECT *
+                        FROM productions p
+                        WHERE (p.station_id, p.object_id, p.end_time) IN (
+                            SELECT station_id, object_id, MAX(end_time)
+                            FROM productions
+                            GROUP BY station_id, object_id
+                        )
+                    ) p
+                    JOIN stations s ON p.station_id = s.id
+                    JOIN objects o ON p.object_id = o.id
+                    LEFT JOIN production_lines pl ON s.line_id = pl.id
+                    {where_clause}
+                    ORDER BY p.end_time DESC
+                """
+                cursor.execute(query_last, tuple(params))
+                seen_stations = set()
+                for row in cursor.fetchall():
+                    station = row['station']
+                    if station not in seen_stations and station in stations:
+                        stations[station]["last_object"] = row["id_modulo"]
+                        stations[station]["last_esito"] = row["esito"]
+                        stations[station]["last_cycle_time"] = str(row["cycle_time"])
+                        stations[station]["last_in_time"] = str(row["start_time"])
+                        stations[station]["last_out_time"] = str(row["end_time"])
+                        seen_stations.add(station)
+
+                return {
+                    "good_count": sum(s["good_count"] for s in stations.values()),
+                    "bad_count": sum(s["bad_count"] for s in stations.values()),
+                    "escluso_count": sum(s["escluso_count"] for s in stations.values()),
+                    "in_prod_count": sum(s["in_prod_count"] for s in stations.values()),
+                    "ok_op_count": sum(s["ok_op_count"] for s in stations.values()),
+                    "stations": stations,
+                }
 
     except Exception as e:
         logger.error(f"MySQL Error: {e}")

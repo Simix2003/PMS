@@ -20,28 +20,28 @@ logger = logging.getLogger(__name__)
 @router.get("/api/station_for_object")
 async def get_station_for_object(id_modulo: str):
     try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
-            obj = cursor.fetchone()
-            if not obj:
-                raise HTTPException(status_code=404, detail="Object not found.")
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
+                obj = cursor.fetchone()
+                if not obj:
+                    raise HTTPException(status_code=404, detail="Object not found.")
 
-            obj_id = obj["id"]
+                obj_id = obj["id"]
 
-            cursor.execute("""
-                SELECT s.name AS station_name
-                FROM productions p
-                JOIN stations s ON p.station_id = s.id
-                WHERE p.object_id = %s AND s.type = 'qc'
-                ORDER BY p.end_time DESC
-                LIMIT 1
-            """, (obj_id,))
-            row = cursor.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="QC station not found for this object.")
+                cursor.execute("""
+                    SELECT s.name AS station_name
+                    FROM productions p
+                    JOIN stations s ON p.station_id = s.id
+                    WHERE p.object_id = %s AND s.type = 'qc'
+                    ORDER BY p.end_time DESC
+                    LIMIT 1
+                """, (obj_id,))
+                row = cursor.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="QC station not found for this object.")
 
-            return {"station": row["station_name"]}
+                return {"station": row["station_name"]}
 
     except Exception as e:
         logger.error(f"Error in get_station_for_object({id_modulo}): {e}")
@@ -93,18 +93,18 @@ async def set_outcome(request: Request):
 @router.get("/api/tablet_stations")
 async def get_qg_stations():
     try:
-        conn = get_mysql_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT name, display_name 
-                FROM stations 
-                WHERE type IN ('qc', 'rework')
-                  AND config IS NOT NULL 
-                  AND config != ''
-                  AND plc IS NOT NULL 
-                  AND plc != ''
-            """)
-            stations = cursor.fetchall()
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT name, display_name 
+                    FROM stations 
+                    WHERE type IN ('qc', 'rework')
+                    AND config IS NOT NULL 
+                    AND config != ''
+                    AND plc IS NOT NULL 
+                    AND plc != ''
+                """)
+                stations = cursor.fetchall()
         return {"stations": stations}
     except Exception as e:
         return {"error": str(e)}

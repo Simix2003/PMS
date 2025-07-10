@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 import logging
-
+import time
 import os
 import sys
 from typing import Optional
@@ -150,17 +150,24 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 
 
             if (fine_buona or fine_scarto) and not fine_true_passato_flags[full_station_id]:
+                t0 = time.perf_counter()
                 logger.info(f"Fine Ciclo on {full_station_id} TRUE ...")
+
                 data_inizio = trigger_timestamps.get(full_station_id)
                 bufferIds = []
-                result = await read_data(plc_connection, line_name, channel_id,
-                                        richiesta_ok=fine_buona,
-                                        richiesta_ko=fine_scarto,
-                                        data_inizio=data_inizio, 
-                                        buffer=buffer, 
-                                        start_byte=start_byte,
-                                        )
-                
+
+                t1 = time.perf_counter()
+                result = await read_data(
+                    plc_connection, line_name, channel_id,
+                    richiesta_ok=fine_buona,
+                    richiesta_ko=fine_scarto,
+                    data_inizio=data_inizio, 
+                    buffer=buffer, 
+                    start_byte=start_byte,
+                )
+                t2 = time.perf_counter()
+                logger.info(f"[{full_station_id}] read_data done in {t2 - t1:.3f}s")
+
                 if result:
                     bufferIds = result.get("BufferIds_Rework", [])
                     fine_true_passato_flags[full_station_id] = True
@@ -170,39 +177,43 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     if production_id:
                         with get_mysql_connection() as conn:
                             with conn.cursor() as cursor:
-                                success, final_esito, end_time = await update_production_final(
+                                t3 = time.perf_counter()
+                                success, final_esito, end_time = await run_in_thread(
+                                    update_production_final,
                                     production_id, result, channel_id, conn, fine_buona, fine_scarto
                                 )
-
-                                if success and channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
-                                    await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_vpf=True)
-                                    assert end_time and final_esito is not None
-                                    timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
-
-                                    await run_in_thread(refresh_top_defects_vpf, "AIN", timestamp)
-                                    await run_in_thread(refresh_vpf_defects_data, timestamp)
-
-                                if success and channel_id == "ELL01" and fine_scarto:
-                                    assert end_time and final_esito is not None
-                                    await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_ell=True)
-
-                                if success and channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
-                                    await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_ain=True)
+                                t4 = time.perf_counter()
+                                logger.info(f"[{full_station_id}] update_production_final in {t4 - t3:.3f}s")
 
                                 if success:
+                                    if channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
+                                        t5 = time.perf_counter()
+                                        await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_vpf=True)
+                                        t6 = time.perf_counter()
+                                        logger.info(f"[{full_station_id}] insert_defects VPF in {t6 - t5:.3f}s")
+
+                                        timestamp = datetime.fromisoformat(end_time) if not isinstance(end_time, datetime) else end_time
+                                        await run_in_thread(refresh_top_defects_vpf, "AIN", timestamp)
+                                        await run_in_thread(refresh_vpf_defects_data, timestamp)
+
+                                    elif channel_id == "ELL01" and fine_scarto:
+                                        t5 = time.perf_counter()
+                                        await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_ell=True)
+                                        logger.info(f"[{full_station_id}] insert_defects ELL in {time.perf_counter() - t5:.3f}s")
+
+                                    elif channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
+                                        t5 = time.perf_counter()
+                                        await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_ain=True)
+                                        logger.info(f"[{full_station_id}] insert_defects AIN in {time.perf_counter() - t5:.3f}s")
+
+                                    # Update visual
                                     try:
                                         zone = get_zone_from_station(channel_id)
-                                        assert end_time and final_esito is not None
-                                        timestamp = end_time if isinstance(end_time, datetime) else datetime.fromisoformat(end_time)
-
-                                        if channel_id == "VPF01":
-                                            reentered = bool(result.get("Re_entered_from_m506", False))
-                                        elif channel_id == "ELL01":
-                                            reentered = bool(result.get("Re_entered_from_m326", False))
-                                        else:
-                                            reentered = False
+                                        timestamp = datetime.fromisoformat(end_time) if not isinstance(end_time, datetime) else end_time
+                                        reentered = result.get("Re_entered_from_m506" if channel_id == "VPF01" else "Re_entered_from_m326", False)
 
                                         if zone:
+                                            t7 = time.perf_counter()
                                             await run_in_thread(
                                                 update_visual_data_on_new_module,
                                                 zone=zone,
@@ -210,16 +221,17 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                                 esito=final_esito,
                                                 ts=timestamp,
                                                 cycle_time=result['Tempo_Ciclo'],
-                                                reentered=reentered,
+                                                reentered=bool(reentered),
                                                 bufferIds=bufferIds
                                             )
+                                            t8 = time.perf_counter()
+                                            logger.info(f"[{full_station_id}] update_visual_data_on_new_module in {t8 - t7:.3f}s")
 
                                             if zone == "AIN" and fine_scarto:
                                                 await run_in_thread(refresh_top_defects_qg2, zone, timestamp)
 
-                                            logger.debug(f"Called update_visual_data_on_new_module ✅")
                                         else:
-                                            logger.info(f"Unknown zone for station {channel_id} — skipping visual update")
+                                            logger.info(f"Unknown zone for {channel_id} — skipping visual update")
 
                                     except Exception as vis_err:
                                         logger.warning(f"Could not update visual_data for {channel_id}: {vis_err}")
@@ -227,21 +239,29 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                     incomplete_productions.pop(full_station_id)
 
                                     esito_conf = paths.get("esito_scarto_compilato")
-                                    pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
                                     pezzo_archivia_conf = paths["pezzo_archiviato"]
 
+                                    t9 = time.perf_counter()
                                     await asyncio.to_thread(plc_connection.write_bool, pezzo_archivia_conf["db"], pezzo_archivia_conf["byte"], pezzo_archivia_conf["bit"], True)
                                     if esito_conf:
                                         await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
+                                    t10 = time.perf_counter()
+                                    logger.info(f"[{full_station_id}] PLC write(s) in {t10 - t9:.3f}s")
 
                                 else:
-                                    logger.error(f"Failed to update production in DB, skipping visual update.")
+                                    pezzo_archivia_conf = paths["pezzo_archiviato"]
+                                    await asyncio.to_thread(plc_connection.write_bool, pezzo_archivia_conf["db"], pezzo_archivia_conf["byte"], pezzo_archivia_conf["bit"], True)
+                                    logger.warning(f"[{full_station_id}] Production update failed. Wrote archivio bit anyway.")
                     else:
                         pezzo_archivia_conf = paths["pezzo_archiviato"]
-                        logger.warning(f"No initial production record found for {full_station_id}; skipping update, Writing PEZZO ARCHIVIATO Anyway")
                         await asyncio.to_thread(plc_connection.write_bool, pezzo_archivia_conf["db"], pezzo_archivia_conf["byte"], pezzo_archivia_conf["bit"], True)
-
+                        logger.warning(f"[{full_station_id}] Module was not found in incomplete productions. Wrote archivio bit anyway.")
+                        
                     remove_temp_issues(line_name, channel_id, result.get("Id_Modulo"))
+
+                t_end = time.perf_counter()
+                logger.info(f"[{full_station_id}] Total Fine Ciclo processing: {t_end - t0:.3f}s")
+
 
             await asyncio.sleep(0.5)
 
@@ -259,75 +279,64 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
     if not paths:
         logger.warning(f"Config not found for {full_id}")
         return
-    
+
+    t0 = time.perf_counter()
     logger.info(f"Inizio Ciclo on {full_id} TRUE ...")
     trigger_timestamps.pop(full_id, None)
 
-    # Write FALSE to esito_scarto_compilato.
     esito_conf = paths.get("esito_scarto_compilato")
+    pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
+
+    # Write FALSE to PLC flags
     if esito_conf:
         await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
-
-
-    # Write FALSE to pezzo_salvato_su_DB_con_inizio_ciclo.
-    pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
     await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False)
+    t1 = time.perf_counter()
+    logger.info(f"[{full_id}] PLC initial reset flags in {t1 - t0:.3f}s")
 
-    # Read initial values.
-    id_mod_conf = paths["id_modulo"]
-
-    ###############################################################################################################################
+    # Get object_id
     if debug:
         object_id = global_state.debug_moduli.get(full_id)
     else:
-        #object_id = await asyncio.to_thread(plc_connection.read_string, id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"])
-        object_id = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)    
-    ###############################################################################################################################
+        id_mod_conf = paths["id_modulo"]
+        object_id = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
 
+    # Get stringatrice
     str_conf = paths["stringatrice"]
-    #values = [await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i) for i in range(str_conf["length"])]
-    values = [
-        extract_bool(buffer, str_conf["byte"], i, start_byte)
-        for i in range(str_conf["length"])
-    ]
-
+    values = [extract_bool(buffer, str_conf["byte"], i, start_byte) for i in range(str_conf["length"])]
     if not any(values):
         values[0] = True
     stringatrice_index = values.index(True) + 1
     stringatrice = str(stringatrice_index)
 
-    #issues_value = await asyncio.to_thread(plc_connection.read_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"])
-    if esito_conf:
-        issues_value = extract_bool(buffer, esito_conf["byte"], esito_conf["bit"], start_byte)
-        issues_submitted = issues_value is True
-    else:
-        issues_submitted = False
+    # Check issues submitted
+    issues_submitted = extract_bool(buffer, esito_conf["byte"], esito_conf["bit"], start_byte) if esito_conf else False
 
     trigger_timestamps[full_id] = datetime.now()
-
-    # Read the initial data from the PLC using read_data.
     data_inizio = trigger_timestamps[full_id]
-    initial_data = await read_data(plc_connection, line_name, channel_id, richiesta_ok=False, richiesta_ko=False, data_inizio=data_inizio, buffer=buffer, start_byte=start_byte)
-        
-    escl_conf = paths.get("stazione_esclusa")
-    if escl_conf:
-        #esclusione_attiva = await asyncio.to_thread(
-        #    plc_connection.read_bool, escl_conf["db"], escl_conf["byte"], escl_conf["bit"]
-        #)
-        esclusione_attiva = extract_bool(buffer, escl_conf["byte"], escl_conf["bit"], start_byte)
-    else:
-        esclusione_attiva = False
 
+    # Read initial data
+    t2 = time.perf_counter()
+    initial_data = await read_data(plc_connection, line_name, channel_id, richiesta_ok=False, richiesta_ko=False, data_inizio=data_inizio, buffer=buffer, start_byte=start_byte)
+    t3 = time.perf_counter()
+    logger.info(f"[{full_id}] read_data in {t3 - t2:.3f}s")
+
+    # Check if station is excluded
+    escl_conf = paths.get("stazione_esclusa")
+    esclusione_attiva = extract_bool(buffer, escl_conf["byte"], escl_conf["bit"], start_byte) if escl_conf else False
     esito = 4 if esclusione_attiva else 2
 
+    # Insert production record
     logger.info(f"[{full_id}] Starting initial production insert for object_id={object_id}")
-
+    t4 = time.perf_counter()
     try:
         with get_mysql_connection() as conn:
-            prod_id = await insert_initial_production_data(initial_data, channel_id, conn, esito)
+            prod_id = await run_in_thread(insert_initial_production_data, initial_data, channel_id, conn, esito)
     except Exception as e:
         logger.exception(f"[{full_id}] Exception during insert_initial_production_data: {e}")
         prod_id = None
+    t5 = time.perf_counter()
+    logger.info(f"[{full_id}] insert_initial_production_data in {t5 - t4:.3f}s")
 
     if prod_id:
         logger.info(f"[{full_id}] ✅ Inserted production record: prod_id={prod_id}")
@@ -338,8 +347,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
     global_state.expected_moduli[full_id] = object_id
     logger.debug(f"[{full_id}] expected_moduli updated with object_id={object_id}")
 
-
-    # Write TRUE to pezzo_salvato_su_DB_con_inizio_ciclo.
+    # Write TRUE to pezzo_salvato_su_DB_con_inizio_ciclo
     if not debug:
         await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True)
 
@@ -350,6 +358,9 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         "outcome": None,
         "issuesSubmitted": issues_submitted
     })
+
+    t_end = time.perf_counter()
+    logger.info(f"[{full_id}] Total on_trigger_change time: {t_end - t0:.3f}s")
 
 async def read_data(
     plc_connection: PLCConnection,

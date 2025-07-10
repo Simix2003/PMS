@@ -137,7 +137,7 @@ def load_channels_from_db() -> tuple[dict, dict]:
     logger.debug(f"PLC_DB_RANGES: {plc_db_ranges}")
     return channels, plc_db_ranges
 
-async def insert_initial_production_data(data, station_name, connection, esito):
+def insert_initial_production_data(data, station_name, connection, esito):
     """
     Inserts a production record using data available at cycle start.
     It sets the end_time to NULL and uses esito = 2 (in progress).
@@ -147,133 +147,123 @@ async def insert_initial_production_data(data, station_name, connection, esito):
     try:
         with connection.cursor() as cursor:
             id_modulo = data.get("Id_Modulo")
-            # Determine line from the 'Linea_in_Lavorazione' list.
-            linea_index = data.get("Linea_in_Lavorazione", [False] * 5).index(True) + 1
+            if not id_modulo:
+                raise ValueError("Missing Id_Modulo")
+
+            # Get line name (Linea1–5)
+            linea_flags = data.get("Linea_in_Lavorazione", [False] * 5)
+            try:
+                linea_index = linea_flags.index(True) + 1
+            except ValueError:
+                raise ValueError("No active line found in Linea_in_Lavorazione")
             actual_line = f"Linea{linea_index}"
 
-            # Get line_id.
-            cursor.execute("SELECT id FROM production_lines WHERE name = %s", (actual_line,))
-            line_row = cursor.fetchone()
-            if not line_row:
-                raise ValueError(f"{actual_line} not found in production_lines")
-            line_id = line_row["id"]
+            # Fetch line_id + station_id together
+            cursor.execute("""
+                SELECT l.id AS line_id, s.id AS station_id
+                FROM production_lines l
+                JOIN stations s ON s.line_id = l.id
+                WHERE l.name = %s AND s.name = %s
+                LIMIT 1
+            """, (actual_line, station_name))
+            result = cursor.fetchone()
+            if not result:
+                raise ValueError(f"Line '{actual_line}' or Station '{station_name}' not found")
+            line_id, station_id = result["line_id"], result["station_id"]
 
-            # Get station id using station_name and line_id.
-            cursor.execute("SELECT id FROM stations WHERE name = %s AND line_id = %s", (station_name, line_id))
-            station_row = cursor.fetchone()
-            if not station_row:
-                raise ValueError(f"Station '{station_name}' not found for {actual_line}")
-            real_station_id = station_row["id"]
-
-            # Insert into objects table.
-            sql_insert_object = """
+            # Insert (or confirm existence of) object
+            cursor.execute("""
                 INSERT INTO objects (id_modulo, creator_station_id)
                 VALUES (%s, %s)
                 ON DUPLICATE KEY UPDATE id_modulo = id_modulo
-            """
-            cursor.execute(sql_insert_object, (id_modulo, real_station_id))
+            """, (id_modulo, station_id))
 
-            # Get object_id.
+            # Get object_id
             cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
             object_id = cursor.fetchone()["id"]
 
-            # ☆ Check for existing partial production record:
+            # Check for existing partial production
             cursor.execute("""
                 SELECT id FROM productions 
-                WHERE object_id = %s 
-                  AND station_id = %s 
-                  AND esito = 2 
-                  AND end_time IS NULL
-                ORDER BY start_time DESC
-                LIMIT 1
-            """, (object_id, real_station_id))
-            existing_prod = cursor.fetchone()
-            if existing_prod:
-                production_id = existing_prod["id"]
+                WHERE object_id = %s AND station_id = %s AND esito = 2 AND end_time IS NULL
+                ORDER BY start_time DESC LIMIT 1
+            """, (object_id, station_id))
+            existing = cursor.fetchone()
+            if existing:
+                production_id = existing["id"]
                 connection.commit()
-                logger.debug(f"Production record already exists: ID {production_id} for object {object_id}")
+                logger.debug(f"✅ Existing production found: ID {production_id} for object {object_id}")
                 return production_id
 
-            # Retrieve last_station_id from stringatrice if available.
+            # Determine last_station_id
             last_station_id = None
-
-            # Priority 1: From stringatrice flags
             str_flags = data.get("Lavorazione_Eseguita_Su_Stringatrice", [])
             if any(str_flags):
-                stringatrice_index = str_flags.index(True) + 1
-                stringatrice_name = f"STR{stringatrice_index:02d}"  # <-- pad with leading zero
-                cursor.execute(
-                    "SELECT id FROM stations WHERE name = %s AND line_id = %s",
-                    (stringatrice_name, line_id)
-                )
+                str_index = str_flags.index(True) + 1
+                str_name = f"STR{str_index:02d}"
+                cursor.execute("""
+                    SELECT id FROM stations WHERE name = %s AND line_id = %s
+                """, (str_name, line_id))
                 str_row = cursor.fetchone()
                 if str_row:
                     last_station_id = str_row["id"]
+            elif data.get("Last_Station"):
+                last_station_id = data["Last_Station"]
 
-            # Priority 2: From Last_Station (only if no stringatrice found)
-            if not last_station_id and data.get("Last_Station"):
-                last_station_id = data['Last_Station']
-
-            # Insert into productions table with esito = 2 (in progress) and no end_time.
-            sql_productions = """
+            # Insert new production
+            cursor.execute("""
                 INSERT INTO productions (
                     object_id, station_id, start_time, end_time, esito, operator_id, last_station_id
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(sql_productions, (
+                ) VALUES (%s, %s, %s, NULL, %s, %s, %s)
+            """, (
                 object_id,
-                real_station_id,
-                data.get("DataInizio"),  # starting timestamp
-                None,                     # end_time left as NULL
-                esito,                        # esito 2 means "in progress", 4 means Escluso
+                station_id,
+                data.get("DataInizio"),
+                esito,
                 data.get("Id_Utente"),
                 last_station_id
             ))
             production_id = cursor.lastrowid
-
             connection.commit()
-            logger.debug(f"Initial production inserted: ID {production_id} for object {object_id}")
+
+            logger.debug(f"✅ New production inserted: ID {production_id} for object {object_id}")
             return production_id
 
     except Exception as e:
         connection.rollback()
-        logger.error(f"Error inserting initial production data: {e}")
+        logger.error(f"❌ insert_initial_production_data error: {e}")
         return None
 
-async def update_production_final(production_id, data, station_name, connection, fine_buona, fine_scarto):
+def update_production_final(production_id, data, station_name, connection, fine_buona, fine_scarto):
     try:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT esito FROM productions WHERE id = %s", (production_id,))
-            row = cursor.fetchone()
-            if not row:
-                logger.warning(f"No production found with ID {production_id}")
-                return False, None, None
-
-            current_esito = row["esito"]
             final_esito = 6 if data.get("Compilato_Su_Ipad_Scarto_Presente") else 1
             if station_name == "RMI01":
                 final_esito = 5 if fine_buona else 6
+
             end_time = data.get("DataFine")
 
-            if current_esito == 2 or station_name == "RMI01":
-                sql_update = """
-                    UPDATE productions 
-                    SET end_time = %s, esito = %s 
-                    WHERE id = %s
-                """
-                cursor.execute(sql_update, (end_time, final_esito, production_id))
-                logger.debug(f"✅ Updated end_time + esito ({final_esito}) for production {production_id}")
-            else:
-                sql_update = """
-                    UPDATE productions 
-                    SET end_time = %s 
-                    WHERE id = %s
-                """
-                cursor.execute(sql_update, (end_time, production_id))
-                logger.debug(f"ℹ️ Updated only end_time for production {production_id} (esito was already {current_esito})")
+            # Perform conditional esito update only if esito == 2 OR station_name == 'RMI01'
+            sql_update = """
+                UPDATE productions 
+                SET 
+                    end_time = %s,
+                    esito = CASE 
+                        WHEN esito = 2 OR %s = 'RMI01' THEN %s 
+                        ELSE esito 
+                    END
+                WHERE id = %s
+            """
+            cursor.execute(sql_update, (end_time, station_name, final_esito, production_id))
+            affected = cursor.rowcount
 
             connection.commit()
+
+            if affected == 0:
+                logger.warning(f"No rows updated for production {production_id}")
+                return False, None, None
+
+            logger.debug(f"✅ Updated production {production_id}: end_time={end_time}, esito={final_esito}")
             return True, final_esito, end_time
 
     except Exception as e:
@@ -437,7 +427,7 @@ def insert_defects(
             photo_id
         ))
 
-async def update_esito(esito: int, production_id: int, cursor, connection):
+def update_esito(esito: int, production_id: int, cursor, connection):
     """
     Update the 'esito' field in the productions table for the given production ID.
     """
@@ -515,7 +505,7 @@ def save_warning_on_mysql(
 
 async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
     try:
-        logger.info(f"[{line_name}] ▶️ Starting check_stringatrice_warnings")
+        logger.debug(f"[{line_name}] ▶️ Starting check_stringatrice_warnings")
 
         with mysql_conn.cursor() as cursor:
             # Step 1: Get the most recent production
@@ -536,13 +526,13 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             last_station_id = last_prod["last_station_id"]
             station_id = last_prod["station_id"]
 
-            logger.info(f"[{line_name}] Last production: prod_id={prod_id}, object_id={object_id}, last_station_id={last_station_id}, station_id={station_id}")
+            logger.debug(f"[{line_name}] Last production: prod_id={prod_id}, object_id={object_id}, last_station_id={last_station_id}, station_id={station_id}")
 
             if last_station_id is None:
                 logger.warning(f"[{line_name}] ⛔ Skipping: last_station_id is None")
                 return
 
-            # Step 2: Get source station info
+            # Step 2: Get source station debug
             cursor.execute("""
                 SELECT s.name, s.display_name, pl.name AS line_name
                 FROM stations s
@@ -554,7 +544,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                 logger.warning(f"[{line_name}] ⚠️ Source station ID {station_id} not found")
                 return
 
-            # Step 3: Get last station info
+            # Step 3: Get last station debug
             cursor.execute("""
                 SELECT s.name, s.display_name, pl.name AS line_name
                 FROM stations s
@@ -568,7 +558,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                 return
 
             full_station_id = f"{station['line_name']}.{station['name']}"
-            logger.info(f"[{line_name}] Full station ID for check: {full_station_id}")
+            logger.debug(f"[{line_name}] Full station ID for check: {full_station_id}")
 
             # Step 4: Get last 24 recent productions from same source
             cursor.execute("""
@@ -589,7 +579,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             """, (last_station_id, prod_id))
             recent_productions = cursor.fetchall()
 
-            logger.info(f"[{line_name}] Found {len(recent_productions)} recent productions from last_station_id={last_station_id}")
+            logger.debug(f"[{line_name}] Found {len(recent_productions)} recent productions from last_station_id={last_station_id}")
 
             # Step 4.1: Add current production separately
             cursor.execute("""
@@ -629,7 +619,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                 count = 0
                 consecutive = 0
 
-                logger.info(f"[{full_station_id}] Checking defect '{defect_name}' in window={window}, threshold={threshold}, consecutive_limit={consecutive_limit}, enabled={enable_consecutive}")
+                logger.debug(f"[{full_station_id}] Checking defect '{defect_name}' in window={window}, threshold={threshold}, consecutive_limit={consecutive_limit}, enabled={enable_consecutive}")
 
                 for i, p in enumerate(productions[:window]):
                     categories = p.get("defect_categories", "")
@@ -637,12 +627,12 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                     all_defects = (categories or "").split(",") + (customs or "").split(",")
                     all_defects = [d.strip() for d in all_defects if d]
 
-                    logger.info(f"[{full_station_id}] Prod {p['production_id']}: defects={all_defects}")
+                    logger.debug(f"[{full_station_id}] Prod {p['production_id']}: defects={all_defects}")
 
                     if defect_name in all_defects:
                         count += 1
                         consecutive += 1
-                        logger.info(f"[{full_station_id}] Defect match {defect_name}: count={count}, consecutive={consecutive}")
+                        logger.debug(f"[{full_station_id}] Defect match {defect_name}: count={count}, consecutive={consecutive}")
 
                         if enable_consecutive and consecutive >= consecutive_limit:
                             logger.warning(f"[{full_station_id}] 🔴 Consecutive KO warning for '{defect_name}' — {consecutive}/{consecutive_limit}")
@@ -674,7 +664,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                                             row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
 
                                         await broadcast_stringatrice_warning(row["line_name"], row)
-                                        logger.info(f"[{full_station_id}] 📡 Broadcasted consecutive warning for {defect_name}")
+                                        logger.debug(f"[{full_station_id}] 📡 Broadcasted consecutive warning for {defect_name}")
 
                             break  # stop checking if already triggered
                     else:
@@ -710,9 +700,9 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                                     row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
 
                                 await broadcast_stringatrice_warning(row["line_name"], row)
-                                logger.info(f"[{full_station_id}] 📡 Broadcasted threshold warning for {defect_name}")
+                                logger.debug(f"[{full_station_id}] 📡 Broadcasted threshold warning for {defect_name}")
 
-        logger.info(f"[{line_name}] ✅ check_stringatrice_warnings completed")
+        logger.debug(f"[{line_name}] ✅ check_stringatrice_warnings completed")
 
     except Exception as e:
         logger.exception(f"[{line_name}] ❌ Error in check_stringatrice_warnings: {e}")

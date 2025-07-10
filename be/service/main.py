@@ -113,7 +113,7 @@ from service.connections.mysql import get_mysql_connection, load_channels_from_d
 from service.tasks.main_esito_task import background_task, make_status_callback
 from service.tasks.main_fermi_task import fermi_task
 from service.helpers.visual_helper import refresh_median_cycle_time_vpf
-from service.state.global_state import plc_connections, stop_threads, inizio_true_passato_flags, inizio_false_passato_flags, fine_false_passato_flags, fine_true_passato_flags
+from service.state.global_state import plc_connections, stop_threads, inizio_true_passato_flags, inizio_false_passato_flags, fine_false_passato_flags, fine_true_passato_flags, executor
 from service.routes.plc_routes import router as plc_router
 from service.routes.issue_routes import router as issue_router
 from service.routes.warning_routes import router as warning_router
@@ -150,15 +150,13 @@ def init_global_flags():
             fine_false_passato_flags[key] = False
 
 # ---------------- FAST STARTUP ----------------
-_executor = ThreadPoolExecutor(max_workers=10)
-
 async def async_load_channels():
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_executor, load_channels_from_db)
+    return await loop.run_in_executor(executor, load_channels_from_db)
 
 async def async_get_refreshed_settings():
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(_executor, get_refreshed_settings)
+    await loop.run_in_executor(executor, get_refreshed_settings)
 
 async def start_background_tasks():
     try:

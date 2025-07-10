@@ -68,7 +68,7 @@ async def set_issues(request: Request):
                     }
 
                     await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor)
-                    await update_esito(6, production_id, cursor=cursor, connection=conn)
+                    await run_in_thread(update_esito, 6, production_id, cursor=cursor, connection=conn)
 
                 conn.commit()
 

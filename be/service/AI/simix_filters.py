@@ -3,7 +3,7 @@ from typing import cast, Dict, Any
 from datetime import datetime
 import json
 import requests
-
+import re
 
 MODEL_PATH = r"D:\AI\Models\gemma-3n-E4B-it-Q4_K_M.gguf"
 N_THREADS = 4
@@ -47,7 +47,6 @@ TIPI DI FILTRO AMMESSI (derivati da FindPage)
 • "questa settimana", "ultimo turno", ecc. → richiedere conferma se ambiguo
 
 REGOLE DI COMPORTAMENTO
-
 1. Se l’utente chiede conteggi, analisi o elenchi, restituisci solo il blocco JSON con i filtri.
 2. Non scrivere testo fuori dal blocco JSON.
 3. Se mancano dati essenziali (es: stazione, data, tipo difetto), chiedili direttamente.
@@ -56,10 +55,9 @@ REGOLE DI COMPORTAMENTO
 FORMATTO STANDARD
 • Ogni filtro è un dizionario `{ "type": ..., "value": ... }`
 • Alcuni tipi possono avere attributi aggiuntivi:
-
-* `Data` → anche `start`, `end` (ISO 8601)
-* `Tempo Ciclo` → anche `condition`, `seconds`
-* `Eventi` → anche `condition`, `eventi`
+  * `Data` → anche `start`, `end` (ISO 8601)
+  * `Tempo Ciclo` → anche `condition`, `seconds`
+  * `Eventi` → anche `condition`, `eventi`
 
 ESEMPI
 
@@ -96,14 +94,26 @@ ESEMPI
 Se un filtro ha sotto-componenti (es. Difetto), puoi rappresentarlo con il valore concatenato (es: "VPF > NG3" o "Saldatura > Stringa[1] > Lato F > Pin[3]").
 """
 
+# Load model
 llm = Llama(
     model_path=MODEL_PATH,
     n_ctx=4096,
     n_threads=N_THREADS,
+    n_batch=256,
     use_mlock=False,
     use_mmap=True,
     verbose=False
 )
+
+# Full warm-up with realistic context
+now = datetime.now()
+iso_now = now.isoformat(timespec='seconds')
+date_prompt = f"Oggi è {now.strftime('%d %b %Y')} ({iso_now})."
+
+INITIAL_PROMPT = f"<|system|>\n{SYSTEM_PROMPT}\n<|user|>\n{date_prompt}\n<|assistant|>\n"
+print("⏳ Warm-up full prompt...")
+_ = llm(INITIAL_PROMPT, max_tokens=1)
+print("✅ Model ready.\n")
 
 def get_response(messages):
     prompt = ""
@@ -132,11 +142,19 @@ def get_response(messages):
 
 def try_parse_filters(reply: str):
     try:
+        # Extract JSON block from markdown if present
+        match = re.search(r"```json\s*(\[[\s\S]*?\])\s*```", reply)
+        if match:
+            reply = match.group(1)
+
+        # Clean up any special trailing tokens like <|file_separator|>
+        reply = re.sub(r"<\|.*?\|>", "", reply).strip()
+
         parsed = json.loads(reply)
         if isinstance(parsed, list) and all(isinstance(f, dict) and "type" in f and "value" in f for f in parsed):
             return parsed
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"❌ Errore nella chiamata all’API: {e}")
     return None
 
 def call_search_api(filters: list, limit: int = 1000):
@@ -156,10 +174,6 @@ def call_search_api(filters: list, limit: int = 1000):
 
 def chat_with_simix():
     print("🤖 Chatta con Simix (CPU-only — scrivi 'esci' per uscire)\n")
-
-    now = datetime.now()
-    iso_now = now.isoformat(timespec='seconds')
-    date_prompt = f"Oggi è {now.strftime('%d %b %Y')} ({iso_now})."
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},

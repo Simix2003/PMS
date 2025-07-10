@@ -8,6 +8,7 @@ import logging
 
 import os
 import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.temp_data import load_temp_data, save_temp_data
@@ -16,6 +17,7 @@ from service.helpers.helpers import get_channel_config
 from service.state.global_state import plc_connections, incomplete_productions
 from service.config.settings import load_settings
 from service.config.config import ISSUE_TREE, debug
+from service.helpers.executor import run_in_thread
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -65,13 +67,14 @@ async def set_issues(request: Request):
                         "issues": issues
                     }
 
-                    await insert_defects(result, production_id, channel_id, line_name, cursor=cursor)
+                    await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor)
                     await update_esito(6, production_id, cursor=cursor, connection=conn)
 
                 conn.commit()
 
+            with get_mysql_connection() as conn:
             # You can call this outside the context manager if it doesn't use the same `conn`
-            await check_stringatrice_warnings(line_name, None, get_current_settings())
+                await check_stringatrice_warnings(line_name, conn, get_current_settings())
 
         except ValueError as e:
             return JSONResponse(status_code=400, content={"error": str(e)})
@@ -79,6 +82,8 @@ async def set_issues(request: Request):
         except Exception as e:
             logger.error(f"❌ Unexpected error inserting defects for {full_id}: {e}")
             return JSONResponse(status_code=500, content={"error": "Errore interno del server"})
+    else:
+        logger.warning(f"production_id was not found in global_state.incomplete_productions for {full_id}")
 
     # ✅ Write confirmation back to PLC
     target = paths["esito_scarto_compilato"]

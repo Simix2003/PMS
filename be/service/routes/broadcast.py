@@ -96,6 +96,7 @@ async def broadcast(line_name: str, channel_id: str, message: dict):
     for ws in list(subscriptions.get(key, [])):
         try:
             await ws.send_json(message)
+            logger.info('Sent data to WebSocket')
         except Exception:
             subscriptions[key].remove(ws)
 

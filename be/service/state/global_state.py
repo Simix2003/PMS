@@ -44,8 +44,10 @@ subscriptions = {}
 trigger_timestamps = {}
 incomplete_productions = {}
 stop_threads = {}
-fine_passato_flags = {}
-inizio_passato_flags = {}
+fine_true_passato_flags = {}
+fine_false_passato_flags = {}
+inizio_true_passato_flags = {}
+inizio_false_passato_flags = {}
 
 # Debug tools
 debug_triggers = {}

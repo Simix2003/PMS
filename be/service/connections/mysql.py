@@ -281,7 +281,7 @@ async def update_production_final(production_id, data, station_name, connection,
         logger.error(f"Error updating production {production_id}: {e}")
         return False, None, None
 
-async def insert_defects(
+def insert_defects(
     data,
     production_id,
     channel_id,
@@ -515,6 +515,8 @@ def save_warning_on_mysql(
 
 async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
     try:
+        logger.info(f"[{line_name}] ▶️ Starting check_stringatrice_warnings")
+
         with mysql_conn.cursor() as cursor:
             # Step 1: Get the most recent production
             cursor.execute("""
@@ -526,7 +528,7 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             last_prod = cursor.fetchone()
 
             if not last_prod:
-                logger.warning("⚠️ No production data found.")
+                logger.warning(f"[{line_name}] ⚠️ No production data found.")
                 return
 
             prod_id = last_prod["production_id"]
@@ -534,7 +536,10 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             last_station_id = last_prod["last_station_id"]
             station_id = last_prod["station_id"]
 
+            logger.info(f"[{line_name}] Last production: prod_id={prod_id}, object_id={object_id}, last_station_id={last_station_id}, station_id={station_id}")
+
             if last_station_id is None:
+                logger.warning(f"[{line_name}] ⛔ Skipping: last_station_id is None")
                 return
 
             # Step 2: Get source station info
@@ -545,6 +550,9 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                 WHERE s.id = %s
             """, (station_id,))
             source_station = cursor.fetchone()
+            if not source_station:
+                logger.warning(f"[{line_name}] ⚠️ Source station ID {station_id} not found")
+                return
 
             # Step 3: Get last station info
             cursor.execute("""
@@ -556,11 +564,13 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             station = cursor.fetchone()
 
             if not station:
+                logger.warning(f"[{line_name}] ⚠️ Last station ID {last_station_id} not found")
                 return
 
             full_station_id = f"{station['line_name']}.{station['name']}"
+            logger.info(f"[{line_name}] Full station ID for check: {full_station_id}")
 
-            # Step 4: Fetch the most recent 24 productions by end_time
+            # Step 4: Get last 24 recent productions from same source
             cursor.execute("""
                 SELECT 
                     p.id AS production_id, 
@@ -579,7 +589,9 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             """, (last_station_id, prod_id))
             recent_productions = cursor.fetchall()
 
-            # Step 4.1: Fetch defect categories for the most recent one manually
+            logger.info(f"[{line_name}] Found {len(recent_productions)} recent productions from last_station_id={last_station_id}")
+
+            # Step 4.1: Add current production separately
             cursor.execute("""
                 SELECT 
                     p.id AS production_id, 
@@ -596,10 +608,13 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
             """, (prod_id,))
             current = cursor.fetchone()
 
-            # Combine them (manual entry first)
+            if not current:
+                logger.warning(f"[{line_name}] ❗ No defect data found for current production ID {prod_id}")
+                return
+
             productions = [current] + recent_productions
 
-            # Step 5: Analyze based on settings
+            # Step 5: Analyze for each defect
             thresholds = settings.get("thresholds", {})
             moduli_window = settings.get("moduli_window", {})
             enable_consecutive_ko = settings.get("enable_consecutive_ko", {})
@@ -614,18 +629,24 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                 count = 0
                 consecutive = 0
 
+                logger.info(f"[{full_station_id}] Checking defect '{defect_name}' in window={window}, threshold={threshold}, consecutive_limit={consecutive_limit}, enabled={enable_consecutive}")
+
                 for i, p in enumerate(productions[:window]):
                     categories = p.get("defect_categories", "")
                     customs = p.get("custom_defects", "")
                     all_defects = (categories or "").split(",") + (customs or "").split(",")
                     all_defects = [d.strip() for d in all_defects if d]
 
+                    logger.info(f"[{full_station_id}] Prod {p['production_id']}: defects={all_defects}")
+
                     if defect_name in all_defects:
                         count += 1
                         consecutive += 1
+                        logger.info(f"[{full_station_id}] Defect match {defect_name}: count={count}, consecutive={consecutive}")
 
                         if enable_consecutive and consecutive >= consecutive_limit:
-                            logger.warning("🔴 Warning (consecutive KO)")
+                            logger.warning(f"[{full_station_id}] 🔴 Consecutive KO warning for '{defect_name}' — {consecutive}/{consecutive_limit}")
+
                             warning_payload = {
                                 "timestamp": datetime.now().isoformat(),
                                 "station_name": station["name"],
@@ -653,15 +674,15 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                                             row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
 
                                         await broadcast_stringatrice_warning(row["line_name"], row)
+                                        logger.info(f"[{full_station_id}] 📡 Broadcasted consecutive warning for {defect_name}")
 
-
-                            break  # ✅ Optional: stop loop after warning
+                            break  # stop checking if already triggered
                     else:
                         consecutive = 0
 
-                # ✅ Check threshold AFTER the loop
                 if count >= threshold:
-                    logger.warning("🔴 Warning (threshold)")
+                    logger.warning(f"[{full_station_id}] 🔴 Threshold warning for '{defect_name}' — {count}/{threshold}")
+
                     warning_payload = {
                         "timestamp": datetime.now().isoformat(),
                         "station_name": station["name"],
@@ -689,9 +710,12 @@ async def check_stringatrice_warnings(line_name: str, mysql_conn, settings):
                                     row["photo"] = base64.b64encode(row["photo"]).decode("utf-8")
 
                                 await broadcast_stringatrice_warning(row["line_name"], row)
+                                logger.info(f"[{full_station_id}] 📡 Broadcasted threshold warning for {defect_name}")
+
+        logger.info(f"[{line_name}] ✅ check_stringatrice_warnings completed")
 
     except Exception as e:
-        logger.error(f"❌ Error fetching last production origin: {e}")
+        logger.exception(f"[{line_name}] ❌ Error in check_stringatrice_warnings: {e}")
 
 def get_last_station_id_from_productions(id_modulo, connection):
     try:

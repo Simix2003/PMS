@@ -212,7 +212,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                             for d in ell_defects:
                                                 d["station_id"] = 9  # ELL01
                                                 d["category"] = "ELL"
-                                            await run_in_thread(mirror_defects, ell_defects, get_mysql_connection())
+                                            with get_mysql_connection() as mirror_conn:
+                                                await run_in_thread(mirror_defects, ell_defects, mirror_conn)
                                         logger.info(f"[{full_station_id}] insert_defects ELL in {time.perf_counter() - t_x:.3f}s")
 
 
@@ -238,18 +239,19 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                         # ✅ Mirror updated row to ell_productions_buffer if ELL zone
                                         t7 = time.perf_counter()
                                         if channel_id in ("ELL01", "RMI01"):
-                                            await run_in_thread(
-                                                mirror_production,
-                                                {
-                                                    "id": production_id,
-                                                    "object_id": object_id,
-                                                    "station_id": 9 if channel_id == "ELL01" else 3,
-                                                    "start_time": result.get("DataInizio"),  # Optional
-                                                    "end_time": end_time,
-                                                    "esito": final_esito,
-                                                },
-                                                get_mysql_connection()
-                                            )
+                                            with get_mysql_connection() as mirror_conn:
+                                                await run_in_thread(
+                                                    mirror_production,
+                                                    {
+                                                        "id": production_id,
+                                                        "object_id": object_id,
+                                                        "station_id": 9 if channel_id == "ELL01" else 3,
+                                                        "start_time": result.get("DataInizio"),  # Optional
+                                                        "end_time": end_time,
+                                                        "esito": final_esito,
+                                                    },
+                                                    mirror_conn
+                                                )
                                             t8 = time.perf_counter()
                                             logger.info(f"🟡[{full_station_id}] mirror_production END in {t8 - t7:.3f}s")
                                         
@@ -387,18 +389,19 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
     t6 = time.perf_counter()
     # ✅ Mirror into ell_productions_buffer if ELL zone
     if prod_id and channel_id in ("ELL01", "RMI01") and initial_data:
-        await run_in_thread(
-            mirror_production,
-            {
-                "id": prod_id,
-                "object_id": object_id,
-                "station_id": 9 if channel_id == "ELL01" else 3,
-                "start_time": initial_data.get("DataInizio"),
-                "end_time": None,
-                "esito": esito,
-            },
-            get_mysql_connection()
-        )
+        with get_mysql_connection() as mirror_conn:
+            await run_in_thread(
+                mirror_production,
+                {
+                    "id": prod_id,
+                    "object_id": object_id,
+                    "station_id": 9 if channel_id == "ELL01" else 3,
+                    "start_time": initial_data.get("DataInizio"),
+                    "end_time": None,
+                    "esito": esito,
+                },
+                mirror_conn
+            )
     t7 = time.perf_counter()
     logger.info(f"[{full_id}] mirror_production in {t7 - t6:.3f}s")
 

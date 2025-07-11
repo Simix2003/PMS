@@ -357,9 +357,9 @@ class _VisualPageState extends State<VisualPage> {
         }
 
         value_gauge_1 =
-            double.tryParse(response['value_gauge_1'].toString()) ?? 0;
+            double.tryParse(response['value_gauge_1'].toString()) ?? 0.0;
         value_gauge_2 =
-            double.tryParse(response['value_gauge_2'].toString()) ?? 0;
+            double.tryParse(response['value_gauge_2'].toString()) ?? 0.0;
 
         // ─── Speed Ratio Chart ──────────────────────────
         speedRatioData =
@@ -747,9 +747,9 @@ class _VisualPageState extends State<VisualPage> {
           print('VALUESS: $bufferDefectSummary');
 
           value_gauge_1 =
-              double.tryParse(data['value_gauge_1'].toString()) ?? 0;
+              double.tryParse(data['value_gauge_1'].toString()) ?? 0.0;
           value_gauge_2 =
-              double.tryParse(data['value_gauge_2'].toString()) ?? 0;
+              double.tryParse(data['value_gauge_2'].toString()) ?? 0.0;
 
           // ─── Speed Ratio Chart ──────────────────────────
           speedRatioData =

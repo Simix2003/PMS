@@ -103,6 +103,9 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
     shift_target = widget.shift_target;
     yield_target = widget.yield_target;
     hourly_shift_target = widget.hourly_shift_target;
+    print(hourly_shift_target);
+    print(widget.value_gauge_1);
+    print(widget.value_gauge_2);
   }
 
   Future<void> showTargetEditDialog({
@@ -1153,7 +1156,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                                   value) {
                                                                 return Center(
                                                                   child: Text(
-                                                                    '${value.toInt()}%',
+                                                                    '${(value).toInt()}%',
                                                                     style:
                                                                         const TextStyle(
                                                                       fontSize:
@@ -1215,12 +1218,15 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                             child: ReWorkSpeedBar(
                                               medianSec:
                                                   widget.speedRatioData[0]
-                                                      ['medianSec'],
+                                                          ['medianSec'] ??
+                                                      0.0,
                                               currentSec:
                                                   widget.speedRatioData[0]
-                                                      ['currentSec'],
+                                                          ['currentSec'] ??
+                                                      0.0,
                                               maxSec: widget.speedRatioData[0]
-                                                  ['maxSec'],
+                                                      ['maxSec'] ??
+                                                  0.0,
                                               textColor: widget.textColor,
                                             ),
                                           ),

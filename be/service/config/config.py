@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
-debug = False
+debug = True
 
 CHANNELS: dict = {}
 
@@ -23,8 +23,11 @@ ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
         "station_2_in":     ["RMI01"],
         "station_1_out_ng": ["ELL01"],
         "station_2_out_ng": ["RMI01"],
-    },
-     "STR": {
+    }
+}
+
+NEW_ZONES = {
+"STR": {
         "station_1_in":     ["STR01"],
         "station_2_in":     ["STR02"],
         "station_3_in":     ["STR03"],
@@ -37,7 +40,6 @@ ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
         "station_5_out_ng": ["STR05"],
     }
 }
-
 # Default fallback values
 DEFAULT_TARGETS = {
     "yield_target": 90,

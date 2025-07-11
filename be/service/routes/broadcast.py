@@ -1,3 +1,4 @@
+import copy
 import logging
 import asyncio
 from fastapi import WebSocket
@@ -116,6 +117,10 @@ async def broadcast_zone_update(line_name: str, zone: str, payload: dict):
     logger.debug(f"📢 Broadcasting {zone} update to {line_name}")
     key = f"{line_name}.visual.{zone}"
     ws_set = subscriptions.get(key, set()).copy()
+
+    # 🧹 Remove non-serializable fields
+    payload = copy.deepcopy(payload)
+    payload.pop("__seen", None)  # 🔥 Remove __seen if present
 
     # 🚫 Skip if identical to last payload sent
     if global_state.last_sent.get(key) == payload:

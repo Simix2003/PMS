@@ -112,7 +112,7 @@ print(f"[DEBUG CHECK] debug from config: {debug}")
 from service.connections.mysql import get_mysql_connection, load_channels_from_db
 from service.tasks.main_esito_task import background_task, make_status_callback
 from service.tasks.main_fermi_task import fermi_task
-from service.helpers.visual_helper import refresh_median_cycle_time_vpf
+from service.helpers.visual_helper import refresh_median_cycle_time_ELL, refresh_median_cycle_time_vpf
 from service.state.global_state import plc_connections, stop_threads, inizio_true_passato_flags, inizio_false_passato_flags, fine_false_passato_flags, fine_true_passato_flags, executor
 from service.routes.plc_routes import router as plc_router
 from service.routes.issue_routes import router as issue_router
@@ -219,7 +219,12 @@ async def start_background_tasks():
             try:
                 refresh_median_cycle_time_vpf()
             except Exception as e:
-                logger.warning(f"Median refresh failed: {e}")
+                logger.warning(f"VPF Median refresh failed: {e}")
+            
+            try:
+                refresh_median_cycle_time_ELL()
+            except Exception as e:
+                logger.warning(f"ELL Median refresh failed: {e}")
             await asyncio.sleep(59 * 60)  # 59 minutes
 
     asyncio.create_task(loop_refresh_median())

@@ -19,7 +19,7 @@ from service.routes.broadcast import broadcast
 from service.state.global_state import inizio_true_passato_flags, inizio_false_passato_flags, fine_true_passato_flags, fine_false_passato_flags, trigger_timestamps, incomplete_productions
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string
-from service.helpers.visual_helper import refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
+from service.helpers.visual_helper import refresh_top_defects_ell, refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
 from service.routes.mbj_routes import parse_mbj_details
 from service.helpers.executor import run_in_thread
 
@@ -212,6 +212,14 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                         timestamp = datetime.fromisoformat(end_time) if not isinstance(end_time, datetime) else end_time
                                         reentered = result.get("Re_entered_from_m506" if channel_id == "VPF01" else "Re_entered_from_m326", False)
 
+                                        id_mod_conf = paths["id_modulo"]
+                                        if debug:
+                                            full_id = f"{line_name}.{channel_id}"
+                                            object_id = global_state.debug_moduli.get(full_id)
+                                        else:
+                                            if id_mod_conf:
+                                                object_id = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
+
                                         if zone:
                                             t7 = time.perf_counter()
                                             await run_in_thread(
@@ -222,13 +230,17 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                                 ts=timestamp,
                                                 cycle_time=result['Tempo_Ciclo'],
                                                 reentered=bool(reentered),
-                                                bufferIds=bufferIds
+                                                bufferIds=bufferIds,
+                                                object_id=object_id
                                             )
                                             t8 = time.perf_counter()
                                             logger.info(f"[{full_station_id}] update_visual_data_on_new_module in {t8 - t7:.3f}s")
 
                                             if zone == "AIN" and fine_scarto:
                                                 await run_in_thread(refresh_top_defects_qg2, zone, timestamp)
+                                                await run_in_thread(refresh_top_defects_ell, 'ELL', timestamp)
+                                            if zone == "ELL" and fine_scarto:
+                                                await run_in_thread(refresh_top_defects_ell, zone, timestamp)
 
                                         else:
                                             logger.info(f"Unknown zone for {channel_id} — skipping visual update")

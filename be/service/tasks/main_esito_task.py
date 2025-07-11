@@ -6,8 +6,6 @@ import os
 import sys
 from typing import Optional
 
-from requests import get
-
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection, insert_defects, insert_initial_production_data, update_production_final
@@ -22,6 +20,7 @@ from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, 
 from service.helpers.visual_helper import refresh_top_defects_ell, refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
 from service.routes.mbj_routes import parse_mbj_details
 from service.helpers.executor import run_in_thread
+from service.helpers.ell_buffer import mirror_defects, mirror_production
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             paths = get_channel_config(line_name, channel_id)
             if not paths:
                 logger.error(f"Invalid line/channel: {line_name}.{channel_id}")
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.75)
                 continue  # Skip this cycle if config not found
 
             # Get full DB buffer once for this PLC
@@ -64,7 +63,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             db_range = PLC_DB_RANGES.get(plc_key, {}).get(db)
             if not db_range:
                 logger.error(f"No DB range defined for {plc_key} DB{db}")
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.75)
                 continue
 
             start_byte = db_range["min"]
@@ -113,7 +112,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
 
             if not paths:
                 logger.error(f"Missing config for {line_name}.{channel_id}")
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.75)
                 continue  # Or return / skip, depending on context
 
             # Now you're safe to use it:
@@ -198,13 +197,29 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
 
                                     elif channel_id == "ELL01" and fine_scarto:
                                         t5 = time.perf_counter()
-                                        await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_ell=True)
+                                        await run_in_thread(
+                                            insert_defects,
+                                            result, production_id, channel_id, line_name,
+                                            cursor=cursor,
+                                            from_ell=True
+                                        )
                                         logger.info(f"[{full_station_id}] insert_defects ELL in {time.perf_counter() - t5:.3f}s")
 
+                                        t_x = time.perf_counter()
+                                        # ✅ Mirror defects to ELL buffer
+                                        ell_defects = result.get("Defect_Rows")
+                                        if ell_defects:
+                                            for d in ell_defects:
+                                                d["station_id"] = 9  # ELL01
+                                                d["category"] = "ELL"
+                                            await run_in_thread(mirror_defects, ell_defects, get_mysql_connection())
+                                        logger.info(f"[{full_station_id}] insert_defects ELL in {time.perf_counter() - t_x:.3f}s")
+
+
                                     elif channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
-                                        t5 = time.perf_counter()
+                                        t6 = time.perf_counter()
                                         await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_ain=True)
-                                        logger.info(f"[{full_station_id}] insert_defects AIN in {time.perf_counter() - t5:.3f}s")
+                                        logger.info(f"[{full_station_id}] insert_defects AIN in {time.perf_counter() - t6:.3f}s")
 
                                     # Update visual
                                     try:
@@ -219,9 +234,28 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                         else:
                                             if id_mod_conf:
                                                 object_id = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
+                                        
+                                        # ✅ Mirror updated row to ell_productions_buffer if ELL zone
+                                        t7 = time.perf_counter()
+                                        if channel_id in ("ELL01", "RMI01"):
+                                            await run_in_thread(
+                                                mirror_production,
+                                                {
+                                                    "id": production_id,
+                                                    "object_id": object_id,
+                                                    "station_id": 9 if channel_id == "ELL01" else 3,
+                                                    "start_time": result.get("DataInizio"),  # Optional
+                                                    "end_time": end_time,
+                                                    "esito": final_esito,
+                                                },
+                                                get_mysql_connection()
+                                            )
+                                            t8 = time.perf_counter()
+                                            logger.info(f"🟡[{full_station_id}] mirror_production END in {t8 - t7:.3f}s")
+                                        
 
                                         if zone:
-                                            t7 = time.perf_counter()
+                                            t9 = time.perf_counter()
                                             await run_in_thread(
                                                 update_visual_data_on_new_module,
                                                 zone=zone,
@@ -233,8 +267,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                                 bufferIds=bufferIds,
                                                 object_id=object_id
                                             )
-                                            t8 = time.perf_counter()
-                                            logger.info(f"[{full_station_id}] update_visual_data_on_new_module in {t8 - t7:.3f}s")
+                                            t10 = time.perf_counter()
+                                            logger.info(f"[{full_station_id}] update_visual_data_on_new_module in {t10 - t9:.3f}s")
 
                                             if zone == "AIN" and fine_scarto:
                                                 await run_in_thread(refresh_top_defects_qg2, zone, timestamp)
@@ -253,12 +287,12 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                     esito_conf = paths.get("esito_scarto_compilato")
                                     pezzo_archivia_conf = paths["pezzo_archiviato"]
 
-                                    t9 = time.perf_counter()
+                                    t11 = time.perf_counter()
                                     await asyncio.to_thread(plc_connection.write_bool, pezzo_archivia_conf["db"], pezzo_archivia_conf["byte"], pezzo_archivia_conf["bit"], True)
                                     if esito_conf:
                                         await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
-                                    t10 = time.perf_counter()
-                                    logger.info(f"[{full_station_id}] PLC write(s) in {t10 - t9:.3f}s")
+                                    t12 = time.perf_counter()
+                                    logger.info(f"[{full_station_id}] PLC write(s) in {t12 - t11:.3f}s")
 
                                 else:
                                     pezzo_archivia_conf = paths["pezzo_archiviato"]
@@ -275,7 +309,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 logger.info(f"[{full_station_id}] Total Fine Ciclo processing: {t_end - t0:.3f}s")
 
 
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.75)
 
         except Exception as e:
             logger.error(f"[{full_station_id}], Error in background task: {str(e)}")
@@ -349,6 +383,24 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         prod_id = None
     t5 = time.perf_counter()
     logger.info(f"[{full_id}] insert_initial_production_data in {t5 - t4:.3f}s")
+
+    t6 = time.perf_counter()
+    # ✅ Mirror into ell_productions_buffer if ELL zone
+    if prod_id and channel_id in ("ELL01", "RMI01") and initial_data:
+        await run_in_thread(
+            mirror_production,
+            {
+                "id": prod_id,
+                "object_id": object_id,
+                "station_id": 9 if channel_id == "ELL01" else 3,
+                "start_time": initial_data.get("DataInizio"),
+                "end_time": None,
+                "esito": esito,
+            },
+            get_mysql_connection()
+        )
+    t7 = time.perf_counter()
+    logger.info(f"[{full_id}] mirror_production in {t7 - t6:.3f}s")
 
     if prod_id:
         logger.info(f"[{full_id}] ✅ Inserted production record: prod_id={prod_id}")

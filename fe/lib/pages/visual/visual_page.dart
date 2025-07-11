@@ -1,7 +1,7 @@
 // ignore_for_file: library_private_types_in_public_api, non_constant_identifier_names, avoid_print
 
 import 'dart:async';
-
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/visual/visuals/STR_page.dart';
 import '../../shared/models/globals.dart';
@@ -312,7 +312,8 @@ class _VisualPageState extends State<VisualPage> {
         RWK_yield_shifs =
             List<Map<String, dynamic>>.from(response['RWK_yield_shifts'] ?? []);
 
-        mergedShiftData = List.generate(FPY_yield_shifts.length, (index) {
+        final shiftCount = math.min(3, FPY_yield_shifts.length);
+        mergedShiftData = List.generate(shiftCount, (index) {
           return {
             'shift': FPY_yield_shifts[index]['label'],
             'FPY': FPY_yield_shifts[index]['yield'],
@@ -667,6 +668,18 @@ class _VisualPageState extends State<VisualPage> {
   void _initializeEllWebSocket() {
     if (_isWebSocketConnected) return;
 
+    int toIntSafe(dynamic value) => value is int
+        ? value
+        : value is double
+            ? value.toInt()
+            : int.tryParse(value.toString()) ?? 0;
+
+    double toDoubleSafe(dynamic value) => value is double
+        ? value
+        : value is int
+            ? value.toDouble()
+            : double.tryParse(value.toString()) ?? 0.0;
+
     _webSocketService.connectToVisual(
       line: 'Linea2',
       zone: widget.zone,
@@ -675,13 +688,13 @@ class _VisualPageState extends State<VisualPage> {
 
         setState(() {
           // ─── Station Metrics ───────────────────────────
-          In_1 = data['station_1_in'] ?? 0;
-          In_2 = data['station_2_in'] ?? 0;
-          ngOut_1 = data['station_1_out_ng'] ?? 0;
-          ngScrap = data['station_2_out_ng'] ?? 0;
+          In_1 = toIntSafe(data['station_1_in']);
+          In_2 = toIntSafe(data['station_2_in']);
+          ngOut_1 = toIntSafe(data['station_1_out_ng']);
+          ngScrap = toIntSafe(data['station_2_out_ng']);
 
-          currentFPYYield = data['FPY_yield'] ?? 100;
-          currentRWKYield = data['RWK_yield'] ?? 100;
+          currentFPYYield = toDoubleSafe(data['FPY_yield']).round();
+          currentRWKYield = toDoubleSafe(data['RWK_yield']).round();
 
           // ─── Yield + Throughput ────────────────────────
           FPYLast8h =
@@ -697,18 +710,19 @@ class _VisualPageState extends State<VisualPage> {
           RWK_yield_shifs =
               List<Map<String, dynamic>>.from(data['RWK_yield_shifts'] ?? []);
 
-          mergedShiftData = List.generate(FPY_yield_shifts.length, (index) {
+          final shiftCount = math.min(3, FPY_yield_shifts.length);
+          mergedShiftData = List.generate(shiftCount, (index) {
             return {
               'shift': FPY_yield_shifts[index]['label'],
-              'FPY': FPY_yield_shifts[index]['yield'],
-              'RWK': RWK_yield_shifs[index]['yield'],
+              'FPY': toDoubleSafe(FPY_yield_shifts[index]['yield']),
+              'RWK': toDoubleSafe(RWK_yield_shifs[index]['yield']),
             };
           });
 
           throughputDataEll = shiftThroughput.map<Map<String, int>>((e) {
-            final total = (e['total'] ?? 0) as int;
-            final ng = (e['ng'] ?? 0) as int;
-            final scrap = (e['scrap'] ?? 0) as int;
+            final total = toIntSafe(e['total']);
+            final ng = toIntSafe(e['ng']);
+            final scrap = toIntSafe(e['scrap']);
             return {'ok': total - ng - scrap, 'ng': ng, 'scrap': scrap};
           }).toList();
 
@@ -716,9 +730,9 @@ class _VisualPageState extends State<VisualPage> {
               shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
 
           hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
-            final total = (e['total'] ?? 0) as int;
-            final ng = (e['ng'] ?? 0) as int;
-            final scrap = (e['scrap'] ?? 0) as int;
+            final total = toIntSafe(e['total']);
+            final ng = toIntSafe(e['ng']);
+            final scrap = toIntSafe(e['scrap']);
             return {'ok': total - ng, 'ng': ng, 'scrap': scrap};
           }).toList();
 
@@ -736,20 +750,16 @@ class _VisualPageState extends State<VisualPage> {
 
           for (final defect in topDefectsRaw) {
             defectLabels.add(defect['label']?.toString() ?? '');
-            min1Counts.add(int.tryParse(defect['min1'].toString()) ?? 0);
-            min2Counts.add(int.tryParse(defect['min2'].toString()) ?? 0);
-            ellCounts.add(int.tryParse(defect['ell'].toString()) ?? 0);
+            min1Counts.add(toIntSafe(defect['min1']));
+            min2Counts.add(toIntSafe(defect['min2']));
+            ellCounts.add(toIntSafe(defect['ell']));
           }
 
           bufferDefectSummary = List<Map<String, dynamic>>.from(
               data['buffer_defect_summary'] ?? []);
 
-          print('VALUESS: $bufferDefectSummary');
-
-          value_gauge_1 =
-              double.tryParse(data['value_gauge_1'].toString()) ?? 0.0;
-          value_gauge_2 =
-              double.tryParse(data['value_gauge_2'].toString()) ?? 0.0;
+          value_gauge_1 = toDoubleSafe(data['value_gauge_1']);
+          value_gauge_2 = toDoubleSafe(data['value_gauge_2']);
 
           // ─── Speed Ratio Chart ──────────────────────────
           speedRatioData =

@@ -372,12 +372,10 @@ def insert_defects(
             })
 
         if defects_to_insert:
-            cursor.executemany("""
-                INSERT INTO object_defects (
-                    production_id, defect_id, defect_type, i_ribbon,
-                    stringa, ribbon_lato, s_ribbon, extra_data, photo_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, [
+            cursor.executemany("""INSERT INTO object_defects (
+                production_id, defect_id, defect_type, i_ribbon,
+                stringa, ribbon_lato, s_ribbon, extra_data, photo_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""", [
                 (
                     d["production_id"], d["defect_id"], d["defect_type"], d["i_ribbon"],
                     d["stringa"], d["ribbon_lato"], d["s_ribbon"], d["extra_data"], d["photo_id"]
@@ -385,6 +383,17 @@ def insert_defects(
                 for d in defects_to_insert
             ])
             cursor.connection.commit()
+
+            # ✅ For mirroring: attach clean summary list for ELL buffer
+            data["Defect_Rows"] = [
+                {
+                    "id": None,
+                    "production_id": d["production_id"],
+                    "object_id": data.get("object_id"),
+                    "defect_type": d["defect_type"]
+                }
+                for d in defects_to_insert
+            ]
         return
 
     # --- Fallback: Vision-based Issues ---

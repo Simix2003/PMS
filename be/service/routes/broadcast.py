@@ -109,7 +109,20 @@ async def broadcast(line_name: str, channel_id: str, message: dict):
         except Exception:
             subscriptions[summary_key].remove(ws)
 
-# Initialize this once (preferably in your global_state)
+from decimal import Decimal
+
+# Clean recursively: convert Decimal → float
+def clean_for_json(obj):
+    if isinstance(obj, dict):
+        return {k: clean_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_for_json(v) for v in obj]
+    elif isinstance(obj, Decimal):
+        return float(obj)
+    else:
+        return obj
+
+# Initialize once at startup
 if not hasattr(global_state, "last_sent"):
     global_state.last_sent = {}
 
@@ -118,21 +131,26 @@ async def broadcast_zone_update(line_name: str, zone: str, payload: dict):
     key = f"{line_name}.visual.{zone}"
     ws_set = subscriptions.get(key, set()).copy()
 
-    # 🧹 Remove non-serializable fields
+    # 🧹 Remove volatile/internal fields
     payload = copy.deepcopy(payload)
-    payload.pop("__seen", None)  # 🔥 Remove __seen if present
+    payload.pop("__seen", None)
 
-    # 🚫 Skip if identical to last payload sent
-    if global_state.last_sent.get(key) == payload:
+    # 🧼 Clean for JSON serialization
+    payload_clean = clean_for_json(payload)
+    if not isinstance(payload_clean, dict):
+        raise ValueError("broadcast_zone_update expects payload to clean into a dict")
+
+    # 🚫 Skip if identical to last payload
+    if global_state.last_sent.get(key) == payload_clean:
         return
 
-    global_state.last_sent[key] = payload  # 💾 Cache latest payload
+    global_state.last_sent[key] = payload_clean
 
     for ws in ws_set:
         try:
             if getattr(ws, "client_state", None) and ws.client_state.name != "CONNECTED":
                 raise ConnectionError("WebSocket not connected")
-            await ws.send_json(payload)
+            await ws.send_json(payload_clean)
         except Exception as e:
             logger.warning(f"❌ WebSocket broadcast failed ({key}): {e}")
             subscriptions[key].discard(ws)

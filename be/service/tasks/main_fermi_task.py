@@ -15,6 +15,7 @@ from service.helpers.helpers import get_channel_config
 from service.config.config import CHANNELS, PLC_DB_RANGES, debug
 from service.helpers.buffer_plc_extract import extract_bool, extract_string, extract_int, extract_DT
 from service.helpers.visual_helper import refresh_fermi_data
+from service.state.global_state import db_write_queue
 
 async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
     logger.debug(f"[{ip}:{slot}] Starting fermi task.")
@@ -112,20 +113,8 @@ async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, ch
         # leggere i dati:
         data = await read_fermi_data(plc_connection, line_name, channel_id)
         
-        # Salvare i dati su MySQL
-        with get_mysql_connection() as conn:
-            await insert_fermo_data(data, conn)
-
-        try:
-            zone = "AIN"
-            timestamp = data["DataInizio"] if data and data.get("DataInizio") else datetime.now()
-            refresh_fermi_data(zone, timestamp)
-
-            zone = "ELL"
-            refresh_fermi_data(zone, timestamp)
-
-        except Exception as vis_err:
-            logger.warning(f"Could not update FERMI_visual_data for {channel_id}: {vis_err}")
+        # Queue DB write + visual refresh
+        await db_write_queue.enqueue(process_fermo_update, data)
         
         # poi quando leggo scrivo Dati Letti fermi a TRUE
         dati_letti_conf = paths.get("dati_letti_fermi")
@@ -259,3 +248,16 @@ async def insert_fermo_data(data, conn):
         )
     
     logger.debug(f"Added FERMO stop_id={stop_id}")
+
+
+async def process_fermo_update(data):
+    """Background task: insert stop data and refresh visuals."""
+    try:
+        with get_mysql_connection() as conn:
+            await insert_fermo_data(data, conn)
+
+        ts = data.get("DataInizio") or datetime.now()
+        refresh_fermi_data("AIN", ts)
+        refresh_fermi_data("ELL", ts)
+    except Exception as e:  # pragma: no cover - best effort logging
+        logger.warning(f"process_fermo_update failed: {e}")

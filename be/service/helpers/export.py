@@ -1,11 +1,13 @@
 from datetime import datetime
 import time
 from typing import Optional, Set
+from bisect import bisect_right
 from openpyxl.utils import get_column_letter
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import PatternFill
+from openpyxl.cell import WriteOnlyCell
 import pandas as pd
 from collections import defaultdict
 from typing import Dict, Any, List
@@ -66,12 +68,7 @@ def export_full_excel(data: dict, progress_callback=None) -> str:
     if progress_callback:
         progress_callback("init")
 
-    wb = Workbook()
-
-    # --- Remove default sheet if present
-    default_sheet = wb.active
-    if isinstance(default_sheet, Worksheet):
-        wb.remove(default_sheet)
+    wb = Workbook(write_only=True)
 
     total_modules = len(data.get("id_moduli", []))
     progress_state = {
@@ -242,15 +239,20 @@ def _append_dataframe(
     df: pd.DataFrame,
     zebra_key: str = "Module Id",
     progress: dict | None = None,
+    align_center_for: Optional[Set[str]] = None,
 ):
     """Write *df* to *ws* with a blue/white zebra pattern keyed on *zebra_key*."""
+    if align_center_for is None:
+        align_center_for = set()
+
     current_key = None
     current_fill = FILL_WHITE
 
-    # Header first
-    ws.append(df.columns.tolist())
-
     columns = list(df.columns)
+    max_lens = [len(str(c)) for c in columns]
+
+    header_cells = [WriteOnlyCell(ws, value=c) for c in columns]
+    ws.append(header_cells)
 
     # 🩺 Check if zebra_key exists, else disable zebra logic
     if zebra_key in df.columns:
@@ -276,25 +278,27 @@ def _append_dataframe(
             if key_value != current_key:
                 current_fill = FILL_BLUE if current_fill == FILL_WHITE else FILL_WHITE
                 current_key = key_value
-        else:
-            # If zebra_idx is None, just always keep current_fill
-            pass
 
-        row_values: List[Any] = []
+        row_cells: List[WriteOnlyCell] = []
         for idx, val in enumerate(row_tuple):
             col = columns[idx]
             if col in {"Checkin - PMS", "Checkout - PMS"} and val:
                 try:
-                    row_values.append(val.strftime("%d.%m.%y %H:%M:%S"))
+                    val = val.strftime("%d.%m.%y %H:%M:%S")
                 except Exception:
-                    row_values.append(val)
+                    pass
+            cell = WriteOnlyCell(ws, value=val)
+            cell.fill = current_fill
+            if col in align_center_for:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
             else:
-                row_values.append(val)
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+            row_cells.append(cell)
+            val_len = len(str(val)) if val is not None else 0
+            if val_len > max_lens[idx]:
+                max_lens[idx] = val_len
 
-        ws.append(row_values)
-        row_idx = ws.max_row
-        for col_idx in range(1, len(row_values) + 1):
-            ws.cell(row=row_idx, column=col_idx).fill = current_fill
+        ws.append(row_cells)
 
         if progress and zebra_idx is not None:
             key_value = row_tuple[zebra_idx]
@@ -303,7 +307,14 @@ def _append_dataframe(
                 progress["current"] += 1
                 cb = progress.get("callback")
                 if cb:
-                    cb(f"creating:{progress.get('sheet')}", progress["current"], progress["total"])
+                    cb(
+                        f"creating:{progress.get('sheet')}",
+                        progress["current"],
+                        progress["total"],
+                    )
+
+    for idx, width in enumerate(max_lens, start=1):
+        ws.column_dimensions[get_column_letter(idx)].width = width + 2
 
 # ---------------------------------------------------------------------------
 # Sheet generators -----------------------------------------------------------
@@ -328,6 +339,18 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any], progress=None):
         if pid not in defects_by_production:
             defects_by_production[pid] = []
         defects_by_production[pid].append(d)
+
+    # Pre-sort QC productions by object for quick lookup
+    qg_by_object: Dict[int, List[tuple]] = defaultdict(list)
+    for p in productions:
+        obj_id = p.get("object_id")
+        if obj_id is None:
+            continue
+        st = stations_by_id.get(p.get("station_id"))
+        if st and st.get("type") == "qc":
+            qg_by_object[obj_id].append((p.get("start_time"), p.get("id")))
+    for lst in qg_by_object.values():
+        lst.sort(key=lambda x: x[0])
 
     rows: List[Dict[str, Any]] = []
     # Initialize rework counter per (module_id, station_id)
@@ -426,48 +449,43 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any], progress=None):
             obj_id = prod.get("object_id")
             prod_time = prod.get("start_time")
 
-            # find latest previous QG production
-            prev_qg = sorted(
-                [
-                    p for p in productions
-                    if p.get("object_id") == obj_id
-                    and p.get("start_time") < prod_time
-                    and stations_by_id.get(p.get("station_id"), {}).get("type") == "qc"
-                ],
-                key=lambda x: x.get("start_time"),
-                reverse=True,
-            )
-            if prev_qg:
-                prev_qg_id = prev_qg[0].get("id")
-                prev_qg_defects = defects_by_production.get(prev_qg_id, [])
-                for d in prev_qg_defects:
-                    cat = d.get("category")
-                    if cat == "Disallineamento":
-                        if d.get("stringa") is not None:
-                            ng_labels_qg.add("NG Disall. Stringa")
-                        elif d.get("i_ribbon") is not None:
-                            ng_labels_qg.add("NG Disall. Ribbon")
-                    elif cat == "Generali":
-                        defect_type = d.get("defect_type")
-                        ng_labels_qg.add(f"NG {defect_type}" if defect_type else "NG Generali")
-                    elif cat == "Saldatura":
-                        ng_labels_qg.add("NG Saldatura")
-                    elif cat == "Mancanza Ribbon":
-                        ng_labels_qg.add("NG Mancanza I_Ribbon")
-                    elif cat == "I_Ribbon Leadwire":
-                        ng_labels_qg.add("NG I_Ribbon Leadwire")
-                    elif cat == "Macchie ECA":
-                        ng_labels_qg.add("NG Macchie ECA")
-                    elif cat == "Celle Rotte":
-                        ng_labels_qg.add("NG Celle Rotte")
-                    elif cat == "Lunghezza String Ribbon":
-                        ng_labels_qg.add("NG Lunghezza String Ribbon")
-                    elif cat == "Graffio su Cella":
-                        ng_labels_qg.add("NG Graffio su Cella")
-                    elif cat == "Bad Soldering":
-                        ng_labels_qg.add("NG Bad Soldering")
-                    elif cat == "Altro":
-                        ng_labels_qg.add("NG Altro")
+            qg_list = qg_by_object.get(obj_id, [])
+            if qg_list:
+                times = [t for t, _ in qg_list]
+                idx = bisect_right(times, prod_time) - 1
+                if idx >= 0:
+                    prev_qg_id = qg_list[idx][1]
+                    prev_qg_defects = defects_by_production.get(prev_qg_id, [])
+                    for d in prev_qg_defects:
+                        cat = d.get("category")
+                        if cat == "Disallineamento":
+                            if d.get("stringa") is not None:
+                                ng_labels_qg.add("NG Disall. Stringa")
+                            elif d.get("i_ribbon") is not None:
+                                ng_labels_qg.add("NG Disall. Ribbon")
+                        elif cat == "Generali":
+                            defect_type = d.get("defect_type")
+                            ng_labels_qg.add(
+                                f"NG {defect_type}" if defect_type else "NG Generali"
+                            )
+                        elif cat == "Saldatura":
+                            ng_labels_qg.add("NG Saldatura")
+                        elif cat == "Mancanza Ribbon":
+                            ng_labels_qg.add("NG Mancanza I_Ribbon")
+                        elif cat == "I_Ribbon Leadwire":
+                            ng_labels_qg.add("NG I_Ribbon Leadwire")
+                        elif cat == "Macchie ECA":
+                            ng_labels_qg.add("NG Macchie ECA")
+                        elif cat == "Celle Rotte":
+                            ng_labels_qg.add("NG Celle Rotte")
+                        elif cat == "Lunghezza String Ribbon":
+                            ng_labels_qg.add("NG Lunghezza String Ribbon")
+                        elif cat == "Graffio su Cella":
+                            ng_labels_qg.add("NG Graffio su Cella")
+                        elif cat == "Bad Soldering":
+                            ng_labels_qg.add("NG Bad Soldering")
+                        elif cat == "Altro":
+                            ng_labels_qg.add("NG Altro")
 
         rows.append(
             {
@@ -502,8 +520,7 @@ def risolutivo_sheet(ws: Worksheet, data: Dict[str, Any], progress=None):
         ],
     )
 
-    _append_dataframe(ws, df, progress=progress)
-    autofit_columns(ws, align_center_for={"Esito", "NG Causale (QG)"})
+    _append_dataframe(ws, df, progress=progress, align_center_for={"Esito", "NG Causale (QG)"})
 
 def eventi_sheet(ws, data: dict, progress=None):
     objects = data.get("objects", [])
@@ -583,8 +600,7 @@ def eventi_sheet(ws, data: dict, progress=None):
         "Line", "Eq - PMS", "Stringatrice", "Module Id", "Numero Eventi"
     ])
 
-    _append_dataframe(ws, df, progress=progress)
-    autofit_columns(ws, align_center_for={"Esito", "Numero Eventi"})
+    _append_dataframe(ws, df, progress=progress, align_center_for={"Esito", "Numero Eventi"})
 
 def rework_sheet(ws: Worksheet, data: Dict[str, Any], progress=None):
     from collections import defaultdict
@@ -744,8 +760,7 @@ def rework_sheet(ws: Worksheet, data: Dict[str, Any], progress=None):
     })
 
     summary_df = pd.DataFrame(export_rows, columns=['Causale NG', 'Matrici al QG2', 'Passaggi al RWK', '%'])
-    _append_dataframe(ws, summary_df, progress=progress)
-    autofit_columns(ws, align_center_for={'%', 'Passaggi al RWK'})
+    _append_dataframe(ws, summary_df, progress=progress, align_center_for={'%', 'Passaggi al RWK'})
 
 def mbj_sheet(ws: Worksheet, data: Dict[str, Any], progress=None):
     objects = data.get("objects", [])
@@ -869,8 +884,7 @@ def mbj_sheet(ws: Worksheet, data: Dict[str, Any], progress=None):
         rows.append(base_row)
 
     df = pd.DataFrame(rows)
-    _append_dataframe(ws, df, progress=progress)
-    autofit_columns(ws, align_center_for={"Esito", "Tempo Ciclo"})
+    _append_dataframe(ws, df, progress=progress, align_center_for={"Esito", "Tempo Ciclo"})
 
 def ng_generali_sheet(ws, data: dict, progress=None) -> bool:
     """
@@ -1023,7 +1037,7 @@ def ng_generali_sheet(ws, data: dict, progress=None) -> bool:
     if rows_written > 0:
         import pandas as pd
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Map header name → column index
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1032,7 +1046,8 @@ def ng_generali_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(defect_columns + ["Esito"]))
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(defect_columns + ["Esito"]))
+        # Gray cells handled above during DataFrame creation
         return True
 
     return False
@@ -1229,7 +1244,7 @@ def ng_saldature_sheet(ws, data: dict, progress=None) -> bool:
     if rows_written > 0:
         import pandas as pd
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Map header cell → column index
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1238,7 +1253,6 @@ def ng_saldature_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(header))
         return True
 
     return False
@@ -1405,7 +1419,7 @@ def ng_disall_ribbon_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Apply gray background to QG-only defects
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1414,7 +1428,6 @@ def ng_disall_ribbon_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(header))
         return True
 
     return False
@@ -1562,7 +1575,7 @@ def ng_disall_stringa_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Apply gray background to QG-inherited defects
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1571,7 +1584,6 @@ def ng_disall_stringa_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(header))
         return True
 
     return False
@@ -1739,7 +1751,7 @@ def ng_mancanza_ribbon_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Apply grey background to QG-inherited defects
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1748,7 +1760,6 @@ def ng_mancanza_ribbon_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(header))
         return True
 
     return False
@@ -1906,7 +1917,7 @@ def ng_iribbon_leadwire_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Apply grey background to QG-inherited defects
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -1915,7 +1926,6 @@ def ng_iribbon_leadwire_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(header))
         return True
 
     return False
@@ -2055,7 +2065,7 @@ def ng_macchie_eca_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Highlight QG-inherited NG cells
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -2064,7 +2074,6 @@ def ng_macchie_eca_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(header))
         return True
 
     return False
@@ -2204,7 +2213,7 @@ def ng_bad_soldering_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Highlight QG-inherited NG cells
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -2213,7 +2222,6 @@ def ng_bad_soldering_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(header))
         return True
 
     return False
@@ -2353,7 +2361,7 @@ def ng_celle_rotte_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Gray background for QG defects
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -2362,7 +2370,6 @@ def ng_celle_rotte_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(header))
         return True
 
     return False
@@ -2499,7 +2506,7 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Gray background for QG cells
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -2508,7 +2515,6 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(header))
         return True
     return False
 
@@ -2649,7 +2655,7 @@ def ng_graffio_su_cella_sheet(ws, data: dict, progress=None) -> bool:
         return False
 
     # Zebra append
-    _append_dataframe(ws, pd.DataFrame(rows, columns=header), zebra_key="Module Id", progress=progress)
+    _append_dataframe(ws, pd.DataFrame(rows, columns=header), zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
     # Apply grey fill
     header_map = {cell.value: cell.column for cell in ws[1]}  # Column name to index
@@ -2658,7 +2664,6 @@ def ng_graffio_su_cella_sheet(ws, data: dict, progress=None) -> bool:
         if col_idx:
             ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-    autofit_columns(ws, align_center_for=set(header))
     return True
 
 def ng_altro_sheet(ws, data: dict, progress=None) -> bool:
@@ -2804,7 +2809,7 @@ def ng_altro_sheet(ws, data: dict, progress=None) -> bool:
     # Step 4: Export + Zebra + Grey
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress)
+        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
 
         # Grey fill inherited QG cells
         header_map = {cell.value: cell.column for cell in ws[1]}
@@ -2813,7 +2818,6 @@ def ng_altro_sheet(ws, data: dict, progress=None) -> bool:
             if col_idx:
                 ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
 
-        autofit_columns(ws, align_center_for=set(header))
         return True
     return False
 

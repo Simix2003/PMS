@@ -32,6 +32,14 @@ from service.helpers.ell_buffer import mirror_defects, mirror_production
 
 logger = logging.getLogger(__name__)
 
+TIMING_THRESHOLD = 0.5
+
+
+def log_duration(msg: str, duration: float, threshold: float = TIMING_THRESHOLD) -> None:
+    """Log duration at WARNING level if above threshold else INFO."""
+    log_fn = logger.warning if duration > threshold else logger.info
+    log_fn(f"{msg} in {duration:.3f}s")
+
 def get_zone_from_station(station: str) -> Optional[str]:
     for zone, cfg in ZONE_SOURCES.items():
         if station in (
@@ -71,9 +79,8 @@ async def process_final_update(
                     fine_buona,
                     fine_scarto,
                 )
-                logger.info(
-                    f"[{full_station_id}] update_production_final in {time.perf_counter() - t3:.3f}s"
-                )
+                duration = time.perf_counter() - t3
+                log_duration(f"[{full_station_id}] update_production_final", duration)
 
                 if success:
                     if channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
@@ -87,9 +94,8 @@ async def process_final_update(
                             cursor=cursor,
                             from_vpf=True,
                         )
-                        logger.info(
-                            f"[{full_station_id}] insert_defects VPF in {time.perf_counter() - t5:.3f}s"
-                        )
+                        duration = time.perf_counter() - t5
+                        log_duration(f"[{full_station_id}] insert_defects VPF", duration)
                         timestamp = (
                             datetime.fromisoformat(end_time)
                             if not isinstance(end_time, datetime)
@@ -109,9 +115,8 @@ async def process_final_update(
                             cursor=cursor,
                             from_ell=True,
                         )
-                        logger.info(
-                            f"[{full_station_id}] insert_defects ELL in {time.perf_counter() - t5:.3f}s"
-                        )
+                        duration = time.perf_counter() - t5
+                        log_duration(f"[{full_station_id}] insert_defects ELL", duration)
                         ell_defects = result.get("Defect_Rows")
                         if ell_defects:
                             for d in ell_defects:
@@ -131,9 +136,8 @@ async def process_final_update(
                             cursor=cursor,
                             from_ain=True,
                         )
-                        logger.info(
-                            f"[{full_station_id}] insert_defects AIN in {time.perf_counter() - t6:.3f}s"
-                        )
+                        duration = time.perf_counter() - t6
+                        log_duration(f"[{full_station_id}] insert_defects AIN", duration)
 
                     # Update visual data
                     try:
@@ -171,9 +175,8 @@ async def process_final_update(
                                 bufferIds=bufferIds,
                                 object_id=object_id,
                             )
-                            logger.info(
-                                f"[{full_station_id}] update_visual_data_on_new_module in {time.perf_counter() - t9:.3f}s"
-                            )
+                            duration = time.perf_counter() - t9
+                            log_duration(f"[{full_station_id}] update_visual_data_on_new_module", duration)
                             if zone == "AIN" and fine_scarto:
                                 await run_in_thread(refresh_top_defects_qg2, zone, timestamp)
                                 await run_in_thread(refresh_top_defects_ell, "ELL", timestamp)
@@ -189,9 +192,8 @@ async def process_final_update(
     finally:
         incomplete_productions.pop(full_station_id, None)
         remove_temp_issues(line_name, channel_id, result.get("Id_Modulo"))
-        logger.info(
-            f"[{full_station_id}] Async final update done in {time.perf_counter() - t0:.3f}s"
-        )
+        duration = time.perf_counter() - t0
+        log_duration(f"[{full_station_id}] Async final update done", duration)
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
     logger.info(f"[{full_station_id}] Starting background task.")
@@ -323,7 +325,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     start_byte=start_byte,
                 )
                 t2 = time.perf_counter()
-                logger.info(f"[{full_station_id}] read_data done in {t2 - t1:.3f}s")
+                duration = t2 - t1
+                log_duration(f"[{full_station_id}] read_data done", duration)
 
                 if result:
                     bufferIds = result.get("BufferIds_Rework", [])
@@ -353,7 +356,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                                 False,
                             )
                         t12 = time.perf_counter()
-                        logger.info(f"[{full_station_id}] PLC writes in {t12 - t11:.3f}s")
+                        duration = t12 - t11
+                        log_duration(f"[{full_station_id}] PLC writes", duration)
 
                         await db_write_queue.enqueue(
                             process_final_update,
@@ -383,7 +387,8 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
 
                     # DB operations and cleanup will run in background
                 t_end = time.perf_counter()
-                logger.info(f"[{full_station_id}] Total Fine Ciclo processing: {t_end - t0:.3f}s")
+                duration = t_end - t0
+                log_duration(f"[{full_station_id}] Total Fine Ciclo processing", duration)
 
 
             await asyncio.sleep(0.75)
@@ -415,7 +420,8 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
     await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False)
     t1 = time.perf_counter()
-    logger.info(f"[{full_id}] PLC initial reset flags in {t1 - t0:.3f}s")
+    duration = t1 - t0
+    log_duration(f"[{full_id}] PLC initial reset flags", duration)
 
     # Get object_id
     if debug:
@@ -442,7 +448,8 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
     t2 = time.perf_counter()
     initial_data = await read_data(plc_connection, line_name, channel_id, richiesta_ok=False, richiesta_ko=False, data_inizio=data_inizio, buffer=buffer, start_byte=start_byte)
     t3 = time.perf_counter()
-    logger.info(f"[{full_id}] read_data in {t3 - t2:.3f}s")
+    duration = t3 - t2
+    log_duration(f"[{full_id}] read_data", duration)
 
     # Check if station is excluded
     escl_conf = paths.get("stazione_esclusa")
@@ -459,7 +466,8 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         logger.exception(f"[{full_id}] Exception during insert_initial_production_data: {e}")
         prod_id = None
     t5 = time.perf_counter()
-    logger.info(f"[{full_id}] insert_initial_production_data in {t5 - t4:.3f}s")
+    duration = t5 - t4
+    log_duration(f"[{full_id}] insert_initial_production_data", duration)
 
     t6 = time.perf_counter()
     # ✅ Mirror into ell_productions_buffer if ELL zone
@@ -478,7 +486,8 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
                 mirror_conn
             )
     t7 = time.perf_counter()
-    logger.info(f"[{full_id}] mirror_production in {t7 - t6:.3f}s")
+    duration = t7 - t6
+    log_duration(f"[{full_id}] mirror_production", duration)
 
     if prod_id:
         logger.info(f"[{full_id}] ✅ Inserted production record: prod_id={prod_id}")
@@ -502,7 +511,8 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
     })
 
     t_end = time.perf_counter()
-    logger.info(f"[{full_id}] Total on_trigger_change time: {t_end - t0:.3f}s")
+    duration = t_end - t0
+    log_duration(f"[{full_id}] Total on_trigger_change time", duration)
 
 async def read_data(
     plc_connection: PLCConnection,

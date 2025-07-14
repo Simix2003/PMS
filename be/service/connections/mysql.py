@@ -288,12 +288,10 @@ def insert_defects(
     # --- VPF Defects ---
     if from_vpf:
         flags = data.get("Tipo_NG_VPF", [])
-        print('MYSQL, VPF flags', flags)
         for idx, flag in enumerate(flags):
             if not flag or idx not in VPF_DEFECT_ID_MAP:
                 continue
             defect_id = VPF_DEFECT_ID_MAP[idx]
-            print('MYSQL, VPF defect_id', defect_id)
             cursor.execute("""
                 INSERT INTO object_defects (
                     production_id, defect_id, defect_type, stringa,
@@ -391,6 +389,7 @@ def insert_defects(
             data["Defect_Rows"] = [
                 {
                     "id": None,
+                    "defect_id": d["defect_id"],
                     "production_id": d["production_id"],
                     "object_id": data.get("object_id"),
                     "defect_type": d["defect_type"]
@@ -836,7 +835,7 @@ def update_stop_reason(stop_id: int, reason: str, conn):
         )
     conn.commit()
 
-# Example shift configuration
+#Shift configuration
 SHIFT_DURATION_HOURS = 8
 SHIFT_START_TIMES = ["06:00", "14:00", "22:00"]
 

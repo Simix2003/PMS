@@ -32,7 +32,7 @@ from service.helpers.ell_buffer import mirror_defects, mirror_production
 
 logger = logging.getLogger(__name__)
 
-TIMING_THRESHOLD = 0.5
+TIMING_THRESHOLD = 0.850
 
 
 def log_duration(msg: str, duration: float, threshold: float = TIMING_THRESHOLD) -> None:
@@ -587,24 +587,20 @@ async def read_data(
         # Step 9: Read Defect NG for VPF BYTE48
         vpf_values_1 = []
         vpf_conf = config.get("difetti_vpf_1")
-        print('vpf conf 1, Channel id', vpf_conf, channel_id)
         if vpf_conf and richiesta_ko and channel_id == "VPF01":
             vpf_values_1 = [
                 extract_bool(buffer, vpf_conf["byte"], i, start_byte)
                 for i in range(vpf_conf["length"])
             ]
-        print('vpf values 1', vpf_values_1)
 
         # Step 10: Read Defect NG for VPF BYTE49
         vpf_values_2 = []
         vpf_conf = config.get("difetti_vpf_2")
-        print('vpf conf 2, Channel id', vpf_conf, channel_id)
         if vpf_conf and richiesta_ko and channel_id == "VPF01":
             vpf_values_2 = [
                 extract_bool(buffer, vpf_conf["byte"], i, start_byte)
                 for i in range(vpf_conf["length"])
             ]
-        print('vpf values 2', vpf_values_2)
 
         # ✅ COMBINE VPF DEFECTS
         combined_vpf_values = vpf_values_1 + vpf_values_2

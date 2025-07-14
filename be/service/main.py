@@ -1,9 +1,9 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 import os
 import sys
 import logging
 import logging.config
+import logging.handlers
 import json
 import time
 from typing import AsyncGenerator
@@ -51,12 +51,13 @@ def configure_logging() -> dict:
             "level": "INFO",  # Show INFO and above in terminal
         },
         "file": {
-            "class": "logging.FileHandler",
+            "class": "logging.handlers.TimedRotatingFileHandler",
             "filename": str(LOG_FILE),
             "formatter": "json",
-            "mode": "a",
+            "when": "midnight",       # Rotate at midnight
+            "backupCount": 7,         # Keep 7 days
             "encoding": "utf-8",
-            "level": "WARNING",  # Only WARNING and above in file
+            "level": "WARNING"
         },
     },
     "root": {

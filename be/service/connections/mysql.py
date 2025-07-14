@@ -288,10 +288,12 @@ def insert_defects(
     # --- VPF Defects ---
     if from_vpf:
         flags = data.get("Tipo_NG_VPF", [])
+        print('MYSQL, VPF flags', flags)
         for idx, flag in enumerate(flags):
             if not flag or idx not in VPF_DEFECT_ID_MAP:
                 continue
             defect_id = VPF_DEFECT_ID_MAP[idx]
+            print('MYSQL, VPF defect_id', defect_id)
             cursor.execute("""
                 INSERT INTO object_defects (
                     production_id, defect_id, defect_type, stringa,
@@ -303,16 +305,16 @@ def insert_defects(
                 f"VPF_NG_{idx+1}",
                 None, None, None, None, None, None
             ))
+        cursor.connection.commit()
         return
 
-    # --- AIN Defects ---
     if from_ain:
         flags = data.get("Tipo_NG_AIN", [])
         for idx, flag in enumerate(flags):
             if not flag or idx not in AIN_DEFECT_ID_MAP:
                 continue
             defect_id = AIN_DEFECT_ID_MAP[idx]
-            defect_type = f"AIN_NG{idx + 2}"  # NG2 or NG3
+            defect_type = f"AIN_NG{idx + 2}"
             cursor.execute("""
                 INSERT INTO object_defects (
                     production_id, defect_id, defect_type, stringa,
@@ -324,6 +326,7 @@ def insert_defects(
                 defect_type,
                 None, None, None, None, None, None
             ))
+        cursor.connection.commit()
         return
 
     # --- ELL Defects ---
@@ -435,6 +438,7 @@ def insert_defects(
             parsed["extra_data"],
             photo_id
         ))
+        cursor.connection.commit()
 
 def update_esito(esito: int, production_id: int, cursor, connection):
     """

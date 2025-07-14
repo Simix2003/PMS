@@ -113,7 +113,16 @@ from service.connections.mysql import get_mysql_connection, load_channels_from_d
 from service.tasks.main_esito_task import background_task, make_status_callback
 from service.tasks.main_fermi_task import fermi_task
 from service.helpers.visual_helper import refresh_median_cycle_time_ELL, refresh_median_cycle_time_vpf
-from service.state.global_state import plc_connections, stop_threads, inizio_true_passato_flags, inizio_false_passato_flags, fine_false_passato_flags, fine_true_passato_flags, executor
+from service.state.global_state import (
+    plc_connections,
+    stop_threads,
+    inizio_true_passato_flags,
+    inizio_false_passato_flags,
+    fine_false_passato_flags,
+    fine_true_passato_flags,
+    executor,
+    db_write_queue,
+)
 from service.routes.plc_routes import router as plc_router
 from service.routes.issue_routes import router as issue_router
 from service.routes.warning_routes import router as warning_router
@@ -164,6 +173,9 @@ async def start_background_tasks():
         logger.debug("visual_data cache initialized")
     except Exception as e:
         logger.error(f"visual_data cache init failed: {e}")
+
+    # Start queue for deferred DB writes
+    db_write_queue.start()
 
     logger.debug("Starting PLC background tasks and Fermi tasks")
 

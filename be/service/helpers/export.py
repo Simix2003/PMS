@@ -8,6 +8,7 @@ from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import PatternFill
 from openpyxl.cell import WriteOnlyCell
+from openpyxl.cell.cell import Cell
 import pandas as pd
 from collections import defaultdict
 from typing import Dict, Any, List
@@ -144,19 +145,15 @@ def metadata_sheet(ws, data: dict, progress=None):
     filters = data.get("filters", [])
     min_cycle_threshold = data.get("min_cycle_threshold", 3.0)
 
-    ws.append(["📝 METADATI ESPORTAZIONE"])
-    ws.append([])
-    ws.append(["Data e ora esportazione:", current_time])
-    ws.append(["Numero totale moduli esportati:", len(id_moduli)])
-    ws.append(["Numero totale eventi esportati:", len(productions)])
+    lines = []
+    lines.append(["📝 METADATI ESPORTAZIONE"])
+    lines.append([])
+    lines.append(["Data e ora esportazione:", current_time])
+    lines.append(["Numero totale moduli esportati:", len(id_moduli)])
+    lines.append(["Numero totale eventi esportati:", len(productions)])
 
-    # ➕ Breakdown by adjusted esito logic
-    good = 0
-    no_good = 0
-    ok_op = 0
-    not_checked = 0
-    escluso = 0
-    in_production = 0
+    # Stats
+    good = no_good = ok_op = not_checked = escluso = in_production = 0
 
     for p in productions:
         cycle_time_obj = p.get("cycle_time")
@@ -175,7 +172,6 @@ def metadata_sheet(ws, data: dict, progress=None):
             min_cycle_threshold
         )
 
-        # Classification logic
         if mapped_esito == "G":
             good += 1
         elif mapped_esito == "NG":
@@ -189,39 +185,49 @@ def metadata_sheet(ws, data: dict, progress=None):
         elif mapped_esito == "In Produzione":
             in_production += 1
 
-    # Add to sheet
-    ws.append(["Good:", good])
-    ws.append(["Good Operatore (ReWork):", ok_op])
-    ws.append(["No Good:", no_good])
-    ws.append(["Not Controllati QG2:", not_checked])
-    ws.append(["Escluso:", escluso])
-    ws.append(["In Produzione:", in_production])
+    lines.extend([
+        ["Good:", good],
+        ["Good Operatore (ReWork):", ok_op],
+        ["No Good:", no_good],
+        ["Not Controllati QG2:", not_checked],
+        ["Escluso:", escluso],
+        ["In Produzione:", in_production],
+        ["Soglia Minima Tempo Ciclo (sec):", f"{min_cycle_threshold:.1f}"],
+        [],
+        ["Filtri Attivi"]
+    ])
 
-    # Threshold info
-    ws.append(["Soglia Minima Tempo Ciclo (sec):", f"{min_cycle_threshold:.1f}"])
-    ws.append([])
-
-    ws.append(["Filtri Attivi"])
     if filters:
         for f in filters:
             raw_value = f.get("value", "")
             segments = [seg.strip() for seg in raw_value.split(">") if seg.strip()]
             cleaned_value = " > ".join(segments)
-            ws.append([f.get("type", "Filtro"), cleaned_value])
+            lines.append([f.get("type", "Filtro"), cleaned_value])
     else:
-        ws.append(["Nessun filtro applicato"])
-    ws.append([])
+        lines.append(["Nessun filtro applicato"])
 
-    # Autofit
+    lines.append([])
+
+    # Now write to worksheet with formatting
     left_align = Alignment(horizontal="left", vertical="center")
-    for col_idx, col_cells in enumerate(ws.columns, start=1):
-        max_len = 0
-        for cell in col_cells:
+
+    col_widths = defaultdict(int)
+
+    for row in lines:
+        excel_row = []
+        for idx, value in enumerate(row):
+            cell = WriteOnlyCell(ws, value=value)
             cell.alignment = left_align
-            val = str(cell.value) if cell.value else ""
-            max_len = max(max_len, len(val))
-        col_letter = get_column_letter(col_idx)
-        ws.column_dimensions[col_letter].width = max_len + 4
+            excel_row.append(cell)
+
+            length = len(str(value)) if value else 0
+            col_letter = get_column_letter(idx + 1)
+            col_widths[col_letter] = max(col_widths[col_letter], length)
+        ws.append(excel_row)
+
+    # Set column widths
+    for col_letter, width in col_widths.items():
+        ws.column_dimensions[col_letter].width = width + 4
 
 # ---------------------------------------------------------------------------
 # Helper utilities -----------------------------------------------------------
@@ -279,7 +285,7 @@ def _append_dataframe(
                 current_fill = FILL_BLUE if current_fill == FILL_WHITE else FILL_WHITE
                 current_key = key_value
 
-        row_cells: List[WriteOnlyCell] = []
+        row_cells: List[Cell] = []
         for idx, val in enumerate(row_tuple):
             col = columns[idx]
             if col in {"Checkin - PMS", "Checkout - PMS"} and val:

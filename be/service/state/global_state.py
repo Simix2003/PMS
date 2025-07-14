@@ -4,6 +4,7 @@ from threading import Lock
 from dotenv import load_dotenv, find_dotenv
 from pymysql.cursors import DictCursor
 from pymysqlpool import ConnectionPool
+from service.helpers.db_queue import DBWriteQueue
 
 # Load .env variables
 load_dotenv(find_dotenv())
@@ -37,6 +38,9 @@ mysql_pool = ConnectionPool(
 
 # Thread-safe DB executor
 executor = ThreadPoolExecutor(max_workers=10)
+
+# Asynchronous queue for deferred DB writes
+db_write_queue = DBWriteQueue()
 
 # Global runtime state
 plc_connections = {}

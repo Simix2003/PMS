@@ -14,7 +14,15 @@ from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
 from service.config.config import PLC_DB_RANGES, ZONE_SOURCES, debug
 from service.routes.broadcast import broadcast
-from service.state.global_state import inizio_true_passato_flags, inizio_false_passato_flags, fine_true_passato_flags, fine_false_passato_flags, trigger_timestamps, incomplete_productions
+from service.state.global_state import (
+    inizio_true_passato_flags,
+    inizio_false_passato_flags,
+    fine_true_passato_flags,
+    fine_false_passato_flags,
+    trigger_timestamps,
+    incomplete_productions,
+    db_write_queue,
+)
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string
 from service.helpers.visual_helper import refresh_top_defects_ell, refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
@@ -34,6 +42,156 @@ def get_zone_from_station(station: str) -> Optional[str]:
         ):
             return zone
     return None
+
+
+async def process_final_update(
+    full_station_id: str,
+    line_name: str,
+    channel_id: str,
+    production_id: int,
+    result: dict,
+    buffer: bytes,
+    start_byte: int,
+    fine_buona: bool,
+    fine_scarto: bool,
+    paths: dict,
+) -> None:
+    """Handle MySQL updates and visual refresh after sending PLC response."""
+    t0 = time.perf_counter()
+    try:
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                t3 = time.perf_counter()
+                success, final_esito, end_time = await run_in_thread(
+                    update_production_final,
+                    production_id,
+                    result,
+                    channel_id,
+                    conn,
+                    fine_buona,
+                    fine_scarto,
+                )
+                logger.info(
+                    f"[{full_station_id}] update_production_final in {time.perf_counter() - t3:.3f}s"
+                )
+
+                if success:
+                    if channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
+                        t5 = time.perf_counter()
+                        await run_in_thread(
+                            insert_defects,
+                            result,
+                            production_id,
+                            channel_id,
+                            line_name,
+                            cursor=cursor,
+                            from_vpf=True,
+                        )
+                        logger.info(
+                            f"[{full_station_id}] insert_defects VPF in {time.perf_counter() - t5:.3f}s"
+                        )
+                        timestamp = (
+                            datetime.fromisoformat(end_time)
+                            if not isinstance(end_time, datetime)
+                            else end_time
+                        )
+                        await run_in_thread(refresh_top_defects_vpf, "AIN", timestamp)
+                        await run_in_thread(refresh_vpf_defects_data, timestamp)
+
+                    elif channel_id == "ELL01" and fine_scarto:
+                        t5 = time.perf_counter()
+                        await run_in_thread(
+                            insert_defects,
+                            result,
+                            production_id,
+                            channel_id,
+                            line_name,
+                            cursor=cursor,
+                            from_ell=True,
+                        )
+                        logger.info(
+                            f"[{full_station_id}] insert_defects ELL in {time.perf_counter() - t5:.3f}s"
+                        )
+                        ell_defects = result.get("Defect_Rows")
+                        if ell_defects:
+                            for d in ell_defects:
+                                d["station_id"] = 9
+                                d["category"] = "ELL"
+                            with get_mysql_connection() as mirror_conn:
+                                await run_in_thread(mirror_defects, ell_defects, mirror_conn)
+
+                    elif channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
+                        t6 = time.perf_counter()
+                        await run_in_thread(
+                            insert_defects,
+                            result,
+                            production_id,
+                            channel_id,
+                            line_name,
+                            cursor=cursor,
+                            from_ain=True,
+                        )
+                        logger.info(
+                            f"[{full_station_id}] insert_defects AIN in {time.perf_counter() - t6:.3f}s"
+                        )
+
+                    # Update visual data
+                    try:
+                        zone = get_zone_from_station(channel_id)
+                        timestamp = (
+                            datetime.fromisoformat(end_time)
+                            if not isinstance(end_time, datetime)
+                            else end_time
+                        )
+                        reentered = result.get(
+                            "Re_entered_from_m506" if channel_id == "VPF01" else "Re_entered_from_m326",
+                            False,
+                        )
+                        id_mod_conf = paths["id_modulo"]
+                        if debug:
+                            object_id = global_state.debug_moduli.get(full_station_id)
+                        else:
+                            object_id = (
+                                extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
+                                if id_mod_conf
+                                else None
+                            )
+
+                        bufferIds = result.get("BufferIds_Rework", [])
+                        if zone:
+                            t9 = time.perf_counter()
+                            await run_in_thread(
+                                update_visual_data_on_new_module,
+                                zone=zone,
+                                station_name=channel_id,
+                                esito=final_esito,
+                                ts=timestamp,
+                                cycle_time=result["Tempo_Ciclo"],
+                                reentered=bool(reentered),
+                                bufferIds=bufferIds,
+                                object_id=object_id,
+                            )
+                            logger.info(
+                                f"[{full_station_id}] update_visual_data_on_new_module in {time.perf_counter() - t9:.3f}s"
+                            )
+                            if zone == "AIN" and fine_scarto:
+                                await run_in_thread(refresh_top_defects_qg2, zone, timestamp)
+                                await run_in_thread(refresh_top_defects_ell, "ELL", timestamp)
+                            if zone == "ELL" and fine_scarto:
+                                await run_in_thread(refresh_top_defects_ell, zone, timestamp)
+                        else:
+                            logger.info(f"Unknown zone for {channel_id} — skipping visual update")
+                    except Exception as vis_err:  # pragma: no cover - best effort logging
+                        logger.warning(f"Could not update visual_data for {channel_id}: {vis_err}")
+
+    except Exception as e:
+        logger.error(f"[{full_station_id}] Async final update failed: {e}")
+    finally:
+        incomplete_productions.pop(full_station_id, None)
+        remove_temp_issues(line_name, channel_id, result.get("Id_Modulo"))
+        logger.info(
+            f"[{full_station_id}] Async final update done in {time.perf_counter() - t0:.3f}s"
+        )
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
     logger.info(f"[{full_station_id}] Starting background task.")
@@ -171,142 +329,59 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     bufferIds = result.get("BufferIds_Rework", [])
                     fine_true_passato_flags[full_station_id] = True
                     fine_false_passato_flags[full_station_id] = False
+
                     production_id = incomplete_productions.get(full_station_id)
 
                     if production_id:
-                        with get_mysql_connection() as conn:
-                            with conn.cursor() as cursor:
-                                t3 = time.perf_counter()
-                                success, final_esito, end_time = await run_in_thread(
-                                    update_production_final,
-                                    production_id, result, channel_id, conn, fine_buona, fine_scarto
-                                )
-                                t4 = time.perf_counter()
-                                logger.info(f"[{full_station_id}] update_production_final in {t4 - t3:.3f}s")
+                        esito_conf = paths.get("esito_scarto_compilato")
+                        pezzo_archivia_conf = paths["pezzo_archiviato"]
 
-                                if success:
-                                    if channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
-                                        t5 = time.perf_counter()
-                                        await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_vpf=True)
-                                        t6 = time.perf_counter()
-                                        logger.info(f"[{full_station_id}] insert_defects VPF in {t6 - t5:.3f}s")
+                        t11 = time.perf_counter()
+                        await asyncio.to_thread(
+                            plc_connection.write_bool,
+                            pezzo_archivia_conf["db"],
+                            pezzo_archivia_conf["byte"],
+                            pezzo_archivia_conf["bit"],
+                            True,
+                        )
+                        if esito_conf:
+                            await asyncio.to_thread(
+                                plc_connection.write_bool,
+                                esito_conf["db"],
+                                esito_conf["byte"],
+                                esito_conf["bit"],
+                                False,
+                            )
+                        t12 = time.perf_counter()
+                        logger.info(f"[{full_station_id}] PLC writes in {t12 - t11:.3f}s")
 
-                                        timestamp = datetime.fromisoformat(end_time) if not isinstance(end_time, datetime) else end_time
-                                        await run_in_thread(refresh_top_defects_vpf, "AIN", timestamp)
-                                        await run_in_thread(refresh_vpf_defects_data, timestamp)
-
-                                    elif channel_id == "ELL01" and fine_scarto:
-                                        t5 = time.perf_counter()
-                                        await run_in_thread(
-                                            insert_defects,
-                                            result, production_id, channel_id, line_name,
-                                            cursor=cursor,
-                                            from_ell=True
-                                        )
-                                        logger.info(f"[{full_station_id}] insert_defects ELL in {time.perf_counter() - t5:.3f}s")
-
-                                        t_x = time.perf_counter()
-                                        # ✅ Mirror defects to ELL buffer
-                                        ell_defects = result.get("Defect_Rows")
-                                        if ell_defects:
-                                            for d in ell_defects:
-                                                d["station_id"] = 9  # ELL01
-                                                d["category"] = "ELL"
-                                            with get_mysql_connection() as mirror_conn:
-                                                await run_in_thread(mirror_defects, ell_defects, mirror_conn)
-                                        logger.info(f"[{full_station_id}] insert_defects ELL in {time.perf_counter() - t_x:.3f}s")
-
-
-                                    elif channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
-                                        t6 = time.perf_counter()
-                                        await run_in_thread(insert_defects, result, production_id, channel_id, line_name, cursor=cursor, from_ain=True)
-                                        logger.info(f"[{full_station_id}] insert_defects AIN in {time.perf_counter() - t6:.3f}s")
-
-                                    # Update visual
-                                    try:
-                                        zone = get_zone_from_station(channel_id)
-                                        timestamp = datetime.fromisoformat(end_time) if not isinstance(end_time, datetime) else end_time
-                                        reentered = result.get("Re_entered_from_m506" if channel_id == "VPF01" else "Re_entered_from_m326", False)
-
-                                        id_mod_conf = paths["id_modulo"]
-                                        if debug:
-                                            full_id = f"{line_name}.{channel_id}"
-                                            object_id = global_state.debug_moduli.get(full_id)
-                                        else:
-                                            if id_mod_conf:
-                                                object_id = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
-                                        
-                                        # ✅ Mirror updated row to ell_productions_buffer if ELL zone
-                                        t7 = time.perf_counter()
-                                        if channel_id in ("ELL01", "RMI01"):
-                                            with get_mysql_connection() as mirror_conn:
-                                                await run_in_thread(
-                                                    mirror_production,
-                                                    {
-                                                        "id": production_id,
-                                                        "object_id": object_id,
-                                                        "station_id": 9 if channel_id == "ELL01" else 3,
-                                                        "start_time": result.get("DataInizio"),  # Optional
-                                                        "end_time": end_time,
-                                                        "esito": final_esito,
-                                                    },
-                                                    mirror_conn
-                                                )
-                                            t8 = time.perf_counter()
-                                            logger.info(f"🟡[{full_station_id}] mirror_production END in {t8 - t7:.3f}s")
-                                        
-
-                                        if zone:
-                                            t9 = time.perf_counter()
-                                            await run_in_thread(
-                                                update_visual_data_on_new_module,
-                                                zone=zone,
-                                                station_name=channel_id,
-                                                esito=final_esito,
-                                                ts=timestamp,
-                                                cycle_time=result['Tempo_Ciclo'],
-                                                reentered=bool(reentered),
-                                                bufferIds=bufferIds,
-                                                object_id=object_id
-                                            )
-                                            t10 = time.perf_counter()
-                                            logger.info(f"[{full_station_id}] update_visual_data_on_new_module in {t10 - t9:.3f}s")
-
-                                            if zone == "AIN" and fine_scarto:
-                                                await run_in_thread(refresh_top_defects_qg2, zone, timestamp)
-                                                await run_in_thread(refresh_top_defects_ell, 'ELL', timestamp)
-                                            if zone == "ELL" and fine_scarto:
-                                                await run_in_thread(refresh_top_defects_ell, zone, timestamp)
-
-                                        else:
-                                            logger.info(f"Unknown zone for {channel_id} — skipping visual update")
-
-                                    except Exception as vis_err:
-                                        logger.warning(f"Could not update visual_data for {channel_id}: {vis_err}")
-
-                                    incomplete_productions.pop(full_station_id)
-
-                                    esito_conf = paths.get("esito_scarto_compilato")
-                                    pezzo_archivia_conf = paths["pezzo_archiviato"]
-
-                                    t11 = time.perf_counter()
-                                    await asyncio.to_thread(plc_connection.write_bool, pezzo_archivia_conf["db"], pezzo_archivia_conf["byte"], pezzo_archivia_conf["bit"], True)
-                                    if esito_conf:
-                                        await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
-                                    t12 = time.perf_counter()
-                                    logger.info(f"[{full_station_id}] PLC write(s) in {t12 - t11:.3f}s")
-
-                                else:
-                                    pezzo_archivia_conf = paths["pezzo_archiviato"]
-                                    await asyncio.to_thread(plc_connection.write_bool, pezzo_archivia_conf["db"], pezzo_archivia_conf["byte"], pezzo_archivia_conf["bit"], True)
-                                    logger.warning(f"[{full_station_id}] Production update failed. Wrote archivio bit anyway.")
+                        await db_write_queue.enqueue(
+                            process_final_update,
+                            full_station_id,
+                            line_name,
+                            channel_id,
+                            production_id,
+                            result,
+                            buffer,
+                            start_byte,
+                            fine_buona,
+                            fine_scarto,
+                            paths,
+                        )
                     else:
                         pezzo_archivia_conf = paths["pezzo_archiviato"]
-                        await asyncio.to_thread(plc_connection.write_bool, pezzo_archivia_conf["db"], pezzo_archivia_conf["byte"], pezzo_archivia_conf["bit"], True)
-                        logger.warning(f"[{full_station_id}] Module was not found in incomplete productions. Wrote archivio bit anyway.")
-                        
-                    remove_temp_issues(line_name, channel_id, result.get("Id_Modulo"))
+                        await asyncio.to_thread(
+                            plc_connection.write_bool,
+                            pezzo_archivia_conf["db"],
+                            pezzo_archivia_conf["byte"],
+                            pezzo_archivia_conf["bit"],
+                            True,
+                        )
+                        logger.warning(
+                            f"[{full_station_id}] Module was not found in incomplete productions. Wrote archivio bit anyway."
+                        )
 
+                    # DB operations and cleanup will run in background
                 t_end = time.perf_counter()
                 logger.info(f"[{full_station_id}] Total Fine Ciclo processing: {t_end - t0:.3f}s")
 

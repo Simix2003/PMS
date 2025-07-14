@@ -2191,7 +2191,7 @@ class _FindPageState extends State<FindPage> {
                 ),
               ),
             ),*/
-          if (!isSelecting || !isExporting) const AnimatedAIButton(),
+          //if (!isSelecting || !isExporting) const AnimatedAIButton(),
         ],
       ),
     );

@@ -38,45 +38,51 @@ class JsonFormatter(logging.Formatter):
 # ----------- Logging Config -----------
 def configure_logging() -> dict:
     log_config = {
-        "version": 1,
-        "disable_existing_loggers": False,
-        "formatters": {
-            "json": {"()": JsonFormatter}
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {"()": JsonFormatter}
+    },
+    "handlers": {
+        "default": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+            "stream": "ext://sys.stdout",
+            "level": "INFO",  # Show INFO and above in terminal
         },
-        "handlers": {
-            "default": {
-                "class": "logging.StreamHandler",
-                "formatter": "json",
-                "stream": "ext://sys.stdout",
-            },
-            "file": {
-                "class": "logging.FileHandler",
-                "filename": str(LOG_FILE),
-                "formatter": "json",
-                "mode": "a",
-                "encoding": "utf-8",
-            },
+        "file": {
+            "class": "logging.FileHandler",
+            "filename": str(LOG_FILE),
+            "formatter": "json",
+            "mode": "a",
+            "encoding": "utf-8",
+            "level": "WARNING",  # Only WARNING and above in file
         },
-        "root": {
-            "level": "INFO", #Change to "DEBUG" for more verbose logging
-            "handlers": ["default", "file"]
+    },
+    "root": {
+        "level": "DEBUG",  # Allow everything to be filtered by handlers
+        "handlers": ["default", "file"]
+    },
+    "loggers": {
+        # Explicit loggers for uvicorn
+        "uvicorn": {
+            "handlers": ["default"],
+            "level": "INFO",
+            "propagate": False
         },
-        "loggers": {
-            "uvicorn": {
-                "handlers": ["default", "file"],
-                "level": "INFO",
-                "propagate": False
-            },
-            "uvicorn.error": {
-                "level": "INFO"
-            },
-            "uvicorn.access": {
-                "handlers": ["default", "file"],
-                "level": "INFO",
-                "propagate": False
-            },
+        "uvicorn.error": {
+            "handlers": ["default"],
+            "level": "INFO",
+            "propagate": False
         },
-    }
+        "uvicorn.access": {
+            "handlers": ["default"],
+            "level": "INFO",
+            "propagate": False
+        },
+    },
+}
+
     logging.config.dictConfig(log_config)
     return log_config
 

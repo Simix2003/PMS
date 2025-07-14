@@ -246,6 +246,7 @@ def _append_dataframe(
     zebra_key: str = "Module Id",
     progress: dict | None = None,
     align_center_for: Optional[Set[str]] = None,
+    grey_cells: Optional[Set[tuple[int, str]]] = None,
 ):
     """Write *df* to *ws* with a blue/white zebra pattern keyed on *zebra_key*."""
     if align_center_for is None:
@@ -278,7 +279,11 @@ def _append_dataframe(
         if cb:
             cb(f"creating:{current_sheet}", progress["current"], progress["total"])
 
-    for row_tuple in df.itertuples(index=False, name=None):
+    grey_cells = grey_cells or set()
+    # Pre-compute mapping for faster lookups
+    grey_lookup = set(grey_cells)
+
+    for row_idx, row_tuple in enumerate(df.itertuples(index=False, name=None), start=2):
         if zebra_idx is not None:
             key_value = row_tuple[zebra_idx]
             if key_value != current_key:
@@ -294,7 +299,10 @@ def _append_dataframe(
                 except Exception:
                     pass
             cell = WriteOnlyCell(ws, value=val)
-            cell.fill = current_fill
+            if (row_idx, col) in grey_lookup:
+                cell.fill = FILL_QG
+            else:
+                cell.fill = current_fill
             if col in align_center_for:
                 cell.alignment = Alignment(horizontal="center", vertical="center")
             else:
@@ -1043,17 +1051,15 @@ def ng_generali_sheet(ws, data: dict, progress=None) -> bool:
     if rows_written > 0:
         import pandas as pd
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Map header name → column index
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
-
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(defect_columns + ["Esito"]))
-        # Gray cells handled above during DataFrame creation
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(defect_columns + ["Esito"]),
+            grey_cells=set(grey_cells),
+        )
+        # Gray cells handled during DataFrame creation
         return True
 
     return False
@@ -1246,18 +1252,18 @@ def ng_saldature_sheet(ws, data: dict, progress=None) -> bool:
         all_rows.append(row)
         rows_written += 1
 
-    # 10) Dump to DataFrame + append; then gray‐fill exactly as in ribbon logic
+    # 10) Dump to DataFrame and apply gray fill during write
     if rows_written > 0:
         import pandas as pd
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Map header cell → column index
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(header),
+            grey_cells=set(grey_cells),
+        )
 
         return True
 
@@ -1425,14 +1431,14 @@ def ng_disall_ribbon_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Apply gray background to QG-only defects
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(header),
+            grey_cells=set(grey_cells),
+        )
 
         return True
 
@@ -1581,14 +1587,14 @@ def ng_disall_stringa_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Apply gray background to QG-inherited defects
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(header),
+            grey_cells=set(grey_cells),
+        )
 
         return True
 
@@ -1757,14 +1763,14 @@ def ng_mancanza_ribbon_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Apply grey background to QG-inherited defects
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(header),
+            grey_cells=set(grey_cells),
+        )
 
         return True
 
@@ -1923,14 +1929,14 @@ def ng_iribbon_leadwire_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Apply grey background to QG-inherited defects
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(header),
+            grey_cells=set(grey_cells),
+        )
 
         return True
 
@@ -2071,14 +2077,14 @@ def ng_macchie_eca_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Highlight QG-inherited NG cells
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(header),
+            grey_cells=set(grey_cells),
+        )
 
         return True
 
@@ -2219,14 +2225,14 @@ def ng_bad_soldering_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Highlight QG-inherited NG cells
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(header),
+            grey_cells=set(grey_cells),
+        )
 
         return True
 
@@ -2367,14 +2373,14 @@ def ng_celle_rotte_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Gray background for QG defects
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(header),
+            grey_cells=set(grey_cells),
+        )
 
         return True
 
@@ -2512,14 +2518,14 @@ def ng_lunghezza_string_ribbon_sheet(ws, data: dict, progress=None) -> bool:
 
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Gray background for QG cells
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(header),
+            grey_cells=set(grey_cells),
+        )
 
         return True
     return False
@@ -2660,15 +2666,15 @@ def ng_graffio_su_cella_sheet(ws, data: dict, progress=None) -> bool:
     if not rows:
         return False
 
-    # Zebra append
-    _append_dataframe(ws, pd.DataFrame(rows, columns=header), zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-    # Apply grey fill
-    header_map = {cell.value: cell.column for cell in ws[1]}  # Column name to index
-    for row_idx, col_name in grey_cells:
-        col_idx = header_map.get(col_name)
-        if col_idx:
-            ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+    # Zebra append with grey highlighting
+    _append_dataframe(
+        ws,
+        pd.DataFrame(rows, columns=header),
+        zebra_key="Module Id",
+        progress=progress,
+        align_center_for=set(header),
+        grey_cells=set(grey_cells),
+    )
 
     return True
 
@@ -2815,14 +2821,14 @@ def ng_altro_sheet(ws, data: dict, progress=None) -> bool:
     # Step 4: Export + Zebra + Grey
     if rows_written > 0:
         df = pd.DataFrame(all_rows, columns=header)
-        _append_dataframe(ws, df, zebra_key="Module Id", progress=progress, align_center_for=set(header))
-
-        # Grey fill inherited QG cells
-        header_map = {cell.value: cell.column for cell in ws[1]}
-        for row_idx, col_name in grey_cells:
-            col_idx = header_map.get(col_name)
-            if col_idx:
-                ws.cell(row=row_idx, column=col_idx).fill = FILL_QG
+        _append_dataframe(
+            ws,
+            df,
+            zebra_key="Module Id",
+            progress=progress,
+            align_center_for=set(header),
+            grey_cells=set(grey_cells),
+        )
 
         return True
     return False

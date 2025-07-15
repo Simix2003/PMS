@@ -195,6 +195,58 @@ async def process_final_update(
         duration = time.perf_counter() - t0
         log_duration(f"[{full_station_id}] Async final update done", duration)
 
+
+async def process_mirror_production(row: dict) -> None:
+    """Background task to mirror production into the ELL buffer."""
+    try:
+        with get_mysql_connection() as conn:
+            await run_in_thread(mirror_production, row, conn)
+    except Exception as e:  # pragma: no cover - best effort logging
+        logger.warning(f"process_mirror_production failed: {e}")
+
+
+async def process_initial_production(
+    full_station_id: str,
+    channel_id: str,
+    initial_data: dict,
+    esito: int,
+    object_id: str,
+) -> None:
+    """Background task to insert initial production and mirror if needed."""
+    try:
+        with get_mysql_connection() as conn:
+            prod_id = await run_in_thread(
+                insert_initial_production_data,
+                initial_data,
+                channel_id,
+                conn,
+                esito,
+            )
+        if prod_id:
+            incomplete_productions[full_station_id] = prod_id
+            logger.info(
+                f"[{full_station_id}] ✅ Inserted production record: prod_id={prod_id}"
+            )
+            if channel_id in ("ELL01", "RMI01") and initial_data:
+                await process_mirror_production(
+                    {
+                        "id": prod_id,
+                        "object_id": object_id,
+                        "station_id": 9 if channel_id == "ELL01" else 3,
+                        "start_time": initial_data.get("DataInizio"),
+                        "end_time": None,
+                        "esito": esito,
+                    }
+                )
+        else:
+            logger.warning(
+                f"[{full_station_id}] ⚠️ No prod_id returned from insert_initial_production_data (object_id={object_id})"
+            )
+    except Exception as e:  # pragma: no cover - best effort logging
+        logger.exception(
+            f"[{full_station_id}] Exception during insert_initial_production_data: {e}"
+        )
+
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
     logger.info(f"[{full_station_id}] Starting background task.")
     prev_trigger = False
@@ -457,44 +509,16 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
     esclusione_attiva = extract_bool(buffer, escl_conf["byte"], escl_conf["bit"], start_byte) if escl_conf else False
     esito = 4 if esclusione_attiva else 2
 
-    # Insert production record
+    # Queue initial production insert and optional mirroring
     logger.info(f"[{full_id}] Starting initial production insert for object_id={object_id}")
-    t4 = time.perf_counter()
-    try:
-        with get_mysql_connection() as conn:
-            prod_id = await run_in_thread(insert_initial_production_data, initial_data, channel_id, conn, esito)
-    except Exception as e:
-        logger.exception(f"[{full_id}] Exception during insert_initial_production_data: {e}")
-        prod_id = None
-    t5 = time.perf_counter()
-    duration = t5 - t4
-    log_duration(f"[{full_id}] insert_initial_production_data", duration)
-
-    t6 = time.perf_counter()
-    # ✅ Mirror into ell_productions_buffer if ELL zone
-    if prod_id and channel_id in ("ELL01", "RMI01") and initial_data:
-        with get_mysql_connection() as mirror_conn:
-            await run_in_thread(
-                mirror_production,
-                {
-                    "id": prod_id,
-                    "object_id": object_id,
-                    "station_id": 9 if channel_id == "ELL01" else 3,
-                    "start_time": initial_data.get("DataInizio"),
-                    "end_time": None,
-                    "esito": esito,
-                },
-                mirror_conn
-            )
-    t7 = time.perf_counter()
-    duration = t7 - t6
-    log_duration(f"[{full_id}] mirror_production", duration)
-
-    if prod_id:
-        logger.info(f"[{full_id}] ✅ Inserted production record: prod_id={prod_id}")
-        incomplete_productions[full_id] = prod_id
-    else:
-        logger.warning(f"[{full_id}] ⚠️ No prod_id returned from insert_initial_production_data (object_id={object_id})")
+    await db_write_queue.enqueue(
+        process_initial_production,
+        full_id,
+        channel_id,
+        initial_data,
+        esito,
+        object_id,
+    )
 
     global_state.expected_moduli[full_id] = object_id
     logger.debug(f"[{full_id}] expected_moduli updated with object_id={object_id}")

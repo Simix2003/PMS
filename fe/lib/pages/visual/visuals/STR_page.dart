@@ -183,7 +183,6 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
   }
 
   void refreshEscalationTrafficLight() {
-    print('CALLING REFRESH ESCALATION TRAFFIC LIGHT FROM str_page');
     setState(() {
       // recalculates counts automatically
     });
@@ -191,8 +190,6 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
   @override
   Widget build(BuildContext context) {
-    print('widget.counts');
-    print(widget.counts);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1817,19 +1814,17 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                   child: Row(
                     children: [
                       Flexible(
-                        child: TopDefectsHorizontalBarChart(
+                        child: TopDefectsHorizontalBarChartSTR(
                           defectLabels: widget.defectLabels,
-                          ain1Counts: widget.ain1Counts,
-                          ain2Counts: widget.ain2Counts,
+                          Counts: widget.ain1Counts,
                         ),
                       ),
                       const SizedBox(width: 8),
                       // RIGHT COLUMN (1 full-height card)
                       Flexible(
-                        child: TopDefectsHorizontalBarChart(
+                        child: TopDefectsHorizontalBarChartSTR_day(
                           defectLabels: widget.defectLabels,
-                          ain1Counts: widget.ain1Counts,
-                          ain2Counts: widget.ain2Counts,
+                          Counts: widget.ain1Counts,
                         ),
                       ),
                       const SizedBox(width: 8),

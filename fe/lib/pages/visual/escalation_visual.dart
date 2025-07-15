@@ -73,6 +73,11 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   final stationNameToId = {
     "AIN01": 29,
     "AIN02": 30,
+    "STR01": 4,
+    "STR02": 5,
+    "STR03": 6,
+    "STR04": 7,
+    "STR05": 8,
   };
 
   final stopTypes = ["ESCALATION"];
@@ -83,7 +88,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   ];
   static const List<String> statusFull = [...statusCreation, "CLOSED"];
 
-  final String _defaultStation = "AIN01";
+  final String _defaultStation = "STR01";
   final String _defaultType = "ESCALATION";
 
   String? _newStation;
@@ -111,13 +116,14 @@ class _EscalationDialogState extends State<_EscalationDialog> {
 
   Future<void> _fetchExistingStops({int? keepSelectedId}) async {
     setState(() => _busy = true);
-    escalations.clear();
+
+    final List<Map<String, dynamic>> newEsc = []; // build a fresh list
     for (final entry in stationNameToId.entries) {
       final res = await _api.getStopsForStation(entry.value,
           shiftsBack: widget.last_n_shifts);
       if (res != null && res['status'] == 'ok' && res['stops'] != null) {
         for (final stop in res['stops']) {
-          escalations.add({
+          newEsc.add({
             'id': stop['id'],
             'title': stop['reason'],
             'status': stop['status'],
@@ -130,19 +136,18 @@ class _EscalationDialogState extends State<_EscalationDialog> {
         }
       }
     }
-    escalations.sort((a, b) => b['id'].compareTo(a['id']));
+    newEsc.sort((a, b) => b['id'].compareTo(a['id']));
 
-    // After data fully loaded → restore selection
+    // restore selection (use newEsc, not the global list)
     if (keepSelectedId != null) {
-      final activeEscalations =
-          escalations.where((e) => e['status'] != 'CLOSED').toList();
-      final newIndex =
-          activeEscalations.indexWhere((e) => e['id'] == keepSelectedId);
-      _selectedIndex = newIndex >= 0 ? newIndex : null;
+      final act = newEsc.where((e) => e['status'] != 'CLOSED').toList();
+      final idx = act.indexWhere((e) => e['id'] == keepSelectedId);
+      _selectedIndex = idx >= 0 ? idx : null;
     }
 
+    escalations.value = newEsc; // 🔥 this notifies every listener
     setState(() => _busy = false);
-    widget.onEscalationsUpdated?.call();
+    widget.onEscalationsUpdated?.call(); // still works for legacy callers
   }
 
   Future<void> _createNewEscalation() async {
@@ -256,9 +261,9 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   @override
   Widget build(BuildContext context) {
     final activeEscalations =
-        escalations.where((e) => e['status'] != 'CLOSED').toList();
+        escalations.value.where((e) => e['status'] != 'CLOSED').toList();
     final closedEscalations =
-        escalations.where((e) => e['status'] == 'CLOSED').toList();
+        escalations.value.where((e) => e['status'] == 'CLOSED').toList();
 
     return Stack(
       children: [

@@ -183,6 +183,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
   }
 
   void refreshEscalationTrafficLight() {
+    print('CALLING REFRESH ESCALATION TRAFFIC LIGHT FROM str_page');
     setState(() {
       // recalculates counts automatically
     });
@@ -190,6 +191,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
   @override
   Widget build(BuildContext context) {
+    print('widget.counts');
+    print(widget.counts);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1523,7 +1526,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     const Text(
-                                      'Available \nTime\nAIN1',
+                                      'Available \nTime',
                                       style: TextStyle(
                                         fontSize: 28,
                                         fontWeight: FontWeight.bold,
@@ -1613,101 +1616,118 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                           ),
                           //const TopDefectsPieChart(),
                           Flexible(
-                            child: Card(
-                              elevation: 10,
-                              color: Colors.white,
-                              child: Padding(
-                                padding: const EdgeInsets.all(8),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text(
-                                      'Available \nTime\nAIN2',
-                                      style: TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Column(
-                                      children: [
-                                        SizedBox(
-                                          width: 200, // radius * 2
-                                          child: Column(
-                                            children: [
-                                              AnimatedRadialGauge(
-                                                duration: const Duration(
-                                                    milliseconds: 800),
-                                                curve: Curves.easeInOut,
-                                                value: widget.availableTime_2
-                                                    .toDouble(),
-                                                radius: 100,
-                                                axis: GaugeAxis(
-                                                  min: 0,
-                                                  max: 100,
-                                                  degrees: 180,
-                                                  style: const GaugeAxisStyle(
-                                                    thickness: 16,
-                                                    background:
-                                                        Color(0xFFDDDDDD),
-                                                    segmentSpacing: 0,
-                                                  ),
-                                                  progressBar:
-                                                      GaugeRoundedProgressBar(
-                                                    color: () {
-                                                      if (widget
-                                                              .availableTime_2 <=
-                                                          50) {
-                                                        return widget
-                                                            .errorColor;
-                                                      }
-                                                      if (widget
-                                                              .availableTime_2 <=
-                                                          75) {
-                                                        return widget
-                                                            .warningColor;
-                                                      }
-                                                      return widget.okColor;
-                                                    }(),
-                                                  ),
-                                                ),
-                                                builder:
-                                                    (context, child, value) {
-                                                  return Center(
-                                                    child: Text(
-                                                      '${value.toInt()}%',
-                                                      style: const TextStyle(
-                                                        fontSize: 32,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                              const SizedBox(height: 6),
-                                              const Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text('0%',
-                                                      style: TextStyle(
-                                                          fontSize: 14)),
-                                                  Text('100%',
-                                                      style: TextStyle(
-                                                          fontSize: 14)),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
+                            child: Visibility(
+                              visible: false, // 👈 hide it but keep layout
+                              maintainSize: true,
+                              maintainAnimation: true,
+                              maintainState: true,
+                              maintainSemantics: true,
+                              maintainInteractivity: false,
+                              child: Card(
+                                elevation: 10,
+                                color: Colors.white,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Text(
+                                        'Available \nTime\nAIN2',
+                                        style: TextStyle(
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87,
                                         ),
-                                      ],
-                                    )
-                                  ],
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Column(
+                                        children: [
+                                          SizedBox(
+                                            width: 200, // radius * 2
+                                            child: Column(
+                                              children: [
+                                                AnimatedRadialGauge(
+                                                  duration: const Duration(
+                                                      milliseconds: 800),
+                                                  curve: Curves.easeInOut,
+                                                  value: widget.availableTime_2
+                                                      .toDouble(),
+                                                  radius: 100,
+                                                  axis: GaugeAxis(
+                                                    min: 0,
+                                                    max: 100,
+                                                    degrees: 180,
+                                                    style: const GaugeAxisStyle(
+                                                      thickness: 16,
+                                                      background:
+                                                          Color(0xFFDDDDDD),
+                                                      segmentSpacing: 0,
+                                                    ),
+                                                    progressBar:
+                                                        GaugeRoundedProgressBar(
+                                                      color: () {
+                                                        if (widget
+                                                                .availableTime_2 <=
+                                                            50) {
+                                                          return widget
+                                                              .errorColor;
+                                                        }
+                                                        if (widget
+                                                                .availableTime_2 <=
+                                                            75) {
+                                                          return widget
+                                                              .warningColor;
+                                                        }
+                                                        return widget.okColor;
+                                                      }(),
+                                                    ),
+                                                  ),
+                                                  builder:
+                                                      (context, child, value) {
+                                                    return Center(
+                                                      child: Text(
+                                                        '${value.toInt()}%',
+                                                        style: const TextStyle(
+                                                          fontSize: 32,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                                const SizedBox(height: 6),
+                                                const Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    Text('0%',
+                                                        style: TextStyle(
+                                                            fontSize: 14)),
+                                                    Text('100%',
+                                                        style: TextStyle(
+                                                            fontSize: 14)),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    ],
+                                  ),
                                 ),
                               ),
+                            ),
+                          ),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4.0),
+                            child: Text(
+                              'Sviluppato da 3SUN Process Eng, \nCapgemini, empowered by Bottero',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 18, color: Colors.grey.shade700),
                             ),
                           ),
                         ],
@@ -1735,23 +1755,15 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                     border: TableBorder.all(
                                         color: Colors.black, width: 0.5),
                                     columnWidths: const {
-                                      0: FlexColumnWidth(2),
+                                      0: FlexColumnWidth(1),
                                       1: FlexColumnWidth(1),
                                       2: FlexColumnWidth(1),
-                                      3: FlexColumnWidth(1),
                                     },
                                     children: [
                                       const TableRow(
                                         decoration:
                                             BoxDecoration(color: Colors.white),
                                         children: [
-                                          Padding(
-                                            padding: EdgeInsets.all(8),
-                                            child: Text("Tipo \nFermata",
-                                                style: TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                          ),
                                           Padding(
                                             padding: EdgeInsets.all(8),
                                             child: Text("Macchina",
@@ -1805,7 +1817,6 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                   child: Row(
                     children: [
                       Flexible(
-                        flex: 3,
                         child: TopDefectsHorizontalBarChart(
                           defectLabels: widget.defectLabels,
                           ain1Counts: widget.ain1Counts,
@@ -1815,27 +1826,18 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                       const SizedBox(width: 8),
                       // RIGHT COLUMN (1 full-height card)
                       Flexible(
-                        flex: 2,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Expanded(
-                              child: VPFDefectsHorizontalBarChart(
-                                defectLabels: widget.defectVPFLabels,
-                                ain1Counts: widget.ain1VPFCounts,
-                                ain2Counts: widget.ain2VPFCounts,
-                              ),
-                            ),
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 4.0),
-                              child: Text(
-                                'Sviluppato da 3SUN Process Eng, \nCapgemini, empowered by Bottero',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontSize: 18, color: Colors.grey.shade700),
-                              ),
-                            ),
-                          ],
+                        child: TopDefectsHorizontalBarChart(
+                          defectLabels: widget.defectLabels,
+                          ain1Counts: widget.ain1Counts,
+                          ain2Counts: widget.ain2Counts,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: TopDefectsHorizontalBarChart(
+                          defectLabels: widget.defectLabels,
+                          ain1Counts: widget.ain1Counts,
+                          ain2Counts: widget.ain2Counts,
                         ),
                       ),
                     ],

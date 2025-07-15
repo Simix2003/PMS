@@ -11,8 +11,7 @@ _temp_cache: list | None = None
 _cache_mtime: float | None = None
 _lock = Lock()
 
-
-def load_temp_data():
+def load_temp_data() -> list:
     """Load temp data from disk with caching."""
     global _temp_cache, _cache_mtime
 
@@ -35,7 +34,10 @@ def load_temp_data():
             except json.JSONDecodeError:
                 _temp_cache = []
             _cache_mtime = mtime
-        return _temp_cache
+
+    if _temp_cache is None:
+        return []
+    return _temp_cache
 
 def save_temp_data(data):
     """Persist data to disk and update cache."""

@@ -104,11 +104,15 @@ class _VisualPageState extends State<VisualPage> {
 
   Map<String, int> calculateEscalationCounts(
       List<Map<String, dynamic>> escalations) {
+    print('escalations');
+    print(escalations);
     final shiftManager =
         escalations.where((e) => e['status'] == 'SHIFT_MANAGER').length;
     final headOfProduction =
         escalations.where((e) => e['status'] == 'HEAD_OF_PRODUCTION').length;
     final closed = escalations.where((e) => e['status'] == 'CLOSED').length;
+
+    print('Returning: $shiftManager, $headOfProduction, $closed');
 
     return {
       'shiftManager': shiftManager,
@@ -466,12 +470,8 @@ class _VisualPageState extends State<VisualPage> {
           if (entry.containsKey("Available_Time_1")) {
             availableTime_1 =
                 int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
-          } else if (entry.containsKey("Available_Time_2")) {
-            availableTime_2 =
-                int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
           } else {
             dataFermi.add([
-              entry['causale']?.toString() ?? '',
               entry['station']?.toString() ?? '',
               entry['count']?.toString() ?? '0',
               entry['time']?.toString() ?? '0'
@@ -938,121 +938,25 @@ class _VisualPageState extends State<VisualPage> {
 
   @override
   Widget build(BuildContext context) {
-    final counts = calculateEscalationCounts(escalations);
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(8),
-        child: isLoading
-            ? buildShimmerPlaceholder()
-            : widget.zone == "AIN"
-                ? AinVisualsPage(
-                    shift_target: shift_target,
-                    hourly_shift_target: hourly_shift_target,
-                    yield_target: yield_target,
-                    circleSize: circleSize,
-                    station_1_status: station_1_status,
-                    station_2_status: station_2_status,
-                    errorColor: errorColor,
-                    okColor: okColor,
-                    textColor: textColor,
-                    warningColor: warningColor,
-                    redColor: redColor,
-                    ng_bussingOut_1: ng_bussingOut_1,
-                    ng_bussingOut_2: ng_bussingOut_2,
-                    bussingIn_1: bussingIn_1,
-                    bussingIn_2: bussingIn_2,
-                    currentYield_1: currentYield_1,
-                    currentYield_2: currentYield_2,
-                    throughputData: throughputData,
-                    shiftLabels: shiftLabels,
-                    hourlyData: hourlyData,
-                    hourLabels: hourLabels,
-                    dataFermi: dataFermi,
-                    station1Shifts: station1Shifts,
-                    station2Shifts: station2Shifts,
-                    mergedShiftData: mergedShiftData,
-                    yieldLast8h_1: yieldLast8h_1,
-                    yieldLast8h_2: yieldLast8h_2,
-                    counts: counts,
-                    availableTime_1: availableTime_1,
-                    availableTime_2: availableTime_2,
-                    defectLabels: defectLabels,
-                    defectVPFLabels: defectVPFLabels,
-                    ain1Counts: ain1Counts,
-                    ain1VPFCounts: ain1VPFCounts,
-                    ain2Counts: ain2Counts,
-                    ain2VPFCounts: ain2VPFCounts,
-                    last_n_shifts: last_n_shifts,
-                    qg2_defects_value: qg2_defects_value,
-                  )
-                : widget.zone == "VPF"
-                    ? VpfVisualsPage(
-                        shift_target: shift_target,
-                        hourly_shift_target: hourly_shift_target,
-                        yield_target: yield_target,
-                        circleSize: circleSize,
-                        station_1_status: station_1_status,
-                        errorColor: errorColor,
-                        okColor: okColor,
-                        textColor: textColor,
-                        warningColor: warningColor,
-                        redColor: redColor,
-                        speedRatioData: speedRatioData,
-                        reEntered_1: reEntered_1,
-                        station1Shifts: station1Shifts,
-                        currentYield_1: currentYield_1,
-                        yieldLast8h_1: yieldLast8h_1,
-                        counts: counts,
-                        last_n_shifts: last_n_shifts,
-                        defectsVPF: defectsVPF,
-                        In_1: In_1,
-                        ngOut_1: ngOut_1,
-                        eqDefects: eqDefects,
-                      )
-                    : widget.zone == "ELL"
-                        ? EllVisualsPage(
-                            shift_target: shift_target,
-                            hourly_shift_target: hourly_shift_target,
-                            yield_target: yield_target,
-                            circleSize: circleSize,
-                            station_1_status: station_1_status,
-                            station_2_status: station_2_status,
-                            errorColor: errorColor,
-                            okColor: okColor,
-                            textColor: textColor,
-                            warningColor: warningColor,
-                            redColor: redColor,
-                            ng_1: ngOut_1,
-                            ng_2: ngScrap,
-                            in_1: In_1,
-                            in_2: In_2,
-                            currentFPYYield: currentFPYYield,
-                            currentRWKYield: currentRWKYield,
-                            throughputDataEll: throughputDataEll,
-                            shiftLabels: shiftLabels,
-                            hourlyData: hourlyData,
-                            hourLabels: hourLabels,
-                            dataFermi: dataFermi,
-                            mergedShiftData: mergedShiftData,
-                            FPYLast8h: FPYLast8h,
-                            RWKLast8h: RWKLast8h,
-                            counts: counts,
-                            defectLabels: defectLabels,
-                            min1Counts: min1Counts,
-                            min2Counts: min2Counts,
-                            ellCounts: ellCounts,
-                            shiftThroughput: shiftThroughput,
-                            FPY_yield_shifts: FPY_yield_shifts,
-                            RWK_yield_shifs: RWK_yield_shifs,
-                            last_n_shifts: last_n_shifts,
-                            bufferDefectSummary: bufferDefectSummary,
-                            value_gauge_1: value_gauge_1,
-                            value_gauge_2: value_gauge_2,
-                            speedRatioData: speedRatioData,
-                          )
-                        : widget.zone == 'STR'
-                            ? StrVisualsPage(
+    return ValueListenableBuilder<List<Map<String, dynamic>>>(
+      valueListenable: escalations,
+      builder: (_, escList, __) {
+        final counts =
+            calculateEscalationCounts(escList); // escList is the real list 👍
+        print('counts: $counts');
+
+        return Scaffold(
+          backgroundColor: Colors.white,
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(8),
+            child: isLoading
+                ? buildShimmerPlaceholder()
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(8),
+                    child: isLoading
+                        ? buildShimmerPlaceholder()
+                        : widget.zone == "AIN"
+                            ? AinVisualsPage(
                                 shift_target: shift_target,
                                 hourly_shift_target: hourly_shift_target,
                                 yield_target: yield_target,
@@ -1092,15 +996,128 @@ class _VisualPageState extends State<VisualPage> {
                                 last_n_shifts: last_n_shifts,
                                 qg2_defects_value: qg2_defects_value,
                               )
-                            : const Center(
-                                child: Text(
-                                  'ZONA non trovata',
-                                  style: TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              ),
-      ),
+                            : widget.zone == "VPF"
+                                ? VpfVisualsPage(
+                                    shift_target: shift_target,
+                                    hourly_shift_target: hourly_shift_target,
+                                    yield_target: yield_target,
+                                    circleSize: circleSize,
+                                    station_1_status: station_1_status,
+                                    errorColor: errorColor,
+                                    okColor: okColor,
+                                    textColor: textColor,
+                                    warningColor: warningColor,
+                                    redColor: redColor,
+                                    speedRatioData: speedRatioData,
+                                    reEntered_1: reEntered_1,
+                                    station1Shifts: station1Shifts,
+                                    currentYield_1: currentYield_1,
+                                    yieldLast8h_1: yieldLast8h_1,
+                                    counts: counts,
+                                    last_n_shifts: last_n_shifts,
+                                    defectsVPF: defectsVPF,
+                                    In_1: In_1,
+                                    ngOut_1: ngOut_1,
+                                    eqDefects: eqDefects,
+                                  )
+                                : widget.zone == "ELL"
+                                    ? EllVisualsPage(
+                                        shift_target: shift_target,
+                                        hourly_shift_target:
+                                            hourly_shift_target,
+                                        yield_target: yield_target,
+                                        circleSize: circleSize,
+                                        station_1_status: station_1_status,
+                                        station_2_status: station_2_status,
+                                        errorColor: errorColor,
+                                        okColor: okColor,
+                                        textColor: textColor,
+                                        warningColor: warningColor,
+                                        redColor: redColor,
+                                        ng_1: ngOut_1,
+                                        ng_2: ngScrap,
+                                        in_1: In_1,
+                                        in_2: In_2,
+                                        currentFPYYield: currentFPYYield,
+                                        currentRWKYield: currentRWKYield,
+                                        throughputDataEll: throughputDataEll,
+                                        shiftLabels: shiftLabels,
+                                        hourlyData: hourlyData,
+                                        hourLabels: hourLabels,
+                                        dataFermi: dataFermi,
+                                        mergedShiftData: mergedShiftData,
+                                        FPYLast8h: FPYLast8h,
+                                        RWKLast8h: RWKLast8h,
+                                        counts: counts,
+                                        defectLabels: defectLabels,
+                                        min1Counts: min1Counts,
+                                        min2Counts: min2Counts,
+                                        ellCounts: ellCounts,
+                                        shiftThroughput: shiftThroughput,
+                                        FPY_yield_shifts: FPY_yield_shifts,
+                                        RWK_yield_shifs: RWK_yield_shifs,
+                                        last_n_shifts: last_n_shifts,
+                                        bufferDefectSummary:
+                                            bufferDefectSummary,
+                                        value_gauge_1: value_gauge_1,
+                                        value_gauge_2: value_gauge_2,
+                                        speedRatioData: speedRatioData,
+                                      )
+                                    : widget.zone == 'STR'
+                                        ? StrVisualsPage(
+                                            shift_target: shift_target,
+                                            hourly_shift_target:
+                                                hourly_shift_target,
+                                            yield_target: yield_target,
+                                            circleSize: circleSize,
+                                            station_1_status: station_1_status,
+                                            station_2_status: station_2_status,
+                                            errorColor: errorColor,
+                                            okColor: okColor,
+                                            textColor: textColor,
+                                            warningColor: warningColor,
+                                            redColor: redColor,
+                                            ng_bussingOut_1: ng_bussingOut_1,
+                                            ng_bussingOut_2: ng_bussingOut_2,
+                                            bussingIn_1: bussingIn_1,
+                                            bussingIn_2: bussingIn_2,
+                                            currentYield_1: currentYield_1,
+                                            currentYield_2: currentYield_2,
+                                            throughputData: throughputData,
+                                            shiftLabels: shiftLabels,
+                                            hourlyData: hourlyData,
+                                            hourLabels: hourLabels,
+                                            dataFermi: dataFermi,
+                                            station1Shifts: station1Shifts,
+                                            station2Shifts: station2Shifts,
+                                            mergedShiftData: mergedShiftData,
+                                            yieldLast8h_1: yieldLast8h_1,
+                                            yieldLast8h_2: yieldLast8h_2,
+                                            counts: counts,
+                                            availableTime_1: availableTime_1,
+                                            availableTime_2: availableTime_2,
+                                            defectLabels: defectLabels,
+                                            defectVPFLabels: defectVPFLabels,
+                                            ain1Counts: ain1Counts,
+                                            ain1VPFCounts: ain1VPFCounts,
+                                            ain2Counts: ain2Counts,
+                                            ain2VPFCounts: ain2VPFCounts,
+                                            last_n_shifts: last_n_shifts,
+                                            qg2_defects_value:
+                                                qg2_defects_value,
+                                          )
+                                        : const Center(
+                                            child: Text(
+                                              'ZONA non trovata',
+                                              style: TextStyle(
+                                                  fontSize: 24,
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                  ),
+          ),
+        );
+      },
     );
   }
 }

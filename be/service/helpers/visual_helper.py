@@ -726,7 +726,8 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 # NEW: accurate numerator for value_gauge_2
                 s1_esito_ng = count_objects_with_esito_ng(cursor, cfg["station_1_in"], shift_start, shift_end)
 
-                value_gauge_2 = round((s1_esito_ng / s2_in) * 100, 2) if s2_in else 0.0
+                value_gauge_2_ = round((s1_esito_ng / s2_in) * 100, 2) if s2_in else 0.0
+                value_gauge_2 = 100 - value_gauge_2_
 
                 # Yields
                 fpy_y = compute_yield(s1_g_r0, s1_ng_r0)
@@ -1691,7 +1692,8 @@ def _update_snapshot_ell_new() -> dict:
                 # NEW: accurate numerator for value_gauge_2
                 s1_esito_ng = count_objects_with_esito_ng(cursor, cfg["station_1_in"], shift_start, shift_end)
 
-                value_gauge_2 = round((s1_esito_ng / s2_in) * 100, 2) if s2_in else 0.0
+                value_gauge_2_ = round((s1_esito_ng / s2_in) * 100, 2) if s2_in else 0.0
+                value_gauge_2 = 100 - value_gauge_2_
 
                 # Yields
                 fpy_y = compute_yield(s1_g_r0, s1_ng_r0)

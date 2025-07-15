@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 class DBWriteQueue:
     """Asyncio-based queue with graceful shutdown and retry logic for DB writes."""
 
-    def __init__(self, max_retries: int = 3, timeout: float = 5.0) -> None:
+    def __init__(self, max_retries: int = 3, timeout: float = 30.0) -> None:
         self.queue: asyncio.Queue = asyncio.Queue()
         self.worker_task: asyncio.Task | None = None
         self._shutdown = asyncio.Event()

@@ -85,6 +85,15 @@ async def process_final_update(
                 log_duration(f"[{full_station_id}] update_production_final", duration)
 
                 if success:
+                    # Parse heavy MBJ XML after PLC response to avoid blocking
+                    if channel_id == "ELL01" and fine_scarto and "MBJ_Defects" not in result:
+                        tmbj = time.perf_counter()
+                        mbj = await run_in_thread(parse_mbj_details, result.get("Id_Modulo"))
+                        if mbj:
+                            result["MBJ_Defects"] = mbj
+                        duration = time.perf_counter() - tmbj
+                        log_duration(f"[{full_station_id}] parse_mbj_details", duration)
+
                     if channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
                         t5 = time.perf_counter()
                         await run_in_thread(
@@ -678,13 +687,8 @@ async def read_data(
         # Step 12: NG flag
         data["Compilato_Su_Ipad_Scarto_Presente"] = richiesta_ko
 
-        # ELL MBJ parsing
-        if channel_id == "ELL01" and richiesta_ko:
-            mbj = parse_mbj_details(data["Id_Modulo"])
-            if mbj:
-                data["MBJ_Defects"] = mbj
-            else:
-                logger.debug(f"[{full_id}] No MBJ XML for {data['Id_Modulo']}")
+        # ELL MBJ parsing moved to process_final_update for performance
+        # (heavy XML parsing would slow the PLC response)
 
         # Step 13: Rework buffer IDs
         rwk_conf = config.get("reWorkBufferIds")

@@ -324,17 +324,19 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                         "issuesSubmitted": False
                     })
 
-            if trigger_value and not inizio_true_passato_flags[full_station_id]:
-                inizio_true_passato_flags[full_station_id] = True
-                inizio_false_passato_flags[full_station_id] = False
-                await on_trigger_change(
-                    plc_connection,
-                    line_name,
-                    channel_id,
-                    trigger_value,
-                    buffer,
-                    start_byte
-                )
+                if trigger_value and not inizio_true_passato_flags[full_station_id]:
+                    inizio_true_passato_flags[full_station_id] = True
+                    inizio_false_passato_flags[full_station_id] = False
+                    asyncio.create_task(
+                        on_trigger_change(
+                            plc_connection,
+                            line_name,
+                            channel_id,
+                            trigger_value,
+                            buffer,
+                            start_byte,
+                        )
+                    )
 
             if not paths:
                 logger.error(f"Missing config for {line_name}.{channel_id}")
@@ -375,91 +377,19 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 
 
             if (fine_buona or fine_scarto) and not fine_true_passato_flags[full_station_id]:
-                is_ell01 = channel_id == "ELL01"
-                t_plc_detect = time.perf_counter()
-                t0 = time.perf_counter()
-                logger.debug(f"Fine Ciclo on {full_station_id} TRUE ...")
-
-                data_inizio = trigger_timestamps.get(full_station_id)
-                bufferIds = []
-
-                t1 = time.perf_counter()
-                result = await read_data(
-                    plc_connection, line_name, channel_id,
-                    richiesta_ok=fine_buona,
-                    richiesta_ko=fine_scarto,
-                    data_inizio=data_inizio, 
-                    buffer=buffer, 
-                    start_byte=start_byte,
-                    is_EndCycle=True
-                )
-                t2 = time.perf_counter()
-                duration = t2 - t1
-                log_duration(f"[{full_station_id}] read_data done", duration)
-
-                if result:
-                    bufferIds = result.get("BufferIds_Rework", [])
-                    fine_true_passato_flags[full_station_id] = True
-                    fine_false_passato_flags[full_station_id] = False
-
-                    production_id = incomplete_productions.get(full_station_id)
-
-                    if production_id:
-                        esito_conf = paths.get("esito_scarto_compilato")
-                        pezzo_archivia_conf = paths["pezzo_archiviato"]
-
-                        t11 = time.perf_counter()
-                        await asyncio.get_event_loop().run_in_executor(
-                            plc_executor,
-                            plc_connection.write_bool,
-                            pezzo_archivia_conf["db"],
-                            pezzo_archivia_conf["byte"],
-                            pezzo_archivia_conf["bit"],
-                            True,
-                        )
-                        t_write_end = time.perf_counter()
-                        if is_ell01:
-                            logger.info(f"[{full_station_id}] ⏱ from PLC TRUE to write_bool(TRUE) = {t_write_end - t_plc_detect:.3f}s")
-                        if esito_conf:
-                            await asyncio.get_event_loop().run_in_executor(
-                                plc_executor, plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False
-                            )
-
-                        t12 = time.perf_counter()
-                        duration = t12 - t11
-                        log_duration(f"[{full_station_id}] PLC writes", duration)
-
-                        logger.debug('Starting DB write queue')
-                        asyncio.create_task(db_write_queue.enqueue(
-                            process_final_update,
-                            full_station_id,
-                            line_name,
-                            channel_id,
-                            production_id,
-                            result,
-                            buffer,
-                            start_byte,
-                            fine_buona,
-                            fine_scarto,
-                            paths,
-                        ))
-                    else:
-                        pezzo_archivia_conf = paths["pezzo_archiviato"]
-                        await asyncio.to_thread(
-                            plc_connection.write_bool,
-                            pezzo_archivia_conf["db"],
-                            pezzo_archivia_conf["byte"],
-                            pezzo_archivia_conf["bit"],
-                            True,
-                        )
-                        logger.warning(
-                            f"[{full_station_id}] Module was not found in incomplete productions. Wrote archivio bit anyway."
-                        )
-
-                    # DB operations and cleanup will run in background
-                t_end = time.perf_counter()
-                duration = t_end - t0
-                log_duration(f"[{full_station_id}] Total Fine Ciclo processing", duration)
+                fine_true_passato_flags[full_station_id] = True
+                fine_false_passato_flags[full_station_id] = False
+                asyncio.create_task(handle_end_cycle(
+                    plc_connection,
+                    line_name,
+                    channel_id,
+                    buffer,
+                    start_byte,
+                    fine_buona,
+                    fine_scarto,
+                    paths,
+                    trigger_timestamps.get(full_station_id)
+                ))
 
 
             await asyncio.sleep(0.25)
@@ -468,6 +398,93 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             logger.error(f"[{full_station_id}], Error in background task: {str(e)}")
             await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
             await asyncio.sleep(5)
+
+async def handle_end_cycle(
+    plc_connection: PLCConnection,
+    line_name: str,
+    channel_id: str,
+    buffer: bytes,
+    start_byte: int,
+    fine_buona: bool,
+    fine_scarto: bool,
+    paths: dict,
+    data_inizio: datetime | None,
+):
+    """Process end-cycle logic in a background task."""
+    full_station_id = f"{line_name}.{channel_id}"
+    is_ell01 = channel_id == "ELL01"
+
+    t_plc_detect = time.perf_counter()
+    t0 = time.perf_counter()
+
+    logger.debug(f"Fine Ciclo on {full_station_id} TRUE ...")
+
+    result = await read_data(
+        plc_connection,
+        line_name,
+        channel_id,
+        richiesta_ok=fine_buona,
+        richiesta_ko=fine_scarto,
+        data_inizio=data_inizio,
+        buffer=buffer,
+        start_byte=start_byte,
+        is_EndCycle=True,
+    )
+
+    if result:
+        production_id = incomplete_productions.get(full_station_id)
+        esito_conf = paths.get("esito_scarto_compilato")
+        pezzo_archivia_conf = paths["pezzo_archiviato"]
+
+        t11 = time.perf_counter()
+        await asyncio.get_event_loop().run_in_executor(
+            plc_executor,
+            plc_connection.write_bool,
+            pezzo_archivia_conf["db"],
+            pezzo_archivia_conf["byte"],
+            pezzo_archivia_conf["bit"],
+            True,
+        )
+        t_write_end = time.perf_counter()
+        if is_ell01:
+            logger.info(
+                f"[{full_station_id}] ⏱ from PLC TRUE to write_bool(TRUE) = {t_write_end - t_plc_detect:.3f}s"
+            )
+        if esito_conf:
+            await asyncio.get_event_loop().run_in_executor(
+                plc_executor,
+                plc_connection.write_bool,
+                esito_conf["db"],
+                esito_conf["byte"],
+                esito_conf["bit"],
+                False,
+            )
+        t12 = time.perf_counter()
+        log_duration(f"[{full_station_id}] PLC writes", t12 - t11)
+
+        if production_id:
+            asyncio.create_task(
+                db_write_queue.enqueue(
+                    process_final_update,
+                    full_station_id,
+                    line_name,
+                    channel_id,
+                    production_id,
+                    result,
+                    buffer,
+                    start_byte,
+                    fine_buona,
+                    fine_scarto,
+                    paths,
+                )
+            )
+        else:
+            logger.warning(
+                f"[{full_station_id}] Module was not found in incomplete productions. Wrote archivio bit anyway."
+            )
+
+    duration = time.perf_counter() - t0
+    log_duration(f"[{full_station_id}] Total Fine Ciclo processing", duration)
 
 async def on_trigger_change(plc_connection: PLCConnection, line_name: str, channel_id: str, val, buffer: bytes | None = None, start_byte: int | None = None):
     if not isinstance(val, bool):

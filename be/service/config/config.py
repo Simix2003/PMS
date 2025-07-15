@@ -133,8 +133,10 @@ config_ini = configparser.ConfigParser()
 config_ini.read(BASE_DIR / "config.ini")
 
 # Read log levels with fallback
-LOGS_FILE = config_ini.get("logging", "LOGS_FILE", fallback="INFO").upper()
-LOGS_TERMINAL = config_ini.get("logging", "LOGS_TERMINAL", fallback="WARNING").upper()
+LOGS_FILE = config_ini.get("logging", "LOGS_FILE", fallback="WARNING").upper()
+print('File log level is', LOGS_FILE)
+LOGS_TERMINAL = config_ini.get("logging", "LOGS_TERMINAL", fallback="INFO").upper()
+print('Terminal log level is', LOGS_TERMINAL)
 
 ML_MODELS_DIR = BASE_DIR / "models"
 DEFECT_SIMILARITY_MODEL_PATH = ML_MODELS_DIR / "fine-tuned-defects_V2"

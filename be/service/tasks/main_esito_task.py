@@ -6,6 +6,8 @@ import os
 import sys
 from typing import Optional
 
+from sympy import true
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection, insert_defects, insert_initial_production_data, update_production_final
@@ -375,6 +377,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     data_inizio=data_inizio, 
                     buffer=buffer, 
                     start_byte=start_byte,
+                    is_EndCycle=True
                 )
                 t2 = time.perf_counter()
                 duration = t2 - t1
@@ -412,7 +415,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                         log_duration(f"[{full_station_id}] PLC writes", duration)
 
                         logger.info('Starting DB write queue')
-                        await db_write_queue.enqueue(
+                        asyncio.create_task(db_write_queue.enqueue(
                             process_final_update,
                             full_station_id,
                             line_name,
@@ -424,7 +427,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                             fine_buona,
                             fine_scarto,
                             paths,
-                        )
+                        ))
                     else:
                         pezzo_archivia_conf = paths["pezzo_archiviato"]
                         await asyncio.to_thread(
@@ -499,7 +502,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
 
     # Read initial data
     t2 = time.perf_counter()
-    initial_data = await read_data(plc_connection, line_name, channel_id, richiesta_ok=False, richiesta_ko=False, data_inizio=data_inizio, buffer=buffer, start_byte=start_byte)
+    initial_data = await read_data(plc_connection, line_name, channel_id, richiesta_ok=False, richiesta_ko=False, data_inizio=data_inizio, buffer=buffer, start_byte=start_byte, is_EndCycle=False)
     t3 = time.perf_counter()
     duration = t3 - t2
     log_duration(f"[{full_id}] read_data", duration)
@@ -511,14 +514,14 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
 
     # Queue initial production insert and optional mirroring
     logger.info(f"[{full_id}] Starting initial production insert for object_id={object_id}")
-    await db_write_queue.enqueue(
+    asyncio.create_task(db_write_queue.enqueue(
         process_initial_production,
         full_id,
         channel_id,
         initial_data,
         esito,
         object_id,
-    )
+    ))
 
     global_state.expected_moduli[full_id] = object_id
     logger.debug(f"[{full_id}] expected_moduli updated with object_id={object_id}")
@@ -547,7 +550,8 @@ async def read_data(
     richiesta_ok: bool,
     data_inizio: datetime | None,
     buffer: bytes | None = None,
-    start_byte: int | None = None
+    start_byte: int | None = None,
+    is_EndCycle: bool = True
 ):
     full_id = f"{line_name}.{channel_id}"
 
@@ -583,11 +587,8 @@ async def read_data(
         id_utente_conf = config["id_utente"]
         data["Id_Utente"] = extract_string(buffer, id_utente_conf["byte"], id_utente_conf["length"], start_byte) or ""
 
-        # Step 6: Timestamps
+        # Always record the start timestamp
         data["DataInizio"] = data_inizio
-        data["DataFine"] = datetime.now()
-        tempo_ciclo = data["DataFine"] - data_inizio
-        data["Tempo_Ciclo"] = str(tempo_ciclo)
 
         # Step 7: Linea flags
         data["Linea_in_Lavorazione"] = [
@@ -598,17 +599,35 @@ async def read_data(
             line_name == "Linea5"
         ]
 
-        # Step 8: Read Stringatrice flags
-        str_conf = config["stringatrice"]
-        values = [
-            extract_bool(buffer, str_conf["byte"], i, start_byte)
-            for i in range(str_conf["length"])
-        ]
-        if not any(values):
-            values[0] = True  # Default fallback
-        data["Lavorazione_Eseguita_Su_Stringatrice"] = values
+        # Step 8: Stringatrice logic
+        if "STR" not in channel_id:
+            str_conf = config["stringatrice"]
+            values = [
+                extract_bool(buffer, str_conf["byte"], i, start_byte)
+                for i in range(str_conf["length"])
+            ]
+            if not any(values):
+                values[0] = True
+            data["Lavorazione_Eseguita_Su_Stringatrice"] = values
+        else:
+            idx = int(channel_id.replace("STR", "")) - 1
+            values = [False] * 5
+            if 0 <= idx < len(values):
+                values[idx] = True
+            data["Lavorazione_Eseguita_Su_Stringatrice"] = values
 
-        # Step 9: Read Defect NG for VPF BYTE48
+        # Early exit for StartCycle: skip heavy reads
+        if not is_EndCycle:
+            return data
+
+        # ==== EndCycle: all remaining steps ====
+
+        # Step 6: Timestamps & cycle time
+        data["DataFine"] = datetime.now()
+        tempo_ciclo = data["DataFine"] - data_inizio
+        data["Tempo_Ciclo"] = str(tempo_ciclo)
+
+        # Step 9: Read VPF defects (BYTE48)
         vpf_values_1 = []
         vpf_conf = config.get("difetti_vpf_1")
         if vpf_conf and richiesta_ko and channel_id == "VPF01":
@@ -617,7 +636,7 @@ async def read_data(
                 for i in range(vpf_conf["length"])
             ]
 
-        # Step 10: Read Defect NG for VPF BYTE49
+        # Step 10: Read VPF defects (BYTE49)
         vpf_values_2 = []
         vpf_conf = config.get("difetti_vpf_2")
         if vpf_conf and richiesta_ko and channel_id == "VPF01":
@@ -626,77 +645,60 @@ async def read_data(
                 for i in range(vpf_conf["length"])
             ]
 
-        # ✅ COMBINE VPF DEFECTS
-        combined_vpf_values = vpf_values_1 + vpf_values_2
-        if combined_vpf_values:
-            data["Tipo_NG_VPF"] = combined_vpf_values
-            logger.debug(f"[{full_id}], VPF Defect flags: {combined_vpf_values}")
-        
-        # Get the re-entered flag for VPF
-        re_entered_conf506 = config.get("re_entered_from_m506")
-        if re_entered_conf506 and channel_id == "VPF01":
-            reentered = extract_bool(buffer, re_entered_conf506["byte"], re_entered_conf506["bit"], start_byte)
-            data["Re_entered_from_m506"] = reentered
+        # Combine VPF defects
+        combined = vpf_values_1 + vpf_values_2
+        if combined:
+            data["Tipo_NG_VPF"] = combined
+            logger.debug(f"[{full_id}], VPF Defect flags: {combined}")
 
-        # Get the re-entered flag for ELL
-        re_entered_conf326 = config.get("re_entered_from_m326")
-        if re_entered_conf326 and channel_id == "ELL01":
-            reentered = extract_bool(buffer, re_entered_conf326["byte"], re_entered_conf326["bit"], start_byte)
-            data["Re_entered_from_m326"] = reentered
+        # Re-entered flags for VPF and ELL
+        conf506 = config.get("re_entered_from_m506")
+        if conf506 and channel_id == "VPF01":
+            data["Re_entered_from_m506"] = extract_bool(buffer, conf506["byte"], conf506["bit"], start_byte)
 
-        # Override with debug flag if present
+        conf326 = config.get("re_entered_from_m326")
+        if conf326 and channel_id == "ELL01":
+            data["Re_entered_from_m326"] = extract_bool(buffer, conf326["byte"], conf326["bit"], start_byte)
+
         if debug:
-            full_station_id = f"{line_name}.{channel_id}"
-            reentrydebug = global_state.reentryDebug.get(full_station_id)
-            if reentrydebug is not None:
-                data["Re_entered_from_m326"] = reentrydebug
+            dbg = global_state.reentryDebug.get(full_id)
+            if dbg is not None:
+                data["Re_entered_from_m326"] = dbg
 
-        # Step 11: Read Defect NG for AIN                
+        # Step 11: AIN defects
         ain_conf = config.get("difetti_ain")
         if ain_conf and richiesta_ko and channel_id in ("AIN01", "AIN02"):
-            all_ain_values = [
+            bits = [
                 extract_bool(buffer, ain_conf["byte"], i, start_byte)
                 for i in range(ain_conf["length"])
             ]
-            # Take only 4th and 5th bits (index 3 and 4)
-            data["Tipo_NG_AIN"] = all_ain_values[3:5]
-            logger.debug(f"[{full_id}], AIN Defect flags (bit 4 & 5): {data['Tipo_NG_AIN']}")
+            data["Tipo_NG_AIN"] = bits[3:5]
+            logger.debug(f"[{full_id}], AIN Defect flags: {data['Tipo_NG_AIN']}")
 
-
-        # Step 12: Set NG flag
+        # Step 12: NG flag
         data["Compilato_Su_Ipad_Scarto_Presente"] = richiesta_ko
 
+        # ELL MBJ parsing
         if channel_id == "ELL01" and richiesta_ko:
-            mbj_details = parse_mbj_details(data["Id_Modulo"])
-            if mbj_details:
-                data['MBJ_Defects'] = mbj_details
+            mbj = parse_mbj_details(data["Id_Modulo"])
+            if mbj:
+                data["MBJ_Defects"] = mbj
             else:
-                logger.debug(f"[{full_id}] No MBJ XML found for {data['Id_Modulo']} — continuing without it")
+                logger.debug(f"[{full_id}] No MBJ XML for {data['Id_Modulo']}")
 
-        # Step 13: Read the BufferIds for Rework (array of 21 strings)
-        rwk_id = config.get("reWorkBufferIds")
-        values = []
-
-        if rwk_id and not debug:
-            db_number = rwk_id["db"]
-            base_byte = rwk_id["byte"]
-            num_strings = rwk_id["length"]
-            string_len = rwk_id.get("string_length", 20)
-            string_size = string_len + 2  # fixed size for S7 STRING[20]
-
-            total_bytes = num_strings * string_size
-
-            # ✅ Read the correct DB block directly
-            rwk_buffer = await asyncio.to_thread(plc_connection.db_read, db_number, base_byte, total_bytes)
-
-            values = [
-                extract_s7_string(rwk_buffer, i * string_size)
-                for i in range(num_strings)
-            ]
+        # Step 13: Rework buffer IDs
+        rwk_conf = config.get("reWorkBufferIds")
+        rwk_vals: list[str] = []
+        if rwk_conf and not debug:
+            db, base = rwk_conf["db"], rwk_conf["byte"]
+            count = rwk_conf["length"]
+            slen = rwk_conf.get("string_length", 20) + 2
+            raw = await asyncio.to_thread(plc_connection.db_read, db, base, count * slen)
+            rwk_vals = [extract_s7_string(raw, i * slen) for i in range(count)]
         elif debug:
-            values = ["3SBHBGHC25620697", "3SBHBGHC25614686", "3SBHBGHC25620697"]
+            rwk_vals = ["3SBHBGHC25620697", "3SBHBGHC25614686", "3SBHBGHC25620697"]
 
-        data["BufferIds_Rework"] = values
+        data["BufferIds_Rework"] = rwk_vals
 
         return data
 

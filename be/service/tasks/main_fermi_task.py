@@ -114,7 +114,7 @@ async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, ch
         data = await read_fermi_data(plc_connection, line_name, channel_id)
         
         # Queue DB write + visual refresh
-        await db_write_queue.enqueue(process_fermo_update, data)
+        asyncio.create_task(db_write_queue.enqueue(process_fermo_update, data))
         
         # poi quando leggo scrivo Dati Letti fermi a TRUE
         dati_letti_conf = paths.get("dati_letti_fermi")

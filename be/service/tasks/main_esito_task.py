@@ -54,7 +54,6 @@ def get_zone_from_station(station: str) -> Optional[str]:
             return zone
     return None
 
-
 async def process_final_update(
     full_station_id: str,
     line_name: str,
@@ -207,7 +206,6 @@ async def process_final_update(
         duration = time.perf_counter() - t0
         log_duration(f"[{full_station_id}] Async final update done", duration)
 
-
 async def process_mirror_production(row: dict) -> None:
     """Background task to mirror production into the ELL buffer."""
     try:
@@ -215,7 +213,6 @@ async def process_mirror_production(row: dict) -> None:
             await run_in_thread(mirror_production, row, conn)
     except Exception as e:  # pragma: no cover - best effort logging
         logger.warning(f"process_mirror_production failed: {e}")
-
 
 async def process_initial_production(
     full_station_id: str,
@@ -261,7 +258,6 @@ async def process_initial_production(
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
     logger.debug(f"[{full_station_id}] Starting background task.")
-    prev_trigger = False
 
     line_name, channel_id = full_station_id.split(".")
 
@@ -294,18 +290,19 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             size = db_range["max"] - db_range["min"] + 1
 
             # Read full DB buffer
+            print('Starting to Read DB for', full_station_id)
+            timer_0 = time.perf_counter()
             buffer = await asyncio.get_event_loop().run_in_executor(
                 plc_executor, plc_connection.db_read, db, start_byte, size
             )
+            print('Finished Reading DB for', full_station_id)
+            timer_1 = time.perf_counter()
+            print(f"[{full_station_id}] Read DB", timer_1 - timer_0)
 
             trigger_conf = paths["trigger"]
             if debug:
                 trigger_value = global_state.debug_triggers.get(full_station_id, False)
             else:
-                #trigger_value = await asyncio.to_thread(
-                #    plc_connection.read_bool,
-                #    trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
-                #)
                 trigger_value = extract_bool(buffer, trigger_conf["byte"], trigger_conf["bit"], start_byte)
 
             if trigger_value is None:
@@ -324,19 +321,19 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                         "issuesSubmitted": False
                     })
 
-                if trigger_value and not inizio_true_passato_flags[full_station_id]:
-                    inizio_true_passato_flags[full_station_id] = True
-                    inizio_false_passato_flags[full_station_id] = False
-                    asyncio.create_task(
-                        on_trigger_change(
-                            plc_connection,
-                            line_name,
-                            channel_id,
-                            trigger_value,
-                            buffer,
-                            start_byte,
-                        )
+            if trigger_value and not inizio_true_passato_flags[full_station_id]:
+                inizio_true_passato_flags[full_station_id] = True
+                inizio_false_passato_flags[full_station_id] = False
+                asyncio.create_task(
+                    on_trigger_change(
+                        plc_connection,
+                        line_name,
+                        channel_id,
+                        trigger_value,
+                        buffer,
+                        start_byte,
                     )
+                )
 
             if not paths:
                 logger.error(f"Missing config for {line_name}.{channel_id}")
@@ -361,8 +358,6 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                     fine_buona = False
                     fine_scarto = False
             else:
-                #fine_buona = await asyncio.to_thread(plc_connection.read_bool, fb_conf["db"], fb_conf["byte"], fb_conf["bit"])
-                #fine_scarto = await asyncio.to_thread(plc_connection.read_bool, fs_conf["db"], fs_conf["byte"], fs_conf["bit"])
                 fine_buona = extract_bool(buffer, fb_conf["byte"], fb_conf["bit"], start_byte)
                 fine_scarto = extract_bool(buffer, fs_conf["byte"], fs_conf["bit"], start_byte)
 
@@ -412,13 +407,14 @@ async def handle_end_cycle(
 ):
     """Process end-cycle logic in a background task."""
     full_station_id = f"{line_name}.{channel_id}"
-    is_ell01 = channel_id == "ELL01"
 
     t_plc_detect = time.perf_counter()
     t0 = time.perf_counter()
 
     logger.debug(f"Fine Ciclo on {full_station_id} TRUE ...")
 
+    print('Starting to read_data for', full_station_id)
+    timer_0 = time.perf_counter()
     result = await read_data(
         plc_connection,
         line_name,
@@ -430,6 +426,9 @@ async def handle_end_cycle(
         start_byte=start_byte,
         is_EndCycle=True,
     )
+    print('Finished read_data for', full_station_id)
+    timer_1 = time.perf_counter()
+    print(f"[{full_station_id}] read_data", timer_1 - timer_0)
 
     if result:
         production_id = incomplete_productions.get(full_station_id)
@@ -446,10 +445,7 @@ async def handle_end_cycle(
             True,
         )
         t_write_end = time.perf_counter()
-        if is_ell01:
-            logger.info(
-                f"[{full_station_id}] ⏱ from PLC TRUE to write_bool(TRUE) = {t_write_end - t_plc_detect:.3f}s"
-            )
+        print(f"[{full_station_id}] from PLC TRUE to write_bool(TRUE) = {t_write_end - t_plc_detect:.3f}s")
         if esito_conf:
             await asyncio.get_event_loop().run_in_executor(
                 plc_executor,
@@ -491,7 +487,6 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         return
 
     full_id = f"{line_name}.{channel_id}"
-    is_ell01 = channel_id == "ELL01"  # ✅ Only trace this channel
 
     paths = get_channel_config(line_name, channel_id)
     if not paths:
@@ -519,8 +514,7 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
     t_reset1 = time.perf_counter()
 
     log_duration(f"[{full_id}] PLC initial reset flags", t_reset1 - t_reset0)
-    if is_ell01:
-        logger.info(f"[{full_id}] ⏱ reset_flags = {t_reset1 - t_reset0:.3f}s")
+    print(f"[{full_id}] ⏱ reset_flags = {t_reset1 - t_reset0:.3f}s")
 
     # Object ID
     if debug:
@@ -585,9 +579,8 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
 
     t_write_true1 = time.perf_counter()
 
-    if is_ell01:
-        logger.info(f"[{full_id}] ⏱ write TRUE = {t_write_true1 - t_write_true0:.3f}s")
-        logger.info(f"[{full_id}] ⏱ from TRIGGER TRUE to PLC write(TRUE) = {t_write_true1 - t_trigger_seen:.3f}s")
+    print(f"[{full_id}] ⏱ write TRUE = {t_write_true1 - t_write_true0:.3f}s")
+    print(f"[{full_id}] ⏱ from TRIGGER TRUE to PLC write(TRUE) = {t_write_true1 - t_trigger_seen:.3f}s")
 
     # Broadcast
     await broadcast(line_name, channel_id, {
@@ -734,8 +727,6 @@ async def read_data(
         # Step 12: NG flag
         data["Compilato_Su_Ipad_Scarto_Presente"] = richiesta_ko
 
-        # ELL MBJ parsing moved to process_final_update for performance
-        # (heavy XML parsing would slow the PLC response)
 
         # Step 13: Rework buffer IDs
         rwk_conf = config.get("reWorkBufferIds")

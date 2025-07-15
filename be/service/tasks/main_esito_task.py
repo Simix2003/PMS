@@ -84,98 +84,93 @@ async def process_final_update(
                 duration = time.perf_counter() - t3
                 log_duration(f"[{full_station_id}] update_production_final", duration)
 
-                if success:
-                    # Parse heavy MBJ XML after PLC response to avoid blocking
-                    if channel_id == "ELL01" and fine_scarto and "MBJ_Defects" not in result:
-                        tmbj = time.perf_counter()
-                        mbj = await run_in_thread(parse_mbj_details, result.get("Id_Modulo"))
-                        if mbj:
-                            result["MBJ_Defects"] = mbj
-                        duration = time.perf_counter() - tmbj
-                        log_duration(f"[{full_station_id}] parse_mbj_details", duration)
+        if success:
+            async_tasks = []
 
-                    if channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
-                        t5 = time.perf_counter()
-                        await run_in_thread(
-                            insert_defects,
+            if channel_id == "ELL01" and fine_scarto and "MBJ_Defects" not in result:
+                async def fetch_mbj():
+                    mbj = await run_in_thread(parse_mbj_details, result.get("Id_Modulo"))
+                    if mbj:
+                        result["MBJ_Defects"] = mbj
+                async_tasks.append(asyncio.create_task(fetch_mbj()))
+
+            if channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
+                async_tasks.append(
+                    asyncio.create_task(
+                        insert_defects_async(
                             result,
                             production_id,
                             channel_id,
                             line_name,
-                            cursor=cursor,
                             from_vpf=True,
                         )
-                        duration = time.perf_counter() - t5
-                        log_duration(f"[{full_station_id}] insert_defects VPF", duration)
-                        timestamp = (
-                            datetime.fromisoformat(end_time)
-                            if not isinstance(end_time, datetime)
-                            else end_time
-                        )
-                        await run_in_thread(refresh_top_defects_vpf, "AIN", timestamp)
-                        await run_in_thread(refresh_vpf_defects_data, timestamp)
+                    )
+                )
+                timestamp = (
+                    datetime.fromisoformat(end_time)
+                    if not isinstance(end_time, datetime)
+                    else end_time
+                )
+                async_tasks.append(asyncio.create_task(run_in_thread(refresh_top_defects_vpf, "AIN", timestamp)))
+                async_tasks.append(asyncio.create_task(run_in_thread(refresh_vpf_defects_data, timestamp)))
 
-                    elif channel_id == "ELL01" and fine_scarto:
-                        t5 = time.perf_counter()
-                        await run_in_thread(
-                            insert_defects,
+            elif channel_id == "ELL01" and fine_scarto:
+                async_tasks.append(
+                    asyncio.create_task(
+                        insert_defects_async(
                             result,
                             production_id,
                             channel_id,
                             line_name,
-                            cursor=cursor,
                             from_ell=True,
                         )
-                        duration = time.perf_counter() - t5
-                        log_duration(f"[{full_station_id}] insert_defects ELL", duration)
-                        ell_defects = result.get("Defect_Rows")
-                        if ell_defects:
-                            for d in ell_defects:
-                                d["station_id"] = 9
-                                d["category"] = "ELL"
-                            with get_mysql_connection() as mirror_conn:
-                                await run_in_thread(mirror_defects, ell_defects, mirror_conn)
+                    )
+                )
+                ell_defects = result.get("Defect_Rows")
+                if ell_defects:
+                    for d in ell_defects:
+                        d["station_id"] = 9
+                        d["category"] = "ELL"
+                    async_tasks.append(asyncio.create_task(mirror_defects_async(ell_defects)))
 
-                    elif channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
-                        t6 = time.perf_counter()
-                        await run_in_thread(
-                            insert_defects,
+            elif channel_id in ("AIN01", "AIN02") and fine_scarto and result.get("Tipo_NG_AIN"):
+                async_tasks.append(
+                    asyncio.create_task(
+                        insert_defects_async(
                             result,
                             production_id,
                             channel_id,
                             line_name,
-                            cursor=cursor,
                             from_ain=True,
                         )
-                        duration = time.perf_counter() - t6
-                        log_duration(f"[{full_station_id}] insert_defects AIN", duration)
+                    )
+                )
 
-                    # Update visual data
-                    try:
-                        zone = get_zone_from_station(channel_id)
-                        timestamp = (
-                            datetime.fromisoformat(end_time)
-                            if not isinstance(end_time, datetime)
-                            else end_time
-                        )
-                        reentered = result.get(
-                            "Re_entered_from_m506" if channel_id == "VPF01" else "Re_entered_from_m326",
-                            False,
-                        )
-                        id_mod_conf = paths["id_modulo"]
-                        if debug:
-                            object_id = global_state.debug_moduli.get(full_station_id)
-                        else:
-                            object_id = (
-                                extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
-                                if id_mod_conf
-                                else None
-                            )
-
-                        bufferIds = result.get("BufferIds_Rework", [])
-                        if zone:
-                            t9 = time.perf_counter()
-                            await run_in_thread(
+            try:
+                zone = get_zone_from_station(channel_id)
+                timestamp = (
+                    datetime.fromisoformat(end_time)
+                    if not isinstance(end_time, datetime)
+                    else end_time
+                )
+                reentered = result.get(
+                    "Re_entered_from_m506" if channel_id == "VPF01" else "Re_entered_from_m326",
+                    False,
+                )
+                id_mod_conf = paths["id_modulo"]
+                if debug:
+                    object_id = global_state.debug_moduli.get(full_station_id)
+                else:
+                    object_id = (
+                        extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
+                        if id_mod_conf
+                        else None
+                    )
+                bufferIds = result.get("BufferIds_Rework", [])
+                if zone:
+                    async_tasks.append(
+                        asyncio.create_task(
+                            run_in_thread(
                                 update_visual_data_on_new_module,
                                 zone=zone,
                                 station_name=channel_id,
@@ -186,17 +181,20 @@ async def process_final_update(
                                 bufferIds=bufferIds,
                                 object_id=object_id,
                             )
-                            duration = time.perf_counter() - t9
-                            log_duration(f"[{full_station_id}] update_visual_data_on_new_module", duration)
-                            if zone == "AIN" and fine_scarto:
-                                await run_in_thread(refresh_top_defects_qg2, zone, timestamp)
-                                await run_in_thread(refresh_top_defects_ell, "ELL", timestamp)
-                            if zone == "ELL" and fine_scarto:
-                                await run_in_thread(refresh_top_defects_ell, zone, timestamp)
-                        else:
-                            logger.debug(f"Unknown zone for {channel_id} — skipping visual update")
-                    except Exception as vis_err:  # pragma: no cover - best effort logging
-                        logger.warning(f"Could not update visual_data for {channel_id}: {vis_err}")
+                        )
+                    )
+                    if zone == "AIN" and fine_scarto:
+                        async_tasks.append(asyncio.create_task(run_in_thread(refresh_top_defects_qg2, zone, timestamp)))
+                        async_tasks.append(asyncio.create_task(run_in_thread(refresh_top_defects_ell, "ELL", timestamp)))
+                    if zone == "ELL" and fine_scarto:
+                        async_tasks.append(asyncio.create_task(run_in_thread(refresh_top_defects_ell, zone, timestamp)))
+                else:
+                    logger.debug(f"Unknown zone for {channel_id} — skipping visual update")
+            except Exception as vis_err:  # pragma: no cover - best effort logging
+                logger.warning(f"Could not update visual_data for {channel_id}: {vis_err}")
+
+            if async_tasks:
+                await asyncio.gather(*async_tasks)
 
     except Exception as e:
         logger.error(f"[{full_station_id}] Async final update failed: {e}")
@@ -213,6 +211,27 @@ async def process_mirror_production(row: dict) -> None:
             await run_in_thread(mirror_production, row, conn)
     except Exception as e:  # pragma: no cover - best effort logging
         logger.warning(f"process_mirror_production failed: {e}")
+
+async def insert_defects_async(*args, **kwargs) -> None:
+    """Wrapper to run insert_defects in thread with its own connection."""
+    try:
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                await run_in_thread(
+                    insert_defects,
+                    *args,
+                    cursor=cursor,
+                    **kwargs,
+                )
+    except Exception as e:
+        logger.warning(f"insert_defects_async failed: {e}")
+
+async def mirror_defects_async(rows):
+    try:
+        with get_mysql_connection() as conn:
+            await run_in_thread(mirror_defects, rows, conn)
+    except Exception as e:
+        logger.warning(f"mirror_defects_async failed: {e}")
 
 async def process_initial_production(
     full_station_id: str,
@@ -413,50 +432,52 @@ async def handle_end_cycle(
 
     logger.debug(f"Fine Ciclo on {full_station_id} TRUE ...")
 
-    print('Starting to read_data for', full_station_id)
-    timer_0 = time.perf_counter()
-    result = await read_data(
-        plc_connection,
-        line_name,
-        channel_id,
-        richiesta_ok=fine_buona,
-        richiesta_ko=fine_scarto,
-        data_inizio=data_inizio,
-        buffer=buffer,
-        start_byte=start_byte,
-        is_EndCycle=True,
+    read_task = asyncio.create_task(
+        read_data(
+            plc_connection,
+            line_name,
+            channel_id,
+            richiesta_ok=fine_buona,
+            richiesta_ko=fine_scarto,
+            data_inizio=data_inizio,
+            buffer=buffer,
+            start_byte=start_byte,
+            is_EndCycle=True,
+        )
     )
-    print('Finished read_data for', full_station_id)
+
+    esito_conf = paths.get("esito_scarto_compilato")
+    pezzo_archivia_conf = paths["pezzo_archiviato"]
+    t11 = time.perf_counter()
+    await asyncio.get_event_loop().run_in_executor(
+        plc_executor,
+        plc_connection.write_bool,
+        pezzo_archivia_conf["db"],
+        pezzo_archivia_conf["byte"],
+        pezzo_archivia_conf["bit"],
+        True,
+    )
+    if esito_conf:
+        await asyncio.get_event_loop().run_in_executor(
+            plc_executor,
+            plc_connection.write_bool,
+            esito_conf["db"],
+            esito_conf["byte"],
+            esito_conf["bit"],
+            False,
+        )
+    t_write_end = time.perf_counter()
+    print(f"[{full_station_id}] from PLC TRUE to write_bool(TRUE) = {t_write_end - t_plc_detect:.3f}s")
+    t12 = time.perf_counter()
+    log_duration(f"[{full_station_id}] PLC writes", t12 - t11)
+
+    timer_0 = time.perf_counter()
+    result = await read_task
     timer_1 = time.perf_counter()
     print(f"[{full_station_id}] read_data", timer_1 - timer_0)
 
     if result:
         production_id = incomplete_productions.get(full_station_id)
-        esito_conf = paths.get("esito_scarto_compilato")
-        pezzo_archivia_conf = paths["pezzo_archiviato"]
-
-        t11 = time.perf_counter()
-        await asyncio.get_event_loop().run_in_executor(
-            plc_executor,
-            plc_connection.write_bool,
-            pezzo_archivia_conf["db"],
-            pezzo_archivia_conf["byte"],
-            pezzo_archivia_conf["bit"],
-            True,
-        )
-        t_write_end = time.perf_counter()
-        print(f"[{full_station_id}] from PLC TRUE to write_bool(TRUE) = {t_write_end - t_plc_detect:.3f}s")
-        if esito_conf:
-            await asyncio.get_event_loop().run_in_executor(
-                plc_executor,
-                plc_connection.write_bool,
-                esito_conf["db"],
-                esito_conf["byte"],
-                esito_conf["bit"],
-                False,
-            )
-        t12 = time.perf_counter()
-        log_duration(f"[{full_station_id}] PLC writes", t12 - t11)
 
         if production_id:
             asyncio.create_task(

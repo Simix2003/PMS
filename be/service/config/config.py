@@ -1,8 +1,9 @@
+import configparser
 import os
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
-debug = True
+debug = False
 
 CHANNELS: dict = {}
 
@@ -126,6 +127,14 @@ if env_mode == "docker":
     BASE_DIR = Path(os.getenv("BASE_DIR", "/data"))
 else:
     BASE_DIR = Path(os.getenv("BASE_DIR", "C:/PMS"))
+
+# Read .ini config
+config_ini = configparser.ConfigParser()
+config_ini.read(BASE_DIR / "config.ini")
+
+# Read log levels with fallback
+LOGS_FILE = config_ini.get("logging", "LOGS_FILE", fallback="INFO").upper()
+LOGS_TERMINAL = config_ini.get("logging", "LOGS_TERMINAL", fallback="WARNING").upper()
 
 ML_MODELS_DIR = BASE_DIR / "models"
 DEFECT_SIMILARITY_MODEL_PATH = ML_MODELS_DIR / "fine-tuned-defects_V2"

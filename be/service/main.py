@@ -38,51 +38,50 @@ class JsonFormatter(logging.Formatter):
 # ----------- Logging Config -----------
 def configure_logging() -> dict:
     log_config = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "json": {"()": JsonFormatter}
-    },
-    "handlers": {
-        "default": {
-            "class": "logging.StreamHandler",
-            "formatter": "json",
-            "stream": "ext://sys.stdout",
-            "level": "INFO",  # Show INFO and above in terminal
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "json": {"()": JsonFormatter}
         },
-        "file": {
-            "class": "logging.handlers.TimedRotatingFileHandler",
-            "filename": str(LOG_FILE),
-            "formatter": "json",
-            "when": "midnight",       # Rotate at midnight
-            "backupCount": 7,         # Keep 7 days
-            "encoding": "utf-8",
-            "level": "WARNING"
+        "handlers": {
+            "default": {
+                "class": "logging.StreamHandler",
+                "formatter": "json",
+                "stream": "ext://sys.stdout",
+                "level": LOGS_TERMINAL,  # ← Inject from config
+            },
+            "file": {
+                "class": "logging.handlers.TimedRotatingFileHandler",
+                "filename": str(LOG_FILE),
+                "formatter": "json",
+                "when": "midnight",
+                "backupCount": 7,
+                "encoding": "utf-8",
+                "level": LOGS_FILE,  # ← Inject from config
+            },
         },
-    },
-    "root": {
-        "level": "DEBUG",  # Allow everything to be filtered by handlers
-        "handlers": ["default", "file"]
-    },
-    "loggers": {
-        # Explicit loggers for uvicorn
-        "uvicorn": {
-            "handlers": ["default"],
-            "level": "INFO",
-            "propagate": False
+        "root": {
+            "level": "DEBUG",  # Keep root permissive; handlers do filtering
+            "handlers": ["default", "file"]
         },
-        "uvicorn.error": {
-            "handlers": ["default"],
-            "level": "INFO",
-            "propagate": False
+        "loggers": {
+            "uvicorn": {
+                "handlers": ["default"],
+                "level": "INFO",
+                "propagate": False
+            },
+            "uvicorn.error": {
+                "handlers": ["default"],
+                "level": "INFO",
+                "propagate": False
+            },
+            "uvicorn.access": {
+                "handlers": ["default"],
+                "level": "INFO",
+                "propagate": False
+            },
         },
-        "uvicorn.access": {
-            "handlers": ["default"],
-            "level": "INFO",
-            "propagate": False
-        },
-    },
-}
+    }
 
     logging.config.dictConfig(log_config)
     return log_config
@@ -114,8 +113,7 @@ if sys.platform.startswith("win"):
 # Local imports
 from controllers.plc import PLCConnection
 from service.controllers.debug_plc import FakePLCConnection
-from service.config.config import CHANNELS, IMAGES_DIR, LOG_FILE, PLC_DB_RANGES, debug
-print(f"[DEBUG CHECK] debug from config: {debug}")
+from service.config.config import CHANNELS, IMAGES_DIR, LOG_FILE, PLC_DB_RANGES, LOGS_FILE, LOGS_TERMINAL, debug
 from service.connections.mysql import get_mysql_connection, load_channels_from_db
 from service.tasks.main_esito_task import background_task, make_status_callback
 from service.tasks.main_fermi_task import fermi_task
@@ -148,6 +146,8 @@ from service.routes.escalation_routes import router as escalation_router
 
 LOG_CONFIG = configure_logging()
 logger = logging.getLogger(__name__)
+
+logger.info(f"Logging to {LOG_FILE} with level {LOGS_FILE} and DEBUG={debug}")
 
 # ---------------- INIT GLOBAL FLAGS ----------------
 def init_global_flags():

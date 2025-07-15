@@ -37,7 +37,8 @@ mysql_pool = ConnectionPool(
 )
 
 # Thread-safe DB executor
-executor = ThreadPoolExecutor(max_workers=10)
+executor = ThreadPoolExecutor(max_workers=20)
+plc_executor = ThreadPoolExecutor(max_workers=30)
 
 # Asynchronous queue for deferred DB writes
 db_write_queue = DBWriteQueue()

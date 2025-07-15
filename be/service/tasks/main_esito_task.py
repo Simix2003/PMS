@@ -23,6 +23,7 @@ from service.state.global_state import (
     fine_false_passato_flags,
     trigger_timestamps,
     incomplete_productions,
+    plc_executor,
     db_write_queue,
 )
 import service.state.global_state as global_state
@@ -34,12 +35,12 @@ from service.helpers.ell_buffer import mirror_defects, mirror_production
 
 logger = logging.getLogger(__name__)
 
-TIMING_THRESHOLD = 0.850
+TIMING_THRESHOLD = 0.400
 
 
 def log_duration(msg: str, duration: float, threshold: float = TIMING_THRESHOLD) -> None:
-    """Log duration at WARNING level if above threshold else INFO."""
-    log_fn = logger.warning if duration > threshold else logger.info
+    """Log duration at WARNING level if above threshold else DEBUG."""
+    log_fn = logger.warning if duration > threshold else logger.debug
     log_fn(f"{msg} in {duration:.3f}s")
 
 def get_zone_from_station(station: str) -> Optional[str]:
@@ -194,7 +195,7 @@ async def process_final_update(
                             if zone == "ELL" and fine_scarto:
                                 await run_in_thread(refresh_top_defects_ell, zone, timestamp)
                         else:
-                            logger.info(f"Unknown zone for {channel_id} — skipping visual update")
+                            logger.debug(f"Unknown zone for {channel_id} — skipping visual update")
                     except Exception as vis_err:  # pragma: no cover - best effort logging
                         logger.warning(f"Could not update visual_data for {channel_id}: {vis_err}")
 
@@ -235,7 +236,7 @@ async def process_initial_production(
             )
         if prod_id:
             incomplete_productions[full_station_id] = prod_id
-            logger.info(
+            logger.debug(
                 f"[{full_station_id}] ✅ Inserted production record: prod_id={prod_id}"
             )
             if channel_id in ("ELL01", "RMI01") and initial_data:
@@ -259,7 +260,7 @@ async def process_initial_production(
         )
 
 async def background_task(plc_connection: PLCConnection, full_station_id: str):
-    logger.info(f"[{full_station_id}] Starting background task.")
+    logger.debug(f"[{full_station_id}] Starting background task.")
     prev_trigger = False
 
     line_name, channel_id = full_station_id.split(".")
@@ -276,7 +277,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             paths = get_channel_config(line_name, channel_id)
             if not paths:
                 logger.error(f"Invalid line/channel: {line_name}.{channel_id}")
-                await asyncio.sleep(0.75)
+                await asyncio.sleep(0.25)
                 continue  # Skip this cycle if config not found
 
             # Get full DB buffer once for this PLC
@@ -286,14 +287,16 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             db_range = PLC_DB_RANGES.get(plc_key, {}).get(db)
             if not db_range:
                 logger.error(f"No DB range defined for {plc_key} DB{db}")
-                await asyncio.sleep(0.75)
+                await asyncio.sleep(0.25)
                 continue
 
             start_byte = db_range["min"]
             size = db_range["max"] - db_range["min"] + 1
 
             # Read full DB buffer
-            buffer = await asyncio.to_thread(plc_connection.db_read, db, start_byte, size)
+            buffer = await asyncio.get_event_loop().run_in_executor(
+                plc_executor, plc_connection.db_read, db, start_byte, size
+            )
 
             trigger_conf = paths["trigger"]
             if debug:
@@ -311,7 +314,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
             if not trigger_value:
                 inizio_true_passato_flags[full_station_id] = False
                 if not inizio_false_passato_flags[full_station_id]:
-                    logger.info(f"Inizio Ciclo on {full_station_id} FALSE ...")
+                    logger.debug(f"Inizio Ciclo on {full_station_id} FALSE ...")
                     inizio_false_passato_flags[full_station_id] = True
                     await broadcast(line_name, channel_id, {
                         "trigger": False,
@@ -335,7 +338,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
 
             if not paths:
                 logger.error(f"Missing config for {line_name}.{channel_id}")
-                await asyncio.sleep(0.75)
+                await asyncio.sleep(0.25)
                 continue  # Or return / skip, depending on context
 
             # Now you're safe to use it:
@@ -368,12 +371,14 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 fine_true_passato_flags[full_station_id] = False
                 if not fine_false_passato_flags[full_station_id]:
                     fine_false_passato_flags[full_station_id] = True
-                    logger.info(f"Fine Ciclo on {full_station_id} FALSE ...")
+                    logger.debug(f"Fine Ciclo on {full_station_id} FALSE ...")
                 
 
             if (fine_buona or fine_scarto) and not fine_true_passato_flags[full_station_id]:
+                is_ell01 = channel_id == "ELL01"
+                t_plc_detect = time.perf_counter()
                 t0 = time.perf_counter()
-                logger.info(f"Fine Ciclo on {full_station_id} TRUE ...")
+                logger.debug(f"Fine Ciclo on {full_station_id} TRUE ...")
 
                 data_inizio = trigger_timestamps.get(full_station_id)
                 bufferIds = []
@@ -404,26 +409,27 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                         pezzo_archivia_conf = paths["pezzo_archiviato"]
 
                         t11 = time.perf_counter()
-                        await asyncio.to_thread(
+                        await asyncio.get_event_loop().run_in_executor(
+                            plc_executor,
                             plc_connection.write_bool,
                             pezzo_archivia_conf["db"],
                             pezzo_archivia_conf["byte"],
                             pezzo_archivia_conf["bit"],
                             True,
                         )
+                        t_write_end = time.perf_counter()
+                        if is_ell01:
+                            logger.info(f"[{full_station_id}] ⏱ from PLC TRUE to write_bool(TRUE) = {t_write_end - t_plc_detect:.3f}s")
                         if esito_conf:
-                            await asyncio.to_thread(
-                                plc_connection.write_bool,
-                                esito_conf["db"],
-                                esito_conf["byte"],
-                                esito_conf["bit"],
-                                False,
+                            await asyncio.get_event_loop().run_in_executor(
+                                plc_executor, plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False
                             )
+
                         t12 = time.perf_counter()
                         duration = t12 - t11
                         log_duration(f"[{full_station_id}] PLC writes", duration)
 
-                        logger.info('Starting DB write queue')
+                        logger.debug('Starting DB write queue')
                         asyncio.create_task(db_write_queue.enqueue(
                             process_final_update,
                             full_station_id,
@@ -456,7 +462,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 log_duration(f"[{full_station_id}] Total Fine Ciclo processing", duration)
 
 
-            await asyncio.sleep(0.75)
+            await asyncio.sleep(0.25)
 
         except Exception as e:
             logger.error(f"[{full_station_id}], Error in background task: {str(e)}")
@@ -468,77 +474,105 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         return
 
     full_id = f"{line_name}.{channel_id}"
+    is_ell01 = channel_id == "ELL01"  # ✅ Only trace this channel
+
     paths = get_channel_config(line_name, channel_id)
     if not paths:
         logger.warning(f"Config not found for {full_id}")
         return
 
-    t0 = time.perf_counter()
-    logger.info(f"Inizio Ciclo on {full_id} TRUE ...")
+    t_trigger_seen = time.perf_counter()
+
+    logger.debug(f"Inizio Ciclo on {full_id} TRUE ...")
+
     trigger_timestamps.pop(full_id, None)
 
     esito_conf = paths.get("esito_scarto_compilato")
     pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
 
-    # Write FALSE to PLC flags
+    # Reset flags
+    t_reset0 = time.perf_counter()
     if esito_conf:
-        await asyncio.to_thread(plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False)
-    await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False)
-    t1 = time.perf_counter()
-    duration = t1 - t0
-    log_duration(f"[{full_id}] PLC initial reset flags", duration)
+        await asyncio.get_event_loop().run_in_executor(
+            plc_executor, plc_connection.write_bool, esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False
+        )
+    await asyncio.get_event_loop().run_in_executor(
+        plc_executor, plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False
+    )
+    t_reset1 = time.perf_counter()
 
-    # Get object_id
+    log_duration(f"[{full_id}] PLC initial reset flags", t_reset1 - t_reset0)
+    if is_ell01:
+        logger.info(f"[{full_id}] ⏱ reset_flags = {t_reset1 - t_reset0:.3f}s")
+
+    # Object ID
     if debug:
         object_id = global_state.debug_moduli.get(full_id)
     else:
         id_mod_conf = paths["id_modulo"]
         object_id = extract_string(buffer, id_mod_conf["byte"], id_mod_conf["length"], start_byte)
+        
+    str_conf = paths.get("stringatrice")
 
-    # Get stringatrice
-    str_conf = paths["stringatrice"]
-    values = [extract_bool(buffer, str_conf["byte"], i, start_byte) for i in range(str_conf["length"])]
-    if not any(values):
-        values[0] = True
+    if "STR" not in channel_id:
+        str_conf = paths.get("stringatrice")
+        values = [
+            extract_bool(buffer, str_conf["byte"], i, start_byte)
+            for i in range(str_conf["length"])
+        ]
+        if not any(values):
+            values[0] = True
+    else:
+        idx = int(channel_id.replace("STR", "")) - 1
+        values = [False] * 5
+        if 0 <= idx < len(values):
+            values[idx] = True
+
     stringatrice_index = values.index(True) + 1
     stringatrice = str(stringatrice_index)
 
-    # Check issues submitted
     issues_submitted = extract_bool(buffer, esito_conf["byte"], esito_conf["bit"], start_byte) if esito_conf else False
 
     trigger_timestamps[full_id] = datetime.now()
     data_inizio = trigger_timestamps[full_id]
 
-    # Read initial data
-    t2 = time.perf_counter()
-    initial_data = await read_data(plc_connection, line_name, channel_id, richiesta_ok=False, richiesta_ko=False, data_inizio=data_inizio, buffer=buffer, start_byte=start_byte, is_EndCycle=False)
-    t3 = time.perf_counter()
-    duration = t3 - t2
-    log_duration(f"[{full_id}] read_data", duration)
+    # Read data
+    t_read0 = time.perf_counter()
+    initial_data = await read_data(plc_connection, line_name, channel_id,
+        richiesta_ok=False, richiesta_ko=False,
+        data_inizio=data_inizio, buffer=buffer, start_byte=start_byte, is_EndCycle=False)
+    t_read1 = time.perf_counter()
 
-    # Check if station is excluded
+    log_duration(f"[{full_id}] read_data", t_read1 - t_read0)
+
+    # Esito
     escl_conf = paths.get("stazione_esclusa")
     esclusione_attiva = extract_bool(buffer, escl_conf["byte"], escl_conf["bit"], start_byte) if escl_conf else False
     esito = 4 if esclusione_attiva else 2
 
-    # Queue initial production insert and optional mirroring
-    logger.info(f"[{full_id}] Starting initial production insert for object_id={object_id}")
+    # Enqueue
+    logger.debug(f"[{full_id}] Starting initial production insert for object_id={object_id}")
     asyncio.create_task(db_write_queue.enqueue(
-        process_initial_production,
-        full_id,
-        channel_id,
-        initial_data,
-        esito,
-        object_id,
+        process_initial_production, full_id, channel_id, initial_data, esito, object_id
     ))
 
     global_state.expected_moduli[full_id] = object_id
     logger.debug(f"[{full_id}] expected_moduli updated with object_id={object_id}")
 
-    # Write TRUE to pezzo_salvato_su_DB_con_inizio_ciclo
+    # Write TRUE
+    t_write_true0 = time.perf_counter()
     if not debug:
-        await asyncio.to_thread(plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True)
+        await asyncio.get_event_loop().run_in_executor(
+            plc_executor, plc_connection.write_bool, pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True
+        )
 
+    t_write_true1 = time.perf_counter()
+
+    if is_ell01:
+        logger.info(f"[{full_id}] ⏱ write TRUE = {t_write_true1 - t_write_true0:.3f}s")
+        logger.info(f"[{full_id}] ⏱ from TRIGGER TRUE to PLC write(TRUE) = {t_write_true1 - t_trigger_seen:.3f}s")
+
+    # Broadcast
     await broadcast(line_name, channel_id, {
         "trigger": True,
         "objectId": object_id,
@@ -546,10 +580,6 @@ async def on_trigger_change(plc_connection: PLCConnection, line_name: str, chann
         "outcome": None,
         "issuesSubmitted": issues_submitted
     })
-
-    t_end = time.perf_counter()
-    duration = t_end - t0
-    log_duration(f"[{full_id}] Total on_trigger_change time", duration)
 
 async def read_data(
     plc_connection: PLCConnection,
@@ -610,7 +640,7 @@ async def read_data(
 
         # Step 8: Stringatrice logic
         if "STR" not in channel_id:
-            str_conf = config["stringatrice"]
+            str_conf = config.get("stringatrice")
             values = [
                 extract_bool(buffer, str_conf["byte"], i, start_byte)
                 for i in range(str_conf["length"])

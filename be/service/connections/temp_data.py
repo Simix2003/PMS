@@ -1,35 +1,52 @@
 import json
-
 import os
 import sys
+from threading import Lock
+
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.config.config import TEMP_STORAGE_PATH
 
+_temp_cache: list | None = None
+_cache_mtime: float | None = None
+_lock = Lock()
+
 
 def load_temp_data():
-    # Ensure directory exists
+    """Load temp data from disk with caching."""
+    global _temp_cache, _cache_mtime
+
     os.makedirs(os.path.dirname(TEMP_STORAGE_PATH), exist_ok=True)
-    
-    if not os.path.exists(TEMP_STORAGE_PATH):
-        # Create an empty JSON file if it doesn't exist
+
+    try:
+        mtime = os.path.getmtime(TEMP_STORAGE_PATH)
+    except FileNotFoundError:
         with open(TEMP_STORAGE_PATH, "w") as file:
             json.dump([], file, indent=4)
-        return []
+        _temp_cache = []
+        _cache_mtime = os.path.getmtime(TEMP_STORAGE_PATH)
+        return _temp_cache
 
-    # If it exists, load normally
-    with open(TEMP_STORAGE_PATH, "r") as file:
-        try:
-            return json.load(file)
-        except json.JSONDecodeError:
-            # If the file is corrupted or empty
-            return []
+    with _lock:
+        if _temp_cache is None or _cache_mtime != mtime:
+            try:
+                with open(TEMP_STORAGE_PATH, "r") as file:
+                    _temp_cache = json.load(file)
+            except json.JSONDecodeError:
+                _temp_cache = []
+            _cache_mtime = mtime
+        return _temp_cache
 
 def save_temp_data(data):
-    # Ensure directory exists before saving
+    """Persist data to disk and update cache."""
+    global _temp_cache, _cache_mtime
+
     os.makedirs(os.path.dirname(TEMP_STORAGE_PATH), exist_ok=True)
-    with open(TEMP_STORAGE_PATH, "w") as file:
-        json.dump(data, file, indent=4)
+    with _lock:
+        with open(TEMP_STORAGE_PATH, "w") as file:
+            json.dump(data, file, indent=4)
+        _temp_cache = data
+        _cache_mtime = os.path.getmtime(TEMP_STORAGE_PATH)
         
 def get_latest_issues(line_name: str, channel_id: str):
     """

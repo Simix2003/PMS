@@ -76,7 +76,7 @@ def handle_new_xml_file(file_path: str):
         }
 
         with get_mysql_connection() as conn:
-            production_id = asyncio.run(insert_initial_production_data(initial_data, station_name, conn, esito=2))
+            production_id = insert_initial_production_data(initial_data, station_name, conn, esito=2)
 
         if not production_id:
             logging.warning(f"❌ insert_initial_production_data failed for {id_modulo}")
@@ -90,7 +90,7 @@ def handle_new_xml_file(file_path: str):
             "DataFine": (data_inizio + timedelta(seconds=30)).strftime("%Y-%m-%d %H:%M:%S")
         }
 
-        asyncio.run(update_production_final(production_id, result, station_name, conn, fine_buona, fine_scarto))
+        update_production_final(production_id, result, station_name, conn, fine_buona, fine_scarto)
         print(f"✅ Updated final production for {id_modulo} with esito {esito}")
 
     except Exception as e:

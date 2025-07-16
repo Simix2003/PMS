@@ -15,7 +15,9 @@ from service.helpers.helpers import get_channel_config
 from service.config.config import CHANNELS, PLC_DB_RANGES, debug
 from service.helpers.buffer_plc_extract import extract_bool, extract_string, extract_int, extract_DT
 from service.helpers.visual_helper import refresh_fermi_data
-from service.state.global_state import db_write_queue
+from service.state.global_state import db_write_queue, plc_executor
+from service.helpers.executor import run_in_thread
+
 
 async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
     logger.debug(f"[{ip}:{slot}] Starting fermi task.")
@@ -66,7 +68,13 @@ async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
                 continue
 
             # Read trigger buffer once
-            buffer = await asyncio.to_thread(plc_connection.db_read, db, start_byte, size)
+            buffer = await asyncio.get_event_loop().run_in_executor(
+                plc_executor,
+                plc_connection.db_read,
+                db,
+                start_byte,
+                size,
+            )
             trigger_value = extract_bool(buffer, trigger_conf["byte"], trigger_conf["bit"], start_byte)
 
             if trigger_value is None:
@@ -78,18 +86,15 @@ async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
 
                 # Use representative station info
                 line_name, channel_id, _ = ref_station
-                await fermi_trigger_change(
-                    plc_connection, line_name, channel_id,
-                    trigger_value, buffer, start_byte
-                )
+                await fermi_trigger_change(plc_connection, line_name, channel_id, trigger_value, buffer, start_byte)
 
             # Write PLC-wide clock toggle
-            #if clock_conf and not debug:
-                #clock = not clock
-                #await asyncio.to_thread(
-                #    plc_connection.write_bool,
-                #    clock_conf["db"], clock_conf["byte"], clock_conf["bit"], clock
-                #)
+            # if clock_conf and not debug:
+            # clock = not clock
+            # await asyncio.to_thread(
+            #    plc_connection.write_bool,
+            #    clock_conf["db"], clock_conf["byte"], clock_conf["bit"], clock
+            # )
 
             await asyncio.sleep(1)
 
@@ -98,7 +103,15 @@ async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
             await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
             await asyncio.sleep(5)
 
-async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, channel_id: str, val, buffer: bytes | None = None, start_byte: int | None = None):
+
+async def fermi_trigger_change(
+    plc_connection: PLCConnection,
+    line_name: str,
+    channel_id: str,
+    val,
+    buffer: bytes | None = None,
+    start_byte: int | None = None,
+):
     if not isinstance(val, bool):
         return
 
@@ -112,27 +125,38 @@ async def fermi_trigger_change(plc_connection: PLCConnection, line_name: str, ch
         logger.debug(f"Dati Pronti FERMI on {full_id} TRUE ...")
         # leggere i dati:
         data = await read_fermi_data(plc_connection, line_name, channel_id)
-        
+
         # Queue DB write + visual refresh
         asyncio.create_task(db_write_queue.enqueue(process_fermo_update, data))
-        
+
         # poi quando leggo scrivo Dati Letti fermi a TRUE
         dati_letti_conf = paths.get("dati_letti_fermi")
         if dati_letti_conf and not debug:
-            await asyncio.to_thread(plc_connection.write_bool, dati_letti_conf["db"], dati_letti_conf["byte"], dati_letti_conf["bit"], True)
+            await asyncio.get_event_loop().run_in_executor(
+                plc_executor,
+                plc_connection.write_bool,
+                dati_letti_conf["db"],
+                dati_letti_conf["byte"],
+                dati_letti_conf["bit"],
+                True,
+            )
 
     else:
         logger.debug(f"Dati Pronti FERMI on {full_id} FALSE ...")
         # METTERE A ZERO DATI LETTI
         dati_letti_conf = paths.get("dati_letti_fermi")
         if dati_letti_conf and not debug:
-            await asyncio.to_thread(plc_connection.write_bool, dati_letti_conf["db"], dati_letti_conf["byte"], dati_letti_conf["bit"], False)
+            await asyncio.get_event_loop().run_in_executor(
+                plc_executor,
+                plc_connection.write_bool,
+                dati_letti_conf["db"],
+                dati_letti_conf["byte"],
+                dati_letti_conf["bit"],
+                False,
+            )
 
-async def read_fermi_data(
-    plc_connection: PLCConnection,
-    line_name: str,
-    channel_id: str
-):
+
+async def read_fermi_data(plc_connection: PLCConnection, line_name: str, channel_id: str):
     full_id = f"{line_name}.{channel_id}"
 
     try:
@@ -161,7 +185,13 @@ async def read_fermi_data(
 
             start_byte = db_range["min"]
             size = db_range["max"] - db_range["min"] + 1
-            buffer = await asyncio.to_thread(plc_connection.db_read, db, start_byte, size)
+            buffer = await asyncio.get_event_loop().run_in_executor(
+                plc_executor,
+                plc_connection.db_read,
+                db,
+                start_byte,
+                size,
+            )
             buffers[db] = (buffer, start_byte)
 
         # 3️⃣ Parse data from correct buffers
@@ -218,6 +248,7 @@ async def read_fermi_data(
         logger.error(f"[{full_id}] Error reading PLC data: {e}")
         return None
 
+
 async def insert_fermo_data(data, conn):
     reason = "Fermo Generico"
     if data["Evento_Fermo"] == 1:
@@ -235,18 +266,19 @@ async def insert_fermo_data(data, conn):
     elif data["Evento_Fermo"] == 9:
         reason = "Mancato Carico"
 
-    stop_id = create_stop(
-            station_id = data["Stazione_Fermo"],
-            start_time = data["DataInizio"],
-            end_time = data["DataFine"],
-            operator_id = data["Id_Utente"],
-            stop_type = "STOP",
-            reason = reason,
-            status = "CLOSED",
-            linked_production_id =None,
-            conn = conn
-        )
-    
+    stop_id = await run_in_thread(
+        create_stop,
+        station_id=data["Stazione_Fermo"],
+        start_time=data["DataInizio"],
+        end_time=data["DataFine"],
+        operator_id=data["Id_Utente"],
+        stop_type="STOP",
+        reason=reason,
+        status="CLOSED",
+        linked_production_id=None,
+        conn=conn,
+    )
+
     logger.debug(f"Added FERMO stop_id={stop_id}")
 
 
@@ -257,7 +289,7 @@ async def process_fermo_update(data):
             await insert_fermo_data(data, conn)
 
         ts = data.get("DataInizio") or datetime.now()
-        refresh_fermi_data("AIN", ts)
-        refresh_fermi_data("ELL", ts)
+        await run_in_thread(refresh_fermi_data, "AIN", ts)
+        await run_in_thread(refresh_fermi_data, "ELL", ts)
     except Exception as e:  # pragma: no cover - best effort logging
         logger.warning(f"process_fermo_update failed: {e}")

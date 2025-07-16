@@ -84,12 +84,12 @@ async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
                 )
 
             # Write PLC-wide clock toggle
-            if clock_conf and not debug:
-                clock = not clock
-                await asyncio.to_thread(
-                    plc_connection.write_bool,
-                    clock_conf["db"], clock_conf["byte"], clock_conf["bit"], clock
-                )
+            #if clock_conf and not debug:
+                #clock = not clock
+                #await asyncio.to_thread(
+                #    plc_connection.write_bool,
+                #    clock_conf["db"], clock_conf["byte"], clock_conf["bit"], clock
+                #)
 
             await asyncio.sleep(1)
 

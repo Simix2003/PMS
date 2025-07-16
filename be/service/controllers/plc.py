@@ -131,6 +131,8 @@ class PLCConnection:
                     return None
 
     def write_bool(self, db_number, byte_index, bit_index, value):
+        t0 = time.perf_counter()
+
         with self.lock:
             self._ensure_connection()
             try:
@@ -148,6 +150,13 @@ class PLCConnection:
                 except Exception as e2:
                     logger.error(f"❌ Retry failed: BOOL write DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e2)}")
                     self.connected = False
+
+        t1 = time.perf_counter()
+        duration = t1 - t0
+        if duration > 0.250:  # Log if takes more than 100ms
+            logger.warning(f"{self.ip_address}⏱ write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
+        else:
+            logger.debug(f"write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
 
     def read_integer(self, db_number, byte_index):
         with self.lock:

@@ -2,7 +2,7 @@ import copy
 import logging
 import asyncio
 from fastapi import WebSocket
-
+from decimal import Decimal
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -94,22 +94,27 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
 
 async def broadcast(line_name: str, channel_id: str, message: dict):
     key = f"{line_name}.{channel_id}"
-    for ws in list(subscriptions.get(key, [])):
+    summary_key = f"{line_name}.summary"
+
+    # Helper
+    async def send_safe(ws):
         try:
             await ws.send_json(message)
             logger.info('Sent data to WebSocket')
+            return ws  # Keep it
         except Exception:
-            subscriptions[key].remove(ws)
+            return None  # Drop it
 
-    # Also broadcast to per-line summary, if any
-    summary_key = f"{line_name}.summary"
-    for ws in list(subscriptions.get(summary_key, [])):
-        try:
-            await ws.send_json(message)
-        except Exception:
-            subscriptions[summary_key].remove(ws)
+    # Send to main channel
+    conns = subscriptions.get(key, set())
+    results = await asyncio.gather(*(send_safe(ws) for ws in conns))
+    subscriptions[key] = {ws for ws in results if ws}
 
-from decimal import Decimal
+    # Send to summary channel
+    summary_conns = subscriptions.get(summary_key, set())
+    summary_results = await asyncio.gather(*(send_safe(ws) for ws in summary_conns))
+    subscriptions[summary_key] = {ws for ws in summary_results if ws}
+
 
 # Clean recursively: convert Decimal → float
 def clean_for_json(obj):

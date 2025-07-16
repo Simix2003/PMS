@@ -86,7 +86,7 @@ async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
 
                 # Use representative station info
                 line_name, channel_id, _ = ref_station
-                await fermi_trigger_change(plc_connection, line_name, channel_id, trigger_value, buffer, start_byte)
+                await fermi_trigger_change(plc_connection, line_name, channel_id, trigger_value)
 
             # Write PLC-wide clock toggle
             # if clock_conf and not debug:
@@ -108,9 +108,7 @@ async def fermi_trigger_change(
     plc_connection: PLCConnection,
     line_name: str,
     channel_id: str,
-    val,
-    buffer: bytes | None = None,
-    start_byte: int | None = None,
+    val
 ):
     if not isinstance(val, bool):
         return

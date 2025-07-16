@@ -8,6 +8,13 @@ logger = logging.getLogger(__name__)
 import time
 from threading import Lock
 
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from service.config.config import WRITE_TO_PLC
+
 class PLCConnection:
     def __init__(self, ip_address, slot, status_callback=None):
         self.lock = Lock()
@@ -133,28 +140,33 @@ class PLCConnection:
     def write_bool(self, db_number, byte_index, bit_index, value):
         t0 = time.perf_counter()
 
+        if not WRITE_TO_PLC:
+            logger.debug(f"[SKIPPED] write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) = {value} (WRITE_TO_PLC=False)")
+            return
+
         with self.lock:
             self._ensure_connection()
-            try:
+
+            def attempt_write():
                 byte_array = self.client.db_read(db_number, byte_index, 1)
                 u.set_bool(byte_array, 0, bit_index, value)
                 self.client.db_write(db_number, byte_index, byte_array)
+
+            try:
+                attempt_write()
             except Exception as e:
-                logger.warning(f"⚠️ Error writing BOOL (first try) DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e)}")
+                logger.warning(f"⚠️ Error writing BOOL (1st try) DB{db_number}, byte {byte_index}, bit {bit_index}: {e}")
                 self.connected = False
                 self.reconnect()
                 try:
-                    byte_array = self.client.db_read(db_number, byte_index, 1)
-                    u.set_bool(byte_array, 0, bit_index, value)
-                    self.client.db_write(db_number, byte_index, byte_array)
+                    attempt_write()
                 except Exception as e2:
-                    logger.error(f"❌ Retry failed: BOOL write DB{db_number}, byte {byte_index}, bit {bit_index}: {str(e2)}")
+                    logger.error(f"❌ Retry failed: BOOL write DB{db_number}, byte {byte_index}, bit {bit_index}: {e2}")
                     self.connected = False
 
-        t1 = time.perf_counter()
-        duration = t1 - t0
-        if duration > 0.250:  # Log if takes more than 100ms
-            logger.warning(f"{self.ip_address}⏱ write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
+        duration = time.perf_counter() - t0
+        if duration > 0.250:
+            logger.warning(f"{self.ip_address} ⏱ write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
         else:
             logger.debug(f"write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
 
@@ -177,23 +189,37 @@ class PLCConnection:
                     return None
 
     def write_integer(self, db_number, byte_index, value):
+        t0 = time.perf_counter()
+
+        if not WRITE_TO_PLC:
+            logger.debug(f"[SKIPPED] write_integer(DB{db_number}, byte {byte_index}) = {value} (WRITE_TO_PLC=False)")
+            return
+
         with self.lock:
             self._ensure_connection()
-            try:
+
+            def attempt_write():
                 byte_array = self.client.db_read(db_number, byte_index, 2)
                 u.set_int(byte_array, 0, value)
                 self.client.db_write(db_number, byte_index, byte_array)
+
+            try:
+                attempt_write()
             except Exception as e:
-                logger.warning(f"⚠️ Error writing INT (first try) DB{db_number}, byte {byte_index}: {str(e)}")
+                logger.warning(f"⚠️ Error writing INT (1st try) DB{db_number}, byte {byte_index}: {e}")
                 self.connected = False
                 self.reconnect()
                 try:
-                    byte_array = self.client.db_read(db_number, byte_index, 2)
-                    u.set_int(byte_array, 0, value)
-                    self.client.db_write(db_number, byte_index, byte_array)
+                    attempt_write()
                 except Exception as e2:
-                    logger.error(f"❌ Retry failed: INT write DB{db_number}, byte {byte_index}: {str(e2)}")
+                    logger.error(f"❌ Retry failed: INT write DB{db_number}, byte {byte_index}: {e2}")
                     self.connected = False
+
+        duration = time.perf_counter() - t0
+        if duration > 0.250:
+            logger.warning(f"{self.ip_address} ⏱ write_integer(DB{db_number}, byte {byte_index}) took {duration:.3f}s")
+        else:
+            logger.debug(f"write_integer(DB{db_number}, byte {byte_index}) took {duration:.3f}s")
 
     def read_string(self, db_number, byte_index, max_size):
         with self.lock:
@@ -218,18 +244,40 @@ class PLCConnection:
                     return None
 
     def write_string(self, db_number, byte_index, value, max_size):
+        t0 = time.perf_counter()
+
+        if not WRITE_TO_PLC:
+            logger.debug(f"[SKIPPED] write_string(DB{db_number}, byte {byte_index}) = '{value}' (WRITE_TO_PLC=False)")
+            return
+
         with self.lock:
             self._ensure_connection()
-            try:
+
+            def attempt_write():
                 byte_array = bytearray(max_size + 2)
-                byte_array[0] = max_size  # Set maximum string length
-                byte_array[1] = len(value)  # Set actual string length
+                byte_array[0] = max_size                # Max length
+                byte_array[1] = len(value[:max_size])   # Actual length
                 for i, c in enumerate(value[:max_size]):
                     byte_array[i + 2] = ord(c)
                 self.client.db_write(db_number, byte_index, byte_array)
+
+            try:
+                attempt_write()
             except Exception as e:
-                logger.warning(f"⚠️ Error writing STRING to DB{db_number}, byte {byte_index}: {str(e)}")
+                logger.warning(f"⚠️ Error writing STRING (1st try) DB{db_number}, byte {byte_index}: {e}")
                 self.connected = False
+                self.reconnect()
+                try:
+                    attempt_write()
+                except Exception as e2:
+                    logger.error(f"❌ Retry failed: STRING write DB{db_number}, byte {byte_index}: {e2}")
+                    self.connected = False
+
+        duration = time.perf_counter() - t0
+        if duration > 0.250:
+            logger.warning(f"{self.ip_address} ⏱ write_string(DB{db_number}, byte {byte_index}) took {duration:.3f}s")
+        else:
+            logger.debug(f"write_string(DB{db_number}, byte {byte_index}) took {duration:.3f}s")
 
     def read_byte(self, db_number, byte_index):
         with self.lock:

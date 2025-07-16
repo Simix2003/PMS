@@ -24,11 +24,8 @@ ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
         "station_2_in":     ["RMI01"],
         "station_1_out_ng": ["ELL01"],
         "station_2_out_ng": ["RMI01"],
-    }
-}
-
-NEW_ZONES = {
-"STR": {
+    },
+    "STR": {
         "station_1_in":     ["STR01"],
         "station_2_in":     ["STR02"],
         "station_3_in":     ["STR03"],
@@ -137,6 +134,10 @@ LOGS_FILE = config_ini.get("logging", "LOGS_FILE", fallback="WARNING").upper()
 print('File log level is', LOGS_FILE)
 LOGS_TERMINAL = config_ini.get("logging", "LOGS_TERMINAL", fallback="INFO").upper()
 print('Terminal log level is', LOGS_TERMINAL)
+
+# PLC write flag
+WRITE_TO_PLC = config_ini.getboolean("plc", "WRITE_TO_PLC", fallback=True)
+print('PLC write flag is', WRITE_TO_PLC)
 
 ML_MODELS_DIR = BASE_DIR / "models"
 DEFECT_SIMILARITY_MODEL_PATH = ML_MODELS_DIR / "fine-tuned-defects_V2"

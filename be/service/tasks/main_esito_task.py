@@ -6,8 +6,6 @@ import os
 import sys
 from typing import Optional
 
-from sympy import true
-
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection, insert_defects, insert_initial_production_data, update_production_final
@@ -500,15 +498,27 @@ async def handle_end_cycle(
     #duration = time.perf_counter() - t0
     #log_duration(f"[{full_station_id}] Total Fine Ciclo processing", duration)
 
+def get_executor_status(executor):
+    active_threads = sum(1 for t in executor._threads if t.is_alive())
+    queue_size = executor._work_queue.qsize()
+    max_workers = executor._max_workers
+    return {
+        "max_workers": max_workers,
+        "active_threads": active_threads,
+        "queue_size": queue_size,
+        "free_threads": max_workers - active_threads,
+    }
+
+
 async def on_trigger_change(
-        plc_connection: PLCConnection,
-        line_name: str,
-        channel_id: str,
-        val,
-        buffer: bytes | None = None,
-        start_byte: int | None = None,
-        trigger_timestamp: float | None = None  # <-- added
-    ):
+    plc_connection: PLCConnection,
+    line_name: str,
+    channel_id: str,
+    val,
+    buffer: bytes | None = None,
+    start_byte: int | None = None,
+    trigger_timestamp: float | None = None
+):
     if not isinstance(val, bool):
         return
 
@@ -530,10 +540,14 @@ async def on_trigger_change(
     # Reset flags
     t0 = time.perf_counter()
     if esito_conf:
+        logger.debug(f"[{full_id}] Checking PLC executor before resetting esito flag...")
+        logger.info(f"[{full_id}] EXECUTOR STATUS: {get_executor_status(plc_executor)}")
         await asyncio.get_event_loop().run_in_executor(
             plc_executor, plc_connection.write_bool,
             esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False
         )
+    logger.debug(f"[{full_id}] Checking PLC executor before resetting pezzo flag...")
+    logger.info(f"[{full_id}] EXECUTOR STATUS: {get_executor_status(plc_executor)}")
     await asyncio.get_event_loop().run_in_executor(
         plc_executor, plc_connection.write_bool,
         pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False
@@ -607,10 +621,23 @@ async def on_trigger_change(
     # Write TRUE
     t10 = time.perf_counter()
     if not debug:
+        logger.info(f"[{full_id}] Checking PLC executor before writing TRUE...")
+        logger.info(f"[{full_id}] EXECUTOR STATUS: {get_executor_status(plc_executor)}")
+
+        logger.info(f"[{full_id}] Writing TRUE to pezzo_conf bit...")
         await asyncio.get_event_loop().run_in_executor(
             plc_executor, plc_connection.write_bool,
             pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True
         )
+
+        logger.info(f"[{full_id}] Verifying written value...")
+        logger.info(f"[{full_id}] EXECUTOR STATUS: {get_executor_status(plc_executor)}")
+        actual_value = await asyncio.get_event_loop().run_in_executor(
+            plc_executor, plc_connection.read_bool,
+            pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"]
+        )
+        logger.info(f"[{full_id}] Verification: pezzo_conf bit is now {actual_value}")
+
     t11 = time.perf_counter()
     durations["write_TRUE"] = t11 - t10
 
@@ -789,12 +816,3 @@ async def read_data(
     except Exception as e:
         logger.error(f"[{full_id}], Error reading PLC data: {e}")
         return None
-
-def make_status_callback(full_station_id: str):
-    async def callback(status):
-        try:
-            line_name, channel_id = full_station_id.split(".")
-            await broadcast(line_name, channel_id, {"plc_status": status})
-        except Exception as e:
-            logger.error(f"Failed to send PLC status for {full_station_id}: {e}")
-    return callback

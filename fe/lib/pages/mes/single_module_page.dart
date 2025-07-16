@@ -13,13 +13,17 @@ class SingleModulePage extends StatefulWidget {
 }
 
 class _SingleModulePageState extends State<SingleModulePage> {
+  static const double maxContentWidth = 900;
+  static const double mesCardHeight = 250;
+
   final TextEditingController _scanController = TextEditingController();
   String? _errorText;
   String? _scannedCode;
   Map<String, dynamic>? _moduleData;
-  bool _isReworkMode = false;
+  String? _reworkStep;
   String? _selectedStage;
   String? _selectedNewClass;
+  String? _selectedLine;
 
   final stages = ['PRE VPF', 'PRE FRAMING', 'PRE JBX', 'POST CURING'];
   final qcOrder = ['A', 'B', 'C'];
@@ -31,7 +35,6 @@ class _SingleModulePageState extends State<SingleModulePage> {
       setState(() => _errorText = 'Inserisci o scansiona un codice valido');
       return;
     }
-
     final randomNG = 'NG${2 + (DateTime.now().millisecond % 9)}';
     final randomQC = ['A', 'B', 'C'][DateTime.now().second % 3];
 
@@ -70,6 +73,18 @@ class _SingleModulePageState extends State<SingleModulePage> {
     ).show();
   }
 
+  void _handleBack() {
+    setState(() {
+      if (_reworkStep == 'stage') {
+        _reworkStep = 'line';
+      } else {
+        _reworkStep = null;
+        _selectedLine = null;
+        _scannedCode = null;
+      }
+    });
+  }
+
   Widget _bigChoice({
     required String label,
     required bool selected,
@@ -78,275 +93,244 @@ class _SingleModulePageState extends State<SingleModulePage> {
     IconData? icon,
     Color? iconColor,
   }) {
-    final buttonStyle = ElevatedButton.styleFrom(
-      backgroundColor: selected ? selectedColor : Colors.white,
-      foregroundColor: selected ? Colors.white : Colors.black,
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 26),
-      textStyle: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-      side: selected
-          ? BorderSide.none
-          : const BorderSide(color: Colors.black54, width: 2),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    return ElevatedButton.icon(
+      onPressed: onTap,
+      icon: icon != null
+          ? Icon(icon, size: 24, color: iconColor ?? Colors.black)
+          : const SizedBox.shrink(),
+      label: Text(label, textAlign: TextAlign.center),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: selected ? selectedColor : Colors.white,
+        foregroundColor: selected ? Colors.white : Colors.black,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
     );
-
-    return icon != null
-        ? ElevatedButton.icon(
-            onPressed: onTap,
-            icon: Icon(icon, size: 32, color: iconColor ?? Colors.black),
-            label: Text(label),
-            style: buttonStyle,
-          )
-        : ElevatedButton(
-            onPressed: onTap,
-            style: buttonStyle,
-            child: Text(label),
-          );
   }
 
-  Widget _buildScanView() {
+  Widget _buildDetailViewWrapper({required Widget child}) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Card(
-            elevation: 18,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-            child: Padding(
-              padding: const EdgeInsets.all(40),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.qr_code_scanner,
-                      size: 80, color: Colors.blue),
-                  const SizedBox(height: 24),
-                  Text('Scansiona ID Modulo',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium!
-                          .copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  Text(
-                      'Inserisci o scansiona il codice del modulo per iniziare.',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium!
-                          .copyWith(color: Colors.black54),
-                      textAlign: TextAlign.center),
-                  const SizedBox(height: 36),
-                  TextField(
-                    controller: _scanController,
-                    onSubmitted: (_) => _handleScan(),
-                    decoration: InputDecoration(
-                      labelText: 'Codice modulo',
-                      prefixIcon: const Icon(Icons.qr_code),
-                      errorText: _errorText,
-                      filled: true,
-                      fillColor: const Color(0xFFF7F9FC),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20)),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: _handleScan,
-                      icon: const Icon(Icons.check, color: Colors.white),
-                      label: const Text(
-                        'Conferma',
-                        style: TextStyle(
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                      ),
-                    ),
-                  )
-                ],
-              ),
-            ),
-          ),
+          constraints: const BoxConstraints(maxWidth: maxContentWidth),
+          child: child,
         ),
       ),
     );
   }
 
-  Widget _buildReworkForm(Map<String, dynamic> latest) {
-    final currentIdx = qcOrder.indexOf(latest['classe_qc']);
-    final allowedQCs = qcOrder.sublist(currentIdx);
+  Widget _buildScanView() {
+    return _buildDetailViewWrapper(
+      child: Column(
+        children: [
+          const Icon(Icons.qr_code_scanner, size: 80, color: Colors.blue),
+          const SizedBox(height: 24),
+          Text('Scansiona ID Modulo',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          Text('Inserisci o scansiona il codice del modulo per iniziare.',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(color: Colors.black54),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 36),
+          TextField(
+            controller: _scanController,
+            onSubmitted: (_) => _handleScan(),
+            decoration: InputDecoration(
+              labelText: 'Codice modulo',
+              prefixIcon: const Icon(Icons.qr_code),
+              errorText: _errorText,
+              filled: true,
+              fillColor: const Color(0xFFF7F9FC),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+          ),
+          const SizedBox(height: 28),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _handleScan,
+              icon: const Icon(Icons.check, color: Colors.white),
+              label: const Text(
+                'Conferma',
+                style: TextStyle(color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildMainActions(Map<String, dynamic> latest) {
+    return _buildDetailViewWrapper(
+      child: Column(
+        children: [
+          SizedBox(height: mesCardHeight, child: MesCard(data: latest)),
+          const SizedBox(height: 36),
+          const Text('Seleziona Azione',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(
+                  child: _bigChoice(
+                      label: 'Scrap',
+                      selected: false,
+                      onTap: () => _handleScrap(_scannedCode),
+                      icon: Icons.delete_forever,
+                      iconColor: Colors.red)),
+              const SizedBox(width: 24),
+              Expanded(
+                  child: _bigChoice(
+                      label: 'ReWork',
+                      selected: false,
+                      onTap: () => setState(() => _reworkStep = 'line'),
+                      icon: Icons.build,
+                      iconColor: Colors.blue)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReworkLineSelection(Map<String, dynamic> latest) {
+    return _buildDetailViewWrapper(
+      child: Column(
+        children: [
+          SizedBox(height: mesCardHeight, child: MesCard(data: latest)),
+          const SizedBox(height: 36),
+          const Text('Seleziona Linea per il rientro',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: ['A', 'B', 'C'].map((line) {
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: _bigChoice(
+                    label: 'Linea $line',
+                    selected: _selectedLine == line,
+                    onTap: () => setState(() {
+                      _selectedLine = line;
+                      _reworkStep = 'stage';
+                    }),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReworkForm(Map<String, dynamic> latest) {
     _selectedStage ??= stages.first;
     _selectedNewClass ??= latest['classe_qc'];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        IconButton(
-          icon: const Icon(Icons.arrow_back, size: 30),
-          onPressed: () => setState(() => _isReworkMode = false),
-        ),
-        MesCard(data: latest),
-        const SizedBox(height: 24),
-        const Text('Seleziona zona Ingresso',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 24,
-          runSpacing: 24,
-          children: stages
-              .map((s) => _bigChoice(
+    return _buildDetailViewWrapper(
+      child: Column(
+        children: [
+          SizedBox(height: mesCardHeight, child: MesCard(data: latest)),
+          const SizedBox(height: 24),
+          Text('Linea selezionata: $_selectedLine\nSeleziona zona di rientro',
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 24),
+          Row(
+            children: stages.map((s) {
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: _bigChoice(
                     label: s,
                     selected: _selectedStage == s,
                     onTap: () => setState(() => _selectedStage = s),
-                    selectedColor: Colors.blue,
-                  ))
-              .toList(),
-        ),
-        const SizedBox(height: 40),
-        const Text('Nuova Classe QC',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 24,
-          runSpacing: 24,
-          children: qcOrder.map((c) {
-            final isAllowed = allowedQCs.contains(c);
-            final isSelected = _selectedNewClass == c;
-
-            final textColor = isSelected
-                ? Colors.white
-                : isAllowed
-                    ? Colors.black
-                    : Colors.grey;
-
-            return ElevatedButton(
-              onPressed: isAllowed
-                  ? () => setState(() => _selectedNewClass = c)
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isSelected
-                    ? Colors.blue
-                    : isAllowed
-                        ? Colors.white
-                        : Colors.grey.shade300,
-                foregroundColor: textColor,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 40, vertical: 26),
-                textStyle:
-                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  ),
                 ),
-              ),
-              child: Text(c),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 50),
-        Center(
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.check_circle, color: Colors.white, size: 30),
-            label: const Text('Conferma Ingresso',
-                style: TextStyle(color: Colors.white)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 26),
-              textStyle: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-            ),
-            onPressed: () async {
-              AwesomeDialog(
-                context: context,
-                dialogType: DialogType.noHeader,
-                dismissOnTouchOutside: false,
-                dismissOnBackKeyPress: false,
-                width: 750,
-                animType: AnimType.scale,
-                title: "Comunicazione con il MES...",
-                desc: "Allineamento in corso...",
-              ).show();
-
-              await Future.delayed(const Duration(seconds: 2));
-
-              Navigator.of(context).pop(); // close loading dialog
-
-              AwesomeDialog(
-                context: context,
-                dialogType: DialogType.success,
-                width: 750,
-                autoDismiss: true,
-                autoHide: const Duration(seconds: 5),
-                title: "Modulo Allineato",
-                desc: 'Modulo pronto per il rientro in "${_selectedStage}"',
-              ).show();
-
-              setState(() {
-                _isReworkMode = false;
-                _scannedCode = null;
-              });
-            },
+              );
+            }).toList(),
           ),
-        ),
-      ],
+          const SizedBox(height: 40),
+          SizedBox(
+            width: double.infinity,
+            height: 60,
+            child: ElevatedButton.icon(
+              icon:
+                  const Icon(Icons.check_circle, color: Colors.white, size: 30),
+              label: const Text(
+                'Conferma Ingresso',
+                style: TextStyle(color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+                textStyle:
+                    const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+              ),
+              onPressed: () async {
+                AwesomeDialog(
+                  context: context,
+                  dialogType: DialogType.noHeader,
+                  dismissOnTouchOutside: false,
+                  dismissOnBackKeyPress: false,
+                  width: 750,
+                  animType: AnimType.scale,
+                  title: "Comunicazione con il MES...",
+                  desc: "Allineamento in corso...",
+                ).show();
+
+                await Future.delayed(const Duration(seconds: 2));
+                Navigator.of(context).pop();
+
+                AwesomeDialog(
+                  context: context,
+                  dialogType: DialogType.success,
+                  width: 750,
+                  autoDismiss: true,
+                  autoHide: const Duration(seconds: 5),
+                  title: "Modulo Allineato",
+                  desc: 'Modulo pronto per il rientro in "\$_selectedStage"',
+                ).show();
+
+                setState(() {
+                  _reworkStep = null;
+                  _scannedCode = null;
+                });
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildDetailView() {
     final latest = _moduleData!['latest_event'] as Map<String, dynamic>;
-
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: _isReworkMode
-          ? _buildReworkForm(latest)
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, size: 30),
-                  onPressed: () => setState(() {
-                    _scannedCode = null;
-                    _moduleData = null;
-                    _isReworkMode = false;
-                  }),
-                ),
-                MesCard(data: latest),
-                const SizedBox(height: 36),
-                Center(
-                  child: Wrap(
-                    spacing: 40,
-                    runSpacing: 20,
-                    children: [
-                      _bigChoice(
-                        label: 'Scrap',
-                        selected: false,
-                        icon: Icons.delete_forever,
-                        iconColor: Colors.red,
-                        selectedColor: Colors.red,
-                        onTap: () => _handleScrap(_scannedCode),
-                      ),
-                      _bigChoice(
-                        label: 'ReWork',
-                        selected: false,
-                        icon: Icons.build,
-                        iconColor: Colors.blue,
-                        onTap: () => setState(() => _isReworkMode = true),
-                      ),
-                    ],
-                  ),
-                )
-              ],
-            ),
-    );
+    if (_reworkStep == 'line') return _buildReworkLineSelection(latest);
+    if (_reworkStep == 'stage') return _buildReworkForm(latest);
+    return _buildMainActions(latest);
   }
 
   @override
@@ -366,7 +350,19 @@ class _SingleModulePageState extends State<SingleModulePage> {
               ],
             ),
           ),
-          _scannedCode == null ? _buildScanView() : _buildDetailView(),
+          if (_scannedCode != null)
+            Positioned(
+              top: 30,
+              left: 40,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, size: 30),
+                onPressed: _handleBack,
+              ),
+            ),
+          Positioned.fill(
+            top: 80,
+            child: _scannedCode == null ? _buildScanView() : _buildDetailView(),
+          ),
         ],
       ),
     );

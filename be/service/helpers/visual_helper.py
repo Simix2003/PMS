@@ -1026,7 +1026,7 @@ def _compute_snapshot_str(now: datetime) -> dict:
             now = datetime.now()
 
         hour_start = now.replace(minute=0, second=0, microsecond=0)
-        cfg = ZONE_SOURCES["AIN"]
+        cfg = ZONE_SOURCES["STR"]
 
         shift_start, shift_end = get_shift_window(now)
 
@@ -1170,62 +1170,43 @@ def _compute_snapshot_str(now: datetime) -> dict:
                     })
 
                 # -------- fermi_data calculation --------
-                # get top 4 stops in current shift
+                STATIONS = [4, 5, 6, 7, 8]
+                SHIFT_DURATION_MINUTES = 480
 
-                # Query total stop time for station 29
-                sql_total_29 = """
-                    SELECT SUM(st.stop_time) AS total_time
-                    FROM stops st
-                    WHERE st.type = 'STOP'
-                    AND st.station_id = 29
-                    AND st.start_time BETWEEN %s AND %s
-                """
-                cursor.execute(sql_total_29, (shift_start, shift_end))
-                row29 = cursor.fetchone() or {}
-                total_stop_time_29 = row29.get("total_time") or 0
-                total_stop_time_minutes_29 = total_stop_time_29 / 60
-                available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
-
-                # Query total stop time for station 30
-                sql_total_30 = """
-                    SELECT SUM(st.stop_time) AS total_time
-                    FROM stops st
-                    WHERE st.type = 'STOP'
-                    AND st.station_id = 30
-                    AND st.start_time BETWEEN %s AND %s
-                """
-                cursor.execute(sql_total_30, (shift_start, shift_end))
-                row30 = cursor.fetchone() or {}
-                total_stop_time_30 = row30.get("total_time") or 0
-                total_stop_time_minutes_30 = total_stop_time_30 / 60
-                available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
-
-                # Query top 4 stops for both stations
-                sql = """
-                    SELECT s.name AS station_name, st.reason, COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
+                placeholders = ','.join(['%s'] * len(STATIONS))  # creates: "%s,%s,%s,%s,%s"
+                sql = f"""
+                    SELECT
+                        s.name AS station_name,
+                        st.station_id,
+                        COUNT(*) AS n_occurrences,
+                        SUM(st.stop_time) AS total_time
                     FROM stops st
                     JOIN stations s ON st.station_id = s.id
                     WHERE st.type = 'STOP'
-                    AND st.station_id IN (29, 30)
                     AND st.start_time BETWEEN %s AND %s
-                    GROUP BY st.station_id, st.reason
-                    ORDER BY total_time DESC
-                    LIMIT 4
+                    AND st.station_id IN ({placeholders})
+                    GROUP BY st.station_id
                 """
-                cursor.execute(sql, (shift_start, shift_end))
+                cursor.execute(sql, (shift_start, shift_end, *STATIONS))
+
                 fermi_data = []
+                total_combined_stop_time = 0
+
                 for row in cursor.fetchall():
-                    total_minutes = round(row["total_time"] / 60)
+                    stop_time_sec = row["total_time"] or 0
+                    stop_time_min = round(stop_time_sec / 60)
+                    total_combined_stop_time += stop_time_min
+
                     fermi_data.append({
-                        "causale": row["reason"],
                         "station": row["station_name"],
                         "count": row["n_occurrences"],
-                        "time": total_minutes
+                        "time": stop_time_min
                     })
 
-                # Append both available times at the end
-                fermi_data.append({"Available_Time_1": f"{available_time_29}"})
-                fermi_data.append({"Available_Time_2": f"{available_time_30}"})
+                # Append one single combined availability % (risolutivo)
+                available_time_risolutivo = max(0, round(100 - (total_combined_stop_time / SHIFT_DURATION_MINUTES * 100)))
+                fermi_data.append({"Available_Time": available_time_risolutivo})
+
 
                 # -------- top_defects_qg2 calculation from productions + object_defects --------
                 # 1️⃣ Query productions table for esito 6 on stations 1+2

@@ -2,6 +2,7 @@
 import asyncio
 import snap7.client as c
 import snap7.util as u
+from snap7.type import Area
 import logging
 
 logger = logging.getLogger(__name__)
@@ -137,7 +138,7 @@ class PLCConnection:
                     self.connected = False
                     return None
 
-    def write_bool(self, db_number, byte_index, bit_index, value):
+    def write_bool_old(self, db_number, byte_index, bit_index, value):
         t0 = time.perf_counter()
 
         if not WRITE_TO_PLC:
@@ -169,6 +170,49 @@ class PLCConnection:
             logger.warning(f"{self.ip_address} ⏱ write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
         else:
             logger.debug(f"write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
+
+    def write_bool(self, db_number, byte_index, bit_index, value):
+        t0 = time.perf_counter()
+        if not WRITE_TO_PLC:
+            logger.debug(f"[SKIPPED] write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) = {value}")
+            return
+
+        with self.lock:
+            self._ensure_connection()
+
+            def attempt_write():
+                # Build 1-byte buffer with only the target bit set/cleared
+                buf = bytearray([0])
+                if value:
+                    buf[0] |= 1 << bit_index
+                else:
+                    buf[0] &= ~(1 << bit_index)
+
+                logger.debug(f"✍️ Writing to DB{db_number}, b{byte_index}:{bit_index} = {value}")
+
+                # Positional call to avoid keyword mismatch
+                self.client.write_area(
+                    Area.DB,
+                    db_number,
+                    byte_index,
+                    buf
+                )
+
+            try:
+                attempt_write()
+            except Exception as e:
+                logger.warning(f"⚠️ Error (1st try) write_bool DB{db_number}, b{byte_index}:{bit_index}: {e}")
+                self.connected = False
+                self.reconnect()
+                try:
+                    attempt_write()
+                except Exception as e2:
+                    logger.error(f"❌ Retry failed: {e2}")
+                    self.connected = False
+
+        duration = time.perf_counter() - t0
+        log = logger.warning if duration > 0.250 else logger.debug
+        log(f"{self.ip_address} ⏱ write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
 
     def read_integer(self, db_number, byte_index):
         with self.lock:

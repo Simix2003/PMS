@@ -100,7 +100,6 @@ async def broadcast(line_name: str, channel_id: str, message: dict):
     async def send_safe(ws):
         try:
             await ws.send_json(message)
-            logger.info('Sent data to WebSocket')
             return ws  # Keep it
         except Exception:
             return None  # Drop it

@@ -618,20 +618,9 @@ async def on_trigger_change(
 
         durations["executor_queue"] = t_pre - t10
         durations["write_TRUE"] = t_post - t_pre
-        durations["write_total"] = t_post - t10  # queue + write
 
-        if durations["write_total"] > 0.5:
+        if durations["write_TRUE"] > 0.5:
             logger.warning(f"[{full_id}] ⏱ write_TRUE={durations['write_TRUE']:.3f}s | queue={durations['executor_queue']:.3f}s | total={durations['write_total']:.3f}s")
-
-    # Final duration from trigger
-    total_duration = t_post - t_trigger_seen
-    #logger.info(f"[{full_id}] Da Inizio Ciclo a True a PLC write(TRUE) = {total_duration}")
-
-    if total_duration > TIMING_THRESHOLD:
-        for name, dur in durations.items():
-            logger.info(f"[{full_id}] step: {name:<25} → {dur:.3f}s")
-        sum_steps = sum(durations.values())
-        logger.info(f"[{full_id}] ⏱ total steps sum = {sum_steps:.3f}s | total duration = {total_duration:.3f}s")
 
     # Broadcast
     await broadcast(line_name, channel_id, {

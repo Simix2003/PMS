@@ -7,6 +7,7 @@ a = Analysis(
     binaries=[('C:\\Users\\papar\\Desktop\\Prova_Comunicazione_PLC\\Lib\\site-packages\\snap7\\lib\\snap7.dll', '.')],
     datas=[],
     hiddenimports = [
+    'pymysqlpool',
     'transformers.models.bert',
     'transformers.models.roberta',
     'transformers.models.deberta',

@@ -127,6 +127,33 @@ class MesCard extends StatelessWidget {
                   .toList(),
             ),
           ],
+          // inside MesCard.build(), just before the final `]` of `children: [...]`
+
+          if ((data['event_count'] ?? 1) > 1)
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Container(
+                margin: const EdgeInsets.only(top: 8, right: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.folder, color: Colors.white, size: 20),
+                    const SizedBox(width: 6),
+                    Text('${data['event_count']} eventi',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 18)),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );

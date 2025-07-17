@@ -538,25 +538,24 @@ async def on_trigger_change(
     pezzo_conf = paths["pezzo_salvato_su_DB_con_inizio_ciclo"]
 
     # Reset flags
-    t0 = time.perf_counter()
-    if esito_conf:
-        logger.debug(f"[{full_id}] Checking PLC executor before resetting esito flag...")
-        logger.info(f"[{full_id}] EXECUTOR STATUS: {get_executor_status(plc_executor)}")
-        await asyncio.get_event_loop().run_in_executor(
-            plc_executor, plc_connection.write_bool,
-            esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False
-        )
-    logger.debug(f"[{full_id}] Checking PLC executor before resetting pezzo flag...")
-    logger.info(f"[{full_id}] EXECUTOR STATUS: {get_executor_status(plc_executor)}")
-    await asyncio.get_event_loop().run_in_executor(
-        plc_executor, plc_connection.write_bool,
-        pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False
-    )
-    t1 = time.perf_counter()
-    durations["reset_flags"] = t1 - t0
+    #t0 = time.perf_counter()
+    #if esito_conf:
+        #logger.debug(f"[{full_id}] Checking PLC executor before resetting esito flag...")
+        #logger.info(f"[{full_id}] EXECUTOR STATUS: {get_executor_status(plc_executor)}")
+        #await asyncio.get_event_loop().run_in_executor(
+        #    plc_executor, plc_connection.write_bool,
+        #    esito_conf["db"], esito_conf["byte"], esito_conf["bit"], False
+        #)
+    #logger.debug(f"[{full_id}] Checking PLC executor before resetting pezzo flag...")
+    #logger.info(f"[{full_id}] EXECUTOR STATUS: {get_executor_status(plc_executor)}")
+    #await asyncio.get_event_loop().run_in_executor(
+    #    plc_executor, plc_connection.write_bool,
+    #    pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], False
+    #)
+    #t1 = time.perf_counter()
+    #durations["reset_flags"] = t1 - t0
 
     # Extract object_id + stringatrice + issues_submitted
-    t2 = time.perf_counter()
     if debug:
         object_id = global_state.debug_moduli.get(full_id)
     else:
@@ -581,11 +580,8 @@ async def on_trigger_change(
     stringatrice = str(stringatrice_index)
 
     issues_submitted = extract_bool(buffer, esito_conf["byte"], esito_conf["bit"], start_byte) if esito_conf else False
-    t3 = time.perf_counter()
-    durations["object_id + stringatrice"] = t3 - t2
 
     # Timestamp
-    t4 = time.perf_counter()
     trigger_timestamps[full_id] = datetime.now()
     data_inizio = trigger_timestamps[full_id]
 
@@ -596,54 +592,40 @@ async def on_trigger_change(
         data_inizio=data_inizio, buffer=buffer,
         start_byte=start_byte, is_EndCycle=False
     )
-    t5 = time.perf_counter()
-    durations["read_data"] = t5 - t4
 
     # Determine esito
-    t6 = time.perf_counter()
     escl_conf = paths.get("stazione_esclusa")
     esclusione_attiva = extract_bool(buffer, escl_conf["byte"], escl_conf["bit"], start_byte) if escl_conf else False
     esito = 4 if esclusione_attiva else 2
-    t7 = time.perf_counter()
-    durations["determine_esito"] = t7 - t6
 
     # Enqueue + expected_moduli update
-    t8 = time.perf_counter()
     logger.debug(f"[{full_id}] Starting initial production insert for object_id={object_id}")
     asyncio.create_task(db_write_queue.enqueue(
         process_initial_production, full_id, channel_id, initial_data, esito, object_id
     ))
     global_state.expected_moduli[full_id] = object_id
     logger.debug(f"[{full_id}] expected_moduli updated with object_id={object_id}")
-    t9 = time.perf_counter()
-    durations["enqueue + update"] = t9 - t8
 
     # Write TRUE
     t10 = time.perf_counter()
     if not debug:
-        logger.info(f"[{full_id}] Checking PLC executor before writing TRUE...")
-        logger.info(f"[{full_id}] EXECUTOR STATUS: {get_executor_status(plc_executor)}")
-
-        logger.info(f"[{full_id}] Writing TRUE to pezzo_conf bit...")
+        t_pre = time.perf_counter()
         await asyncio.get_event_loop().run_in_executor(
             plc_executor, plc_connection.write_bool,
             pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True
         )
+        t_post = time.perf_counter()
 
-        logger.info(f"[{full_id}] Verifying written value...")
-        logger.info(f"[{full_id}] EXECUTOR STATUS: {get_executor_status(plc_executor)}")
-        actual_value = await asyncio.get_event_loop().run_in_executor(
-            plc_executor, plc_connection.read_bool,
-            pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"]
-        )
-        logger.info(f"[{full_id}] Verification: pezzo_conf bit is now {actual_value}")
+        durations["executor_queue"] = t_pre - t10
+        durations["write_TRUE"] = t_post - t_pre
+        durations["write_total"] = t_post - t10  # queue + write
 
-    t11 = time.perf_counter()
-    durations["write_TRUE"] = t11 - t10
+        if durations["write_total"] > 0.5:
+            logger.warning(f"[{full_id}] ⏱ write_TRUE={durations['write_TRUE']:.3f}s | queue={durations['executor_queue']:.3f}s | total={durations['write_total']:.3f}s")
 
-    # Final log and breakdown
-    total_duration = t11 - t_trigger_seen
-    logger.info(f"[{full_id}] Da Inizio Ciclo a True a PLC write(TRUE) = {total_duration}")
+    # Final duration from trigger
+    total_duration = t_post - t_trigger_seen
+    #logger.info(f"[{full_id}] Da Inizio Ciclo a True a PLC write(TRUE) = {total_duration}")
 
     if total_duration > TIMING_THRESHOLD:
         for name, dur in durations.items():

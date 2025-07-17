@@ -5,6 +5,9 @@ import 'package:awesome_dialog/awesome_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/shared/widgets/mes_card.dart';
 
+import '../../shared/services/api_service.dart';
+import '../object_details/objectDetails_page.dart';
+
 class SingleModulePage extends StatefulWidget {
   const SingleModulePage({super.key});
 
@@ -28,13 +31,53 @@ class _SingleModulePageState extends State<SingleModulePage> {
   final stages = ['PRE VPF', 'PRE FRAMING', 'PRE JBX', 'POST CURING'];
   final qcOrder = ['A', 'B', 'C'];
   final _userName = 'Simone Paparo';
+  final randomQC = ['A', 'B', 'C'][DateTime.now().second % 3];
 
-  void _handleScan() {
+  void _handleScan() async {
     final code = _scanController.text.trim();
     if (code.isEmpty) {
       setState(() => _errorText = 'Inserisci o scansiona un codice valido');
       return;
     }
+
+    try {
+      final results = await ApiService.fetchSearchResults(
+        filters: [
+          {'type': 'ID Modulo', 'value': code},
+        ],
+        orderBy: 'start_time', // or whatever column you use
+        orderDirection: 'decrescente', // "crescente" | "decrescente"
+        limit: '1',
+        showAllEvents: true,
+      );
+
+      if (results.isNotEmpty) {
+        final group = results.first;
+        final latest = Map<String, dynamic>.from(group['latest_event']);
+        final history = List<Map<String, dynamic>>.from(group['history']);
+        final eventCount = group['event_count'] as int;
+
+        // -- enrich `latest` so MesCard has everything it needs
+        latest['classe_qc'] = randomQC; // always overridden
+        latest['event_count'] = eventCount; // for the badge
+        latest['all_events'] = [latest, ...history]; // for drill-down
+
+        setState(() {
+          _scannedCode = code;
+          _moduleData = {'latest_event': latest}; // keeps rest of UI unchanged
+          _errorText = null;
+        });
+      } else {
+        _handleFakeScan(code);
+      }
+    } catch (_) {
+      _handleFakeScan(code);
+    }
+
+    _scanController.clear();
+  }
+
+  void _handleFakeScan(String code) {
     final randomNG = 'NG${2 + (DateTime.now().millisecond % 9)}';
     final randomQC = ['A', 'B', 'C'][DateTime.now().second % 3];
 
@@ -48,8 +91,7 @@ class _SingleModulePageState extends State<SingleModulePage> {
           'classe_qc': randomQC,
         }
       };
-      _scanController.clear();
-      _errorText = null;
+      _errorText = 'Dati reali non trovati. Dati simulati mostrati.';
     });
   }
 
@@ -180,7 +222,26 @@ class _SingleModulePageState extends State<SingleModulePage> {
     return _buildDetailViewWrapper(
       child: Column(
         children: [
-          SizedBox(height: mesCardHeight, child: MesCard(data: latest)),
+          GestureDetector(
+            onTap: () {
+              final latest =
+                  _moduleData!['latest_event'] as Map<String, dynamic>;
+              final allEvents =
+                  (latest['all_events'] as List<Map<String, dynamic>>?) ??
+                      [latest];
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ObjectdetailsPage(
+                    events: allEvents,
+                    minCycleTimeThreshold: 10,
+                  ),
+                ),
+              );
+            },
+            child: MesCard(data: latest),
+          ),
           const SizedBox(height: 36),
           const Text('Seleziona Azione',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),

@@ -24,10 +24,15 @@ flutter build web --web-renderer html --release -t lib/main_visual.dart -o build
 # Build for port 8054 (MES)
 flutter build web --web-renderer html --release -t lib/main_mes.dart -o build/web_mes
 
+flutter build web --web-renderer=canvaskit --release -t lib/main_mes.dart -o build/web_mes
+
 flutter run -d web-server --web-renderer html -t lib/main_home.dart
 flutter run -d web-server --web-renderer html -t lib/main_data.dart
 flutter run -d web-server --web-renderer html -t lib/main_stringatrici.dart
 flutter run -d web-server --web-renderer html -t lib/main_visual.dart
+flutter run -d web-server --web-renderer html -t lib/main_mes.dart
+
+flutter run -d web-server --web-renderer=canvaskit -t lib/main_mes.dart
 
 flutter run -d chrome --web-renderer html -t lib/main_data.dart
 

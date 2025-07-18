@@ -3,7 +3,7 @@ from typing import Optional, Sequence
 
 ELL_STATIONS = (3, 9)  # RMI01 = 3, ELL01 = 9
 
-def mirror_production(row: dict, connection) -> None:
+def mirror_ell_production(row: dict, connection) -> None:
     """
     Copy one productions row into ell_productions_buffer.
     If row['object_id'] is a string (id_modulo), resolve to INT object_id first.

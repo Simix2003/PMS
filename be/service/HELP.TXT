@@ -3,6 +3,10 @@ PS D:\Imix\Lavori\2025\3SUN\IX-Monitor\ix_monitor>
 >> # Activate it
 & "D:/Imix/Lavori/2025/3SUN/IX-Monitor/pms/be/service/venv/Scripts/Activate.ps1"
 
+VM:
+& "C:\PMS_Project\pms\be\service\venv\Scripts\Activate.ps1"
+python C:\PMS_Project\pms\be\service\main.py
+
 pip freeze > requirements.txt
 
 pyinstaller --clean service.spec

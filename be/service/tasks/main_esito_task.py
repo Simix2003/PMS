@@ -8,7 +8,7 @@ from typing import Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import get_mysql_connection, insert_defects, insert_initial_production_data, update_production_final
+from service.connections.mysql import get_mysql_connection, insert_defects, insert_initial_production_data, update_production_final, insert_str_data
 from service.connections.temp_data import remove_temp_issues
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
@@ -25,11 +25,11 @@ from service.state.global_state import (
     db_write_queue,
 )
 import service.state.global_state as global_state
-from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string
+from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string, extract_int
 from service.helpers.visual_helper import refresh_top_defects_ell, refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
 from service.routes.mbj_routes import parse_mbj_details
 from service.helpers.executor import run_in_thread
-from service.helpers.ell_buffer import mirror_defects, mirror_production
+from service.helpers.ell_buffer import mirror_defects, mirror_ell_production
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +79,6 @@ async def process_final_update(
                     fine_buona,
                     fine_scarto,
                 )
-                #duration = time.perf_counter() - t3
-                #log_duration(f"[{full_station_id}] update_production_final", duration)
 
         if success:
             async_tasks = []
@@ -91,7 +89,7 @@ async def process_final_update(
                     if mbj:
                         result["MBJ_Defects"] = mbj
                 async_tasks.append(asyncio.create_task(fetch_mbj()))
-
+            
             if channel_id == "VPF01" and fine_scarto and result.get("Tipo_NG_VPF"):
                 async_tasks.append(
                     asyncio.create_task(
@@ -143,7 +141,33 @@ async def process_final_update(
                         )
                     )
                 )
+            #Step: Insert STR visual snapshot if STR station and EndCycle
+            elif channel_id.startswith("STR"):
+                try:
+                    str_data = {
+                        "cell_G": result.get("cell_G", 0),
+                        "cell_NG": result.get("cell_NG", 0),
+                        "string_G": result.get("string_G", 0),
+                        "string_NG": result.get("string_NG", 0),
+                    }
+            
+                    station_id = result.get("station_id", None)
 
+                    timestamp = (
+                        datetime.fromisoformat(end_time)
+                        if not isinstance(end_time, datetime)
+                        else end_time
+                    )
+                    asyncio.create_task(
+                        insert_str_data_async(
+                            str_data,
+                            station_id,
+                            timestamp,
+                            line_name,
+                        )
+                    )
+                except Exception as e:
+                    logger.error(f"[{full_station_id}] Failed to insert STR snapshot: {e}")
             try:
                 zone = get_zone_from_station(channel_id)
                 timestamp = (
@@ -165,7 +189,7 @@ async def process_final_update(
                         else None
                     )
                 bufferIds = result.get("BufferIds_Rework", [])
-                if zone:
+                if zone and zone != "STR":
                     async_tasks.append(
                         asyncio.create_task(
                             run_in_thread(
@@ -199,14 +223,12 @@ async def process_final_update(
     finally:
         incomplete_productions.pop(full_station_id, None)
         remove_temp_issues(line_name, channel_id, result.get("Id_Modulo"))
-        #duration = time.perf_counter() - t0
-        #log_duration(f"[{full_station_id}] Async final update done", duration)
 
-async def process_mirror_production(row: dict) -> None:
+async def process_mirror_ell_production(row: dict) -> None:
     """Background task to mirror production into the ELL buffer."""
     try:
         with get_mysql_connection() as conn:
-            await run_in_thread(mirror_production, row, conn)
+            await run_in_thread(mirror_ell_production, row, conn)
     except Exception as e:  # pragma: no cover - best effort logging
         logger.warning(f"process_mirror_production failed: {e}")
 
@@ -223,6 +245,20 @@ async def insert_defects_async(*args, **kwargs) -> None:
                 )
     except Exception as e:
         logger.warning(f"insert_defects_async failed: {e}")
+
+async def insert_str_data_async(*args, **kwargs) -> None:
+    """Wrapper to run insert_str_data in thread with its own connection."""
+    try:
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                await run_in_thread(
+                    insert_str_data,
+                    *args,
+                    cursor=cursor,
+                    **kwargs,
+                )
+    except Exception as e:
+        logger.warning(f"insert_str_data_async failed: {e}")
 
 async def mirror_defects_async(rows):
     try:
@@ -254,7 +290,7 @@ async def process_initial_production(
                 f"[{full_station_id}] ✅ Inserted production record: prod_id={prod_id}"
             )
             if channel_id in ("ELL01", "RMI01") and initial_data:
-                await process_mirror_production(
+                await process_mirror_ell_production(
                     {
                         "id": prod_id,
                         "object_id": object_id,
@@ -429,8 +465,11 @@ async def handle_end_cycle(
 
     logger.debug(f"Fine Ciclo on {full_station_id} TRUE ...")
 
-    read_task = asyncio.create_task(
-        read_data(
+    esito_conf = paths.get("esito_scarto_compilato")
+    pezzo_archivia_conf = paths["pezzo_archiviato"]
+    timer_0 = time.perf_counter()
+    
+    result = await read_data(
             plc_connection,
             line_name,
             channel_id,
@@ -441,10 +480,9 @@ async def handle_end_cycle(
             start_byte=start_byte,
             is_EndCycle=True,
         )
-    )
-
-    esito_conf = paths.get("esito_scarto_compilato")
-    pezzo_archivia_conf = paths["pezzo_archiviato"]
+    timer_1 = time.perf_counter()
+    logger.debug(f"[{full_station_id}] read_data", timer_1 - timer_0)
+    
     t11 = time.perf_counter()
     await asyncio.get_event_loop().run_in_executor(
         plc_executor,
@@ -465,11 +503,6 @@ async def handle_end_cycle(
         )
     t_write_end = time.perf_counter()
     log_duration(f"[{full_station_id}] from PLC TRUE to write_bool(TRUE)", t_write_end - t_plc_detect)
-
-    timer_0 = time.perf_counter()
-    result = await read_task
-    timer_1 = time.perf_counter()
-    logger.debug(f"[{full_station_id}] read_data", timer_1 - timer_0)
 
     if result:
         production_id = incomplete_productions.get(full_station_id)
@@ -620,7 +653,7 @@ async def on_trigger_change(
         durations["write_TRUE"] = t_post - t_pre
 
         if durations["write_TRUE"] > 0.5:
-            logger.warning(f"[{full_id}] ⏱ write_TRUE={durations['write_TRUE']:.3f}s | queue={durations['executor_queue']:.3f}s | total={durations['write_total']:.3f}s")
+            logger.warning(f"[{full_id}] ⏱ write_TRUE={durations['write_TRUE']:.3f}s | queue={durations['executor_queue']:.3f}s")
 
     # Broadcast
     await broadcast(line_name, channel_id, {
@@ -781,6 +814,41 @@ async def read_data(
             rwk_vals = ["3SBHBGHC25620697", "3SBHBGHC25614686", "3SBHBGHC25620697"]
 
         data["BufferIds_Rework"] = rwk_vals
+        
+        STR_STATION_MAP = {
+            "STR01": 4,
+            "STR02": 5,
+            "STR03": 6,
+            "STR04": 7,
+            "STR05": 8,
+        }
+
+        STR_OFFSETS = [46, 48, 50, 52]  # Bytes for cell_G, cell_NG, string_G, string_NG
+
+        # Step 14: STR Visual Snapshot Insert (only for STR stations)
+        if channel_id.startswith("STR"):
+            try:
+                # Read 4 integers directly from the current DB buffer
+                data["cell_G"]    = extract_int(buffer, STR_OFFSETS[0], start_byte)
+                data["cell_NG"]   = extract_int(buffer, STR_OFFSETS[1], start_byte)
+                data["string_NG"]  = extract_int(buffer, STR_OFFSETS[2], start_byte)
+                data["string_G"] = extract_int(buffer, STR_OFFSETS[3], start_byte)
+
+                # Map channel_id to station_id
+                station_id = STR_STATION_MAP.get(channel_id)
+                if station_id is None:
+                    raise ValueError(f"Unknown STR channel_id: {channel_id}")
+
+                data["station_id"] = station_id
+
+                logger.debug(
+                    f"[{full_id}], STR snapshot read: "
+                    f"cell_G={data['cell_G']}, cell_NG={data['cell_NG']}, "
+                    f"string_G={data['string_G']}, string_NG={data['string_NG']} "
+                    f"for station_id={station_id}"
+                )
+            except Exception as e:
+                logger.error(f"[{full_id}], Failed to read STR snapshot: {e}")
 
         return data
 

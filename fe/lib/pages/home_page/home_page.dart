@@ -264,6 +264,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         });
       }
     } catch (e) {
+      final errorText = e.toString();
+      final brokenImageMatch =
+          RegExp(r'Invalid image for defect path: (.+)$').firstMatch(errorText);
+      final isImageError = brokenImageMatch != null;
+      final brokenDefect = brokenImageMatch?.group(1)?.trim();
+
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
@@ -280,19 +286,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                "C'è stato un problema durante l'invio dei difetti.",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              Text(
+                "C'è stato un problema durante l'invio dei difetti. fai una foto a questa pagina ti prego e falla vedere al ragazzo che di solito aggiorna i tablet così riesco a capire cosa è successo, ti prego, ti prego, ti prego, '-' ",
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
               Row(
-                children: const [
-                  Icon(Icons.camera_alt_outlined, color: Colors.orange),
-                  SizedBox(width: 8),
+                children: [
+                  Icon(
+                      isImageError
+                          ? Icons.camera_alt_outlined
+                          : Icons.report_problem_outlined,
+                      color: isImageError ? Colors.orange : Colors.grey),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      "La foto allegata potrebbe essere danneggiata.\nPer favore, scattala di nuovo.",
-                      style: TextStyle(fontSize: 14),
+                      errorText,
+                      style: const TextStyle(fontSize: 14),
                     ),
                   ),
                 ],
@@ -300,29 +311,25 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ],
           ),
           actions: [
-            TextButton.icon(
-              icon: const Icon(Icons.replay, color: Colors.blue),
-              label: const Text("Ripeti foto"),
-              onPressed: () {
-                final regex = RegExp(r'Invalid image for defect path: (.+)$');
-                final match = regex.firstMatch(e.toString());
-
-                if (match != null) {
-                  final brokenDefect = match.group(1)?.trim();
+            if (isImageError)
+              TextButton.icon(
+                icon: const Icon(Icons.replay, color: Colors.blue),
+                label: const Text("Ripeti foto"),
+                onPressed: () {
                   if (brokenDefect != null) {
                     _pictures
                         .removeWhere((img) => img["defect"] == brokenDefect);
-
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text("Foto rimossa per: $brokenDefect"),
-                      ),
+                          content: Text("Foto rimossa per: $brokenDefect")),
                     );
                   }
-                }
-
-                Navigator.of(context).pop();
-              },
+                  Navigator.of(context).pop();
+                },
+              ),
+            TextButton(
+              child: const Text("Chiudi"),
+              onPressed: () => Navigator.of(context).pop(),
             ),
           ],
         ),

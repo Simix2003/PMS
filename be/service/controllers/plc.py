@@ -3,6 +3,7 @@ import asyncio
 import snap7.client as c
 import snap7.util as u
 from snap7.type import Area
+from snap7.type import Parameter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,8 @@ class PLCConnection:
         self.connected = False
         self.status_callback = status_callback
         self._connect()
+        
+        print("Current timeout:", self.client.get_param(Parameter.PingTimeout))
 
     def _connect(self):
         """Internal connection method."""
@@ -138,11 +141,15 @@ class PLCConnection:
                     self.connected = False
                     return None
 
-    def write_bool_old(self, db_number, byte_index, bit_index, value):
+    def write_bool(self, db_number, byte_index, bit_index, value, max_retries=3):
+        """
+        Write a BOOL to the PLC with quick retry logic (no full reconnect unless needed).
+        - max_retries: how many quick attempts to do before reconnecting
+        """
         t0 = time.perf_counter()
 
         if not WRITE_TO_PLC:
-            logger.debug(f"[SKIPPED] write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) = {value} (WRITE_TO_PLC=False)")
+            logger.debug(f"[SKIPPED] write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) = {value}")
             return
 
         with self.lock:
@@ -153,25 +160,34 @@ class PLCConnection:
                 u.set_bool(byte_array, 0, bit_index, value)
                 self.client.db_write(db_number, byte_index, byte_array)
 
-            try:
-                attempt_write()
-            except Exception as e:
-                logger.warning(f"⚠️ Error writing BOOL (1st try) DB{db_number}, byte {byte_index}, bit {bit_index}: {e}")
+            # Try quick retries first (with short sleeps)
+            for attempt in range(max_retries):
+                try:
+                    attempt_write()
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    logger.warning(f"⚠️ Write attempt {attempt+1}/{max_retries} failed: DB{db_number}, b{byte_index}:{bit_index}: {e}")
+                    # Small progressive wait before retry (50ms, 100ms, 200ms...)
+                    time.sleep(0.05 * (2 ** attempt))
+            else:
+                # All quick retries failed, do a full reconnect and last try
                 self.connected = False
                 self.reconnect()
                 try:
                     attempt_write()
                 except Exception as e2:
-                    logger.error(f"❌ Retry failed: BOOL write DB{db_number}, byte {byte_index}, bit {bit_index}: {e2}")
+                    logger.error(f"❌ Retry after reconnect failed: BOOL DB{db_number}, byte {byte_index}, bit {bit_index}: {e2}")
                     self.connected = False
 
         duration = time.perf_counter() - t0
-        if duration > 0.250:
-            logger.warning(f"{self.ip_address} ⏱ write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
-        else:
-            logger.debug(f"write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
+        log = logger.warning if duration > 0.250 else logger.debug
+        log(f"{self.ip_address} ⏱ write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) took {duration:.3f}s")
 
-    def write_bool(self, db_number, byte_index, bit_index, value):
+    def write_bool_new(self, db_number, byte_index, bit_index, value, max_retries=3):
+        """
+        Optimized BOOL write with fast retries before doing a full reconnect.
+        - max_retries: quick retry attempts before reconnect (50ms → 100ms → 200ms)
+        """
         t0 = time.perf_counter()
         if not WRITE_TO_PLC:
             logger.debug(f"[SKIPPED] write_bool(DB{db_number}, byte {byte_index}, bit {bit_index}) = {value}")
@@ -190,24 +206,28 @@ class PLCConnection:
 
                 logger.debug(f"✍️ Writing to DB{db_number}, b{byte_index}:{bit_index} = {value}")
 
-                # Positional call to avoid keyword mismatch
-                self.client.write_area(
-                    Area.DB,
-                    db_number,
-                    byte_index,
-                    buf
-                )
+                # Direct area write
+                self.client.write_area(Area.DB, db_number, byte_index, buf)
 
-            try:
-                attempt_write()
-            except Exception as e:
-                logger.warning(f"⚠️ Error (1st try) write_bool DB{db_number}, b{byte_index}:{bit_index}: {e}")
+            # Quick retry loop
+            for attempt in range(max_retries):
+                try:
+                    attempt_write()
+                    break  # Success → exit retry loop
+                except Exception as e:
+                    logger.warning(
+                        f"⚠️ Write attempt {attempt+1}/{max_retries} failed: DB{db_number}, b{byte_index}:{bit_index}: {e}"
+                    )
+                    # Small progressive delay before next try (50ms, 100ms, 200ms...)
+                    time.sleep(0.05 * (2 ** attempt))
+            else:
+                # All quick retries failed → try reconnect once
                 self.connected = False
                 self.reconnect()
                 try:
                     attempt_write()
                 except Exception as e2:
-                    logger.error(f"❌ Retry failed: {e2}")
+                    logger.error(f"❌ Retry after reconnect failed: {e2}")
                     self.connected = False
 
         duration = time.perf_counter() - t0

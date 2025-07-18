@@ -439,6 +439,27 @@ def insert_defects(
         ))
         cursor.connection.commit()
 
+def insert_str_data(data, station_id, timestamp, line_name, cursor):
+    """
+    Insert a new STR snapshot into the str_visual_snapshot table.
+    """
+    try:
+        sql_insert = """
+            INSERT INTO str_visual_snapshot (station_id, timestamp, cell_G, cell_NG, string_G, string_NG)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(sql_insert, (
+            station_id,
+            timestamp,
+            data["cell_G"],
+            data["cell_NG"],
+            data["string_G"],
+            data["string_NG"],
+        ))
+        cursor.connection.commit()
+    except Exception as e:
+        logger.error(f"Error inserting STR snapshot: {e}")
+
 def update_esito(esito: int, production_id: int, cursor, connection):
     """
     Update the 'esito' field in the productions table for the given production ID.

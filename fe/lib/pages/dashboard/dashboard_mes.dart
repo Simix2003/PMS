@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/graphs/find_page.dart';
 import 'package:ix_monitor/pages/mes/single_module_page.dart';
+import 'package:ix_monitor/pages/mes/simix_rca_page.dart';
 
 class DashboardMES extends StatefulWidget {
   const DashboardMES({super.key});
@@ -15,7 +16,7 @@ class _DashboardMESState extends State<DashboardMES> {
   bool autoSearch = false;
 
   List<Widget> get _pages => [
-        SingleModulePage(),
+        const SingleModulePage(),
         FindPage(
           initialFilters: filtersForFindPage,
           autoSearch: autoSearch,
@@ -25,6 +26,7 @@ class _DashboardMESState extends State<DashboardMES> {
             });
           },
         ),
+        const SimixRcaPage(),
       ];
 
   @override
@@ -51,6 +53,10 @@ class _DashboardMESState extends State<DashboardMES> {
           BottomNavigationBarItem(
             icon: Icon(Icons.query_stats),
             label: 'Mega MES',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.question_answer_outlined),
+            label: '5 Why',
           ),
         ],
       ),

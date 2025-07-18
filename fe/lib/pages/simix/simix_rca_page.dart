@@ -1,6 +1,8 @@
 import 'dart:ui';
+import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../shared/services/api_service.dart';
+import '../../shared/services/socket_service.dart';
 
 class SimixRcaPage extends StatefulWidget {
   const SimixRcaPage({super.key});
@@ -12,24 +14,76 @@ class SimixRcaPage extends StatefulWidget {
 class _SimixRcaPageState extends State<SimixRcaPage> {
   final TextEditingController _contextController = TextEditingController();
   final TextEditingController _answerController = TextEditingController();
+  final WebSocketService _ws = WebSocketService();
 
   String? _question;
   List<String> _suggestions = [];
   final List<Map<String, String>> _chain = [];
+  bool _loading = false;
+  String _buffer = '';
+  int _dotCount = 0;
+  Timer? _timer;
+
+  void _startTimer() {
+    _timer?.cancel();
+    _dotCount = 0;
+    _timer = Timer.periodic(const Duration(milliseconds: 400), (_) {
+      setState(() {
+        _dotCount = (_dotCount + 1) % 4;
+      });
+    });
+  }
+
+  void _stopTimer() {
+    _timer?.cancel();
+    _timer = null;
+    _dotCount = 0;
+  }
 
   Future<void> _askNext([String? answer]) async {
-    print('Called');
     if (answer != null && _question != null) {
       _chain.add({'q': _question!, 'a': answer});
     }
     final ctx = _contextController.text.trim();
     if (ctx.isEmpty) return;
-    final res = await ApiService.askSimixRca(ctx, _chain);
     setState(() {
-      _question = res['question'] as String?;
-      _suggestions = List<String>.from(res['suggestions'] ?? []);
-      _answerController.clear();
+      _loading = true;
+      _buffer = '';
     });
+    _startTimer();
+    _ws.connectToSimixRca(
+      context: ctx,
+      chain: _chain,
+      onToken: (token) {
+        if (token == '[[END]]') {
+          try {
+            final data = jsonDecode(_buffer);
+            setState(() {
+              _question = data['question'] as String?;
+              _suggestions = List<String>.from(data['suggestions'] ?? []);
+              _answerController.clear();
+              _loading = false;
+            });
+          } catch (_) {
+            setState(() {
+              _loading = false;
+            });
+          }
+          _stopTimer();
+          _ws.close();
+        } else {
+          setState(() {
+            _buffer += token;
+          });
+        }
+      },
+      onError: (_) {
+        setState(() {
+          _loading = false;
+        });
+        _stopTimer();
+      },
+    );
   }
 
   Widget _buildBody() {
@@ -56,20 +110,31 @@ class _SimixRcaPageState extends State<SimixRcaPage> {
         ],
       );
     }
+    if (_loading) {
+      return Center(
+        child: Text(
+          'Simix sta pensando${'.' * _dotCount}',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+        ),
+      );
+    }
 
     return Column(
       children: [
         Text(
           _question!,
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 16),
         Wrap(
           spacing: 8,
           children: _suggestions
-              .map((s) => ActionChip(
-                    label: Text(s),
+              .map((s) => ElevatedButton(
                     onPressed: () => _askNext(s),
+                    style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12)),
+                    child: Text(s),
                   ))
               .toList(),
         ),
@@ -82,6 +147,9 @@ class _SimixRcaPageState extends State<SimixRcaPage> {
         const SizedBox(height: 12),
         ElevatedButton(
           onPressed: () => _askNext(_answerController.text.trim()),
+          style: ElevatedButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 14)),
           child: const Text('Invia'),
         )
       ],
@@ -115,5 +183,12 @@ class _SimixRcaPageState extends State<SimixRcaPage> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _ws.close();
+    _stopTimer();
+    super.dispose();
   }
 }

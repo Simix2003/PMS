@@ -145,6 +145,30 @@ class WebSocketService {
     );
   }
 
+  // ----------------- SIMIX RCA -----------------
+  void connectToSimixRca({
+    required String context,
+    required List<Map<String, String>> chain,
+    required void Function(String) onToken,
+    void Function()? onDone,
+    void Function(dynamic)? onError,
+  }) {
+    close();
+
+    final uri = Uri.parse('$baseUrl/ws/simix_rca');
+    _channel = WebSocketChannel.connect(uri);
+
+    // Send initial payload
+    _channel!.sink.add(jsonEncode({'context': context, 'why_chain': chain}));
+
+    _handleStream(
+      stream: _channel!.stream,
+      onMessage: (msg) => onToken(msg as String),
+      onDone: onDone,
+      onError: onError,
+    );
+  }
+
   // ----------------- CLOSE -----------------
   void close() {
     isConnected = false;

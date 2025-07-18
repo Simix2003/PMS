@@ -154,19 +154,45 @@ class WebSocketService {
     void Function(dynamic)? onError,
   }) {
     close();
-
     final uri = Uri.parse('$baseUrl/ws/simix_rca');
-    _channel = WebSocketChannel.connect(uri);
+    print("🔌 Connecting to WebSocket: $uri");
 
-    // Send initial payload
-    _channel!.sink.add(jsonEncode({'context': context, 'why_chain': chain}));
+    try {
+      _channel = WebSocketChannel.connect(uri);
+      print("✅ WebSocket connected");
 
-    _handleStream(
-      stream: _channel!.stream,
-      onMessage: (msg) => onToken(msg as String),
-      onDone: onDone,
-      onError: onError,
-    );
+      // Send initial payload
+      final payload = jsonEncode({'context': context, 'why_chain': chain});
+      print("📤 Sending payload: $payload");
+      _channel!.sink.add(payload);
+
+      _handleStream(
+        stream: _channel!.stream,
+        onMessage: (msg) {
+          String text;
+          if (msg is String) {
+            text = msg;
+          } else if (msg is List<int>) {
+            text = utf8.decode(msg);
+          } else {
+            text = msg.toString();
+          }
+          print("📥 Raw message received: '$text'");
+          onToken(text);
+        },
+        onDone: () {
+          print("🔒 WebSocket closed by server");
+          onDone?.call();
+        },
+        onError: (err) {
+          print("❗ WebSocket stream error: $err");
+          onError?.call(err);
+        },
+      );
+    } catch (e) {
+      print("❌ Failed to connect WebSocket: $e");
+      onError?.call(e);
+    }
   }
 
   // ----------------- CLOSE -----------------

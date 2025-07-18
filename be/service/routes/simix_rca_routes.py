@@ -144,7 +144,6 @@ async def api_next_question(req: RCARequest):
 
 @router.websocket("/ws/simix_rca")
 async def websocket_next_question(websocket: WebSocket):
-    """Stream the next RCA question via WebSocket."""
     await websocket.accept()
     try:
         payload = await websocket.receive_json()
@@ -152,11 +151,33 @@ async def websocket_next_question(websocket: WebSocket):
         chain = payload.get("why_chain", [])
 
         prompt = build_prompt(context, chain)
-        for chunk in llm(prompt, max_tokens=512, stop=["<|user|>"], stream=True):
-            token = chunk.get("choices", [{}])[0].get("text", "")
-            await websocket.send_text(token)
 
+        collected = []
+        for chunk in llm(prompt, max_tokens=512, stop=["<|user|>"], stream=True):
+            if isinstance(chunk, dict):
+                token = chunk.get("choices", [{}])[0].get("text", "")
+            elif isinstance(chunk, str):
+                token = chunk
+            else:
+                token = ""
+            if token:
+                collected.append(token)
+                # Stream token immediately so the frontend sees it live
+                await websocket.send_text(token)
+
+        # Assemble full response
+        full_text = "".join(collected)
+        # Clean up formatting for JSON
+        full_text = full_text.replace("<|file_separator|>", "").strip()
+        full_text = re.sub(r"^```(?:json)?", "", full_text, flags=re.IGNORECASE).strip()
+        full_text = re.sub(r"```$", "", full_text).strip()
+        full_text = re.sub(r",\s*]", "]", full_text)
+        full_text = re.sub(r",\s*}", "}", full_text)
+
+        # Send the cleaned JSON as a separate final message
+        await websocket.send_text(f"[[JSON]]{full_text}")
         await websocket.send_text("[[END]]")
+
     except WebSocketDisconnect:
         logger.debug("Simix RCA websocket disconnected")
     except Exception as e:

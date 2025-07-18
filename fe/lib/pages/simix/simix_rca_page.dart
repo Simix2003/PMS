@@ -43,50 +43,82 @@ class _SimixRcaPageState extends State<SimixRcaPage> {
   Future<void> _askNext([String? answer]) async {
     if (answer != null && _question != null) {
       _chain.add({'q': _question!, 'a': answer});
+      print("📨 Added to chain: $_chain");
     }
     final ctx = _contextController.text.trim();
-    if (ctx.isEmpty) return;
+    if (ctx.isEmpty) {
+      print("⚠️ Context is empty, skipping request");
+      return;
+    }
+    print(
+        "🔗 Connecting to RCA WebSocket with context: '$ctx' and chain length: ${_chain.length}");
+
     setState(() {
       _loading = true;
       _buffer = '';
     });
     _startTimer();
+
     _ws.connectToSimixRca(
       context: ctx,
       chain: _chain,
       onToken: (token) {
+        print("📩 Received token: '$token'");
+
         if (token == '[[END]]') {
+          print("🏁 End of stream. Final displayed buffer: $_buffer");
+          _stopTimer();
+          _ws.close();
+        } else if (token.startsWith('[[JSON]]')) {
+          final cleanJson = token.replaceFirst('[[JSON]]', '');
+          print("🗂 Extracted JSON: $cleanJson");
           try {
-            final data = jsonDecode(_buffer);
+            final data = jsonDecode(cleanJson);
             setState(() {
               _question = data['question'] as String?;
               _suggestions = List<String>.from(data['suggestions'] ?? []);
               _answerController.clear();
-              _loading = false;
+              _buffer = ''; // Clear the typing buffer
+              _loading = false; // <<< EXIT loading state NOW
             });
-          } catch (_) {
+          } catch (e) {
+            print("❌ Failed to parse final JSON: $e");
             setState(() {
-              _loading = false;
+              _question = 'Errore nel parsing della risposta';
+              _suggestions = [];
+              _buffer = '';
+              _loading = false; // <<< Also exit loading on error
             });
           }
-          _stopTimer();
-          _ws.close();
         } else {
+          // Show the streaming text as it comes
           setState(() {
             _buffer += token;
           });
         }
       },
-      onError: (_) {
-        setState(() {
-          _loading = false;
-        });
+      onError: (err) {
+        print("❗ WebSocket error: $err");
+        setState(() => _loading = false);
         _stopTimer();
       },
     );
   }
 
   Widget _buildBody() {
+    // Show loading screen regardless of question state
+    if (_loading) {
+      return Center(
+        child: Text(
+          _buffer.isNotEmpty
+              ? _buffer // Live stream text
+              : 'Simix sta pensando${'.' * _dotCount}',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
+        ),
+      );
+    }
+
+    // If no question yet, show context input
     if (_question == null) {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -110,15 +142,8 @@ class _SimixRcaPageState extends State<SimixRcaPage> {
         ],
       );
     }
-    if (_loading) {
-      return Center(
-        child: Text(
-          'Simix sta pensando${'.' * _dotCount}',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-        ),
-      );
-    }
 
+    // Otherwise, show question + suggestions
     return Column(
       children: [
         Text(

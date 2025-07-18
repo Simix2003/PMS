@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import logging
@@ -140,3 +140,26 @@ async def api_next_question(req: RCARequest):
     result = ask_next(req.context, req.why_chain)
     logger.info(f"Returning RCA result: {result}")
     return result
+
+
+@router.websocket("/ws/simix_rca")
+async def websocket_next_question(websocket: WebSocket):
+    """Stream the next RCA question via WebSocket."""
+    await websocket.accept()
+    try:
+        payload = await websocket.receive_json()
+        context = payload.get("context", "")
+        chain = payload.get("why_chain", [])
+
+        prompt = build_prompt(context, chain)
+        for chunk in llm(prompt, max_tokens=512, stop=["<|user|>"], stream=True):
+            token = chunk.get("choices", [{}])[0].get("text", "")
+            await websocket.send_text(token)
+
+        await websocket.send_text("[[END]]")
+    except WebSocketDisconnect:
+        logger.debug("Simix RCA websocket disconnected")
+    except Exception as e:
+        logger.exception(f"Simix RCA websocket error: {e}")
+    finally:
+        await websocket.close()

@@ -18,6 +18,7 @@ class _SimixRcaPageState extends State<SimixRcaPage> {
   final List<Map<String, String>> _chain = [];
 
   Future<void> _askNext([String? answer]) async {
+    print('Called');
     if (answer != null && _question != null) {
       _chain.add({'q': _question!, 'a': answer});
     }

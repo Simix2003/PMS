@@ -6,16 +6,19 @@ import os
 import sys
 import json
 import re
+from collections.abc import Iterator
 from llama_cpp import Llama
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 MODEL_PATH = r"D:\AI\Models\gemma-3n-E4B-it-Q4_K_M.gguf"
 N_THREADS = 4
 
+logger.info(f"Loading Llama model from: {MODEL_PATH} (threads={N_THREADS})...")
 llm = Llama(
     model_path=MODEL_PATH,
     n_ctx=4096,
@@ -25,6 +28,7 @@ llm = Llama(
     use_mmap=True,
     verbose=False,
 )
+logger.info("Llama model loaded successfully.")
 
 SYSTEM_PROMPT_RCA = """
 Il tuo nome è Simix. Sei un assistente AI specializzato in analisi delle cause radice (RCA) per una linea di produzione di moduli fotovoltaici.
@@ -60,8 +64,11 @@ class RCARequest(BaseModel):
     context: str
     why_chain: List[Dict[str, str]] = []
 
-
 def build_prompt(case_context: str, chain: List[Dict[str, str]]) -> str:
+    logger.debug("Building prompt for Simix RCA...")
+    logger.debug(f"Context: {case_context}")
+    logger.debug(f"Why-chain: {json.dumps(chain, ensure_ascii=False)}")
+
     prompt = f"<|system|>\n{SYSTEM_PROMPT_RCA.strip()}\n<|user|>\n"
     prompt += f"Contesto: {case_context.strip()}\n\n"
     if chain:
@@ -72,30 +79,64 @@ def build_prompt(case_context: str, chain: List[Dict[str, str]]) -> str:
     else:
         prompt += "Inizia con la **prima domanda e almeno 3 possibili risposte** in formato JSON.\n"
     prompt += "<|assistant|>\n"
+
+    logger.debug(f"Built prompt (first 500 chars): {prompt[:500]}...")
     return prompt
 
+def extract_text_from_result(result):
+    """Handles both streaming (Iterator) and normal Llama responses."""
+    if isinstance(result, Iterator):
+        logger.debug("Result is a streaming iterator; collecting chunks...")
+        collected = []
+        for chunk in result:
+            piece = chunk.get("choices", [{}])[0].get("text", "")
+            collected.append(piece)
+        return "".join(collected)
+    else:
+        return result.get("choices", [{}])[0].get("text", "")
 
 def ask_next(case_context: str, chain: List[Dict[str, str]]) -> Dict[str, Any]:
     prompt = build_prompt(case_context, chain)
-    result = llm(prompt, max_tokens=512, stop=["<|user|>"])
-    raw_text = result["choices"][0]["text"]
+
+    logger.info("Querying Llama model for RCA question...")
+    try:
+        # Set `stream=False` unless you explicitly want streaming
+        result = llm(prompt, max_tokens=512, stop=["<|user|>"], stream=False)
+        logger.debug(f"Raw LLM result object: {result}")
+    except Exception as e:
+        logger.exception(f"Error calling LLM: {e}")
+        return {"question": "Errore durante la generazione della domanda.", "suggestions": []}
+
+    raw_text = extract_text_from_result(result)
+    logger.debug(f"Raw model text before cleaning: {raw_text}")
+
+    # Cleanup
     raw_text = raw_text.replace("<|file_separator|>", "").strip()
     raw_text = re.sub(r"^```(?:json)?", "", raw_text, flags=re.IGNORECASE).strip()
     raw_text = re.sub(r"```$", "", raw_text).strip()
+    logger.debug(f"Model text after cleanup: {raw_text}")
+
     try:
+        # Fix trailing commas
         raw_text = re.sub(r",\s*]", "]", raw_text)
         raw_text = re.sub(r",\s*}", "}", raw_text)
+        logger.debug(f"Final JSON candidate: {raw_text}")
+
         data = json.loads(raw_text)
         question = data.get("question", "").strip()
         suggestions = [s.strip() for s in data.get("suggestions", [])]
+        logger.info(f"Generated question: {question}")
+        logger.info(f"Suggestions: {suggestions}")
     except Exception as e:
-        logger.error(f"Failed parsing model output: {e}")
+        logger.exception(f"Failed parsing model output: {e}")
         question = "Errore nel parsing della domanda."
         suggestions = []
-    return {"question": question, "suggestions": suggestions}
 
+    return {"question": question, "suggestions": suggestions}
 
 @router.post("/api/simix_rca/next")
 async def api_next_question(req: RCARequest):
-    return ask_next(req.context, req.why_chain)
-
+    logger.info(f"Received RCA request: context='{req.context}' (chain length={len(req.why_chain)})")
+    result = ask_next(req.context, req.why_chain)
+    logger.info(f"Returning RCA result: {result}")
+    return result

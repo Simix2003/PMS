@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/graphs/find_page.dart';
 import 'package:ix_monitor/pages/mes/single_module_page.dart';
-import 'package:ix_monitor/pages/mes/simix_rca_page.dart';
+
+import '../simix/simix_rca_page.dart';
 
 class DashboardMES extends StatefulWidget {
   const DashboardMES({super.key});

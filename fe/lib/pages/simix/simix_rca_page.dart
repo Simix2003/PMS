@@ -17,6 +17,7 @@ class _SimixRcaPageState extends State<SimixRcaPage> {
   final WebSocketService _ws = WebSocketService();
 
   String? _question;
+  String? _summary;
   List<String> _suggestions = [];
   final List<Map<String, String>> _chain = [];
   bool _loading = false;
@@ -45,6 +46,7 @@ class _SimixRcaPageState extends State<SimixRcaPage> {
       _chain.add({'q': _question!, 'a': answer});
       print("📨 Added to chain: $_chain");
     }
+    _summary = null;
     final ctx = _contextController.text.trim();
     if (ctx.isEmpty) {
       print("⚠️ Context is empty, skipping request");
@@ -75,8 +77,14 @@ class _SimixRcaPageState extends State<SimixRcaPage> {
           try {
             final data = jsonDecode(cleanJson);
             setState(() {
-              _question = data['question'] as String?;
-              _suggestions = List<String>.from(data['suggestions'] ?? []);
+              if (data.containsKey('summary')) {
+                _summary = data['summary'] as String?;
+                _question = null;
+                _suggestions = [];
+              } else {
+                _question = data['question'] as String?;
+                _suggestions = List<String>.from(data['suggestions'] ?? []);
+              }
               _answerController.clear();
               _buffer = ''; // Clear the typing buffer
               _loading = false; // <<< EXIT loading state NOW
@@ -115,6 +123,24 @@ class _SimixRcaPageState extends State<SimixRcaPage> {
               : 'Simix sta pensando${'.' * _dotCount}',
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
         ),
+      );
+    }
+
+    // Show final summary if present
+    if (_summary != null) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            'Riassunto 5 Why',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            _summary!,
+            style: const TextStyle(fontSize: 18),
+          ),
+        ],
       );
     }
 

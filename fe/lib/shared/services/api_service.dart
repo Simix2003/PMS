@@ -1073,4 +1073,21 @@ class ApiService {
       return false;
     }
   }
+
+  /// Ask Simix RCA assistant for the next question.
+  static Future<Map<String, dynamic>> askSimixRca(
+      String context, List<Map<String, String>> chain) async {
+    final url = Uri.parse('$baseUrl/api/simix_rca/next');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'context': context, 'why_chain': chain}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Errore durante la richiesta a Simix RCA');
+    }
+  }
 }

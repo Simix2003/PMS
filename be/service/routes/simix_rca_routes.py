@@ -64,6 +64,33 @@ class RCARequest(BaseModel):
     context: str
     why_chain: List[Dict[str, str]] = []
 
+def build_summary_prompt(case_context: str, chain: List[Dict[str, str]]) -> str:
+    """Builds a prompt for summarising the completed 5 Why chain."""
+    logger.debug("Building summary prompt for Simix RCA...")
+    prompt = f"<|system|>\n{SYSTEM_PROMPT_RCA.strip()}\n<|user|>\n"
+    prompt += f"Contesto: {case_context.strip()}\n\n"
+    prompt += "Domande e risposte finali:\n"
+    for idx, step in enumerate(chain[:5], start=1):
+        prompt += f"{idx}. Q: {step['q']}\n   A: {step['a']}\n"
+    prompt += "\nFornisci un breve riassunto in italiano della catena dei 5 Perché evidenziando la possibile causa radice.\n"
+    prompt += "<|assistant|>\n"
+    logger.debug(f"Built summary prompt (first 500 chars): {prompt[:500]}...")
+    return prompt
+
+def summarize_chain(case_context: str, chain: List[Dict[str, str]]) -> str:
+    prompt = build_summary_prompt(case_context, chain)
+    try:
+        result = llm(prompt, max_tokens=512, stop=["<|user|>"], stream=False)
+    except Exception as e:
+        logger.exception(f"Error calling LLM for summary: {e}")
+        return "Errore nella generazione del riassunto."
+
+    raw_text = extract_text_from_result(result)
+    raw_text = raw_text.replace("<|file_separator|>", "").strip()
+    raw_text = re.sub(r"^```(?:json)?", "", raw_text, flags=re.IGNORECASE).strip()
+    raw_text = re.sub(r"```$", "", raw_text).strip()
+    return raw_text.strip()
+
 def build_prompt(case_context: str, chain: List[Dict[str, str]]) -> str:
     logger.debug("Building prompt for Simix RCA...")
     logger.debug(f"Context: {case_context}")
@@ -96,6 +123,10 @@ def extract_text_from_result(result):
         return result.get("choices", [{}])[0].get("text", "")
 
 def ask_next(case_context: str, chain: List[Dict[str, str]]) -> Dict[str, Any]:
+    if len(chain) >= 5:
+        summary = summarize_chain(case_context, chain)
+        return {"summary": summary}
+
     prompt = build_prompt(case_context, chain)
 
     logger.info("Querying Llama model for RCA question...")
@@ -150,7 +181,10 @@ async def websocket_next_question(websocket: WebSocket):
         context = payload.get("context", "")
         chain = payload.get("why_chain", [])
 
-        prompt = build_prompt(context, chain)
+        if len(chain) >= 5:
+            prompt = build_summary_prompt(context, chain)
+        else:
+            prompt = build_prompt(context, chain)
 
         collected = []
         for chunk in llm(prompt, max_tokens=512, stop=["<|user|>"], stream=True):
@@ -162,20 +196,20 @@ async def websocket_next_question(websocket: WebSocket):
                 token = ""
             if token:
                 collected.append(token)
-                # Stream token immediately so the frontend sees it live
                 await websocket.send_text(token)
 
-        # Assemble full response
         full_text = "".join(collected)
-        # Clean up formatting for JSON
         full_text = full_text.replace("<|file_separator|>", "").strip()
         full_text = re.sub(r"^```(?:json)?", "", full_text, flags=re.IGNORECASE).strip()
         full_text = re.sub(r"```$", "", full_text).strip()
-        full_text = re.sub(r",\s*]", "]", full_text)
-        full_text = re.sub(r",\s*}", "}", full_text)
+        if len(chain) >= 5:
+            payload = json.dumps({"summary": full_text})
+        else:
+            full_text = re.sub(r",\s*]", "]", full_text)
+            full_text = re.sub(r",\s*}", "}", full_text)
+            payload = full_text
 
-        # Send the cleaned JSON as a separate final message
-        await websocket.send_text(f"[[JSON]]{full_text}")
+        await websocket.send_text(f"[[JSON]]{payload}")
         await websocket.send_text("[[END]]")
 
     except WebSocketDisconnect:

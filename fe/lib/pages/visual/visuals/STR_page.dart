@@ -7,85 +7,90 @@ import '../../../shared/services/api_service.dart';
 import '../escalation_visual.dart';
 
 class StrVisualsPage extends StatefulWidget {
-  final int shift_target;
-  final double hourly_shift_target;
-  final int yield_target;
+  final int shiftTarget;
+  final double hourlyShiftTarget;
+  final int yieldTarget;
   final double circleSize;
-  final int station_1_status;
-  final int station_2_status;
+
+  // Station status (optional: map per station)
+  final Map<int, int> stationStatus; // {1: status, 2: status, ...}
+
+  // Colors
   final Color errorColor;
   final Color okColor;
   final Color textColor;
   final Color warningColor;
   final Color redColor;
-  final int ng_bussingOut_1;
-  final int ng_bussingOut_2;
-  final int bussingIn_1;
-  final int bussingIn_2;
-  final int currentYield_1;
-  final int currentYield_2;
+
+  // Production data for all 5 stations
+  final Map<int, int> stationInputs; // {1: in, 2: in, ...}
+  final Map<int, int> stationNG; // {1: ng, 2: ng, ...}
+  final Map<int, int> stationYield; // {1: %, 2: %, ...}
+  final Map<int, int> stationScrap; // {1: scrap, ...} (currently always 0)
+
+  // Shift and throughput data
   final List<Map<String, int>> throughputData;
   final List<String> shiftLabels;
   final List<Map<String, int>> hourlyData;
   final List<String> hourLabels;
-  final List<Map<String, dynamic>> station1Shifts;
-  final List<Map<String, dynamic>> station2Shifts;
+
+  // Yield history (backend-native)
+  final List<Map<String, dynamic>> strYieldShifts;
+  final List<Map<String, dynamic>> overallYieldShifts;
+  final List<Map<String, dynamic>> strYieldLast8h;
+  final List<Map<String, dynamic>> overallYieldLast8h;
+
+  // Merged shift data for charts
   final List<Map<String, dynamic>> mergedShiftData;
+
+  // Downtime & availability
   final List<List<String>> dataFermi;
-  final List<Map<String, dynamic>> yieldLast8h_1;
-  final List<Map<String, dynamic>> yieldLast8h_2;
-  final Map<String, int> counts;
-  final int availableTime_1;
-  final int availableTime_2;
+  final Map<int, int> zoneAvailability;
+
+  // Defects data
   final List<String> defectLabels;
   final List<String> defectVPFLabels;
-  final List<int> ain1Counts;
-  final List<int> ain1VPFCounts;
-  final List<int> ain2Counts;
-  final List<int> ain2VPFCounts;
-  final int qg2_defects_value;
-  final int last_n_shifts;
+  final List<int> defectsCounts;
+  final List<int> VpfDefectsCounts;
+  final int qg2DefectsValue;
+
+  final int lastNShifts;
+  final Map<String, int> counts;
 
   const StrVisualsPage({
     super.key,
-    required this.shift_target,
-    required this.hourly_shift_target,
-    required this.yield_target,
+    required this.shiftTarget,
+    required this.hourlyShiftTarget,
+    required this.yieldTarget,
     required this.circleSize,
-    required this.station_1_status,
-    required this.station_2_status,
+    required this.stationStatus,
     required this.errorColor,
     required this.okColor,
     required this.textColor,
     required this.warningColor,
     required this.redColor,
-    required this.ng_bussingOut_1,
-    required this.ng_bussingOut_2,
-    required this.bussingIn_1,
-    required this.bussingIn_2,
-    required this.currentYield_1,
-    required this.currentYield_2,
+    required this.stationInputs,
+    required this.stationNG,
+    required this.stationYield,
+    required this.stationScrap,
     required this.throughputData,
     required this.shiftLabels,
     required this.hourlyData,
     required this.hourLabels,
-    required this.station1Shifts,
-    required this.station2Shifts,
+    required this.strYieldShifts,
+    required this.overallYieldShifts,
+    required this.strYieldLast8h,
+    required this.overallYieldLast8h,
     required this.mergedShiftData,
     required this.dataFermi,
-    required this.yieldLast8h_1,
-    required this.yieldLast8h_2,
-    required this.counts,
-    required this.availableTime_1,
-    required this.availableTime_2,
+    required this.zoneAvailability,
     required this.defectLabels,
     required this.defectVPFLabels,
-    required this.ain1Counts,
-    required this.ain1VPFCounts,
-    required this.ain2Counts,
-    required this.ain2VPFCounts,
-    required this.qg2_defects_value,
-    required this.last_n_shifts,
+    required this.defectsCounts,
+    required this.VpfDefectsCounts,
+    required this.qg2DefectsValue,
+    required this.lastNShifts,
+    required this.counts,
   });
 
   @override
@@ -100,9 +105,9 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
   @override
   void initState() {
     super.initState();
-    shift_target = widget.shift_target;
-    yield_target = widget.yield_target;
-    hourly_shift_target = widget.hourly_shift_target;
+    shift_target = widget.shiftTarget;
+    yield_target = widget.yieldTarget;
+    hourly_shift_target = widget.hourlyShiftTarget;
   }
 
   Future<void> showTargetEditDialog({
@@ -283,12 +288,13 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                     children: [
                                       // Row titles (aligned with the two card columns)
                                       Row(
+                                        crossAxisAlignment: CrossAxisAlignment
+                                            .start, // Align texts to top
                                         children: [
-                                          const SizedBox(
-                                            width: 125,
-                                          ), // aligns with the AIN 1 / AIN 2 label
+                                          const SizedBox(width: 110),
                                           Flexible(
-                                            child: Center(
+                                            child: Align(
+                                              alignment: Alignment.topCenter,
                                               child: Text(
                                                 'STR G',
                                                 style: TextStyle(
@@ -300,7 +306,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                           ),
                                           const SizedBox(width: 18),
                                           Flexible(
-                                            child: Center(
+                                            child: Align(
+                                              alignment: Alignment.topCenter,
                                               child: Text(
                                                 'STR NG',
                                                 style: TextStyle(
@@ -312,9 +319,12 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                           ),
                                           const SizedBox(width: 18),
                                           Flexible(
-                                            child: Center(
+                                            child: Align(
+                                              alignment: Alignment.topCenter,
                                               child: Text(
-                                                'CELL SCRAP',
+                                                'CELLE SCRAP\n(Stringhe EQ)',
+                                                textAlign: TextAlign
+                                                    .center, // Center align the two lines
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 16,
@@ -347,7 +357,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
                                                 color: getStationColor(
-                                                    widget.station_1_status),
+                                                    widget.stationStatus[1] ??
+                                                        0),
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
@@ -370,7 +381,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.bussingIn_1
+                                                      widget.stationInputs[1]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -381,6 +392,19 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            // Circle  NG STR1
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getNgColor(
+                                                    widget.stationNG[1] ?? 0,
+                                                    widget.stationInputs[1] ??
+                                                        0),
+                                                shape: BoxShape.circle,
                                               ),
                                             ),
 
@@ -402,7 +426,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.bussingIn_1
+                                                      widget.stationNG[1]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -413,6 +437,20 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+
+                                            const SizedBox(width: 8),
+                                            // Circle  Scarp STR1
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getNgColor(
+                                                    widget.stationScrap[1] ?? 0,
+                                                    widget.stationInputs[1] ??
+                                                        0),
+                                                shape: BoxShape.circle,
                                               ),
                                             ),
 
@@ -435,7 +473,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.ng_bussingOut_1
+                                                      widget.stationScrap[1]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -473,7 +511,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
                                                 color: getStationColor(
-                                                    widget.station_1_status),
+                                                    widget.stationStatus[2] ??
+                                                        0),
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
@@ -496,7 +535,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.bussingIn_1
+                                                      widget.stationInputs[2]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -507,6 +546,19 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            // Circle  NG STR2
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getNgColor(
+                                                    widget.stationNG[2] ?? 0,
+                                                    widget.stationInputs[2] ??
+                                                        0),
+                                                shape: BoxShape.circle,
                                               ),
                                             ),
 
@@ -528,7 +580,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.bussingIn_1
+                                                      widget.stationNG[2]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -539,6 +591,20 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+
+                                            const SizedBox(width: 8),
+                                            // Circle  Scarp STR2
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getNgColor(
+                                                    widget.stationScrap[2] ?? 0,
+                                                    widget.stationInputs[2] ??
+                                                        0),
+                                                shape: BoxShape.circle,
                                               ),
                                             ),
 
@@ -561,7 +627,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.ng_bussingOut_1
+                                                      widget.stationScrap[2]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -577,10 +643,9 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                           ],
                                         ),
                                       ),
-
                                       const SizedBox(height: 8),
 
-                                      // Second row of cards
+                                      // Third row of cards
                                       Flexible(
                                         child: Row(
                                           children: [
@@ -600,7 +665,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
                                                 color: getStationColor(
-                                                    widget.station_1_status),
+                                                    widget.stationStatus[3] ??
+                                                        0),
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
@@ -623,7 +689,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.bussingIn_1
+                                                      widget.stationInputs[3]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -634,6 +700,19 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            // Circle  NG STR3
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getNgColor(
+                                                    widget.stationNG[3] ?? 0,
+                                                    widget.stationInputs[3] ??
+                                                        0),
+                                                shape: BoxShape.circle,
                                               ),
                                             ),
 
@@ -655,7 +734,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.bussingIn_1
+                                                      widget.stationNG[3]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -666,6 +745,20 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+
+                                            const SizedBox(width: 8),
+                                            // Circle  Scarp STR3
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getNgColor(
+                                                    widget.stationScrap[3] ?? 0,
+                                                    widget.stationInputs[3] ??
+                                                        0),
+                                                shape: BoxShape.circle,
                                               ),
                                             ),
 
@@ -688,7 +781,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.ng_bussingOut_1
+                                                      widget.stationScrap[3]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -704,10 +797,9 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                           ],
                                         ),
                                       ),
-
                                       const SizedBox(height: 8),
 
-                                      // Second row of cards
+                                      // Fourth row of cards
                                       Flexible(
                                         child: Row(
                                           children: [
@@ -727,7 +819,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
                                                 color: getStationColor(
-                                                    widget.station_1_status),
+                                                    widget.stationStatus[4] ??
+                                                        0),
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
@@ -750,7 +843,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.bussingIn_1
+                                                      widget.stationInputs[4]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -761,6 +854,19 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            // Circle  NG STR4
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getNgColor(
+                                                    widget.stationNG[4] ?? 0,
+                                                    widget.stationInputs[4] ??
+                                                        0),
+                                                shape: BoxShape.circle,
                                               ),
                                             ),
 
@@ -782,7 +888,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.bussingIn_1
+                                                      widget.stationNG[4]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -793,6 +899,20 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+
+                                            const SizedBox(width: 8),
+                                            // Circle  Scarp STR4
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getNgColor(
+                                                    widget.stationScrap[4] ?? 0,
+                                                    widget.stationInputs[4] ??
+                                                        0),
+                                                shape: BoxShape.circle,
                                               ),
                                             ),
 
@@ -815,7 +935,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.ng_bussingOut_1
+                                                      widget.stationScrap[4]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -831,10 +951,9 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                           ],
                                         ),
                                       ),
-
                                       const SizedBox(height: 8),
 
-                                      // Second row of cards
+                                      // Fifth row of cards
                                       Flexible(
                                         child: Row(
                                           children: [
@@ -854,7 +973,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
                                                 color: getStationColor(
-                                                    widget.station_1_status),
+                                                    widget.stationStatus[5] ??
+                                                        0),
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
@@ -877,7 +997,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.bussingIn_1
+                                                      widget.stationInputs[5]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -888,6 +1008,19 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            // Circle  NG STR5
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getNgColor(
+                                                    widget.stationNG[5] ?? 0,
+                                                    widget.stationInputs[5] ??
+                                                        0),
+                                                shape: BoxShape.circle,
                                               ),
                                             ),
 
@@ -909,7 +1042,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.bussingIn_1
+                                                      widget.stationNG[5]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -920,6 +1053,20 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+
+                                            const SizedBox(width: 8),
+                                            // Circle  Scarp STR5
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getNgColor(
+                                                    widget.stationScrap[5] ?? 0,
+                                                    widget.stationInputs[5] ??
+                                                        0),
+                                                shape: BoxShape.circle,
                                               ),
                                             ),
 
@@ -942,7 +1089,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.ng_bussingOut_1
+                                                      widget.stationScrap[5]
                                                           .toString(),
                                                       style: TextStyle(
                                                         fontWeight:
@@ -1020,7 +1167,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
                                       const SizedBox(height: 8),
 
-                                      // First row of cards
+                                      // First Yield
                                       Flexible(
                                         child: Row(
                                           children: [
@@ -1029,16 +1176,19 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: widget.currentYield_1 ==
-                                                        0
-                                                    ? Colors.white
-                                                    : getYieldColor(
-                                                        widget.currentYield_1,
-                                                        yield_target),
+                                                color:
+                                                    widget.stationYield[1] == 0
+                                                        ? Colors.white
+                                                        : getYieldColor(
+                                                            widget.stationYield[
+                                                                    1] ??
+                                                                0,
+                                                            yield_target),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
                                                   color:
-                                                      widget.currentYield_1 == 0
+                                                      widget.stationYield[1] ==
+                                                              0
                                                           ? Colors.black
                                                           : Colors.transparent,
                                                   width: 2,
@@ -1067,7 +1217,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      '${widget.currentYield_1.toString()}%',
+                                                      '${widget.stationYield[1].toString()}%',
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -1084,7 +1234,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       ),
                                       const SizedBox(height: 8),
 
-                                      // Second row of cards
+                                      // Second Yield
                                       Flexible(
                                         child: Row(
                                           children: [
@@ -1093,16 +1243,19 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: widget.currentYield_2 ==
-                                                        0
-                                                    ? Colors.white
-                                                    : getYieldColor(
-                                                        widget.currentYield_2,
-                                                        yield_target),
+                                                color:
+                                                    widget.stationYield[2] == 0
+                                                        ? Colors.white
+                                                        : getYieldColor(
+                                                            widget.stationYield[
+                                                                    2] ??
+                                                                0,
+                                                            yield_target),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
                                                   color:
-                                                      widget.currentYield_2 == 0
+                                                      widget.stationYield[2] ==
+                                                              0
                                                           ? Colors.black
                                                           : Colors.transparent,
                                                   width: 2,
@@ -1113,6 +1266,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             const SizedBox(
                                               width: 8,
                                             ),
+
                                             Flexible(
                                               child: Card(
                                                 color: Colors.white,
@@ -1130,7 +1284,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      '${widget.currentYield_2.toString()}%',
+                                                      '${widget.stationYield[2].toString()}%',
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -1147,7 +1301,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       ),
                                       const SizedBox(height: 8),
 
-                                      // Third row of cards
+                                      // Third Yield
                                       Flexible(
                                         child: Row(
                                           children: [
@@ -1156,16 +1310,19 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: widget.currentYield_1 ==
-                                                        0
-                                                    ? Colors.white
-                                                    : getYieldColor(
-                                                        widget.currentYield_1,
-                                                        yield_target),
+                                                color:
+                                                    widget.stationYield[3] == 0
+                                                        ? Colors.white
+                                                        : getYieldColor(
+                                                            widget.stationYield[
+                                                                    3] ??
+                                                                0,
+                                                            yield_target),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
                                                   color:
-                                                      widget.currentYield_1 == 0
+                                                      widget.stationYield[3] ==
+                                                              0
                                                           ? Colors.black
                                                           : Colors.transparent,
                                                   width: 2,
@@ -1194,7 +1351,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      '${widget.currentYield_1.toString()}%',
+                                                      '${widget.stationYield[3].toString()}%',
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -1211,7 +1368,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       ),
                                       const SizedBox(height: 8),
 
-                                      // Fourth row of cards
+                                      // Fourth Yield
                                       Flexible(
                                         child: Row(
                                           children: [
@@ -1220,16 +1377,19 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: widget.currentYield_1 ==
-                                                        0
-                                                    ? Colors.white
-                                                    : getYieldColor(
-                                                        widget.currentYield_1,
-                                                        yield_target),
+                                                color:
+                                                    widget.stationYield[4] == 0
+                                                        ? Colors.white
+                                                        : getYieldColor(
+                                                            widget.stationYield[
+                                                                    4] ??
+                                                                0,
+                                                            yield_target),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
                                                   color:
-                                                      widget.currentYield_1 == 0
+                                                      widget.stationYield[4] ==
+                                                              0
                                                           ? Colors.black
                                                           : Colors.transparent,
                                                   width: 2,
@@ -1258,7 +1418,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      '${widget.currentYield_1.toString()}%',
+                                                      '${widget.stationYield[4].toString()}%',
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -1275,7 +1435,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       ),
                                       const SizedBox(height: 8),
 
-                                      // Fifth row of cards
+                                      // Fifth Yield
                                       Flexible(
                                         child: Row(
                                           children: [
@@ -1284,16 +1444,19 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: widget.currentYield_1 ==
-                                                        0
-                                                    ? Colors.white
-                                                    : getYieldColor(
-                                                        widget.currentYield_1,
-                                                        yield_target),
+                                                color:
+                                                    widget.stationYield[5] == 0
+                                                        ? Colors.white
+                                                        : getYieldColor(
+                                                            widget.stationYield[
+                                                                    5] ??
+                                                                0,
+                                                            yield_target),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
                                                   color:
-                                                      widget.currentYield_1 == 0
+                                                      widget.stationYield[5] ==
+                                                              0
                                                           ? Colors.black
                                                           : Colors.transparent,
                                                   width: 2,
@@ -1322,7 +1485,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      '${widget.currentYield_1.toString()}%',
+                                                      '${widget.stationYield[5].toString()}%',
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -1357,8 +1520,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                   const SizedBox(height: 8),
                                   // Second row with 1 card that fills all remaining space
                                   Yield2LineChart(
-                                    hourlyData1: widget.yieldLast8h_1,
-                                    hourlyData2: widget.yieldLast8h_2,
+                                    hourlyData1: widget.strYieldLast8h,
+                                    hourlyData2: widget.overallYieldLast8h,
                                     target: yield_target as double,
                                   ),
                                 ],
@@ -1400,9 +1563,9 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                               closedCount: widget.counts['closed'] ?? 0,
                             ),
                             const SizedBox(height: 8),
-                            (widget.last_n_shifts > 0)
+                            (widget.lastNShifts > 0)
                                 ? Text(
-                                    'Ultimi ${widget.last_n_shifts} Shift',
+                                    'Ultimi ${widget.lastNShifts} Shift',
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
@@ -1423,7 +1586,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
                         // Right side: Escalation button
                         EscalationButton(
-                          last_n_shifts: widget.last_n_shifts,
+                          last_n_shifts: widget.lastNShifts,
                           onEscalationsUpdated: refreshEscalationTrafficLight,
                         ),
                       ],
@@ -1462,7 +1625,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
           children: [
             // LEFT SIDE – UPTIME/DOWNTIME
             Flexible(
-              flex: 3,
+              flex: 4,
               child: HeaderBox(
                 title: 'UPTIME/DOWNTIME Shift',
                 target: '',
@@ -1472,7 +1635,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
             // RIGHT SIDE – Pareto + NG Card
             Flexible(
-              flex: 3,
+              flex: 5,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1481,7 +1644,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                       title: 'Pareto Shift',
                       target: '',
                       icon: Icons.bar_chart_rounded,
-                      qg2_defects_value: widget.qg2_defects_value.toString(),
+                      qg2_defects_value: widget.qg2DefectsValue.toString(),
                       zone: 'AIN',
                     ),
                   ),
@@ -1523,9 +1686,9 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     const Text(
-                                      'Available \nTime',
+                                      'Available Time STR01',
                                       style: TextStyle(
-                                        fontSize: 28,
+                                        fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                         color: Colors.black87,
                                       ),
@@ -1534,22 +1697,24 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                     Column(
                                       children: [
                                         SizedBox(
-                                          width: 200, // radius * 2
+                                          width: 100, // radius * 2
                                           child: Column(
                                             children: [
                                               AnimatedRadialGauge(
                                                 duration: const Duration(
                                                     milliseconds: 800),
                                                 curve: Curves.easeInOut,
-                                                value: widget.availableTime_1
+                                                value: (widget.zoneAvailability[
+                                                            1] ??
+                                                        0)
                                                     .toDouble(),
-                                                radius: 100,
+                                                radius: 50,
                                                 axis: GaugeAxis(
                                                   min: 0,
                                                   max: 100,
                                                   degrees: 180,
                                                   style: const GaugeAxisStyle(
-                                                    thickness: 16,
+                                                    thickness: 6,
                                                     background:
                                                         Color(0xFFDDDDDD),
                                                     segmentSpacing: 0,
@@ -1557,14 +1722,16 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                   progressBar:
                                                       GaugeRoundedProgressBar(
                                                     color: () {
-                                                      if (widget
-                                                              .availableTime_1 <=
+                                                      if ((widget.zoneAvailability[
+                                                                  1] ??
+                                                              0) <=
                                                           50) {
                                                         return widget
                                                             .errorColor;
                                                       }
-                                                      if (widget
-                                                              .availableTime_1 <=
+                                                      if ((widget.zoneAvailability[
+                                                                  1] ??
+                                                              0) <=
                                                           75) {
                                                         return widget
                                                             .warningColor;
@@ -1579,7 +1746,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                     child: Text(
                                                       '${value.toInt()}%',
                                                       style: const TextStyle(
-                                                        fontSize: 32,
+                                                        fontSize: 28,
                                                         fontWeight:
                                                             FontWeight.bold,
                                                       ),
@@ -1587,7 +1754,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                   );
                                                 },
                                               ),
-                                              const SizedBox(height: 6),
+                                              /*const SizedBox(height: 4),
                                               const Row(
                                                 mainAxisAlignment:
                                                     MainAxisAlignment
@@ -1595,12 +1762,12 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                 children: [
                                                   Text('0%',
                                                       style: TextStyle(
-                                                          fontSize: 14)),
+                                                          fontSize: 12)),
                                                   Text('100%',
                                                       style: TextStyle(
-                                                          fontSize: 14)),
+                                                          fontSize: 12)),
                                                 ],
-                                              ),
+                                              ),*/
                                             ],
                                           ),
                                         ),
@@ -1611,114 +1778,415 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                               ),
                             ),
                           ),
-                          //const TopDefectsPieChart(),
                           Flexible(
-                            child: Visibility(
-                              visible: false, // 👈 hide it but keep layout
-                              maintainSize: true,
-                              maintainAnimation: true,
-                              maintainState: true,
-                              maintainSemantics: true,
-                              maintainInteractivity: false,
-                              child: Card(
-                                elevation: 10,
-                                color: Colors.white,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Text(
-                                        'Available \nTime\nAIN2',
-                                        style: TextStyle(
-                                          fontSize: 28,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black87,
-                                        ),
+                            child: Card(
+                              elevation: 10,
+                              color: Colors.white,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text(
+                                      'Available Time STR02',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
                                       ),
-                                      const SizedBox(width: 16),
-                                      Column(
-                                        children: [
-                                          SizedBox(
-                                            width: 200, // radius * 2
-                                            child: Column(
-                                              children: [
-                                                AnimatedRadialGauge(
-                                                  duration: const Duration(
-                                                      milliseconds: 800),
-                                                  curve: Curves.easeInOut,
-                                                  value: widget.availableTime_2
-                                                      .toDouble(),
-                                                  radius: 100,
-                                                  axis: GaugeAxis(
-                                                    min: 0,
-                                                    max: 100,
-                                                    degrees: 180,
-                                                    style: const GaugeAxisStyle(
-                                                      thickness: 16,
-                                                      background:
-                                                          Color(0xFFDDDDDD),
-                                                      segmentSpacing: 0,
-                                                    ),
-                                                    progressBar:
-                                                        GaugeRoundedProgressBar(
-                                                      color: () {
-                                                        if (widget
-                                                                .availableTime_2 <=
-                                                            50) {
-                                                          return widget
-                                                              .errorColor;
-                                                        }
-                                                        if (widget
-                                                                .availableTime_2 <=
-                                                            75) {
-                                                          return widget
-                                                              .warningColor;
-                                                        }
-                                                        return widget.okColor;
-                                                      }(),
-                                                    ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Column(
+                                      children: [
+                                        SizedBox(
+                                          width: 100, // radius * 2
+                                          child: Column(
+                                            children: [
+                                              AnimatedRadialGauge(
+                                                duration: const Duration(
+                                                    milliseconds: 800),
+                                                curve: Curves.easeInOut,
+                                                value: (widget.zoneAvailability[
+                                                            2] ??
+                                                        0)
+                                                    .toDouble(),
+                                                radius: 50,
+                                                axis: GaugeAxis(
+                                                  min: 0,
+                                                  max: 100,
+                                                  degrees: 180,
+                                                  style: const GaugeAxisStyle(
+                                                    thickness: 6,
+                                                    background:
+                                                        Color(0xFFDDDDDD),
+                                                    segmentSpacing: 0,
                                                   ),
-                                                  builder:
-                                                      (context, child, value) {
-                                                    return Center(
-                                                      child: Text(
-                                                        '${value.toInt()}%',
-                                                        style: const TextStyle(
-                                                          fontSize: 32,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
+                                                  progressBar:
+                                                      GaugeRoundedProgressBar(
+                                                    color: () {
+                                                      if ((widget.zoneAvailability[
+                                                                  2] ??
+                                                              0) <=
+                                                          50) {
+                                                        return widget
+                                                            .errorColor;
+                                                      }
+                                                      if ((widget.zoneAvailability[
+                                                                  2] ??
+                                                              0) <=
+                                                          75) {
+                                                        return widget
+                                                            .warningColor;
+                                                      }
+                                                      return widget.okColor;
+                                                    }(),
+                                                  ),
+                                                ),
+                                                builder:
+                                                    (context, child, value) {
+                                                  return Center(
+                                                    child: Text(
+                                                      '${value.toInt()}%',
+                                                      style: const TextStyle(
+                                                        fontSize: 28,
+                                                        fontWeight:
+                                                            FontWeight.bold,
                                                       ),
-                                                    );
-                                                  },
-                                                ),
-                                                const SizedBox(height: 6),
-                                                const Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment
-                                                          .spaceBetween,
-                                                  children: [
-                                                    Text('0%',
-                                                        style: TextStyle(
-                                                            fontSize: 14)),
-                                                    Text('100%',
-                                                        style: TextStyle(
-                                                            fontSize: 14)),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              /*const SizedBox(height: 4),
+                                              const Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text('0%',
+                                                      style: TextStyle(
+                                                          fontSize: 12)),
+                                                  Text('100%',
+                                                      style: TextStyle(
+                                                          fontSize: 12)),
+                                                ],
+                                              ),*/
+                                            ],
                                           ),
-                                        ],
-                                      )
-                                    ],
-                                  ),
+                                        ),
+                                      ],
+                                    )
+                                  ],
                                 ),
                               ),
                             ),
                           ),
-                          Padding(
+                          Flexible(
+                            child: Card(
+                              elevation: 10,
+                              color: Colors.white,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text(
+                                      'Available Time STR03',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Column(
+                                      children: [
+                                        SizedBox(
+                                          width: 100, // radius * 2
+                                          child: Column(
+                                            children: [
+                                              AnimatedRadialGauge(
+                                                duration: const Duration(
+                                                    milliseconds: 800),
+                                                curve: Curves.easeInOut,
+                                                value: (widget.zoneAvailability[
+                                                            3] ??
+                                                        0)
+                                                    .toDouble(),
+                                                radius: 50,
+                                                axis: GaugeAxis(
+                                                  min: 0,
+                                                  max: 100,
+                                                  degrees: 180,
+                                                  style: const GaugeAxisStyle(
+                                                    thickness: 6,
+                                                    background:
+                                                        Color(0xFFDDDDDD),
+                                                    segmentSpacing: 0,
+                                                  ),
+                                                  progressBar:
+                                                      GaugeRoundedProgressBar(
+                                                    color: () {
+                                                      if ((widget.zoneAvailability[
+                                                                  3] ??
+                                                              0) <=
+                                                          50) {
+                                                        return widget
+                                                            .errorColor;
+                                                      }
+                                                      if ((widget.zoneAvailability[
+                                                                  3] ??
+                                                              0) <=
+                                                          75) {
+                                                        return widget
+                                                            .warningColor;
+                                                      }
+                                                      return widget.okColor;
+                                                    }(),
+                                                  ),
+                                                ),
+                                                builder:
+                                                    (context, child, value) {
+                                                  return Center(
+                                                    child: Text(
+                                                      '${value.toInt()}%',
+                                                      style: const TextStyle(
+                                                        fontSize: 28,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              /*const SizedBox(height: 4),
+                                              const Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text('0%',
+                                                      style: TextStyle(
+                                                          fontSize: 12)),
+                                                  Text('100%',
+                                                      style: TextStyle(
+                                                          fontSize: 12)),
+                                                ],
+                                              ),*/
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Flexible(
+                            child: Card(
+                              elevation: 10,
+                              color: Colors.white,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text(
+                                      'Available Time STR04',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Column(
+                                      children: [
+                                        SizedBox(
+                                          width: 100, // radius * 2
+                                          child: Column(
+                                            children: [
+                                              AnimatedRadialGauge(
+                                                duration: const Duration(
+                                                    milliseconds: 800),
+                                                curve: Curves.easeInOut,
+                                                value: (widget.zoneAvailability[
+                                                            4] ??
+                                                        0)
+                                                    .toDouble(),
+                                                radius: 50,
+                                                axis: GaugeAxis(
+                                                  min: 0,
+                                                  max: 100,
+                                                  degrees: 180,
+                                                  style: const GaugeAxisStyle(
+                                                    thickness: 6,
+                                                    background:
+                                                        Color(0xFFDDDDDD),
+                                                    segmentSpacing: 0,
+                                                  ),
+                                                  progressBar:
+                                                      GaugeRoundedProgressBar(
+                                                    color: () {
+                                                      if ((widget.zoneAvailability[
+                                                                  4] ??
+                                                              0) <=
+                                                          50) {
+                                                        return widget
+                                                            .errorColor;
+                                                      }
+                                                      if ((widget.zoneAvailability[
+                                                                  4] ??
+                                                              0) <=
+                                                          75) {
+                                                        return widget
+                                                            .warningColor;
+                                                      }
+                                                      return widget.okColor;
+                                                    }(),
+                                                  ),
+                                                ),
+                                                builder:
+                                                    (context, child, value) {
+                                                  return Center(
+                                                    child: Text(
+                                                      '${value.toInt()}%',
+                                                      style: const TextStyle(
+                                                        fontSize: 28,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              /*const SizedBox(height: 4),
+                                              const Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text('0%',
+                                                      style: TextStyle(
+                                                          fontSize: 12)),
+                                                  Text('100%',
+                                                      style: TextStyle(
+                                                          fontSize: 12)),
+                                                ],
+                                              ),*/
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Flexible(
+                            child: Card(
+                              elevation: 10,
+                              color: Colors.white,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text(
+                                      'Available Time STR05',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Column(
+                                      children: [
+                                        SizedBox(
+                                          width: 100, // radius * 2
+                                          child: Column(
+                                            children: [
+                                              AnimatedRadialGauge(
+                                                duration: const Duration(
+                                                    milliseconds: 800),
+                                                curve: Curves.easeInOut,
+                                                value: (widget.zoneAvailability[
+                                                            5] ??
+                                                        0)
+                                                    .toDouble(),
+                                                radius: 50,
+                                                axis: GaugeAxis(
+                                                  min: 0,
+                                                  max: 100,
+                                                  degrees: 180,
+                                                  style: const GaugeAxisStyle(
+                                                    thickness: 6,
+                                                    background:
+                                                        Color(0xFFDDDDDD),
+                                                    segmentSpacing: 0,
+                                                  ),
+                                                  progressBar:
+                                                      GaugeRoundedProgressBar(
+                                                    color: () {
+                                                      if ((widget.zoneAvailability[
+                                                                  5] ??
+                                                              0) <=
+                                                          50) {
+                                                        return widget
+                                                            .errorColor;
+                                                      }
+                                                      if ((widget.zoneAvailability[
+                                                                  5] ??
+                                                              0) <=
+                                                          75) {
+                                                        return widget
+                                                            .warningColor;
+                                                      }
+                                                      return widget.okColor;
+                                                    }(),
+                                                  ),
+                                                ),
+                                                builder:
+                                                    (context, child, value) {
+                                                  return Center(
+                                                    child: Text(
+                                                      '${value.toInt()}%',
+                                                      style: const TextStyle(
+                                                        fontSize: 28,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              /*const SizedBox(height: 4),
+                                              const Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text('0%',
+                                                      style: TextStyle(
+                                                          fontSize: 12)),
+                                                  Text('100%',
+                                                      style: TextStyle(
+                                                          fontSize: 12)),
+                                                ],
+                                              ),*/
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          /*Padding(
                             padding: EdgeInsets.symmetric(horizontal: 4.0),
                             child: Text(
                               'Sviluppato da 3SUN Process Eng, \nCapgemini, empowered by Bottero',
@@ -1726,7 +2194,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                               style: TextStyle(
                                   fontSize: 18, color: Colors.grey.shade700),
                             ),
-                          ),
+                          ),*/
                         ],
                       ),
                     ),
@@ -1816,23 +2284,14 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                       Flexible(
                         child: TopDefectsHorizontalBarChartSTR(
                           defectLabels: widget.defectLabels,
-                          Counts: widget.ain1Counts,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // RIGHT COLUMN (1 full-height card)
-                      Flexible(
-                        child: TopDefectsHorizontalBarChartSTR_day(
-                          defectLabels: widget.defectLabels,
-                          Counts: widget.ain1Counts,
+                          Counts: widget.defectsCounts,
                         ),
                       ),
                       const SizedBox(width: 8),
                       Flexible(
-                        child: TopDefectsHorizontalBarChart(
+                        child: VPFDefectsHorizontalBarChartSTR(
                           defectLabels: widget.defectLabels,
-                          ain1Counts: widget.ain1Counts,
-                          ain2Counts: widget.ain2Counts,
+                          Counts: widget.VpfDefectsCounts,
                         ),
                       ),
                     ],

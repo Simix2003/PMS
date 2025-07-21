@@ -914,6 +914,63 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> fetchVisualDataForStr() async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=STR'));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      return {
+        ...data,
+        // Station inputs (fix typo statopm_3_in -> station_3_in)
+        'station_1_in': data['station_1_in'] ?? 0,
+        'station_2_in': data['station_2_in'] ?? 0,
+        'station_3_in': data['station_3_in'] ?? 0,
+        'station_4_in': data['station_4_in'] ?? 0,
+        'station_5_in': data['station_5_in'] ?? 0,
+
+        // NG counts
+        'station_1_out_ng': data['station_1_out_ng'] ?? 0,
+        'station_2_out_ng': data['station_2_out_ng'] ?? 0,
+        'station_3_out_ng': data['station_3_out_ng'] ?? 0,
+        'station_4_out_ng': data['station_4_out_ng'] ?? 0,
+        'station_5_out_ng': data['station_5_out_ng'] ?? 0,
+
+        // Scrap
+        'station_1_scrap': data['station_1_scrap'] ?? 0,
+        'station_2_scrap': data['station_2_scrap'] ?? 0,
+        'station_3_scrap': data['station_3_scrap'] ?? 0,
+        'station_4_scrap': data['station_4_scrap'] ?? 0,
+        'station_5_scrap': data['station_5_scrap'] ?? 0,
+
+        // Yields (default 100% when no data)
+        'station_1_yield': data['station_1_yield'] ?? 100,
+        'station_2_yield': data['station_2_yield'] ?? 100,
+        'station_3_yield': data['station_3_yield'] ?? 100,
+        'station_4_yield': data['station_4_yield'] ?? 100,
+        'station_5_yield': data['station_5_yield'] ?? 100,
+
+        // Yield history (map backend keys correctly)
+        'str_yield_shifts': data['str_yield_shifts'] ?? [],
+        'overall_yield_shifts': data['overall_yield_shifts'] ?? [],
+        'str_yield_last_8h': data['str_yield_last_8h'] ?? [],
+        'overall_yield_last_8h': data['overall_yield_last_8h'] ?? [],
+
+        // Throughput and stops
+        'shift_throughput': data['shift_throughput'] ?? [],
+        'fermi_data': data['fermi_data'] ?? [],
+
+        // Defects data
+        'top_defects_qg2': data['top_defects_qg2'] ?? [],
+        'total_defects_qg2': data['total_defects_qg2'] ?? 0,
+        'top_defects_vpf': data['top_defects_vpf'] ?? [],
+      };
+    } else {
+      throw Exception('Failed to load zone data');
+    }
+  }
+
   Future<Map<String, dynamic>?> createStop({
     required int stationId,
     required String startTime,

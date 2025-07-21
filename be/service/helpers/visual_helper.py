@@ -1169,7 +1169,7 @@ def _compute_snapshot_str(now: datetime) -> dict:
                         "end":   h_end.isoformat(),
                     })
 
-                # -------- fermi_data calculation --------
+                # -------- fermi_data calculation (per station availability) --------
                 STATIONS = [4, 5, 6, 7, 8]
                 SHIFT_DURATION_MINUTES = 480
 
@@ -1190,23 +1190,24 @@ def _compute_snapshot_str(now: datetime) -> dict:
                 cursor.execute(sql, (shift_start, shift_end, *STATIONS))
 
                 fermi_data = []
-                total_combined_stop_time = 0
-
                 for row in cursor.fetchall():
                     stop_time_sec = row["total_time"] or 0
                     stop_time_min = round(stop_time_sec / 60)
-                    total_combined_stop_time += stop_time_min
+
+                    # Calculate availability per station
+                    availability = max(0, round(100 - (stop_time_min / SHIFT_DURATION_MINUTES * 100)))
 
                     fermi_data.append({
                         "station": row["station_name"],
                         "count": row["n_occurrences"],
-                        "time": stop_time_min
+                        "time": stop_time_min,
+                        "available_time": availability  # per-station availability %
                     })
 
-                # Append one single combined availability % (risolutivo)
-                available_time_risolutivo = max(0, round(100 - (total_combined_stop_time / SHIFT_DURATION_MINUTES * 100)))
-                fermi_data.append({"Available_Time": available_time_risolutivo})
-
+                # (Optional) If you still want a combined overall availability:
+                total_combined_stop_time = sum(item["time"] for item in fermi_data)
+                overall_availability = max(0, round(100 - (total_combined_stop_time / SHIFT_DURATION_MINUTES * 100)))
+                fermi_data.append({"Available_Time_Total": overall_availability})
 
                 # -------- top_defects_qg2 calculation from productions + object_defects --------
                 # 1️⃣ Query productions table for esito 6 on stations 1+2
@@ -1331,7 +1332,7 @@ def _compute_snapshot_str(now: datetime) -> dict:
                 return {
                     "station_1_in": s1_in,
                     "station_2_in": s2_in,
-                    "statopm_3_in": s3_in,
+                    "station_3_in": s3_in,
                     "station_4_in": s4_in,
                     "station_5_in": s5_in,
                     "station_1_out_ng": s1_ng,

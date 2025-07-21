@@ -33,6 +33,9 @@ class _VisualPageState extends State<VisualPage> {
 
   int station_1_status = 1;
   int station_2_status = 1;
+  int station_3_status = 1;
+  int station_4_status = 1;
+  int station_5_status = 1;
 
   int ng_bussingOut_1 = 0;
   int ng_bussingOut_2 = 0;
@@ -71,6 +74,8 @@ class _VisualPageState extends State<VisualPage> {
   List<String> defectVPFLabels = [];
   //final List<int> ain1Counts = [17, 8, 9, 7, 3];
   List<int> ain1Counts = [];
+  List<int> VpfDefectsCounts = [];
+  List<int> Counts = [];
   List<int> ain1VPFCounts = [];
   //final List<int> ain2Counts = [4, 5, 0, 1, 2];
   List<int> ain2Counts = [];
@@ -101,6 +106,18 @@ class _VisualPageState extends State<VisualPage> {
   int currentRWKYield = 100;
   double value_gauge_1 = 0;
   double value_gauge_2 = 0;
+
+  //STR
+  Map<int, int> zoneInputs = {},
+      zoneNG = {},
+      zoneYield = {},
+      zoneScrap = {},
+      zoneAvailability = {};
+  List<Map<String, dynamic>> strShifts = [];
+  List<Map<String, dynamic>> overallShifts = [];
+  List<Map<String, dynamic>> yieldLast8h = [];
+  List<Map<String, dynamic>> overallYieldLast8h = [];
+  int availableTime = 0;
 
   Map<String, int> calculateEscalationCounts(
       List<Map<String, dynamic>> escalations) {
@@ -382,100 +399,113 @@ class _VisualPageState extends State<VisualPage> {
 
   Future<void> fetchStrZoneData() async {
     try {
-      final response = await ApiService.fetchVisualDataForAin();
+      final response = await ApiService.fetchVisualDataForStr();
+
       setState(() {
-        bussingIn_1 = response['station_1_in'] ?? 0;
-        bussingIn_2 = response['station_2_in'] ?? 0;
-        ng_bussingOut_1 = response['station_1_out_ng'] ?? 0;
-        ng_bussingOut_2 = response['station_2_out_ng'] ?? 0;
-        currentYield_1 = response['station_1_yield'] ?? 100;
-        currentYield_2 = response['station_2_yield'] ?? 100;
+        final stations = [1, 2, 3, 4, 5];
+        zoneInputs.clear();
+        zoneNG.clear();
+        zoneYield.clear();
+        zoneScrap.clear();
+        zoneAvailability.clear(); // <-- NEW: to store availability per station
 
-        yieldLast8h_1 = List<Map<String, dynamic>>.from(
-            response['station_1_yield_last_8h'] ?? []);
-        yieldLast8h_2 = List<Map<String, dynamic>>.from(
-            response['station_2_yield_last_8h'] ?? []);
-        shiftThroughput =
-            List<Map<String, dynamic>>.from(response['shift_throughput'] ?? []);
-        hourlyThroughput = List<Map<String, dynamic>>.from(
-            response['last_8h_throughput'] ?? []);
-        station1Shifts = List<Map<String, dynamic>>.from(
-            response['station_1_yield_shifts'] ?? []);
-        station2Shifts = List<Map<String, dynamic>>.from(
-            response['station_2_yield_shifts'] ?? []);
+        // Gather inputs, NG, scrap, yields for all stations
+        for (var s in stations) {
+          zoneInputs[s] = response['station_${s}_in'] ?? 0;
+          zoneNG[s] = response['station_${s}_out_ng'] ?? 0;
+          zoneScrap[s] = response['station_${s}_scrap'] ?? 0;
+          zoneYield[s] = response['station_${s}_yield'] ?? 100;
+        }
 
-        mergedShiftData = List.generate(station1Shifts.length, (index) {
+        // Yield history (last 8h bins + overall)
+        yieldLast8h = List<Map<String, dynamic>>.from(
+            response['str_yield_last_8h'] ?? []);
+        overallYieldLast8h = List<Map<String, dynamic>>.from(
+            response['overall_yield_last_8h'] ?? []);
+
+        // Shift yields (STR global + overall)
+        strShifts =
+            List<Map<String, dynamic>>.from(response['str_yield_shifts'] ?? []);
+        overallShifts = List<Map<String, dynamic>>.from(
+            response['overall_yield_shifts'] ?? []);
+
+        // Merge shift yields for chart (label, yield, good, NG)
+        mergedShiftData = List.generate(strShifts.length, (i) {
           return {
-            'shift': station1Shifts[index]['label'],
-            'bussing1': station1Shifts[index]['yield'],
-            'bussing2': station2Shifts[index]['yield'],
+            'shift': strShifts[i]['label'],
+            'yield': strShifts[i]['yield'] ?? 100,
+            'good': strShifts[i]['good'] ?? 0,
+            'ng': strShifts[i]['ng'] ?? 0,
           };
         });
 
+        // Throughput per shift (total vs NG)
+        shiftThroughput =
+            List<Map<String, dynamic>>.from(response['shift_throughput'] ?? []);
         throughputData = shiftThroughput.map<Map<String, int>>((e) {
           final total = (e['total'] ?? 0) as int;
           final ng = (e['ng'] ?? 0) as int;
           return {'ok': total - ng, 'ng': ng};
         }).toList();
-
         shiftLabels =
             shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
 
-        hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
-          final total = (e['total'] ?? 0) as int;
+        // Hourly data from 8h yield bins (good vs NG)
+        hourlyData = yieldLast8h.map<Map<String, int>>((e) {
+          final good = (e['good'] ?? 0) as int;
           final ng = (e['ng'] ?? 0) as int;
-          return {'ok': total - ng, 'ng': ng};
+          return {'ok': good, 'ng': ng};
         }).toList();
-
         hourLabels =
-            hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+            yieldLast8h.map((e) => e['hour']?.toString() ?? '').toList();
 
-        // Parse Top Defects QG2
+        // Top Defects QG2
         final topDefectsRaw =
             List<Map<String, dynamic>>.from(response['top_defects_qg2'] ?? []);
-
         defectLabels = [];
-        ain1Counts = [];
-        ain2Counts = [];
-
+        Counts = [];
         for (final defect in topDefectsRaw) {
           defectLabels.add(defect['label']?.toString() ?? '');
-          ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
-          ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+          Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
         }
+        qg2_defects_value = response['total_defects_qg2'] ?? 0;
 
-        qg2_defects_value = response['total_defects_qg2'];
-
-        // Parse Top Defects VPF
+        // Top Defects VPF
         final topDefectsVPF =
             List<Map<String, dynamic>>.from(response['top_defects_vpf'] ?? []);
-
         defectVPFLabels = [];
-        ain1VPFCounts = [];
-        ain2VPFCounts = [];
-
+        VpfDefectsCounts = [];
         for (final defect in topDefectsVPF) {
           defectVPFLabels.add(defect['label']?.toString() ?? '');
-          ain1VPFCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
-          ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+          VpfDefectsCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
         }
 
-        // Parse fermi data
+        // Fermi data (downtime + per-station availability)
         final fermiRaw =
             List<Map<String, dynamic>>.from(response['fermi_data'] ?? []);
-
-        dataFermi = []; // clear previous data
+        dataFermi = [];
+        availableTime = 0; // keep total if still sent
 
         for (final entry in fermiRaw) {
-          if (entry.containsKey("Available_Time_1")) {
-            availableTime_1 =
-                int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
-          } else {
+          if (entry.containsKey("station") &&
+              entry.containsKey("available_time")) {
+            // Store per-station availability
+            final stationName = entry["station"].toString();
+            final stationId =
+                _stationIdFromName(stationName); // Helper to map names to 1-5
+            final avail = int.tryParse(entry["available_time"].toString()) ?? 0;
+            zoneAvailability[stationId] = avail;
+
+            // Also store station downtime info (for table/chart)
             dataFermi.add([
-              entry['station']?.toString() ?? '',
+              stationName,
               entry['count']?.toString() ?? '0',
               entry['time']?.toString() ?? '0'
             ]);
+          } else if (entry.containsKey("Available_Time_Total")) {
+            // Optional overall availability
+            availableTime =
+                int.tryParse(entry["Available_Time_Total"].toString()) ?? 0;
           }
         }
 
@@ -487,6 +517,12 @@ class _VisualPageState extends State<VisualPage> {
         isLoading = false;
       });
     }
+  }
+
+// Helper: map station name ("STR01" etc.) to 1–5 index
+  int _stationIdFromName(String name) {
+    final num = int.tryParse(RegExp(r'\d+$').firstMatch(name)?.group(0) ?? '');
+    return (num != null && num >= 1 && num <= 5) ? num : 0;
   }
 
   Future<void> _initializeWebSocket() async {
@@ -1065,46 +1101,69 @@ class _VisualPageState extends State<VisualPage> {
                                       )
                                     : widget.zone == 'STR'
                                         ? StrVisualsPage(
-                                            shift_target: shift_target,
-                                            hourly_shift_target:
+                                            shiftTarget: shift_target,
+                                            hourlyShiftTarget:
                                                 hourly_shift_target,
-                                            yield_target: yield_target,
+                                            yieldTarget: yield_target,
                                             circleSize: circleSize,
-                                            station_1_status: station_1_status,
-                                            station_2_status: station_2_status,
+
+                                            // Status map for all stations
+                                            stationStatus: {
+                                              1: station_1_status,
+                                              2: station_2_status,
+                                              3: station_3_status,
+                                              4: station_4_status,
+                                              5: station_5_status,
+                                            },
+
                                             errorColor: errorColor,
                                             okColor: okColor,
                                             textColor: textColor,
                                             warningColor: warningColor,
                                             redColor: redColor,
-                                            ng_bussingOut_1: ng_bussingOut_1,
-                                            ng_bussingOut_2: ng_bussingOut_2,
-                                            bussingIn_1: bussingIn_1,
-                                            bussingIn_2: bussingIn_2,
-                                            currentYield_1: currentYield_1,
-                                            currentYield_2: currentYield_2,
+
+                                            // Station production metrics (maps for flexibility)
+                                            stationInputs:
+                                                zoneInputs, // {1: in, 2: in, 3: in, 4: in, 5: in}
+                                            stationNG:
+                                                zoneNG, // {1: ng, 2: ng, ...}
+                                            stationYield:
+                                                zoneYield, // {1: %, 2: %, ...}
+                                            stationScrap:
+                                                zoneScrap, // {1: scrap, ...} (currently 0)
+
+                                            // Throughput and shifts
                                             throughputData: throughputData,
                                             shiftLabels: shiftLabels,
                                             hourlyData: hourlyData,
                                             hourLabels: hourLabels,
-                                            dataFermi: dataFermi,
-                                            station1Shifts: station1Shifts,
-                                            station2Shifts: station2Shifts,
+
+                                            // Yield history (full backend-provided lists)
+                                            strYieldShifts:
+                                                strShifts, // Global yields per shift
+                                            overallYieldShifts:
+                                                overallShifts, // Overall (station 2 focus)
+                                            strYieldLast8h:
+                                                yieldLast8h, // Global yields (8h bins)
+                                            overallYieldLast8h:
+                                                overallYieldLast8h, // Overall yields (8h bins)
+
+                                            // Preprocessed shift summary for charts
                                             mergedShiftData: mergedShiftData,
-                                            yieldLast8h_1: yieldLast8h_1,
-                                            yieldLast8h_2: yieldLast8h_2,
-                                            counts: counts,
-                                            availableTime_1: availableTime_1,
-                                            availableTime_2: availableTime_2,
+
+                                            // Downtime and availability
+                                            dataFermi: dataFermi,
+                                            zoneAvailability: zoneAvailability,
+
+                                            // Defects
                                             defectLabels: defectLabels,
                                             defectVPFLabels: defectVPFLabels,
-                                            ain1Counts: ain1Counts,
-                                            ain1VPFCounts: ain1VPFCounts,
-                                            ain2Counts: ain2Counts,
-                                            ain2VPFCounts: ain2VPFCounts,
-                                            last_n_shifts: last_n_shifts,
-                                            qg2_defects_value:
-                                                qg2_defects_value,
+                                            defectsCounts: ain1Counts,
+                                            VpfDefectsCounts: ain1VPFCounts,
+                                            qg2DefectsValue: qg2_defects_value,
+
+                                            lastNShifts: last_n_shifts,
+                                            counts: counts,
                                           )
                                         : const Center(
                                             child: Text(

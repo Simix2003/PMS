@@ -56,31 +56,37 @@ Devi SEMPRE rispondere **solo** in formato JSON, senza testo aggiuntivo o simbol
 Segui esattamente questo schema:
 {
   "question": "Perché [testo della domanda]?",
-  "suggestions": ["risposta 1","risposta 2","risposta 3"]
+  "suggestions": ["possibile causa 1","possibile causa 2","possibile causa 3"]
 }
+Le voci in "suggestions" DEVONO essere **possibili spiegazioni o cause**, non nuove domande.
 """
+
+SYSTEM_PROMPT_SUMMARY = """
+Il tuo nome è Simix. Sei un assistente AI che deve solo creare un breve riassunto finale della catena dei 5 Perché.
+Non scrivere JSON, non ripetere le domande o risposte.
+Rispondi solo con un testo semplice in italiano che spiega la causa radice individuata.
+"""
+
 
 class RCARequest(BaseModel):
     context: str
     why_chain: List[Dict[str, str]] = []
 
 def build_summary_prompt(case_context: str, chain: List[Dict[str, str]]) -> str:
-    """Builds a prompt for summarising the completed 5 Why chain."""
     logger.debug("Building summary prompt for Simix RCA...")
-    prompt = f"<|system|>\n{SYSTEM_PROMPT_RCA.strip()}\n<|user|>\n"
+    prompt = f"<|system|>\n{SYSTEM_PROMPT_SUMMARY.strip()}\n<|user|>\n"
     prompt += f"Contesto: {case_context.strip()}\n\n"
     prompt += "Domande e risposte finali:\n"
     for idx, step in enumerate(chain[:5], start=1):
         prompt += f"{idx}. Q: {step['q']}\n   A: {step['a']}\n"
-    prompt += "\nFornisci un breve riassunto in italiano della catena dei 5 Perché evidenziando la possibile causa radice.\n"
+    prompt += "\nFornisci SOLO un breve riassunto in italiano della catena, evidenziando la causa radice.\n"
     prompt += "<|assistant|>\n"
-    logger.debug(f"Built summary prompt (first 500 chars): {prompt[:500]}...")
     return prompt
 
 def summarize_chain(case_context: str, chain: List[Dict[str, str]]) -> str:
     prompt = build_summary_prompt(case_context, chain)
     try:
-        result = llm(prompt, max_tokens=512, stop=["<|user|>"], stream=False)
+        result = llm(prompt, max_tokens=512, stop=["<|user|>"], stream=True)
     except Exception as e:
         logger.exception(f"Error calling LLM for summary: {e}")
         return "Errore nella generazione del riassunto."
@@ -102,9 +108,13 @@ def build_prompt(case_context: str, chain: List[Dict[str, str]]) -> str:
         prompt += "Domande e risposte finora:\n"
         for idx, step in enumerate(chain, start=1):
             prompt += f"{idx}. Q: {step['q']}\n   A: {step['a']}\n"
-        prompt += "\nFornisci la **prossima domanda e almeno 3 possibili risposte** in formato JSON.\n"
+        prompt += (
+                "\nFornisci la **prossima domanda (iniziando con 'Perché')** e almeno 3 "
+                "**possibili spiegazioni (cause)** in formato JSON, seguendo lo schema richiesto. "
+                "Non generare domande nelle 'suggestions', ma solo cause.\n"
+            )
     else:
-        prompt += "Inizia con la **prima domanda e almeno 3 possibili risposte** in formato JSON.\n"
+        prompt += "Inizia con la **prima domanda e almeno 3 possibili spiegazioni (cause)** in formato JSON, seguendo lo schema richiesto.*\n"
     prompt += "<|assistant|>\n"
 
     logger.debug(f"Built prompt (first 500 chars): {prompt[:500]}...")
@@ -132,7 +142,7 @@ def ask_next(case_context: str, chain: List[Dict[str, str]]) -> Dict[str, Any]:
     logger.info("Querying Llama model for RCA question...")
     try:
         # Set `stream=False` unless you explicitly want streaming
-        result = llm(prompt, max_tokens=512, stop=["<|user|>"], stream=False)
+        result = llm(prompt, max_tokens=512, stop=["<|user|>"], stream=True)
         logger.debug(f"Raw LLM result object: {result}")
     except Exception as e:
         logger.exception(f"Error calling LLM: {e}")
@@ -181,7 +191,8 @@ async def websocket_next_question(websocket: WebSocket):
         context = payload.get("context", "")
         chain = payload.get("why_chain", [])
 
-        if len(chain) >= 5:
+        # Choose correct prompt based on chain length
+        if len(chain) > 2:
             prompt = build_summary_prompt(context, chain)
         else:
             prompt = build_prompt(context, chain)
@@ -196,14 +207,18 @@ async def websocket_next_question(websocket: WebSocket):
                 token = ""
             if token:
                 collected.append(token)
+                # Stream live text to frontend (buffer display)
                 await websocket.send_text(token)
 
+        # Combine full output from model
         full_text = "".join(collected)
         full_text = full_text.replace("<|file_separator|>", "").strip()
         full_text = re.sub(r"^```(?:json)?", "", full_text, flags=re.IGNORECASE).strip()
         full_text = re.sub(r"```$", "", full_text).strip()
-        if len(chain) >= 5:
-            payload = json.dumps({"summary": full_text})
+
+        if len(chain) > 2:
+            clean_summary = full_text.strip()
+            payload = json.dumps({"summary": clean_summary})
         else:
             full_text = re.sub(r",\s*]", "]", full_text)
             full_text = re.sub(r",\s*}", "}", full_text)

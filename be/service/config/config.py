@@ -139,6 +139,8 @@ print('Terminal log level is', LOGS_TERMINAL)
 WRITE_TO_PLC = config_ini.getboolean("plc", "WRITE_TO_PLC", fallback=True)
 print('PLC write flag is', WRITE_TO_PLC)
 
+print('Debug value is', debug)
+
 ML_MODELS_DIR = BASE_DIR / "models"
 DEFECT_SIMILARITY_MODEL_PATH = ML_MODELS_DIR / "fine-tuned-defects_V2"
 TEMP_STORAGE_PATH = BASE_DIR / "temp_data.json"

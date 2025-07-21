@@ -24,6 +24,8 @@ ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
         "station_2_in":     ["RMI01"],
         "station_1_out_ng": ["ELL01"],
         "station_2_out_ng": ["RMI01"],
+        "station_qg_1":     ["MIN01"],
+        "station_qg_2":     ["MIN02"],
     },
     "STR": {
         "station_1_in":     ["STR01"],

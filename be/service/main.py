@@ -149,6 +149,48 @@ logger = logging.getLogger(__name__)
 
 logger.info(f"Logging to {LOG_FILE} with level {LOGS_FILE} and DEBUG={debug}")
 
+async def monitor_plc_ports(plcs: list[tuple[str, int]], interval: int = 10):
+    """
+    Monitora la porta 102 di ogni PLC e logga latenza o timeout.
+    plcs: lista [(ip, slot)]
+    interval: ogni quanti secondi ripetere il test
+    """
+    import socket
+    from datetime import datetime
+    while True:
+        for ip, slot in plcs:
+            start = time.perf_counter()
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2.0)
+                sock.connect((ip, 102))
+                latency = (time.perf_counter() - start) * 1000
+                sock.close()
+                logger.info(
+                    "",
+                    extra={"json": {
+                        "event": "plc_port_check",
+                        "ip": ip,
+                        "slot": slot,
+                        "status": "ok",
+                        "latency_ms": round(latency, 2),
+                        "timestamp": datetime.now().isoformat()
+                    }},
+                )
+            except Exception as e:
+                logger.warning(
+                    "",
+                    extra={"json": {
+                        "event": "plc_port_check",
+                        "ip": ip,
+                        "slot": slot,
+                        "status": "error",
+                        "error": str(e),
+                        "timestamp": datetime.now().isoformat()
+                    }},
+                )
+        await asyncio.sleep(interval)
+
 # ---------------- INIT GLOBAL FLAGS ----------------
 def init_global_flags():
     stop_threads.clear()
@@ -248,6 +290,11 @@ async def start_background_tasks():
 
     asyncio.create_task(loop_refresh_median())
     logger.debug("Scheduled VPF median refresh every 59 minutes")
+
+    # Avvia il monitor della porta 102 ogni 10 secondi
+    if not debug: 
+        asyncio.create_task(monitor_plc_ports(list(unique_plcs), interval=10))
+    logger.debug("PLC port 102 monitor task avviato")
 
     logger.debug("All PLC and background tasks launched")
 

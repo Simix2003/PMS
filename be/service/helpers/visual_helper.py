@@ -749,6 +749,11 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                     s2_n_ = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
                     s2_g_ = s2_in_ - s2_n_
 
+                    qg2_ng_1 = count_unique_objects(cursor, cfg["station_qg_1"],  start, end, "ng")
+                    qg2_ng_2 = count_unique_objects(cursor, cfg["station_qg_2"],  start, end, "ng")
+
+                    qg2_ng = qg2_ng_1 + qg2_ng_2
+
                     FPY_yield_shifts.append({
                         "label": label,
                         "start": start.isoformat(),
@@ -996,6 +1001,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
     return {
             "station_1_in": s1_in,
             "station_2_in": s2_in,
+            "station_1_ng_qg2": qg2_ng,
             "station_1_out_ng": s1_ng,
             "station_2_out_ng": s2_ng,
             "station_1_r0_in": s1_in_r0,

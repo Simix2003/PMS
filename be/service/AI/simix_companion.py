@@ -1,10 +1,10 @@
 from llama_cpp import Llama
 from typing import List, Dict, Any
-from datetime import datetime
 import json
 import re
 
 MODEL_PATH = r"D:\AI\Models\gemma-3n-E4B-it-Q4_K_M.gguf"
+#MODEL_PATH = r"D:\AI\Models\gemma-3n-E2B-it-Q4_K_M.gguf"
 N_THREADS = 4
 
 SYSTEM_PROMPT_RCA = """

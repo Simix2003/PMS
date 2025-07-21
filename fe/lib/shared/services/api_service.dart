@@ -893,6 +893,7 @@ class ApiService {
         ...data,
         'station_1_in': data['station_1_in'] ?? 0,
         'station_2_in': data['station_2_in'] ?? 0,
+        'station_1_ng_qg2': data['station_1_ng_qg2'] ?? 0,
         'station_1_out_ng': data['station_1_out_ng'] ?? 0,
         'station_2_out_ng': data['station_2_out_ng'] ?? 0,
         'FPY_yield': data['FPY_yield'] ?? 100,

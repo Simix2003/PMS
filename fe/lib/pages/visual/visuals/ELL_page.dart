@@ -20,6 +20,7 @@ class EllVisualsPage extends StatefulWidget {
   final Color redColor;
   final int ng_1;
   final int ng_2;
+  final int qg2_ng;
   final int in_1;
   final int in_2;
   final int currentFPYYield;
@@ -61,6 +62,7 @@ class EllVisualsPage extends StatefulWidget {
     required this.redColor,
     required this.ng_1,
     required this.ng_2,
+    required this.qg2_ng,
     required this.in_1,
     required this.in_2,
     required this.currentFPYYield,
@@ -96,6 +98,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
   late int shift_target;
   late double hourly_shift_target;
   late int yield_target;
+  late int ng_tot;
 
   @override
   void initState() {
@@ -103,9 +106,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
     shift_target = widget.shift_target;
     yield_target = widget.yield_target;
     hourly_shift_target = widget.hourly_shift_target;
-    print(hourly_shift_target);
-    print(widget.value_gauge_1);
-    print(widget.value_gauge_2);
+    ng_tot = widget.ng_1 + widget.qg2_ng;
   }
 
   Future<void> showTargetEditDialog({
@@ -293,7 +294,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                           Flexible(
                                             child: Center(
                                               child: Text(
-                                                'IN Good',
+                                                'IN',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 16,
@@ -305,7 +306,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                           Flexible(
                                             child: Center(
                                               child: Text(
-                                                'OUT NG',
+                                                'NG TOT',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 16,
@@ -381,13 +382,13 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: widget.ng_1 == 0
+                                                color: ng_tot == 0
                                                     ? Colors.white
-                                                    : getNgColor(widget.ng_1,
-                                                        widget.in_1),
+                                                    : getNgColor(
+                                                        ng_tot, widget.in_1),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
-                                                  color: widget.ng_1 == 0
+                                                  color: ng_tot == 0
                                                       ? Colors.black
                                                       : Colors.transparent,
                                                   width: 2,
@@ -414,7 +415,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.ng_1.toString(),
+                                                      ng_tot.toString(),
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -437,12 +438,20 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                             width: 100,
                                           ), // aligns with the AIN 1 / AIN 2 label
                                           Flexible(
-                                            child: Center(
-                                              child: Text(
-                                                'IN',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 16,
+                                            child: Visibility(
+                                              visible: false,
+                                              maintainSize: true,
+                                              maintainAnimation: true,
+                                              maintainState: true,
+                                              maintainSemantics: true,
+                                              maintainInteractivity: false,
+                                              child: Center(
+                                                child: Text(
+                                                  'IN',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 16,
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -451,7 +460,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                           Flexible(
                                             child: Center(
                                               child: Text(
-                                                'Scrap',
+                                                'NG ELL',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 16,
@@ -461,54 +470,80 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                           ),
                                         ],
                                       ),
-
                                       // Second row of cards
                                       Flexible(
                                         child: Row(
                                           children: [
-                                            Text(
-                                              'RMI',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 24,
-                                                color: Colors.black,
+                                            Visibility(
+                                              visible: false,
+                                              maintainSize: true,
+                                              maintainAnimation: true,
+                                              maintainState: true,
+                                              maintainSemantics: true,
+                                              maintainInteractivity: false,
+                                              child: Text(
+                                                'RMI',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 24,
+                                                  color: Colors.black,
+                                                ),
                                               ),
                                             ),
                                             SizedBox(width: 8),
 
-                                            Container(
-                                              width: widget.circleSize,
-                                              height: widget.circleSize,
-                                              decoration: BoxDecoration(
-                                                color: getStationColor(
-                                                    widget.station_2_status),
-                                                shape: BoxShape.circle,
+                                            Visibility(
+                                              visible: false,
+                                              maintainSize: true,
+                                              maintainAnimation: true,
+                                              maintainState: true,
+                                              maintainSemantics: true,
+                                              maintainInteractivity: false,
+                                              child: Container(
+                                                width: widget.circleSize,
+                                                height: widget.circleSize,
+                                                decoration: BoxDecoration(
+                                                  color: getStationColor(
+                                                      widget.station_2_status),
+                                                  shape: BoxShape.circle,
+                                                ),
                                               ),
                                             ),
+
                                             SizedBox(width: 8),
-                                            Flexible(
-                                              child: Card(
-                                                color: Colors.white,
-                                                child: Container(
-                                                  decoration: BoxDecoration(
-                                                    border: Border.all(
-                                                      color: widget.textColor,
-                                                      width: 1,
+
+                                            Visibility(
+                                              child: Flexible(
+                                                child: Card(
+                                                  color: Colors.white,
+                                                  elevation:
+                                                      0, // <-- Removes the default shadow
+                                                  shadowColor: Colors
+                                                      .transparent, // Extra safety: no shadow color
+                                                  child: Container(
+                                                    decoration: BoxDecoration(
+                                                      border: Border.all(
+                                                        color: Colors
+                                                            .transparent, // No border
+                                                        width: 0,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              12),
                                                     ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
-                                                  ),
-                                                  padding: const EdgeInsets
-                                                      .symmetric(vertical: 12),
-                                                  child: Center(
-                                                    child: Text(
-                                                      widget.in_2.toString(),
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 32,
-                                                        color: widget.textColor,
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        vertical: 12),
+                                                    child: Center(
+                                                      child: Text(
+                                                        widget.in_2.toString(),
+                                                        style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 32,
+                                                          color: Colors
+                                                              .transparent, // Hide text completely
+                                                        ),
                                                       ),
                                                     ),
                                                   ),
@@ -903,7 +938,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
         Row(
           children: [
             Flexible(
-              flex: 3,
+              flex: 4,
               child: HeaderBox(
                 title: 'Dettaglio ReWork',
                 target: '',
@@ -913,7 +948,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
 
             // RIGHT SIDE – Pareto + NG Card
             Flexible(
-              flex: 4,
+              flex: 5,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -951,7 +986,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                   child: Row(
                     children: [
                       Flexible(
-                        flex: 3,
+                        flex: 4,
                         child: Container(
                           height: 400,
                           margin: const EdgeInsets.only(right: 6, bottom: 0),
@@ -966,6 +1001,251 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                               Flexible(
                                 child: Column(
                                   children: [
+                                    Row(
+                                      children: [
+                                        const SizedBox(
+                                          width: 100,
+                                        ), // aligns with the AIN 1 / AIN 2 label
+                                        Flexible(
+                                          child: Center(
+                                            child: Text(
+                                              'IN',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 70),
+                                        Flexible(
+                                          child: Center(
+                                            child: Text(
+                                              'Scrap',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Flexible(
+                                      child: Row(
+                                        children: [
+                                          Text(
+                                            'RMI',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 24,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                          SizedBox(width: 8),
+
+                                          Container(
+                                            width: widget.circleSize,
+                                            height: widget.circleSize,
+                                            decoration: BoxDecoration(
+                                              color: getStationColor(
+                                                  widget.station_2_status),
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Flexible(
+                                            child: Card(
+                                              color: Colors.white,
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  border: Border.all(
+                                                    color: widget.textColor,
+                                                    width: 1,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        vertical: 12),
+                                                child: Center(
+                                                  child: Text(
+                                                    widget.in_2.toString(),
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 28,
+                                                      color: widget.textColor,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 24),
+                                          // 🟢 Second Circle
+                                          Container(
+                                            width: widget.circleSize,
+                                            height: widget.circleSize,
+                                            decoration: BoxDecoration(
+                                              color: widget.ng_2 == 0
+                                                  ? Colors.white
+                                                  : getNgColor(
+                                                      widget.ng_2, widget.in_2),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: widget.ng_2 == 0
+                                                    ? Colors.black
+                                                    : Colors.transparent,
+                                                width: 2,
+                                              ),
+                                            ),
+                                          ),
+
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: Card(
+                                              color: Colors.white,
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  border: Border.all(
+                                                    color: widget.textColor,
+                                                    width: 1,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        vertical: 12),
+                                                child: Center(
+                                                  child: Text(
+                                                    widget.ng_2.toString(),
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 28,
+                                                      color: widget.textColor,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // Second row of cards
+                                    Flexible(
+                                      child: Visibility(
+                                        visible: false,
+                                        maintainSize: true,
+                                        maintainAnimation: true,
+                                        maintainState: true,
+                                        maintainSemantics: true,
+                                        maintainInteractivity: false,
+                                        child: Row(
+                                          children: [
+                                            Text(
+                                              'RMI',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 16,
+                                                color: Colors.black,
+                                              ),
+                                            ),
+                                            SizedBox(width: 8),
+
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: getStationColor(
+                                                    widget.station_2_status),
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            SizedBox(width: 8),
+                                            Flexible(
+                                              child: Card(
+                                                color: Colors.white,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: widget.textColor,
+                                                      width: 1,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(vertical: 12),
+                                                  child: Center(
+                                                    child: Text(
+                                                      widget.in_2.toString(),
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        color: widget.textColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 24),
+                                            // 🟢 Second Circle
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: widget.ng_2 == 0
+                                                    ? Colors.white
+                                                    : getNgColor(widget.ng_2,
+                                                        widget.in_2),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: widget.ng_2 == 0
+                                                      ? Colors.black
+                                                      : Colors.transparent,
+                                                  width: 2,
+                                                ),
+                                              ),
+                                            ),
+
+                                            const SizedBox(width: 8),
+                                            Flexible(
+                                              child: Card(
+                                                color: Colors.white,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: widget.textColor,
+                                                      width: 1,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(vertical: 12),
+                                                  child: Center(
+                                                    child: Text(
+                                                      widget.ng_2.toString(),
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        color: widget.textColor,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                     Row(
                                       children: [
                                         Flexible(
@@ -1198,7 +1478,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 4),
+                                    /*const SizedBox(height: 4),
                                     Flexible(
                                       flex: 2,
                                       child: Column(
@@ -1232,7 +1512,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                           ),
                                         ],
                                       ),
-                                    ),
+                                    ),*/
                                     Text(
                                       'Sviluppato da 3SUN Process Eng, Capgemini, \nempowered by Bottero',
                                       textAlign: TextAlign.center,
@@ -1249,7 +1529,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                         ),
                       ),
                       Flexible(
-                        flex: 4,
+                        flex: 5,
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

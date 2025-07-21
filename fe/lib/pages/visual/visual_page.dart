@@ -95,6 +95,7 @@ class _VisualPageState extends State<VisualPage> {
 
   int In_2 = 0;
   int ngScrap = 0;
+  int qg2_ng = 0;
   List<Map<String, dynamic>> FPY_yield_shifts = [];
   List<Map<String, dynamic>> RWK_yield_shifs = [];
   List<Map<String, dynamic>> FPYLast8h = [];
@@ -316,6 +317,7 @@ class _VisualPageState extends State<VisualPage> {
         In_2 = response['station_2_in'] ?? 0;
         ngOut_1 = response['station_1_out_ng'] ?? 0;
         ngScrap = response['station_2_out_ng'] ?? 0;
+        qg2_ng = response['station_1_ng_qg2'] ?? 0;
 
         currentFPYYield = response['FPY_yield'] ?? 100;
         currentRWKYield = response['RWK_yield'] ?? 100;
@@ -1071,6 +1073,7 @@ class _VisualPageState extends State<VisualPage> {
                                         warningColor: warningColor,
                                         redColor: redColor,
                                         ng_1: ngOut_1,
+                                        qg2_ng: qg2_ng,
                                         ng_2: ngScrap,
                                         in_1: In_1,
                                         in_2: In_2,

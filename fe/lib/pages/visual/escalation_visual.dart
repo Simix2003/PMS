@@ -99,6 +99,11 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   bool _editingReason = false;
   final TextEditingController _editReasonCtrl = TextEditingController();
 
+  DateTime _dt(dynamic value, {DateTime? fallback}) {
+    if (value == null) return fallback ?? DateTime.now();
+    return value is DateTime ? value : DateTime.parse(value.toString());
+  }
+
   @override
   void initState() {
     super.initState();
@@ -123,16 +128,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
           shiftsBack: widget.last_n_shifts);
       if (res != null && res['status'] == 'ok' && res['stops'] != null) {
         for (final stop in res['stops']) {
-          newEsc.add({
-            'id': stop['id'],
-            'title': stop['reason'],
-            'status': stop['status'],
-            'station': entry.key,
-            'start_time': DateTime.parse(stop['start_time']),
-            'end_time': stop['end_time'] != null
-                ? DateTime.parse(stop['end_time'])
-                : null,
-          });
+          newEsc.add(normalizeStop(stop, station: entry.key));
         }
       }
     }
@@ -182,9 +178,28 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     });
   }
 
+  Map<String, dynamic> normalizeStop(Map<String, dynamic> stop,
+      {String? station}) {
+    return {
+      'id': stop['id'],
+      'title': stop['reason'] ?? stop['title'],
+      'status': stop['status'],
+      'station': station ?? stop['station'],
+      'start_time': stop['start_time'] is DateTime
+          ? stop['start_time']
+          : DateTime.tryParse(stop['start_time'].toString()),
+      'end_time': stop['end_time'] == null
+          ? null
+          : (stop['end_time'] is DateTime
+              ? stop['end_time']
+              : DateTime.tryParse(stop['end_time'].toString())),
+    };
+  }
+
   Future<void> _updateStatus(int id, String newStatus) async {
     setState(() => _busy = true);
     final nowIso = DateTime.now().toIso8601String().split('.').first;
+
     final res = await _api.updateStopStatus(
       stopId: id,
       newStatus: newStatus,
@@ -192,12 +207,15 @@ class _EscalationDialogState extends State<_EscalationDialog> {
       operatorId: 'NO OPERATOR',
     );
 
-    if (res != null) {
-      await _fetchExistingStops(keepSelectedId: id);
-    } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Update failed')));
+    if (res != null && res['stop'] != null) {
+      final updated = normalizeStop(res['stop']);
+      // replace old item with updated one (prevents rebuild with raw String)
+      final list = List<Map<String, dynamic>>.from(escalations.value);
+      final idx = list.indexWhere((e) => e['id'] == updated['id']);
+      if (idx >= 0) list[idx] = updated;
+      escalations.value = list;
     }
+    await _fetchExistingStops(keepSelectedId: id);
     setState(() => _busy = false);
   }
 
@@ -265,113 +283,284 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     final closedEscalations =
         escalations.value.where((e) => e['status'] == 'CLOSED').toList();
 
-    return Stack(
-      children: [
-        Dialog(
-          backgroundColor: Colors.white,
-          child: SizedBox(
-            width: 1000,
-            height: 700,
+    return Material(
+      color: Colors.black.withOpacity(0.5),
+      child: Center(
+        child: Container(
+          width: 1100,
+          height: 750,
+          margin: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFAFAFA),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 40,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              children: [
+                Row(
+                  children: [
+                    _buildModernSidebar(activeEscalations),
+                    Expanded(
+                      child: _showClosed
+                          ? _buildModernClosedView(closedEscalations)
+                          : (_selectedIndex == null ||
+                                  _selectedIndex! >= activeEscalations.length)
+                              ? _buildModernCreateForm()
+                              : _buildModernDetail(
+                                  activeEscalations[_selectedIndex!]),
+                    ),
+                  ],
+                ),
+                if (_busy) _buildLoadingOverlay(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernSidebar(List activeEscalations) {
+    return Container(
+      width: 320,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          right: BorderSide(color: Color(0xFFE5E5E7), width: 1),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFE5E5E7), width: 1),
+              ),
+            ),
             child: Row(
               children: [
-                _buildSidebar(activeEscalations),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: _showClosed
-                        ? _buildClosedView(closedEscalations)
-                        : (_selectedIndex == null ||
-                                _selectedIndex! >= activeEscalations.length)
-                            ? _buildCreateNewForm()
-                            : _buildDetail(activeEscalations[_selectedIndex!]),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF2F2F7),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      size: 18,
+                      color: Color(0xFF8E8E93),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Text(
+                  'Escalations',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1C1C1E),
                   ),
                 ),
               ],
             ),
           ),
-        ),
-        if (_busy)
-          Positioned.fill(
-            child: Container(
-              color: Colors.black.withOpacity(0.3),
-              alignment: Alignment.center,
-              child: const CircularProgressIndicator(),
-            ),
-          ),
-      ],
-    );
-  }
 
-  Widget _buildSidebar(List activeEscalations) {
-    return Container(
-      width: 280,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.white]),
-        borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(16), bottomLeft: Radius.circular(16)),
-      ),
-      child: Column(
-        children: [
+          // Create New Button
           Padding(
-            padding: EdgeInsets.all(12.0),
-            child: Row(
-              children: [
-                IconButton(
-                    icon: Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context)),
-                Text('ESCALATIONS',
-                    style:
-                        TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton.icon(
-              icon: Icon(Icons.add),
-              label: Text("Crea Nuovo"),
-              onPressed: () => setState(() => _selectedIndex = null),
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: activeEscalations.length,
-              itemBuilder: (_, i) {
-                final e = activeEscalations[i];
-                final isSel = _selectedIndex == i;
-                return Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Card(
-                    elevation: isSel ? 8 : 2,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    color: Colors.white.withOpacity(0.75),
-                    child: ListTile(
-                      leading: Icon(_statusIcon(e['status']),
-                          color: _statusColor(e['status']), size: 30),
-                      title: Text(e['title'],
-                          maxLines: 2, overflow: TextOverflow.ellipsis),
-                      onTap: () => setState(() => _selectedIndex = i),
+            padding: const EdgeInsets.all(20),
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedIndex = null),
+              child: Container(
+                width: double.infinity,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF007AFF).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
-                );
-              },
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add, color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Nuova Escalation',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    _showClosed ? Colors.blueAccent : Colors.grey.shade800,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+
+          // Active Escalations List
+          Expanded(
+            child: activeEscalations.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.inbox_outlined,
+                          size: 48,
+                          color: Color(0xFFAEAEB2),
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'Nessuna escalation attiva',
+                          style: TextStyle(
+                            color: Color(0xFFAEAEB2),
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: activeEscalations.length,
+                    itemBuilder: (_, i) {
+                      final e = activeEscalations[i];
+                      final isSelected = _selectedIndex == i;
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedIndex = i),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(0xFF007AFF).withOpacity(0.1)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                              border: isSelected
+                                  ? Border.all(
+                                      color: const Color(0xFF007AFF),
+                                      width: 1,
+                                    )
+                                  : null,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: _statusColor(e['status'])
+                                        .withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Icon(
+                                    _statusIcon(e['status']),
+                                    color: _statusColor(e['status']),
+                                    size: 18,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        e['title'],
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w500,
+                                          color: isSelected
+                                              ? const Color(0xFF007AFF)
+                                              : const Color(0xFF1C1C1E),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        e['status'],
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFF8E8E93),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          // Closed Items Button
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Color(0xFFE5E5E7), width: 1),
               ),
-              icon: const Icon(Icons.history, color: Colors.white),
-              label: const Text('Fermi Chiusi',
-                  style: TextStyle(color: Colors.white)),
-              onPressed: () => setState(() => _showClosed = true),
+            ),
+            child: GestureDetector(
+              onTap: () => setState(() => _showClosed = true),
+              child: Container(
+                width: double.infinity,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: _showClosed
+                      ? const Color(0xFF34C759)
+                      : const Color(0xFFF2F2F7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.history,
+                      color:
+                          _showClosed ? Colors.white : const Color(0xFF8E8E93),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Fermi Chiusi',
+                      style: TextStyle(
+                        color: _showClosed
+                            ? Colors.white
+                            : const Color(0xFF8E8E93),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -379,110 +568,565 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     );
   }
 
-  // We should fake the station to be always the AIN1 for the moment, also the Type will only be "ESCALATION"
-  Widget _buildCreateNewForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Nuova Escalation",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 24),
-        /*DropdownButtonFormField<String>(
-          value: _newStation,
-          hint: const Text("Seleziona Stazione"),
-          items: stationNameToId.keys
-              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-              .toList(),
-          onChanged: (v) => setState(() => _newStation = v),
-        ),
-        const SizedBox(height: 16),
-        DropdownButtonFormField<String>(
-          value: _newType,
-          hint: const Text("Seleziona Tipo"),
-          items: stopTypes
-              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-              .toList(),
-          onChanged: (v) => setState(() => _newType = v),
-        ),*/
-        const SizedBox(height: 16),
-        DropdownButtonFormField<String>(
-          value: _newStatus,
-          hint: const Text("Seleziona Stato"),
-          items: statusCreation
-              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-              .toList(),
-          onChanged: (v) => setState(() => _newStatus = v),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _reasonCtrl,
-          maxLines: 3,
-          decoration: const InputDecoration(
-              labelText: 'Motivo', border: OutlineInputBorder()),
-        ),
-        const Spacer(),
-        ElevatedButton(
-            onPressed: _createNewEscalation, child: const Text("Salva"))
-      ],
+  Widget _buildModernCreateForm() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Nuova Escalation',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1C1C1E),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Crea una nuova escalation del sistema',
+            style: TextStyle(
+              fontSize: 16,
+              color: Color(0xFF8E8E93),
+            ),
+          ),
+          const SizedBox(height: 40),
+
+          // Status Selector
+          const Text(
+            'Stato',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1C1C1E),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E5E7)),
+            ),
+            child: DropdownButtonFormField<String>(
+              value: _newStatus,
+              hint: const Text('Seleziona stato'),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.all(16),
+              ),
+              items: statusCreation
+                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                  .toList(),
+              onChanged: (v) => setState(() => _newStatus = v),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Reason Field
+          const Text(
+            'Motivo',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1C1C1E),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E5E7)),
+            ),
+            child: TextField(
+              controller: _reasonCtrl,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                hintText: 'Descrivi il motivo dell\'escalation...',
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.all(16),
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // Save Button
+          Container(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: _createNewEscalation,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF007AFF),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Salva Escalation',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildClosedView(List closed) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Fermi Chiusi',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        Expanded(
-          child: closed.isEmpty
-              ? const Center(child: Text("Nessun fermo chiuso"))
-              : ListView(
-                  children: closed.map((e) {
-                    final duration = e['end_time'].difference(e['start_time']);
-                    return Card(
-                      elevation: 4,
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      child: ListTile(
-                        leading:
-                            const Icon(Icons.check_circle, color: Colors.green),
-                        title: Text(e['title']),
-                        subtitle: Text(
-                          "${DateFormat('HH:mm').format(e['start_time'])} - ${DateFormat('HH:mm').format(e['end_time'])}  (${_formatDuration(duration)})",
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () =>
-                              _handleDelete(e), // <-- implement this
-                        ),
-                        onTap: () => _showClosedDetail(e),
-                      ),
-                    );
-                  }).toList(),
+  Widget _buildModernClosedView(List closed) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => _showClosed = false),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF2F2F7),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_ios,
+                    size: 16,
+                    color: Color(0xFF007AFF),
+                  ),
                 ),
-        ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.arrow_back),
-            label: const Text('Torna'),
-            onPressed: () => setState(() => _showClosed = false),
+              ),
+              const SizedBox(width: 16),
+              const Text(
+                'Fermi Chiusi',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1C1C1E),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+          Expanded(
+            child: closed.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 64,
+                          color: Color(0xFFAEAEB2),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Nessun fermo chiuso',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Color(0xFFAEAEB2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: closed.length,
+                    itemBuilder: (_, i) {
+                      final e = closed[i];
+                      final start = _dt(e['start_time']);
+                      final end = _dt(e['end_time'], fallback: start);
+                      final duration = end.difference(start);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE5E5E7)),
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          leading: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF34C759).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Icon(
+                              Icons.check_circle,
+                              color: Color(0xFF34C759),
+                              size: 24,
+                            ),
+                          ),
+                          title: Text(
+                            e['title'],
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1C1C1E),
+                            ),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              "${DateFormat('HH:mm').format(start)} - ${DateFormat('HH:mm').format(end)} • ${_formatDuration(duration)}",
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF8E8E93),
+                              ),
+                            ),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              GestureDetector(
+                                onTap: () => _showClosedDetail(e),
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF007AFF)
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: const Icon(
+                                    Icons.info_outline,
+                                    size: 18,
+                                    color: Color(0xFF007AFF),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () => _handleDelete(e),
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFF3B30)
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                    color: Color(0xFFFF3B30),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernDetail(Map<String, dynamic> esc) {
+    final start = _dt(esc['start_time']);
+    final end = _dt(esc['end_time'], fallback: DateTime.now());
+    final duration = end.difference(start);
+
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title Section
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _editingReason
+                    ? Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF007AFF)),
+                        ),
+                        child: TextField(
+                          controller: _editReasonCtrl,
+                          maxLines: 2,
+                          autofocus: true,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1C1C1E),
+                          ),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.all(16),
+                            hintText: 'Titolo escalation...',
+                          ),
+                        ),
+                      )
+                    : Text(
+                        esc['title'],
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1C1C1E),
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 16),
+              GestureDetector(
+                onTap: () {
+                  if (_editingReason) {
+                    _updateReason(esc['id']);
+                  } else {
+                    setState(() {
+                      _editingReason = true;
+                      _editReasonCtrl.text = esc['title'];
+                    });
+                  }
+                },
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF2F2F7),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    _editingReason ? Icons.check : Icons.edit_outlined,
+                    size: 20,
+                    color: const Color(0xFF007AFF),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 32),
+
+          // Status Section
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE5E5E7)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: _statusColor(esc['status']).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Icon(
+                        _statusIcon(esc['status']),
+                        color: _statusColor(esc['status']),
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _statusColor(esc['status']),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        esc['status'],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Status Update Dropdown
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF2F2F7),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: DropdownButtonFormField<String>(
+                    value: esc['status'],
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.all(16),
+                      hintText: 'Aggiorna stato...',
+                    ),
+                    items: statusFull
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                        .toList(),
+                    onChanged: (val) => _updateStatus(esc['id'], val!),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Info Cards
+          Row(
+            children: [
+              Expanded(
+                child: _buildInfoCard(
+                  Icons.play_circle_outline,
+                  'Inizio',
+                  DateFormat('HH:mm:ss').format(_dt(esc['start_time'])),
+                  const Color(0xFF007AFF),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildInfoCard(
+                  Icons.timer_outlined,
+                  'Durata',
+                  _formatDuration(duration),
+                  const Color(0xFF34C759),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(
+      IconData icon, String title, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E5E7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF8E8E93),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1C1C1E),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.3),
+        child: const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
           ),
         ),
-      ],
+      ),
     );
   }
 
   void _handleDelete(Map<String, dynamic> item) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Text("Sei sicuro?"),
-        content: Text("Vuoi eliminare: '${item['title']}'?"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
+        title: const Text(
+          "Conferma Eliminazione",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF1C1C1E),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Sei sicuro di voler eliminare definitivamente questa escalation?",
+              style: TextStyle(
+                fontSize: 16,
+                color: Color(0xFF8E8E93),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F2F7),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                "'${item['title']}'",
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF1C1C1E),
+                ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Annulla"),
+            child: const Text(
+              "Annulla",
+              style: TextStyle(
+                color: Color(0xFF007AFF),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () async {
@@ -492,16 +1136,39 @@ class _EscalationDialogState extends State<_EscalationDialog> {
               final res = await ApiService().deleteStop(item['id']);
               if (res != null && res['status'] == 'ok') {
                 await _fetchExistingStops();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text("Escalation eliminata con successo"),
+                    backgroundColor: const Color(0xFF34C759),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                );
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text("Errore durante l'eliminazione")),
+                  SnackBar(
+                    content: const Text("Errore durante l'eliminazione"),
+                    backgroundColor: const Color(0xFFFF3B30),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                 );
               }
 
               setState(() => _busy = false);
             },
-            child: const Text("Elimina", style: TextStyle(color: Colors.red)),
+            child: const Text(
+              "Elimina",
+              style: TextStyle(
+                color: Color(0xFFFF3B30),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -509,12 +1176,34 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   }
 
   void _showClosedDetail(Map<String, dynamic> esc) async {
-    // Call your API when the card is clicked
+    // Show loading state
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
+        ),
+      ),
+    );
+
+    // Call API
     final res = await ApiService().getStopDetails(esc['id']);
 
+    // Close loading dialog
+    Navigator.of(context).pop();
+
     if (res == null || res['status'] != 'ok') {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Errore durante il caricamento dei dettagli')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Errore durante il caricamento dei dettagli'),
+          backgroundColor: const Color(0xFFFF3B30),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
       return;
     }
 
@@ -523,207 +1212,295 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     showDialog(
       context: context,
       builder: (_) {
-        final duration = esc['end_time'].difference(esc['start_time']);
-        return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text("Dettagli Fermo"),
-          content: SizedBox(
-            width: 400,
+        final start = _dt(esc['start_time']);
+        final end = _dt(esc['end_time'], fallback: start);
+        final duration = end.difference(start);
+
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: 500,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 40,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("Motivo: ${esc['title']}", style: TextStyle(fontSize: 16)),
-                const SizedBox(height: 12),
-                Text("Stazione: ${esc['station']}"),
-                const SizedBox(height: 12),
-                Text(
-                    "Inizio: ${DateFormat('HH:mm:ss').format(esc['start_time'])}"),
-                const SizedBox(height: 12),
-                Text("Fine: ${DateFormat('HH:mm:ss').format(esc['end_time'])}"),
-                const SizedBox(height: 12),
-                Text("Durata: ${_formatDuration(duration)}"),
-                const SizedBox(height: 12),
-                Divider(),
-                Text("Storico Status:",
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                _buildStatusHistoryFromApi(history),
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFFE5E5E7), width: 1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF34C759).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF34C759),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Text(
+                          "Dettagli Fermo Chiuso",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1C1C1E),
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2F2F7),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 18,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Content
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF2F2F7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Motivo",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF8E8E93),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              esc['title'],
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1C1C1E),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Info Grid
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildDetailInfoCard(
+                              "Stazione",
+                              esc['station'],
+                              Icons.precision_manufacturing,
+                              const Color(0xFF007AFF),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildDetailInfoCard(
+                              "Durata",
+                              _formatDuration(duration),
+                              Icons.timer,
+                              const Color(0xFF34C759),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildDetailInfoCard(
+                              "Inizio",
+                              DateFormat('HH:mm:ss').format(start),
+                              Icons.play_circle,
+                              const Color(0xFFFF9500),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildDetailInfoCard(
+                              "Fine",
+                              DateFormat('HH:mm:ss').format(end),
+                              Icons.stop_circle,
+                              const Color(0xFFFF3B30),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Status History
+                      const Text(
+                        "Storico Stati",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1C1C1E),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: _buildModernStatusHistory(history),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Chiudi"))
-          ],
         );
       },
     );
   }
 
-  Widget _buildStatusHistoryFromApi(List history) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: history.map<Widget>((entry) {
-        final status = entry['status'];
-        final ts = DateTime.parse(entry['changed_at']);
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
+  Widget _buildDetailInfoCard(
+      String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Icon(_statusIcon(status), color: _statusColor(status), size: 20),
-              SizedBox(width: 8),
-              Text("$status @ ${DateFormat('HH:mm:ss').format(ts)}")
+              Icon(icon, color: color, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
+              ),
             ],
           ),
-        );
-      }).toList(),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1C1C1E),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildDetail(Map<String, dynamic> esc) {
-    final now = DateTime.now();
-    final end = esc['end_time'] ?? now;
-    final duration = end.difference(esc['start_time']);
+  Widget _buildModernStatusHistory(List history) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F2F7),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListView.separated(
+        padding: const EdgeInsets.all(12),
+        shrinkWrap: true,
+        itemCount: history.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) {
+          final entry = history[i];
+          final status = entry['status'];
+          final ts = DateTime.parse(entry['changed_at']);
 
-    return Center(
-      child: Container(
-        width: 600,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.75),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 10,
-              offset: Offset(0, 4),
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
             ),
-          ],
-          border: Border.all(color: Colors.grey.shade300, width: 1),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Title with edit
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Expanded(
-                  child: _editingReason
-                      ? TextField(
-                          controller: _editReasonCtrl,
-                          maxLines: 2,
-                          autofocus: true,
-                          decoration: const InputDecoration(
-                              border: OutlineInputBorder(), hintText: 'Motivo'),
-                        )
-                      : Text(
-                          esc['title'],
-                          style: const TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87),
-                        ),
-                ),
-                IconButton(
-                  icon: Icon(_editingReason ? Icons.check : Icons.edit),
-                  onPressed: () {
-                    if (_editingReason) {
-                      _updateReason(esc['id']);
-                    } else {
-                      setState(() {
-                        _editingReason = true;
-                        _editReasonCtrl.text = esc['title'];
-                      });
-                    }
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Status with icon + chip
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor:
-                      _statusColor(esc['status']).withOpacity(0.15),
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: _statusColor(status).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Icon(
-                    _statusIcon(esc['status']),
-                    size: 28,
-                    color: _statusColor(esc['status']),
+                    _statusIcon(status),
+                    color: _statusColor(status),
+                    size: 14,
                   ),
                 ),
                 const SizedBox(width: 12),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _statusColor(esc['status']),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
+                Expanded(
                   child: Text(
-                    esc['status'],
+                    status,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF1C1C1E),
+                    ),
+                  ),
+                ),
+                Text(
+                  DateFormat('HH:mm:ss').format(ts),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF8E8E93),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-
-            // Status update dropdown
-            DropdownButtonFormField<String>(
-              value: esc['status'],
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-              items: statusFull
-                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                  .toList(),
-              onChanged: (val) => _updateStatus(esc['id'], val!),
-            ),
-            const SizedBox(height: 24),
-
-            // Additional info fields (station, start, duration)
-            /*Row(
-              children: [
-                Icon(Icons.precision_manufacturing, color: Colors.black54),
-                const SizedBox(width: 8),
-                Text("Stazione: ${esc['station']}",
-                    style: const TextStyle(fontSize: 16)),
-              ],
-            ),
-            const SizedBox(height: 12),*/
-            Row(
-              children: [
-                Icon(Icons.play_circle, color: Colors.black54),
-                const SizedBox(width: 8),
-                Text(
-                    "Inizio: ${DateFormat('HH:mm:ss').format(esc['start_time'])}",
-                    style: const TextStyle(fontSize: 16)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Icon(Icons.timer, color: Colors.black54),
-                const SizedBox(width: 8),
-                Text("Durata: ${_formatDuration(duration)}",
-                    style: const TextStyle(fontSize: 16)),
-              ],
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

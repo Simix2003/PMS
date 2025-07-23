@@ -729,6 +729,11 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 value_gauge_2_ = round((s1_esito_ng / s2_in) * 100, 2) if s2_in else 0.0
                 value_gauge_2 = 100 - value_gauge_2_
 
+                qg2_ng_1 = count_unique_objects(cursor, cfg["station_qg_1"],  shift_start, shift_end, "ng")
+                qg2_ng_2 = count_unique_objects(cursor, cfg["station_qg_2"],  shift_start, shift_end, "ng")
+
+                qg2_ng = qg2_ng_1 + qg2_ng_2
+
                 # Yields
                 fpy_y = compute_yield(s1_g_r0, s1_ng_r0)
                 rwk_y = compute_yield(s1_g, s2_in)
@@ -748,11 +753,6 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                     s2_in_  = count_unique_objects(cursor, cfg["station_2_in"],  start, end, "all")
                     s2_n_ = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
                     s2_g_ = s2_in_ - s2_n_
-
-                    qg2_ng_1 = count_unique_objects(cursor, cfg["station_qg_1"],  start, end, "ng")
-                    qg2_ng_2 = count_unique_objects(cursor, cfg["station_qg_2"],  start, end, "ng")
-
-                    qg2_ng = qg2_ng_1 + qg2_ng_2
 
                     FPY_yield_shifts.append({
                         "label": label,
@@ -1680,6 +1680,11 @@ def _update_snapshot_ell_new() -> dict:
                 # NEW: accurate numerator for value_gauge_2
                 s1_esito_ng = count_objects_with_esito_ng(cursor, cfg["station_1_in"], shift_start, shift_end)
 
+                qg2_ng_1 = count_unique_objects(cursor, cfg["station_qg_1"],  shift_start, shift_end, "ng")
+                qg2_ng_2 = count_unique_objects(cursor, cfg["station_qg_2"],  shift_start, shift_end, "ng")
+
+                qg2_ng = qg2_ng_1 + qg2_ng_2
+
                 value_gauge_2_ = round((s1_esito_ng / s2_in) * 100, 2) if s2_in else 0.0
                 value_gauge_2 = 100 - value_gauge_2_
 
@@ -1950,6 +1955,7 @@ def _update_snapshot_ell_new() -> dict:
     return {
             "station_1_in": s1_in,
             "station_2_in": s2_in,
+            "station_1_ng_qg2": qg2_ng,
             "station_1_out_ng": s1_ng,
             "station_2_out_ng": s2_ng,
             "station_1_r0_in": s1_in_r0,

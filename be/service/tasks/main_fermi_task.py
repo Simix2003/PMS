@@ -62,9 +62,7 @@ async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
     while True:
         try:
             if not plc_connection.connected or not plc_connection.is_connected():
-                logger.warning(f"PLC disconnected for {ip}:{slot}, attempting reconnect...")
-                await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
-                await asyncio.sleep(10)
+                logger.warning(f"PLC disconnected for {ip}:{slot}, Skipping Fermi")
                 continue
 
             # Read trigger buffer once
@@ -100,8 +98,6 @@ async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
 
         except Exception as e:
             logger.error(f"[{ip}:{slot}] 🔴 Error in fermi_task: {e}")
-            await asyncio.to_thread(plc_connection.reconnect, retries=3, delay=5)
-            await asyncio.sleep(5)
 
 
 async def fermi_trigger_change(

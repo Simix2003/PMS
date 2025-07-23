@@ -149,11 +149,12 @@ logger = logging.getLogger(__name__)
 
 logger.info(f"Logging to {LOG_FILE} with level {LOGS_FILE} and DEBUG={debug}")
 
-async def monitor_plc_ports(plcs: list[tuple[str, int]], interval: int = 10):
+async def monitor_plc_ports(plcs: list[tuple[str, int]], interval: int = 10, warn_threshold_ms: float = 50.0):
     """
     Monitora la porta 102 di ogni PLC e logga latenza o timeout.
-    plcs: lista [(ip, slot)]
-    interval: ogni quanti secondi ripetere il test
+    - DEBUG per latenza normale
+    - WARNING se la latenza supera warn_threshold_ms
+    - WARNING per errori di connessione
     """
     import socket
     from datetime import datetime
@@ -166,7 +167,9 @@ async def monitor_plc_ports(plcs: list[tuple[str, int]], interval: int = 10):
                 sock.connect((ip, 102))
                 latency = (time.perf_counter() - start) * 1000
                 sock.close()
-                logger.info(
+
+                log_func = logger.warning if latency > warn_threshold_ms else logger.debug
+                log_func(
                     "",
                     extra={"json": {
                         "event": "plc_port_check",

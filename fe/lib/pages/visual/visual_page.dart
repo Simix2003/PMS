@@ -22,7 +22,9 @@ class VisualPage extends StatefulWidget {
 
 class _VisualPageState extends State<VisualPage> {
   final WebSocketService _webSocketService = WebSocketService();
+  final WebSocketService _escalationSocket = WebSocketService();
   bool _isWebSocketConnected = false;
+  Timer? _escalationPollTimer;
   Color errorColor = Colors.amber.shade700;
   Color redColor = Colors.red;
   Color warningColor = Colors.yellow.shade400;
@@ -119,6 +121,16 @@ class _VisualPageState extends State<VisualPage> {
   List<Map<String, dynamic>> yieldLast8h = [];
   List<Map<String, dynamic>> overallYieldLast8h = [];
   int availableTime = 0;
+
+  final Map<String, int> _stationNameToId = {
+    "AIN01": 29,
+    "AIN02": 30,
+    "STR01": 4,
+    "STR02": 5,
+    "STR03": 6,
+    "STR04": 7,
+    "STR05": 8,
+  };
 
   Map<String, int> calculateEscalationCounts(
       List<Map<String, dynamic>> escalations) {
@@ -527,6 +539,56 @@ class _VisualPageState extends State<VisualPage> {
     return (num != null && num >= 1 && num <= 5) ? num : 0;
   }
 
+  Future<void> _fetchEscalations() async {
+    final api = ApiService();
+    final List<Map<String, dynamic>> newEsc = [];
+    for (final entry in _stationNameToId.entries) {
+      final res = await api.getStopsForStation(entry.value,
+          shiftsBack: last_n_shifts);
+      if (res != null && res['status'] == 'ok' && res['stops'] != null) {
+        for (final stop in res['stops']) {
+          newEsc.add({
+            'id': stop['id'],
+            'title': stop['reason'],
+            'status': stop['status'],
+            'station': entry.key,
+            'start_time': DateTime.parse(stop['start_time']),
+            'end_time': stop['end_time'] != null
+                ? DateTime.parse(stop['end_time'])
+                : null,
+          });
+        }
+      }
+    }
+    newEsc.sort((a, b) => b['id'].compareTo(a['id']));
+    escalations.value = newEsc;
+  }
+
+  void _initializeEscalationWebSocket() {
+    _fetchEscalations();
+    _escalationSocket.connectToEscalations(
+      onDone: _scheduleEscalationReconnect,
+      onError: (_) => _scheduleEscalationReconnect(),
+    );
+
+    _escalationPollTimer?.cancel();
+    _escalationPollTimer = Timer.periodic(
+      Duration(seconds: 10),
+      (_) async {
+        if (!_escalationSocket.isConnected) {
+          await _fetchEscalations();
+        }
+      },
+    );
+  }
+
+  void _scheduleEscalationReconnect() {
+    _fetchEscalations();
+    Future.delayed(Duration(seconds: 5), () {
+      if (mounted) _initializeEscalationWebSocket();
+    });
+  }
+
   Future<void> _initializeWebSocket() async {
     if (widget.zone == "AIN") {
       _initializeAinWebSocket();
@@ -933,6 +995,7 @@ class _VisualPageState extends State<VisualPage> {
     loadTargets();
     fetchZoneData();
     _initializeWebSocket();
+    _initializeEscalationWebSocket();
     _startHourlyRefreshScheduler();
   }
 
@@ -958,7 +1021,9 @@ class _VisualPageState extends State<VisualPage> {
   @override
   void dispose() {
     _hourlyRefreshTimer?.cancel();
+    _escalationPollTimer?.cancel();
     _webSocketService.close();
+    _escalationSocket.close();
     super.dispose();
   }
 

@@ -14,9 +14,36 @@ from service.connections.mysql import (
     get_stop_with_levels,
     update_stop_reason,
 )
+from service.routes.broadcast import broadcast_escalation_update
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+STATION_NAME_TO_ID = {
+    "AIN01": 29,
+    "AIN02": 30,
+    "STR01": 4,
+    "STR02": 5,
+    "STR03": 6,
+    "STR04": 7,
+    "STR05": 8,
+}
+
+def build_escalation_list(conn, shifts_back: int = 3) -> list[dict]:
+    items: list[dict] = []
+    for name, sid in STATION_NAME_TO_ID.items():
+        stops = get_stops_for_station(sid, conn, shifts_back)
+        for stop in stops:
+            items.append({
+                "id": stop["id"],
+                "title": stop["reason"],
+                "status": stop["status"],
+                "station": name,
+                "start_time": stop["start_time"].isoformat(),
+                "end_time": stop["end_time"].isoformat() if stop.get("end_time") else None,
+            })
+    items.sort(key=lambda x: x["id"], reverse=True)
+    return items
 
 # -------------------------
 # Create new stop
@@ -31,16 +58,18 @@ async def api_create_stop(payload: Dict[str, Any]):
     try:
         with get_mysql_connection() as conn:
             stop_id = create_stop(
-                station_id = payload["station_id"],
-                start_time = payload["start_time"],
-                end_time = payload.get("end_time"),
-                operator_id = payload["operator_id"],
-                stop_type = payload["stop_type"],
-                reason = payload["reason"],
-                status = payload["status"],
-                linked_production_id = payload.get("linked_production_id"),
-                conn = conn
+                station_id=payload["station_id"],
+                start_time=payload["start_time"],
+                end_time=payload.get("end_time"),
+                operator_id=payload["operator_id"],
+                stop_type=payload["stop_type"],
+                reason=payload["reason"],
+                status=payload["status"],
+                linked_production_id=payload.get("linked_production_id"),
+                conn=conn,
             )
+            updated = build_escalation_list(conn)
+            await broadcast_escalation_update(updated)
         return {"status": "ok", "stop_id": stop_id}
     except Exception as e:
         logger.error(f"Error creating stop: {e}")
@@ -59,12 +88,14 @@ async def api_update_status(payload: Dict[str, Any]):
     try:
         with get_mysql_connection() as conn:
             update_stop_status(
-                stop_id = payload["stop_id"],
-                new_status = payload["new_status"],
-                changed_at = payload["changed_at"],
-                operator_id = payload["operator_id"],
-                conn = conn
+                stop_id=payload["stop_id"],
+                new_status=payload["new_status"],
+                changed_at=payload["changed_at"],
+                operator_id=payload["operator_id"],
+                conn=conn,
             )
+            updated = build_escalation_list(conn)
+            await broadcast_escalation_update(updated)
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error updating stop status: {e}")
@@ -83,6 +114,8 @@ async def api_update_reason(payload: Dict[str, Any]):
                 reason=payload["reason"],
                 conn=conn,
             )
+            updated = build_escalation_list(conn)
+            await broadcast_escalation_update(updated)
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error updating stop reason: {e}")
@@ -124,8 +157,10 @@ async def api_delete_stop(stop_id: int):
 
                 # 2️⃣ Then delete the main stop entry
                 cursor.execute("DELETE FROM stops WHERE id = %s", (stop_id,))
-            
+
             conn.commit()
+            updated = build_escalation_list(conn)
+            await broadcast_escalation_update(updated)
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error deleting stop {stop_id}: {e}")

@@ -4,6 +4,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
 //import '../utils/constants.dart';
 import 'dart:html' as html;
+import '../models/globals.dart';
 
 class WebSocketService {
   static String get baseUrl {
@@ -120,6 +121,33 @@ class WebSocketService {
     _handleStream(
       stream: _channel!.stream,
       onMessage: (msg) => onMessage(jsonDecode(msg)),
+      onDone: onDone,
+      onError: onError,
+    );
+  }
+
+  // ----------------- ESCALATIONS -----------------
+  void connectToEscalations({
+    void Function()? onDone,
+    void Function(dynamic)? onError,
+  }) {
+    close();
+
+    final uri = Uri.parse('$baseUrl/ws/escalations');
+    _channel = WebSocketChannel.connect(uri);
+
+    _handleStream(
+      stream: _channel!.stream,
+      onMessage: (msg) {
+        final data = jsonDecode(msg);
+        if (data is Map && data['type'] == 'escalation_update') {
+          final payload = data['payload'];
+          if (payload is List) {
+            escalations.value =
+                List<Map<String, dynamic>>.from(payload);
+          }
+        }
+      },
       onDone: onDone,
       onError: onError,
     );

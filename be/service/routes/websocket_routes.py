@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.helpers.helpers import get_channel_config
 from service.routes.broadcast import send_initial_state
-from service.state.global_state import subscriptions
+from service.state.global_state import subscriptions, escalation_websockets
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -59,6 +59,20 @@ async def websocket_warnings(websocket: WebSocket, line_name: str):
     except WebSocketDisconnect:
         logger.debug(f"Stringatrice‑warning client for {line_name} disconnected")
         subscriptions[key].remove(websocket)
+
+
+@router.websocket("/ws/escalations")
+async def websocket_escalations(websocket: WebSocket):
+    await websocket.accept()
+    escalation_websockets.add(websocket)
+    logger.debug("Escalation client connected")
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        logger.debug("Escalation client disconnected")
+    finally:
+        escalation_websockets.discard(websocket)
 
 
 @router.websocket("/ws/export/{progress_id}")

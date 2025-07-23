@@ -53,6 +53,7 @@ fine_true_passato_flags = {}
 fine_false_passato_flags = {}
 inizio_true_passato_flags = {}
 inizio_false_passato_flags = {}
+escalation_websockets = set()
 
 # Debug tools
 debug_triggers = {}

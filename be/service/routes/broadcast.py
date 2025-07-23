@@ -184,3 +184,15 @@ async def broadcast_export_progress(progress_id: str, payload: dict):
         except Exception as e:
             logger.warning(f"❌ WebSocket broadcast failed ({key}): {e}")
             subscriptions[key].discard(ws)
+
+async def broadcast_escalation_update(payload: list[dict]):
+    message = {"type": "escalation_update", "payload": clean_for_json(payload)}
+    websockets = global_state.escalation_websockets.copy()
+    for ws in websockets:
+        try:
+            if getattr(ws, "client_state", None) and ws.client_state.name != "CONNECTED":
+                raise ConnectionError("WebSocket not connected")
+            await ws.send_json(message)
+        except Exception as e:
+            logger.warning(f"❌ WebSocket broadcast failed (/ws/escalations): {e}")
+            global_state.escalation_websockets.discard(ws)

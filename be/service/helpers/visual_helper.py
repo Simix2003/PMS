@@ -158,7 +158,7 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     try:
         if now is None:
             now = datetime.now()
-        #now = now - timedelta(days=7)
+        now = now - timedelta(days=14)
 
         if zone == "VPF":
             return _compute_snapshot_vpf(now)
@@ -646,6 +646,28 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
         "eq_defects": eq_defects,
     }
 
+def count_good_after_rework(cursor, start, end):
+    """
+    # GOOD @S9 after GOOD @S3
+    """
+    sql = """
+        WITH reworked AS (
+            SELECT DISTINCT object_id
+            FROM productions
+            WHERE station_id = 3              -- ReWork
+              AND esito <> 6                  -- GOOD
+              AND start_time BETWEEN %s AND %s
+        )
+        SELECT COUNT(DISTINCT p.object_id) AS cnt
+        FROM productions p
+        JOIN reworked r USING (object_id)
+        WHERE p.station_id = 9                -- back to ELL
+          AND p.esito <> 6                    -- GOOD
+          AND p.start_time BETWEEN %s AND %s
+    """
+    cursor.execute(sql, (start, end, start, end))
+    return cursor.fetchone()["cnt"] or 0
+
 def _compute_snapshot_ell(now: datetime) -> dict:
     try:
         if now is None:
@@ -725,8 +747,9 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 # NEW: accurate numerator for value_gauge_2
                 s1_esito_ng = count_objects_with_esito_ng(cursor, cfg["station_1_in"], shift_start, shift_end)
 
-                value_gauge_2_ = round((s1_esito_ng / s2_in) * 100, 2) if s2_in else 0.0
-                value_gauge_2 = 100 - value_gauge_2_
+                # ---- Gauge 2 ---------------------------------------------------------------
+                good_after_rework = count_good_after_rework(cursor, shift_start, shift_end)
+                value_gauge_2 = round((good_after_rework / s2_g) * 100, 2) if s2_g else 0.0
 
                 qg2_ng_1 = count_unique_objects(cursor, cfg["station_qg_1"],  shift_start, shift_end, "ng")
                 qg2_ng_2 = count_unique_objects(cursor, cfg["station_qg_2"],  shift_start, shift_end, "ng")
@@ -1529,6 +1552,28 @@ def _update_snapshot_vpf(
         except Exception as e:
             logger.warning(f"Failed to parse cycle_time '{cycle_time}': {e}")
 
+def count_good_after_rework_buffer(cursor, start, end):
+    """
+    GOOD @S9 after GOOD @S3 (buffer version)
+    """
+    sql = """
+        WITH reworked AS (
+            SELECT DISTINCT object_id
+            FROM ell_productions_buffer
+            WHERE station_id = 3              -- Re-work station
+              AND esito <> 6                  -- GOOD
+              AND start_time BETWEEN %s AND %s
+        )
+        SELECT COUNT(DISTINCT p.object_id) AS cnt
+        FROM ell_productions_buffer p
+        JOIN reworked r USING (object_id)
+        WHERE p.station_id = 9               -- ELL final test
+          AND p.esito <> 6                   -- GOOD
+          AND p.start_time BETWEEN %s AND %s
+    """
+    cursor.execute(sql, (start, end, start, end))
+    return cursor.fetchone()["cnt"] or 0
+
 def _update_snapshot_ell_new() -> dict:
     try:
 
@@ -1581,8 +1626,9 @@ def _update_snapshot_ell_new() -> dict:
 
                 qg2_ng = qg2_ng_1 + qg2_ng_2
 
-                value_gauge_2_ = round((s1_esito_ng / s2_in) * 100, 2) if s2_in else 0.0
-                value_gauge_2 = 100 - value_gauge_2_
+                # ---------- Gauge 2 (GOOD@S9 after GOOD@S3) ----------
+                good_after_rework = count_good_after_rework_buffer(cursor, shift_start, shift_end)
+                value_gauge_2     = round((good_after_rework / s2_g) * 100, 2) if s2_g else 0.0
 
                 # Yields
                 fpy_y = compute_yield(s1_g_r0, s1_ng_r0)

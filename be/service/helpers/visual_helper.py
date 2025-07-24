@@ -158,7 +158,7 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
     try:
         if now is None:
             now = datetime.now()
-        now = now - timedelta(days=14)
+        #now = now - timedelta(days=14)
 
         if zone == "VPF":
             return _compute_snapshot_vpf(now)
@@ -1160,34 +1160,46 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "yield": compute_yield(g2, n2),
             })
 
-        # 4. Station stops (availability)
+        # 4. Station stops (availability) – Always include all STR stations
         placeholders = ','.join(['%s'] * len(STATION_IDS))
         cur.execute(f"""
             SELECT s.name AS station_name, st.station_id,
-                   COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
+                COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
             FROM stops st
             JOIN stations s ON st.station_id = s.id
             WHERE st.type='STOP'
-              AND st.start_time BETWEEN %s AND %s
-              AND st.station_id IN ({placeholders})
+            AND st.start_time BETWEEN %s AND %s
+            AND st.station_id IN ({placeholders})
             GROUP BY st.station_id
         """, (shift_start, shift_end, *STATION_IDS))
-        fermi_data = []
+
+        # Pre-fill all STR stations with zeros
         SHIFT_DURATION_MINUTES = 480
+        fermi_data = []
+        station_defaults = {sid: {"station": f"STR0{sid-3}", "count": 0, "time": 0, "available_time": 100}
+                            for sid in STATION_IDS}
+
+        # Overwrite defaults with actual query results
         for row in cur.fetchall():
+            sid = row["station_id"]
             stop_min = round((row["total_time"] or 0) / 60)
             availability = max(0, round(100 - (stop_min / SHIFT_DURATION_MINUTES * 100)))
-            fermi_data.append({
-                "station": row["station_name"],
+            station_defaults[sid] = {
+                "station": row["station_name"],  # use DB name (should match STRxx)
                 "count": row["n_occurrences"],
                 "time": stop_min,
                 "available_time": availability,
-            })
+            }
+
+        # Collect all 5 stations (ensures every station is present)
+        fermi_data = list(station_defaults.values())
+
+        # Compute overall availability (total downtime of all)
         total_stop_time = sum(item["time"] for item in fermi_data)
         overall_availability = max(0, round(100 - (total_stop_time / SHIFT_DURATION_MINUTES * 100)))
         fermi_data.append({"Available_Time_Total": overall_availability})
 
-        # 5. Top defects (QG2 + VPF) — extract into helper if reused
+        # 5. Top defects (QG2) — extract into helper if reused
         sql_prod = """
             SELECT id, station_id
             FROM productions

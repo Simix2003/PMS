@@ -780,7 +780,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
                           subtitle: Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
-                              "${DateFormat('HH:mm').format(start)} - ${DateFormat('HH:mm').format(end)} • ${_formatDuration(duration)}",
+                              "${DateFormat('dd/MM HH:mm', 'it_IT').format(start)} - ${DateFormat('dd/MM HH:mm', 'it_IT').format(end)} • ${_formatDuration(duration)}",
                               style: const TextStyle(
                                 fontSize: 14,
                                 color: Color(0xFF8E8E93),
@@ -1358,7 +1358,8 @@ class _EscalationDialogState extends State<_EscalationDialog> {
                           Expanded(
                             child: _buildDetailInfoCard(
                               "Inizio",
-                              DateFormat('HH:mm:ss').format(start),
+                              DateFormat('dd/MM HH:mm:ss', 'it_IT')
+                                  .format(start),
                               Icons.play_circle,
                               const Color(0xFFFF9500),
                             ),
@@ -1367,7 +1368,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
                           Expanded(
                             child: _buildDetailInfoCard(
                               "Fine",
-                              DateFormat('HH:mm:ss').format(end),
+                              DateFormat('dd/MM HH:mm:ss', 'it_IT').format(end),
                               Icons.stop_circle,
                               const Color(0xFFFF3B30),
                             ),
@@ -1491,7 +1492,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
                   ),
                 ),
                 Text(
-                  DateFormat('HH:mm:ss').format(ts),
+                  DateFormat('dd/MM HH:mm:ss', 'it_IT').format(ts),
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF8E8E93),

@@ -142,14 +142,14 @@ from service.routes.mbj_routes import router as mbj_router
 from service.routes.ml_routes import router as ml_router
 from service.routes.visual_routes import initialize_visual_cache, router as visual_router
 from service.routes.escalation_routes import router as escalation_router
-from service.routes.simix_rca_routes import router as simix_rca_router
+#from service.routes.simix_rca_routes import router as simix_rca_router
 
 LOG_CONFIG = configure_logging()
 logger = logging.getLogger(__name__)
 
 logger.info(f"Logging to {LOG_FILE} with level {LOGS_FILE} and DEBUG={debug}")
 
-async def monitor_plc_ports(plcs: list[tuple[str, int]], interval: int = 10, warn_threshold_ms: float = 50.0):
+async def monitor_plc_ports(plcs: list[tuple[str, int]], interval: int = 10, warn_threshold_ms: float = 100.0):
     """
     Monitora la porta 102 di ogni PLC e logga latenza o timeout.
     - DEBUG per latenza normale
@@ -355,7 +355,7 @@ for router, name in [
     (overlay_router, "overlay"), (export_router, "export"), (settings_router, "settings"),
     (graph_router, "graph"), (station_router, "station"), (search_router, "search"),
     (websocket_router, "websocket"), (health_check_router, "health_check"),
-    (mbj_router, "mbj"), (ml_router, "ml"), (visual_router, "visual"), (escalation_router, "escalation"), (simix_rca_router, "simix_rca")
+    (mbj_router, "mbj"), (ml_router, "ml"), (visual_router, "visual"), (escalation_router, "escalation")#, (simix_rca_router, "simix_rca")
 ]:
     app.include_router(router)
     logger.debug(f"  • {name}_router registered")

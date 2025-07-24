@@ -473,25 +473,28 @@ class _VisualPageState extends State<VisualPage> {
         hourLabels =
             yieldLast8h.map((e) => e['hour']?.toString() ?? '').toList();
 
-        // Top Defects QG2
+        //  Top Defects QG2  ───────────────────────────────────────────────
         final topDefectsRaw =
             List<Map<String, dynamic>>.from(response['top_defects_qg2'] ?? []);
+
         defectLabels = [];
         Counts = [];
-        for (final defect in topDefectsRaw) {
-          defectLabels.add(defect['label']?.toString() ?? '');
-          Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+        for (final d in topDefectsRaw) {
+          defectLabels.add(d['label']?.toString() ?? '');
+          Counts.add(int.tryParse(d['total'].toString()) ?? 0); // ← use TOTAL
         }
         qg2_defects_value = response['total_defects_qg2'] ?? 0;
 
-        // Top Defects VPF
+        //  Top Defects VPF  ───────────────────────────────────────────────
         final topDefectsVPF =
             List<Map<String, dynamic>>.from(response['top_defects_vpf'] ?? []);
+
         defectVPFLabels = [];
         VpfDefectsCounts = [];
-        for (final defect in topDefectsVPF) {
-          defectVPFLabels.add(defect['label']?.toString() ?? '');
-          VpfDefectsCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
+        for (final d in topDefectsVPF) {
+          defectVPFLabels.add(d['label']?.toString() ?? '');
+          VpfDefectsCounts.add(
+              int.tryParse(d['total'].toString()) ?? 0); // ← use TOTAL
         }
 
         // Fermi data (downtime + per-station availability)
@@ -543,8 +546,8 @@ class _VisualPageState extends State<VisualPage> {
     final api = ApiService();
     final List<Map<String, dynamic>> newEsc = [];
     for (final entry in _stationNameToId.entries) {
-      final res = await api.getStopsForStation(entry.value,
-          shiftsBack: last_n_shifts);
+      final res =
+          await api.getStopsForStation(entry.value, shiftsBack: last_n_shifts);
       if (res != null && res['status'] == 'ok' && res['stops'] != null) {
         for (final stop in res['stops']) {
           newEsc.add({
@@ -953,32 +956,34 @@ class _VisualPageState extends State<VisualPage> {
             }
           }
 
-          // ─── QG2 Defects ──────────────────────────────
+          // ─── QG2 Defects (combine totals) ──────────────────────────────
           final topDefectsQG2 =
               List<Map<String, dynamic>>.from(data['top_defects_qg2'] ?? []);
           defectLabels = [];
-          ain1Counts = [];
-          ain2Counts = [];
+          Counts = [];
 
           for (final defect in topDefectsQG2) {
             defectLabels.add(defect['label']?.toString() ?? '');
-            ain1Counts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
-            ain2Counts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+            // Combine ain1 + ain2 → just one bar
+            final ain1 = int.tryParse(defect['ain1'].toString()) ?? 0;
+            final ain2 = int.tryParse(defect['ain2'].toString()) ?? 0;
+            Counts.add(ain1 + ain2);
           }
 
           qg2_defects_value = data['total_defects_qg2'] ?? 0;
 
-          // ─── VPF Defects ───────────────────────────────
+          // ─── VPF Defects (combine totals) ──────────────────────────────
           final topDefectsVPF =
               List<Map<String, dynamic>>.from(data['top_defects_vpf'] ?? []);
           defectVPFLabels = [];
-          ain1VPFCounts = [];
-          ain2VPFCounts = [];
+          VpfDefectsCounts = [];
 
           for (final defect in topDefectsVPF) {
             defectVPFLabels.add(defect['label']?.toString() ?? '');
-            ain1VPFCounts.add(int.tryParse(defect['ain1'].toString()) ?? 0);
-            ain2VPFCounts.add(int.tryParse(defect['ain2'].toString()) ?? 0);
+            // Combine ain1 + ain2 → just one bar
+            final ain1 = int.tryParse(defect['ain1'].toString()) ?? 0;
+            final ain2 = int.tryParse(defect['ain2'].toString()) ?? 0;
+            VpfDefectsCounts.add(ain1 + ain2);
           }
         });
       },

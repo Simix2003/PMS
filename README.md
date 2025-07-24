@@ -129,6 +129,8 @@ Versions:
 "2.4.0" - Visual Management for ELL
 "2.4.1" - Improvements on MBJ view
 
+"2.4.5" - Finished STR and new ELL visuals
+
 ## OWASP dependency verification
 
 Per verificare la presenza di vulnerabilità note nelle dipendenze Python è

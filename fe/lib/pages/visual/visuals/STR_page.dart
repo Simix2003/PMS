@@ -2269,8 +2269,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
             Flexible(
               flex: 3,
               child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: 400, // ← set your maximum height here
+                constraints: const BoxConstraints(
+                  maxHeight: 400, // Limit overall height
                 ),
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 16),
@@ -2280,25 +2280,46 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.stretch, // Stretch charts
                     children: [
-                      Flexible(
+                      // Left: QG2 chart
+                      Expanded(
                         child: TopDefectsHorizontalBarChartSTR(
                           defectLabels: widget.defectLabels,
                           Counts: widget.defectsCounts,
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Flexible(
-                        child: VPFDefectsHorizontalBarChartSTR(
-                          defectLabels: widget.defectLabels,
-                          Counts: widget.VpfDefectsCounts,
+                      // Right: VPF chart + text stacked
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment
+                              .spaceBetween, // Space chart + text
+                          children: [
+                            Expanded(
+                              child: VPFDefectsHorizontalBarChartSTR(
+                                defectLabels: widget.defectLabels,
+                                Counts: widget.VpfDefectsCounts,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Sviluppato da 3SUN Process Eng,\nCapgemini, empowered by Bottero',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF616161), // grey700
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-            ),
+            )
           ],
         ),
       ],

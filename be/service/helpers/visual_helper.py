@@ -122,6 +122,28 @@ def count_unique_objects_r0(cursor, station_names, start, end, esito_filter):
     cursor.execute(sql, tuple(params))
     return cursor.fetchone()["cnt"] or 0
 
+def count_unique_ng_objects(cursor, all_station_names, start, end):
+    placeholders = ", ".join(["%s"] * len(all_station_names))
+    params = all_station_names + [start, end]
+
+    sql = f"""
+        SELECT COUNT(DISTINCT p.object_id) AS cnt
+        FROM productions p
+        JOIN stations s ON p.station_id = s.id
+        WHERE s.name IN ({placeholders})
+        AND p.end_time BETWEEN %s AND %s
+        AND p.esito = 6
+        AND NOT EXISTS (
+            SELECT 1
+            FROM productions p2
+            WHERE p2.object_id = p.object_id
+            AND p2.station_id = p.station_id
+            AND p2.end_time > p.end_time
+        )
+    """
+    cursor.execute(sql, tuple(params))
+    return cursor.fetchone()["cnt"] or 0
+
 def get_previous_shifts(now: datetime, n: int = 3):
     shifts = []
     ref = now
@@ -756,9 +778,13 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
                 qg2_ng = qg2_ng_1 + qg2_ng_2
 
+                # Final NG total across station 1 and both QG2 stations (deduplicated)
+                stations_ng = cfg["station_1_out_ng"] + cfg["station_qg_1"] + cfg["station_qg_2"]
+                ng_tot = count_unique_ng_objects(cursor, stations_ng, shift_start, shift_end)
+
                 # Yields
                 fpy_y = compute_yield(s1_g_r0, s1_ng_r0)
-                rwk_y = compute_yield(s1_g, s2_in)
+                rwk_y = compute_yield(s1_g, s2_in) ##TODO FIX THIS SHIT
 
                 # -------- last 3 shifts yield + throughput -------
                 FPY_yield_shifts, RWK_yield_shifs, shift_throughput = [], [], []
@@ -1026,6 +1052,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
             "station_1_ng_qg2": qg2_ng,
             "station_1_out_ng": s1_ng,
             "station_2_out_ng": s2_ng,
+            "ng_tot": ng_tot,
             "station_1_r0_in": s1_in_r0,
             "station_1_r0_ng": s1_ng_r0,
             "station_2_r0_in":  s2_in_r0,
@@ -1332,7 +1359,7 @@ def update_visual_data_on_new_module(
             _update_snapshot_ain(data, station_name, esito, ts)
         elif zone == "ELL":
             #_update_snapshot_ell(data, station_name, esito, ts, cycle_time, reentered, object_id)
-            new_snapshot = _update_snapshot_ell_new()
+            new_snapshot = _update_snapshot_ell_new(bufferIds)
             data.clear()
             data.update(new_snapshot)
         elif zone == "STR":
@@ -1586,9 +1613,8 @@ def count_good_after_rework_buffer(cursor, start, end):
     cursor.execute(sql, (start, end, start, end))
     return cursor.fetchone()["cnt"] or 0
 
-def _update_snapshot_ell_new() -> dict:
+def _update_snapshot_ell_new(bufferIds: List[str]) -> dict:
     try:
-
         now = datetime.now()
 
         hour_start = now.replace(minute=0, second=0, microsecond=0)
@@ -1638,13 +1664,17 @@ def _update_snapshot_ell_new() -> dict:
 
                 qg2_ng = qg2_ng_1 + qg2_ng_2
 
+                # Final NG total across station 1 and both QG2 stations (deduplicated)
+                stations_ng = cfg["station_1_out_ng"] + cfg["station_qg_1"] + cfg["station_qg_2"]
+                ng_tot = count_unique_ng_objects(cursor, stations_ng, shift_start, shift_end)
+
                 # ---------- Gauge 2 (GOOD@S9 after GOOD@S3) ----------
                 good_after_rework = count_good_after_rework_buffer(cursor, shift_start, shift_end)
                 value_gauge_2     = round((good_after_rework / s2_g) * 100, 2) if s2_g else 0.0
 
                 # Yields
                 fpy_y = compute_yield(s1_g_r0, s1_ng_r0)
-                rwk_y = compute_yield(s1_g, s2_in)
+                rwk_y = compute_yield(s1_g, s2_in) ##TODO FIX THIS SHIT
 
                 # -------- last 3 shifts yield + throughput -------
                 FPY_yield_shifts, RWK_yield_shifs, shift_throughput = [], [], []
@@ -1849,6 +1879,43 @@ def _update_snapshot_ell_new() -> dict:
                 result = cursor.fetchone()
                 reentered_count = result["re_entered"] if result and "re_entered" in result else 0
 
+                # ===================== 4. Buffer‑ID defect trace  =====================
+                buffer_defect_summary = []
+                bufferIds = [b.strip() for b in bufferIds if b and b.strip()]
+                if bufferIds:
+                    placeholders = ",".join(["%s"] * len(bufferIds))
+                    cursor.execute(
+                        f"""
+                        SELECT o.id_modulo,
+                            p.id AS production_id,
+                            SUM(p.station_id = 3) AS rwk_count,
+                            JSON_ARRAYAGG(
+                                JSON_OBJECT('defect_id', od.defect_id,
+                                            'defect_type', COALESCE(
+                                                CASE WHEN od.defect_id = 1 THEN od.defect_type ELSE d.category END,
+                                                'Sconosciuto'),
+                                            'extra_data', IFNULL(od.extra_data,'')))
+                                ) AS defects
+                        FROM objects o
+                        JOIN productions p        ON p.object_id     = o.id AND p.esito = 6
+                        LEFT JOIN object_defects od ON od.production_id = p.id
+                        LEFT JOIN defects d         ON d.id            = od.defect_id
+                        WHERE o.id_modulo IN ({placeholders})
+                        GROUP BY o.id_modulo, p.id
+                        """,
+                        bufferIds,
+                    )
+                    buffer_defect_summary = [
+                        {
+                            "object_id": row["id_modulo"],
+                            "production_id": row["production_id"],
+                            "rework_count": int(row["rwk_count"]),
+                            "defects": json.loads(row["defects"]) if row["defects"] else [],
+                        }
+                        for row in cursor.fetchall()
+                    ]
+
+
                 # -------- speed_ratio (median vs current cycle time at station 3 = ReWork1) ------
                 sql_speed_data = """
                     SELECT p.cycle_time
@@ -1912,6 +1979,7 @@ def _update_snapshot_ell_new() -> dict:
             "station_1_ng_qg2": qg2_ng,
             "station_1_out_ng": s1_ng,
             "station_2_out_ng": s2_ng,
+            "ng_tot": ng_tot,
             "station_1_r0_in": s1_in_r0,
             "station_1_r0_ng": s1_ng_r0,
             "station_2_r0_in":  s2_in_r0,
@@ -1932,6 +2000,7 @@ def _update_snapshot_ell_new() -> dict:
             "value_gauge_1": value_gauge_1,
             "value_gauge_2": value_gauge_2,
             "speed_ratio": speed_ratio,
+            "bufferDefectSummary": buffer_defect_summary,
 }
 
 def _update_snapshot_str(

@@ -610,7 +610,7 @@ class ThroughputBarChart extends StatelessWidget {
               Row(
                 children: [
                   const Text(
-                    'Throughput',
+                    'Produzione',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1094,7 +1094,7 @@ class ThroughputSTRBarChart extends StatelessWidget {
               Row(
                 children: [
                   const Text(
-                    'Throughput',
+                    'Produzione',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1405,7 +1405,7 @@ class HourlyBarChart extends StatelessWidget {
                 const Padding(
                   padding: EdgeInsets.only(bottom: 12),
                   child: Text(
-                    'Throughput Cumulativo',
+                    'Produzione Cumulativa',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

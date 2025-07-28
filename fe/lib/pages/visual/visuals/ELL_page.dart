@@ -19,7 +19,8 @@ class EllVisualsPage extends StatefulWidget {
   final Color warningColor;
   final Color redColor;
   final int ng_1;
-  final int ng_2;
+  final int ng_2; // AGGIUNGERE NO GOOD TOT. DISTINTI ( QG2 e ELL)
+  final int ng_tot;
   final int qg2_ng;
   final int in_1;
   final int in_2;
@@ -62,6 +63,7 @@ class EllVisualsPage extends StatefulWidget {
     required this.redColor,
     required this.ng_1,
     required this.ng_2,
+    required this.ng_tot,
     required this.qg2_ng,
     required this.in_1,
     required this.in_2,
@@ -98,7 +100,6 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
   late int shift_target;
   late double hourly_shift_target;
   late int yield_target;
-  late int ng_tot;
 
   @override
   void initState() {
@@ -106,7 +107,6 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
     shift_target = widget.shift_target;
     yield_target = widget.yield_target;
     hourly_shift_target = widget.hourly_shift_target;
-    ng_tot = widget.ng_1 + widget.qg2_ng;
   }
 
   Future<void> showTargetEditDialog({
@@ -382,13 +382,13 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: ng_tot == 0
+                                                color: widget.ng_tot == 0
                                                     ? Colors.white
-                                                    : getNgColor(
-                                                        ng_tot, widget.in_1),
+                                                    : getNgColor(widget.ng_tot,
+                                                        widget.in_1),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
-                                                  color: ng_tot == 0
+                                                  color: widget.ng_tot == 0
                                                       ? Colors.black
                                                       : Colors.transparent,
                                                   width: 2,
@@ -415,7 +415,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      ng_tot.toString(),
+                                                      widget.ng_tot.toString(),
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -556,13 +556,13 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: widget.ng_2 == 0
+                                                color: widget.ng_1 == 0
                                                     ? Colors.white
-                                                    : getNgColor(widget.ng_2,
-                                                        widget.in_2),
+                                                    : getNgColor(widget.ng_1,
+                                                        widget.in_1),
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
-                                                  color: widget.ng_2 == 0
+                                                  color: widget.ng_1 == 0
                                                       ? Colors.black
                                                       : Colors.transparent,
                                                   width: 2,

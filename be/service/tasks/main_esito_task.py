@@ -352,6 +352,9 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
                 trigger_value = global_state.debug_triggers.get(full_station_id, False)
             else:
                 trigger_value = extract_bool(buffer, trigger_conf["byte"], trigger_conf["bit"], start_byte)
+            
+            #if full_station_id =="Linea2.VPF01":
+            #    logger.info(f"Triggr value of VPF : {trigger_value}")
 
             if trigger_value is None:
                 raise Exception("Trigger read returned None")
@@ -458,8 +461,8 @@ async def handle_end_cycle(
 
     t_plc_detect = time.perf_counter()
     t0 = time.perf_counter()
-
-    logger.debug(f"Fine Ciclo on {full_station_id} TRUE ...")
+    #if full_station_id =="Linea2.VPF01":
+    #    logger.info(f"Fine Ciclo on {full_station_id} TRUE ...")
 
     esito_conf = paths.get("esito_scarto_compilato")
     pezzo_archivia_conf = paths["pezzo_archiviato"]
@@ -560,7 +563,8 @@ async def on_trigger_change(
     t_trigger_seen = trigger_timestamp or time.perf_counter()
     durations = {}
 
-    logger.debug(f"Inizio Ciclo on {full_id} TRUE ...")
+    #if full_id =="Linea2.VPF01":
+    #    logger.info(f"Inizio Ciclo on {full_id} TRUE ...")
     trigger_timestamps.pop(full_id, None)
 
     esito_conf = paths.get("esito_scarto_compilato")
@@ -806,6 +810,7 @@ async def read_data(
             slen = rwk_conf.get("string_length", 20) + 2
             raw = await asyncio.to_thread(plc_connection.db_read, db, base, count * slen)
             rwk_vals = [extract_s7_string(raw, i * slen) for i in range(count)]
+            print('RWK_VALS:', rwk_vals)
         elif debug:
             rwk_vals = ["3SBHBGHC25620697", "3SBHBGHC25614686", "3SBHBGHC25620697"]
 
@@ -837,7 +842,7 @@ async def read_data(
 
                 data["station_id"] = station_id
 
-                logger.debug(
+                logger.info(
                     f"[{full_id}], STR snapshot read: "
                     f"cell_G={data['cell_G']}, cell_NG={data['cell_NG']}, "
                     f"string_G={data['string_G']}, string_NG={data['string_NG']} "

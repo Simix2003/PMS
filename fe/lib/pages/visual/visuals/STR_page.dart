@@ -395,16 +395,31 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               ),
                                             ),
                                             const SizedBox(width: 8),
-                                            // Circle  NG STR1
+                                            // Circle NG STR1
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                    widget.stationNG[1] ?? 0,
-                                                    widget.stationInputs[1] ??
-                                                        0),
+                                                color: (widget.stationNG[1] ??
+                                                            0) ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getNgColor(
+                                                        widget.stationNG[1] ??
+                                                            0,
+                                                        widget.stationInputs[
+                                                                1] ??
+                                                            0,
+                                                      ),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: (widget.stationNG[1] ??
+                                                              0) ==
+                                                          0
+                                                      ? Colors.black
+                                                      : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -441,16 +456,34 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             ),
 
                                             const SizedBox(width: 8),
-                                            // Circle  Scarp STR1
+                                            // Circle Scrap STR1
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                    widget.stationScrap[1] ?? 0,
-                                                    widget.stationInputs[1] ??
-                                                        0),
+                                                color:
+                                                    (widget.stationScrap[1] ??
+                                                                0) ==
+                                                            0
+                                                        ? Colors.white
+                                                        : getNgColor(
+                                                            widget.stationScrap[
+                                                                    1] ??
+                                                                0,
+                                                            widget.stationInputs[
+                                                                    1] ??
+                                                                0,
+                                                          ),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      (widget.stationScrap[1] ??
+                                                                  0) ==
+                                                              0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -549,16 +582,31 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               ),
                                             ),
                                             const SizedBox(width: 8),
-                                            // Circle  NG STR2
+                                            // Circle NG STR2
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                    widget.stationNG[2] ?? 0,
-                                                    widget.stationInputs[2] ??
-                                                        0),
+                                                color: (widget.stationNG[2] ??
+                                                            0) ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getNgColor(
+                                                        widget.stationNG[2] ??
+                                                            0,
+                                                        widget.stationInputs[
+                                                                2] ??
+                                                            0,
+                                                      ),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: (widget.stationNG[2] ??
+                                                              0) ==
+                                                          0
+                                                      ? Colors.black
+                                                      : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -595,16 +643,34 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             ),
 
                                             const SizedBox(width: 8),
-                                            // Circle  Scarp STR2
+                                            // Circle Scrap STR2
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                    widget.stationScrap[2] ?? 0,
-                                                    widget.stationInputs[2] ??
-                                                        0),
+                                                color:
+                                                    (widget.stationScrap[2] ??
+                                                                0) ==
+                                                            0
+                                                        ? Colors.white
+                                                        : getNgColor(
+                                                            widget.stationScrap[
+                                                                    2] ??
+                                                                0,
+                                                            widget.stationInputs[
+                                                                    2] ??
+                                                                0,
+                                                          ),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      (widget.stationScrap[2] ??
+                                                                  0) ==
+                                                              0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -703,16 +769,31 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               ),
                                             ),
                                             const SizedBox(width: 8),
-                                            // Circle  NG STR3
+                                            // Circle NG STR3
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                    widget.stationNG[3] ?? 0,
-                                                    widget.stationInputs[3] ??
-                                                        0),
+                                                color: (widget.stationNG[3] ??
+                                                            0) ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getNgColor(
+                                                        widget.stationNG[3] ??
+                                                            0,
+                                                        widget.stationInputs[
+                                                                3] ??
+                                                            0,
+                                                      ),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: (widget.stationNG[3] ??
+                                                              0) ==
+                                                          0
+                                                      ? Colors.black
+                                                      : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -749,16 +830,34 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             ),
 
                                             const SizedBox(width: 8),
-                                            // Circle  Scarp STR3
+                                            // Circle Scrap STR3
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                    widget.stationScrap[3] ?? 0,
-                                                    widget.stationInputs[3] ??
-                                                        0),
+                                                color:
+                                                    (widget.stationScrap[3] ??
+                                                                0) ==
+                                                            0
+                                                        ? Colors.white
+                                                        : getNgColor(
+                                                            widget.stationScrap[
+                                                                    3] ??
+                                                                0,
+                                                            widget.stationInputs[
+                                                                    3] ??
+                                                                0,
+                                                          ),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      (widget.stationScrap[3] ??
+                                                                  0) ==
+                                                              0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -857,16 +956,31 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               ),
                                             ),
                                             const SizedBox(width: 8),
-                                            // Circle  NG STR4
+                                            // Circle NG STR4
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                    widget.stationNG[4] ?? 0,
-                                                    widget.stationInputs[4] ??
-                                                        0),
+                                                color: (widget.stationNG[4] ??
+                                                            0) ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getNgColor(
+                                                        widget.stationNG[4] ??
+                                                            0,
+                                                        widget.stationInputs[
+                                                                4] ??
+                                                            0,
+                                                      ),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: (widget.stationNG[4] ??
+                                                              0) ==
+                                                          0
+                                                      ? Colors.black
+                                                      : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -903,16 +1017,34 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             ),
 
                                             const SizedBox(width: 8),
-                                            // Circle  Scarp STR4
+                                            // Circle Scrap STR4
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                    widget.stationScrap[4] ?? 0,
-                                                    widget.stationInputs[4] ??
-                                                        0),
+                                                color:
+                                                    (widget.stationScrap[4] ??
+                                                                0) ==
+                                                            0
+                                                        ? Colors.white
+                                                        : getNgColor(
+                                                            widget.stationScrap[
+                                                                    4] ??
+                                                                0,
+                                                            widget.stationInputs[
+                                                                    4] ??
+                                                                0,
+                                                          ),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      (widget.stationScrap[4] ??
+                                                                  0) ==
+                                                              0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -1011,16 +1143,31 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                               ),
                                             ),
                                             const SizedBox(width: 8),
-                                            // Circle  NG STR5
+                                            // Circle NG STR5
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                    widget.stationNG[5] ?? 0,
-                                                    widget.stationInputs[5] ??
-                                                        0),
+                                                color: (widget.stationNG[5] ??
+                                                            0) ==
+                                                        0
+                                                    ? Colors.white
+                                                    : getNgColor(
+                                                        widget.stationNG[5] ??
+                                                            0,
+                                                        widget.stationInputs[
+                                                                5] ??
+                                                            0,
+                                                      ),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: (widget.stationNG[5] ??
+                                                              0) ==
+                                                          0
+                                                      ? Colors.black
+                                                      : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 
@@ -1057,16 +1204,34 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             ),
 
                                             const SizedBox(width: 8),
-                                            // Circle  Scarp STR5
+                                            // Circle Scrap STR5
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
                                               decoration: BoxDecoration(
-                                                color: getNgColor(
-                                                    widget.stationScrap[5] ?? 0,
-                                                    widget.stationInputs[5] ??
-                                                        0),
+                                                color:
+                                                    (widget.stationScrap[5] ??
+                                                                0) ==
+                                                            0
+                                                        ? Colors.white
+                                                        : getNgColor(
+                                                            widget.stationScrap[
+                                                                    5] ??
+                                                                0,
+                                                            widget.stationInputs[
+                                                                    5] ??
+                                                                0,
+                                                          ),
                                                 shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color:
+                                                      (widget.stationScrap[5] ??
+                                                                  0) ==
+                                                              0
+                                                          ? Colors.black
+                                                          : Colors.transparent,
+                                                  width: 2,
+                                                ),
                                               ),
                                             ),
 

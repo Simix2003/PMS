@@ -17,18 +17,31 @@ logger.setLevel(logging.DEBUG)
 
 MODEL_PATH = r"D:\AI\Models\gemma-3n-E4B-it-Q4_K_M.gguf"
 N_THREADS = 4
+MODEL_AVAILABLE = True
 
-logger.info(f"Loading Llama model from: {MODEL_PATH} (threads={N_THREADS})...")
-llm = Llama(
-    model_path=MODEL_PATH,
-    n_ctx=4096,
-    n_threads=N_THREADS,
-    n_batch=256,
-    use_mlock=False,
-    use_mmap=True,
-    verbose=False,
-)
-logger.info("Llama model loaded successfully.")
+class DummyLLM:
+    def __call__(self, *args, **kwargs):
+        logger.error("Attempted to use AI model but it is unavailable.")
+        return {"choices": [{"text": ""}]}  # Always empty
+
+try:
+    if not os.path.isfile(MODEL_PATH):
+        raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
+    logger.info(f"Loading Llama model from: {MODEL_PATH} (threads={N_THREADS})...")
+    llm = Llama(
+        model_path=MODEL_PATH,
+        n_ctx=4096,
+        n_threads=N_THREADS,
+        n_batch=256,
+        use_mlock=False,
+        use_mmap=True,
+        verbose=False,
+    )
+    logger.info("Llama model loaded successfully.")
+except Exception as e:
+    logger.error(f"Failed to load AI model: {e}")
+    llm = DummyLLM()
+    MODEL_AVAILABLE = False
 
 SYSTEM_PROMPT_RCA = """
 Il tuo nome è Simix. Sei un assistente AI specializzato in analisi delle cause radice (RCA) per una linea di produzione di moduli fotovoltaici.
@@ -84,6 +97,10 @@ def build_summary_prompt(case_context: str, chain: List[Dict[str, str]]) -> str:
     return prompt
 
 def summarize_chain(case_context: str, chain: List[Dict[str, str]]) -> str:
+    if not MODEL_AVAILABLE:
+        logger.warning("AI model unavailable — cannot generate summary.")
+        return "Il modello AI non è disponibile. Controllare il server."
+
     prompt = build_summary_prompt(case_context, chain)
     try:
         result = llm(prompt, max_tokens=512, stop=["<|user|>"], stream=True)
@@ -133,6 +150,10 @@ def extract_text_from_result(result):
         return result.get("choices", [{}])[0].get("text", "")
 
 def ask_next(case_context: str, chain: List[Dict[str, str]]) -> Dict[str, Any]:
+    if not MODEL_AVAILABLE:
+        logger.warning("AI model unavailable — cannot generate RCA question.")
+        return {"error": "AI model non disponibile. Controllare configurazione."}
+    
     if len(chain) >= 5:
         summary = summarize_chain(case_context, chain)
         return {"summary": summary}
@@ -177,6 +198,9 @@ def ask_next(case_context: str, chain: List[Dict[str, str]]) -> Dict[str, Any]:
 
 @router.post("/api/simix_rca/next")
 async def api_next_question(req: RCARequest):
+    if not MODEL_AVAILABLE:
+        return {"error": "AI model non disponibile. Controllare configurazione."}
+    
     logger.info(f"Received RCA request: context='{req.context}' (chain length={len(req.why_chain)})")
     result = ask_next(req.context, req.why_chain)
     logger.info(f"Returning RCA result: {result}")
@@ -186,6 +210,11 @@ async def api_next_question(req: RCARequest):
 @router.websocket("/ws/simix_rca")
 async def websocket_next_question(websocket: WebSocket):
     await websocket.accept()
+    if not MODEL_AVAILABLE:
+        await websocket.send_text("[[ERROR]] Modello AI non disponibile. Controllare configurazione.")
+        await websocket.send_text("[[END]]")
+        await websocket.close()
+        return
     try:
         payload = await websocket.receive_json()
         context = payload.get("context", "")

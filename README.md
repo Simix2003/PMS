@@ -99,8 +99,8 @@ A seconda della pagina che vuoi visualizzare, esegui uno dei seguenti comandi:
 ## Struttura Progetto (Base)
 
 ```
-/lib                    # Codice Flutter frontend
-/service                # Backend Python
+/fe/lib                    # Codice Flutter frontend
+/be/service                # Backend Python
 ```
 
 ---

@@ -1108,6 +1108,7 @@ class _VisualPageState extends State<VisualPage> {
                                 ain2VPFCounts: ain2VPFCounts,
                                 last_n_shifts: last_n_shifts,
                                 qg2_defects_value: qg2_defects_value,
+                                onStopsUpdated: fetchZoneData,
                               )
                             : widget.zone == "VPF"
                                 ? VpfVisualsPage(
@@ -1243,6 +1244,7 @@ class _VisualPageState extends State<VisualPage> {
 
                                             lastNShifts: last_n_shifts,
                                             counts: counts,
+                                            onStopsUpdated: fetchZoneData,
                                           )
                                         : const Center(
                                             child: Text(

@@ -210,19 +210,15 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
   }
 
   void _onStopEnded() {
-    print('Stop ended');
     _stopTimer?.cancel();
     _runningStop = null;
     widget.onStopsUpdated?.call();
-    print('Stops updated');
     setState(() {});
   }
 
   Future<void> _stopRunningStop() async {
-    print('Stopping running stop');
     if (_runningStop == null) return;
     final id = _runningStop!['id'];
-    print('Stop ID: $id');
     if (id != null) {
       await ApiService().updateStopStatus(
         stopId: id,
@@ -231,7 +227,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
         operatorId: 'NO OPERATOR',
       );
     }
-    print('Stop ID updated');
     _onStopEnded();
   }
 

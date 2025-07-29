@@ -309,7 +309,12 @@ def _compute_snapshot_ain(now: datetime) -> dict:
 
                 # Query total stop time for station 29
                 sql_total_29 = """
-                    SELECT SUM(st.stop_time) AS total_time
+                    SELECT SUM(
+                        CASE 
+                            WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                            ELSE st.stop_time
+                        END
+                    ) AS total_time
                     FROM stops st
                     WHERE st.type = 'STOP'
                     AND st.station_id = 29
@@ -321,9 +326,15 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 total_stop_time_minutes_29 = total_stop_time_29 / 60
                 available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
 
+
                 # Query total stop time for station 30
                 sql_total_30 = """
-                    SELECT SUM(st.stop_time) AS total_time
+                    SELECT SUM(
+                        CASE 
+                            WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                            ELSE st.stop_time
+                        END
+                    ) AS total_time
                     FROM stops st
                     WHERE st.type = 'STOP'
                     AND st.station_id = 30
@@ -335,9 +346,17 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 total_stop_time_minutes_30 = total_stop_time_30 / 60
                 available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
 
+
                 # Query top 4 stops for both stations
                 sql = """
-                    SELECT s.name AS station_name, st.reason, COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
+                    SELECT s.name AS station_name, st.reason,
+                        COUNT(*) AS n_occurrences,
+                        SUM(
+                            CASE 
+                                WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                                ELSE st.stop_time
+                            END
+                        ) AS total_time
                     FROM stops st
                     JOIN stations s ON st.station_id = s.id
                     WHERE st.type = 'STOP'
@@ -2330,6 +2349,7 @@ def _update_snapshot_str(
 def refresh_fermi_data(zone: str, ts: datetime) -> None:
     """
     Refresh fermi_data for the zone (to be called after stop insert/update).
+    Includes open stops (end_time IS NULL) so they show live in VisualPage.
     """
     with _update_lock:
         if zone not in global_state.visual_data:
@@ -2341,13 +2361,18 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
         with get_mysql_connection() as conn:
             with conn.cursor() as cursor:
                 try:
-                    # Total stop time for station 29
+                    # Total stop time for station 29 (include running stops)
                     sql_total_29 = """
-                        SELECT SUM(st.stop_time) AS total_time
+                        SELECT SUM(
+                            CASE 
+                                WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                                ELSE st.stop_time
+                            END
+                        ) AS total_time
                         FROM stops st
                         WHERE st.type = 'STOP'
-                        AND st.station_id = 29
-                        AND st.start_time BETWEEN %s AND %s
+                          AND st.station_id = 29
+                          AND st.start_time BETWEEN %s AND %s
                     """
                     cursor.execute(sql_total_29, (shift_start, shift_end))
                     row29 = cursor.fetchone() or {}
@@ -2355,13 +2380,18 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                     total_stop_time_minutes_29 = total_stop_time_29 / 60
                     available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
 
-                    # Total stop time for station 30
+                    # Total stop time for station 30 (include running stops)
                     sql_total_30 = """
-                        SELECT SUM(st.stop_time) AS total_time
+                        SELECT SUM(
+                            CASE 
+                                WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                                ELSE st.stop_time
+                            END
+                        ) AS total_time
                         FROM stops st
                         WHERE st.type = 'STOP'
-                        AND st.station_id = 30
-                        AND st.start_time BETWEEN %s AND %s
+                          AND st.station_id = 30
+                          AND st.start_time BETWEEN %s AND %s
                     """
                     cursor.execute(sql_total_30, (shift_start, shift_end))
                     row30 = cursor.fetchone() or {}
@@ -2369,14 +2399,22 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                     total_stop_time_minutes_30 = total_stop_time_30 / 60
                     available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
 
-                    # Top 4 stop reasons
+                    # Top 4 stop reasons (include running stops)
                     sql = """
-                        SELECT s.name AS station_name, st.reason, COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
+                        SELECT s.name AS station_name,
+                               st.reason,
+                               COUNT(*) AS n_occurrences,
+                               SUM(
+                                   CASE 
+                                       WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                                       ELSE st.stop_time
+                                   END
+                               ) AS total_time
                         FROM stops st
                         JOIN stations s ON st.station_id = s.id
                         WHERE st.type = 'STOP'
-                        AND st.station_id IN (29, 30)
-                        AND st.start_time BETWEEN %s AND %s
+                          AND st.station_id IN (29, 30)
+                          AND st.start_time BETWEEN %s AND %s
                         GROUP BY st.station_id, st.reason
                         ORDER BY total_time DESC
                         LIMIT 4
@@ -2392,33 +2430,23 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
                             "time": total_minutes
                         })
 
-                    # Add availability values
+                    # Append available times
                     fermi_data.append({"Available_Time_1": f"{available_time_29}"})
                     fermi_data.append({"Available_Time_2": f"{available_time_30}"})
 
-                    # Save and broadcast
+                    # Save & broadcast
                     data["fermi_data"] = fermi_data
 
                     payload = copy.deepcopy(data)
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            loop.call_soon_threadsafe(
-                                lambda: asyncio.create_task(
-                                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
-                                )
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.call_soon_threadsafe(
+                            lambda: asyncio.create_task(
+                                broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
                             )
-                        else:
-                            asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
-                    except RuntimeError:
-                        # No loop in current thread — create one manually
-                        try:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                            loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
-                            loop.close()
-                        except Exception as e:
-                            logger.warning(f"[refresh_fermi_data] fallback WebSocket update failed for {zone}: {e}")
+                        )
+                    else:
+                        asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
 
                 except Exception as e:
                     logger.exception(f"Error refreshing fermi_data for zone={zone}: {e}")

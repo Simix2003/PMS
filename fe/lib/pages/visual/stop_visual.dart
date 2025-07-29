@@ -111,6 +111,7 @@ class _StopDialogState extends State<_StopDialog> {
         });
       });
       widget.onStopStarted?.call({
+        'id': _stopId,
         'station': _selectedStation,
         'reason': _reasonCtrl.text,
         'start': _start,

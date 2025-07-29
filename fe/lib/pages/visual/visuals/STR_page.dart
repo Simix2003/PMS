@@ -208,8 +208,11 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
   void _onStopStarted(Map<String, dynamic> stop) {
     _stopTimer?.cancel();
-    _runningStop = stop;
-    _stopTimer = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+    setState(() {
+      _runningStop = stop;
+    });
+    _stopTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
   }
 
   void _onStopEnded() {
@@ -217,6 +220,20 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
     _runningStop = null;
     widget.onStopsUpdated?.call();
     setState(() {});
+  }
+
+  Future<void> _stopRunningStop() async {
+    if (_runningStop == null) return;
+    final id = _runningStop!['id'];
+    if (id != null) {
+      await ApiService().updateStopStatus(
+        stopId: id,
+        newStatus: 'CLOSED',
+        changedAt: DateTime.now().toIso8601String().split('.').first,
+        operatorId: 'NO OPERATOR',
+      );
+    }
+    _onStopEnded();
   }
 
   String _formatDuration(Duration d) {
@@ -2434,6 +2451,13 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                           ),
                                           Padding(
                                             padding: EdgeInsets.all(8),
+                                            child: Text("Frequenza",
+                                                style: TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                          ),
+                                          Padding(
+                                            padding: EdgeInsets.all(8),
                                             child: Text("Fermo Cumulato (min)",
                                                 style: TextStyle(
                                                     fontWeight:
@@ -2443,19 +2467,30 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       ),
                                       if (_runningStop != null)
                                         TableRow(
-                                          decoration: const BoxDecoration(color: Color(0xFFFFF3E0)),
+                                          decoration:
+                                              const BoxDecoration(color: Color(0xFFFFF3E0)),
                                           children: [
                                             Padding(
                                               padding: const EdgeInsets.all(8),
-                                              child: Text(_runningStop!['station'] ?? '', style: const TextStyle(fontSize: 24)),
-                                            ),
-                                            const Padding(
-                                              padding: EdgeInsets.all(8),
-                                              child: Text('-'),
+                                              child: Text(_runningStop!['station'] ?? '',
+                                                  style: const TextStyle(fontSize: 24)),
                                             ),
                                             Padding(
                                               padding: const EdgeInsets.all(8),
-                                              child: Text(_formatDuration(DateTime.now().difference(_runningStop!['start'] as DateTime))),
+                                              child: ElevatedButton(
+                                                onPressed: _stopRunningStop,
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.redAccent,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                                ),
+                                                child: const Text('Stop'),
+                                              ),
+                                            ),
+                                            Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Text(
+                                                  _formatDuration(DateTime.now().difference(
+                                                      _runningStop!['start'] as DateTime))),
                                             ),
                                           ],
                                         ),

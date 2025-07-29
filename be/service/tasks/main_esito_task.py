@@ -25,7 +25,7 @@ from service.state.global_state import (
     db_write_queue,
 )
 import service.state.global_state as global_state
-from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string, extract_int
+from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string, extract_swapped_int, extract_int
 from service.helpers.visual_helper import refresh_top_defects_ell, refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
 from service.routes.mbj_routes import parse_mbj_details
 from service.helpers.executor import run_in_thread
@@ -830,8 +830,8 @@ async def read_data(
         if channel_id.startswith("STR"):
             try:
                 # Read 4 integers directly from the current DB buffer
-                data["cell_G"]    = extract_int(buffer, STR_OFFSETS[0], start_byte)
-                data["cell_NG"]   = extract_int(buffer, STR_OFFSETS[1], start_byte)
+                data["cell_G"]    = extract_swapped_int(buffer, STR_OFFSETS[0], start_byte)
+                data["cell_NG"]   = extract_swapped_int(buffer, STR_OFFSETS[1], start_byte)
                 data["string_NG"]  = extract_int(buffer, STR_OFFSETS[2], start_byte)
                 data["string_G"] = extract_int(buffer, STR_OFFSETS[3], start_byte)
 

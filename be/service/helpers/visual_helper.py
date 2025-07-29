@@ -1886,20 +1886,29 @@ def _update_snapshot_ell_new(bufferIds: List[str]) -> dict:
                     placeholders = ",".join(["%s"] * len(bufferIds))
                     cursor.execute(
                         f"""
-                        SELECT o.id_modulo,
+                        SELECT 
+                            o.id_modulo,
                             p.id AS production_id,
                             SUM(p.station_id = 3) AS rwk_count,
                             JSON_ARRAYAGG(
-                                JSON_OBJECT('defect_id', od.defect_id,
-                                            'defect_type', COALESCE(
-                                                CASE WHEN od.defect_id = 1 THEN od.defect_type ELSE d.category END,
-                                                'Sconosciuto'),
-                                            'extra_data', IFNULL(od.extra_data,'')))
-                                ) AS defects
+                                JSON_OBJECT(
+                                    'defect_id', od.defect_id,
+                                    'defect_type',
+                                        CASE 
+                                            WHEN od.defect_id = 1 THEN od.defect_type
+                                            ELSE COALESCE(d.category, 'Sconosciuto')
+                                        END,
+                                    'extra_data', IFNULL(od.extra_data,'')
+                                )
+                            ) AS defects
                         FROM objects o
-                        JOIN productions p        ON p.object_id     = o.id AND p.esito = 6
-                        LEFT JOIN object_defects od ON od.production_id = p.id
-                        LEFT JOIN defects d         ON d.id            = od.defect_id
+                        JOIN productions p
+                            ON p.object_id = o.id 
+                        AND p.esito = 6
+                        LEFT JOIN object_defects od 
+                            ON od.production_id = p.id
+                        LEFT JOIN defects d 
+                            ON d.id = od.defect_id
                         WHERE o.id_modulo IN ({placeholders})
                         GROUP BY o.id_modulo, p.id
                         """,

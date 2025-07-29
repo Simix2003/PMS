@@ -32,6 +32,19 @@ def extract_int(buffer, byte_offset, base_offset):
     pos = byte_offset - base_offset
     return u.get_int(buffer, pos)
 
+def extract_swapped_int(buffer, byte_offset, base_offset):
+    pos = byte_offset - base_offset
+    b1 = buffer[pos]
+    b2 = buffer[pos + 1]
+
+    print(f"RAW BYTES @ {byte_offset}: b1={b1} (0x{b1:02X}), b2={b2} (0x{b2:02X})")
+
+    # Standard Siemens byte swap (little-endian)
+    value = b2 * 256 + b1
+
+    print(f"Computed PLC counter (Siemens little-endian): {value}")
+    return value
+
 def extract_DT(buffer, byte_offset, base_offset):
     pos = byte_offset - base_offset
     iso_string = u.get_dt(buffer, pos)

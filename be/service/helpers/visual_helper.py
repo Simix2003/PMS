@@ -197,6 +197,33 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
         logger.exception(f"compute_zone_snapshot() FAILED for zone={zone}: {e}")
         raise
 
+# ---------------------------------------------------------------------------
+def refresh_snapshot(zone: str) -> None:
+    """Recompute and broadcast the full snapshot for a zone."""
+    with _update_lock:
+        snapshot = compute_zone_snapshot(zone)
+        global_state.visual_data[zone] = snapshot
+
+        payload = copy.deepcopy(snapshot)
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.call_soon_threadsafe(
+                    lambda: asyncio.create_task(
+                        broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                    )
+                )
+            else:
+                asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+        except RuntimeError:
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+                loop.close()
+            except Exception as e:
+                logger.warning(f"refresh_snapshot() fallback WebSocket update failed for {zone}: {e}")
+
 # ─────────────────────────────────────────────────────────────────────────────
 def _compute_snapshot_ain(now: datetime) -> dict:
     try:

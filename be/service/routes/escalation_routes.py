@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
+from datetime import datetime
 import os
 import sys
 import logging
@@ -15,6 +16,8 @@ from service.connections.mysql import (
     update_stop_reason,
 )
 from service.routes.broadcast import broadcast_escalation_update
+from service.helpers.visual_helper import refresh_fermi_data, refresh_snapshot
+from service.helpers.executor import run_in_thread
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -27,6 +30,19 @@ STATION_NAME_TO_ID = {
     "STR03": 6,
     "STR04": 7,
     "STR05": 8,
+}
+
+# Mapping from station IDs to visual zones
+STATION_ID_TO_ZONE = {
+    29: "AIN",
+    30: "AIN",
+    3: "ELL",
+    9: "ELL",
+    4: "STR",
+    5: "STR",
+    6: "STR",
+    7: "STR",
+    8: "STR",
 }
 
 def build_escalation_list(conn, shifts_back: int = 3) -> list[dict]:
@@ -68,6 +84,16 @@ async def api_create_stop(payload: Dict[str, Any]):
                 linked_production_id=payload.get("linked_production_id"),
                 conn=conn,
             )
+
+            if payload.get("stop_type") == "STOP":
+                zone = STATION_ID_TO_ZONE.get(payload.get("station_id"))
+                if zone:
+                    ts = datetime.fromisoformat(str(payload.get("start_time")).split("+")[0])
+                    if zone in ("AIN", "ELL"):
+                        await run_in_thread(refresh_fermi_data, zone, ts)
+                    elif zone == "STR":
+                        await run_in_thread(refresh_snapshot, zone)
+
             updated = build_escalation_list(conn)
             await broadcast_escalation_update(updated)
         return {"status": "ok", "stop_id": stop_id}
@@ -87,6 +113,10 @@ async def api_update_status(payload: Dict[str, Any]):
     """
     try:
         with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT station_id, type FROM stops WHERE id=%s", (payload["stop_id"],))
+                row = cursor.fetchone()
+
             update_stop_status(
                 stop_id=payload["stop_id"],
                 new_status=payload["new_status"],
@@ -94,6 +124,16 @@ async def api_update_status(payload: Dict[str, Any]):
                 operator_id=payload["operator_id"],
                 conn=conn,
             )
+
+            if row and row.get("type") == "STOP":
+                zone = STATION_ID_TO_ZONE.get(row.get("station_id"))
+                if zone:
+                    ts = datetime.fromisoformat(str(payload.get("changed_at")).split("+")[0])
+                    if zone in ("AIN", "ELL"):
+                        await run_in_thread(refresh_fermi_data, zone, ts)
+                    elif zone == "STR":
+                        await run_in_thread(refresh_snapshot, zone)
+
             updated = build_escalation_list(conn)
             await broadcast_escalation_update(updated)
         return {"status": "ok"}
@@ -152,6 +192,9 @@ async def api_delete_stop(stop_id: int):
     try:
         with get_mysql_connection() as conn:
             with conn.cursor() as cursor:
+                cursor.execute("SELECT station_id, type, start_time FROM stops WHERE id=%s", (stop_id,))
+                row = cursor.fetchone()
+
                 # 1️⃣ First delete related status change records
                 cursor.execute("DELETE FROM stop_status_changes WHERE stop_id = %s", (stop_id,))
 
@@ -161,6 +204,15 @@ async def api_delete_stop(stop_id: int):
             conn.commit()
             updated = build_escalation_list(conn)
             await broadcast_escalation_update(updated)
+
+            if row and row.get("type") == "STOP":
+                zone = STATION_ID_TO_ZONE.get(row.get("station_id"))
+                if zone:
+                    ts = row.get("start_time")
+                    if zone in ("AIN", "ELL"):
+                        await run_in_thread(refresh_fermi_data, zone, ts)
+                    elif zone == "STR":
+                        await run_in_thread(refresh_snapshot, zone)
         return {"status": "ok"}
     except Exception as e:
         logger.error(f"Error deleting stop {stop_id}: {e}")

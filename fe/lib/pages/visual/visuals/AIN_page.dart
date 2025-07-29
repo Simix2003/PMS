@@ -5,6 +5,9 @@ import 'package:gauge_indicator/gauge_indicator.dart';
 import 'package:ix_monitor/pages/visual/visual_widgets.dart';
 import '../../../shared/services/api_service.dart';
 import '../escalation_visual.dart';
+import 'dart:async';
+import '../stop_visual.dart';
+import '../visual_page.dart';
 
 class AinVisualsPage extends StatefulWidget {
   final int shift_target;
@@ -45,6 +48,7 @@ class AinVisualsPage extends StatefulWidget {
   final List<int> ain2VPFCounts;
   final int qg2_defects_value;
   final int last_n_shifts;
+  final VoidCallback? onStopsUpdated;
 
   const AinVisualsPage({
     super.key,
@@ -86,6 +90,7 @@ class AinVisualsPage extends StatefulWidget {
     required this.ain2VPFCounts,
     required this.qg2_defects_value,
     required this.last_n_shifts,
+    this.onStopsUpdated,
   });
 
   @override
@@ -96,6 +101,8 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
   late int shift_target;
   late double hourly_shift_target;
   late int yield_target;
+  Map<String, dynamic>? _runningStop;
+  Timer? _stopTimer;
 
   @override
   void initState() {
@@ -103,6 +110,12 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
     shift_target = widget.shift_target;
     yield_target = widget.yield_target;
     hourly_shift_target = widget.hourly_shift_target;
+  }
+
+  @override
+  void dispose() {
+    _stopTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> showTargetEditDialog({
@@ -186,6 +199,25 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
     setState(() {
       // recalculates counts automatically
     });
+  }
+
+  void _onStopStarted(Map<String, dynamic> stop) {
+    _stopTimer?.cancel();
+    _runningStop = stop;
+    _stopTimer = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+  }
+
+  void _onStopEnded() {
+    _stopTimer?.cancel();
+    _runningStop = null;
+    widget.onStopsUpdated?.call();
+    setState(() {});
+  }
+
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '${d.inHours.toString().padLeft(2, '0')}:$m:$s';
   }
 
   @override
@@ -1172,6 +1204,28 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                           ),
                                         ],
                                       ),
+                                      if (_runningStop != null)
+                                        TableRow(
+                                          decoration: const BoxDecoration(color: Color(0xFFFFF3E0)),
+                                          children: [
+                                            Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Text(_runningStop!['reason'] ?? '', style: const TextStyle(fontSize: 24)),
+                                            ),
+                                            Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Text(_runningStop!['station'] ?? '', style: const TextStyle(fontSize: 24)),
+                                            ),
+                                            const Padding(
+                                              padding: EdgeInsets.all(8),
+                                              child: Text('-'),
+                                            ),
+                                            Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Text(_formatDuration(DateTime.now().difference(_runningStop!['start'] as DateTime))),
+                                            ),
+                                          ],
+                                        ),
                                       ...buildCustomRows(widget.dataFermi),
                                     ],
                                   ),
@@ -1179,11 +1233,19 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                               ),
                             ),
                           ],
-                        ),
+                          ),
+                          const SizedBox(height: 8),
+                          StopButton(
+                            lastNShifts: widget.last_n_shifts,
+                            onStopsUpdated: _onStopEnded,
+                            onStopStarted: _onStopStarted,
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
               ),
             ),
             Flexible(

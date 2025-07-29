@@ -5,6 +5,9 @@ import 'package:gauge_indicator/gauge_indicator.dart';
 import 'package:ix_monitor/pages/visual/visual_widgets.dart';
 import '../../../shared/services/api_service.dart';
 import '../escalation_visual.dart';
+import 'dart:async';
+import '../stop_visual.dart';
+import '../visual_page.dart';
 
 class StrVisualsPage extends StatefulWidget {
   final int shiftTarget;
@@ -56,6 +59,7 @@ class StrVisualsPage extends StatefulWidget {
 
   final int lastNShifts;
   final Map<String, int> counts;
+  final VoidCallback? onStopsUpdated;
 
   const StrVisualsPage({
     super.key,
@@ -91,6 +95,7 @@ class StrVisualsPage extends StatefulWidget {
     required this.qg2DefectsValue,
     required this.lastNShifts,
     required this.counts,
+    this.onStopsUpdated,
   });
 
   @override
@@ -101,6 +106,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
   late int shift_target;
   late double hourly_shift_target;
   late int yield_target;
+  Map<String, dynamic>? _runningStop;
+  Timer? _stopTimer;
 
   @override
   void initState() {
@@ -108,6 +115,12 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
     shift_target = widget.shiftTarget;
     yield_target = widget.yieldTarget;
     hourly_shift_target = widget.hourlyShiftTarget;
+  }
+
+  @override
+  void dispose() {
+    _stopTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> showTargetEditDialog({
@@ -191,6 +204,25 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
     setState(() {
       // recalculates counts automatically
     });
+  }
+
+  void _onStopStarted(Map<String, dynamic> stop) {
+    _stopTimer?.cancel();
+    _runningStop = stop;
+    _stopTimer = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+  }
+
+  void _onStopEnded() {
+    _stopTimer?.cancel();
+    _runningStop = null;
+    widget.onStopsUpdated?.call();
+    setState(() {});
+  }
+
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '${d.inHours.toString().padLeft(2, '0')}:$m:$s';
   }
 
   @override
@@ -2417,6 +2449,24 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                           ),
                                         ],
                                       ),
+                                      if (_runningStop != null)
+                                        TableRow(
+                                          decoration: const BoxDecoration(color: Color(0xFFFFF3E0)),
+                                          children: [
+                                            Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Text(_runningStop!['station'] ?? '', style: const TextStyle(fontSize: 24)),
+                                            ),
+                                            const Padding(
+                                              padding: EdgeInsets.all(8),
+                                              child: Text('-'),
+                                            ),
+                                            Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Text(_formatDuration(DateTime.now().difference(_runningStop!['start'] as DateTime))),
+                                            ),
+                                          ],
+                                        ),
                                       ...buildCustomRows(widget.dataFermi),
                                     ],
                                   ),
@@ -2426,6 +2476,12 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                           ],
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    StopButton(
+                      lastNShifts: widget.lastNShifts,
+                      onStopsUpdated: _onStopEnded,
+                      onStopStarted: _onStopStarted,
                     ),
                   ],
                 ),

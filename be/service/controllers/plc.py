@@ -79,7 +79,13 @@ class PLCConnection:
         - Leaves reconnecting to the background thread (non-blocking)
         """
         self.connected = False
-        logger.error(f"⚠️ PLC communication error in {context}: {exc}. Connection marked as down.")
+        try:
+            self.client.disconnect()
+        except Exception:
+            pass
+        logger.error(
+            f"⚠️ PLC communication error in {context}: {exc}. Connection marked as down."
+        )
 
     def is_connected(self):
         try:

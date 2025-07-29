@@ -149,6 +149,15 @@ logger = logging.getLogger(__name__)
 
 logger.info(f"Logging to {LOG_FILE} with level {LOGS_FILE} and DEBUG={debug}")
 
+# Log uncaught asyncio exceptions instead of crashing
+loop = asyncio.get_event_loop()
+
+def _handle_async_exception(loop, context):
+    err = context.get("exception") or context.get("message")
+    logger.error(f"Unhandled asyncio exception: {err}")
+
+loop.set_exception_handler(_handle_async_exception)
+
 async def monitor_plc_ports(plcs: list[tuple[str, int]], interval: int = 10, warn_threshold_ms: float = 100.0):
     """
     Monitora la porta 102 di ogni PLC e logga latenza o timeout.

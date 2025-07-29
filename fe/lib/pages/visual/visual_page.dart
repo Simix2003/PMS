@@ -864,7 +864,7 @@ class _VisualPageState extends State<VisualPage> {
           }
 
           bufferDefectSummary = List<Map<String, dynamic>>.from(
-              data['buffer_defect_summary'] ?? []);
+              data['bufferDefectSummary'] ?? []);
 
           value_gauge_1 = toDoubleSafe(data['value_gauge_1']);
           value_gauge_2 = toDoubleSafe(data['value_gauge_2']);
@@ -1237,8 +1237,8 @@ class _VisualPageState extends State<VisualPage> {
                                             // Defects
                                             defectLabels: defectLabels,
                                             defectVPFLabels: defectVPFLabels,
-                                            defectsCounts: ain1Counts,
-                                            VpfDefectsCounts: ain1VPFCounts,
+                                            defectsCounts: Counts,
+                                            VpfDefectsCounts: VpfDefectsCounts,
                                             qg2DefectsValue: qg2_defects_value,
 
                                             lastNShifts: last_n_shifts,

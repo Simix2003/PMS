@@ -181,8 +181,72 @@ class _HeaderBoxState extends State<HeaderBox> {
                         ),
                       ),
                     ),
-                  )
-                else if (widget.zone == 'VPF')
+                  ),
+                if (widget.zone == 'ELL')
+                  Text(
+                    "Difetti \nTot.",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: textColor,
+                    ),
+                  ),
+                if (widget.zone == 'ELL')
+                  SizedBox(
+                    height: 50,
+                    width: 75,
+                    child: Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      color: warningColor,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Center(
+                        // 👈 Center content both vertically & horizontally
+                        child: Text(
+                          widget.qg2_defects_value.toString(),
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (widget.zone == 'STR')
+                  Text(
+                    "Difetti \nTot.",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: textColor,
+                    ),
+                  ),
+                if (widget.zone == 'STR')
+                  SizedBox(
+                    height: 50,
+                    width: 75,
+                    child: Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      color: warningColor,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Center(
+                        // 👈 Center content both vertically & horizontally
+                        child: Text(
+                          widget.qg2_defects_value.toString(),
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (widget.zone == 'VPF')
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

@@ -773,57 +773,136 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 good_after_rework = count_good_after_rework(cursor, shift_start, shift_end)
                 value_gauge_2 = round((good_after_rework / s2_g) * 100, 2) if s2_g else 0.0
 
-                qg2_ng_1 = count_unique_objects(cursor, cfg["station_qg_1"],  shift_start, shift_end, "ng")
-                qg2_ng_2 = count_unique_objects(cursor, cfg["station_qg_2"],  shift_start, shift_end, "ng")
+                # --- NG Counters ---
+                s1_ng = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
+
+                qg2_ng_1 = count_unique_objects(cursor, cfg["station_qg_1"], shift_start, shift_end, "ng")
+                qg2_ng_2 = count_unique_objects(cursor, cfg["station_qg_2"], shift_start, shift_end, "ng")
 
                 qg2_ng = qg2_ng_1 + qg2_ng_2
 
-                # Final NG total across station 1 and both QG2 stations (deduplicated)
+                # Combined NG across ELL (station_1) + QG2_1 + QG2_2 (deduplicated by object_id)
                 stations_ng = cfg["station_1_out_ng"] + cfg["station_qg_1"] + cfg["station_qg_2"]
                 ng_tot = count_unique_ng_objects(cursor, stations_ng, shift_start, shift_end)
 
+                # Optional deeper inspection — show object IDs
+                cursor.execute(f"""
+                    SELECT DISTINCT p.object_id, s.name AS station, p.start_time
+                    FROM productions p
+                    JOIN stations s ON p.station_id = s.id
+                    WHERE s.name IN ({','.join(['%s']*len(stations_ng))})
+                    AND p.esito = 6
+                    AND p.start_time BETWEEN %s AND %s
+                """, (*stations_ng, shift_start, shift_end))
+                rows = cursor.fetchall()
+                print(f"[ELL DEBUG]   Total NG objects fetched: {len(rows)}")
+                for r in rows[:10]:  # print just first 10 for brevity
+                    print(f"    - Obj {r['object_id']} at {r['station']} ({r['start_time']})")
+
                 # Yields
+                # FPY = good on first pass / total first-pass
                 fpy_y = compute_yield(s1_g_r0, s1_ng_r0)
-                rwk_y = compute_yield(s1_g, s2_in) ##TODO FIX THIS SHIT
+
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT p.object_id) AS cnt
+                    FROM productions p
+                    JOIN stations s ON p.station_id = s.id
+                    WHERE s.name = %s
+                    AND p.start_time BETWEEN %s AND %s
+                """, (cfg["station_1_in"], shift_start, shift_end))
+                total_started = cursor.fetchone()["cnt"] or 0
+
+                #–– Final‐good = each module’s last pass at station 1 was OK
+                sql = """
+                WITH last1 AS (
+                SELECT p.object_id, p.esito,
+                        ROW_NUMBER() OVER (PARTITION BY p.object_id
+                                            ORDER BY p.start_time DESC) AS rn
+                FROM productions p
+                JOIN stations s ON p.station_id = s.id
+                WHERE s.name = %s
+                    AND p.start_time BETWEEN %s AND %s
+                )
+                SELECT COUNT(*) AS cnt
+                FROM last1
+                WHERE rn = 1
+                AND esito <> 6
+                """
+                cursor.execute(sql, (cfg["station_1_in"], shift_start, shift_end))
+                final_good = cursor.fetchone()["cnt"] or 0
+
+                final_failed = total_started - final_good
+                rwk_y = compute_yield(final_good, final_failed)
 
                 # -------- last 3 shifts yield + throughput -------
                 FPY_yield_shifts, RWK_yield_shifs, shift_throughput = [], [], []
                 for label, start, end in get_previous_shifts(now):
-                    # yield R0
+                    # First-pass (R0) yield stats
                     s1_in_r0_  = count_unique_objects_r0(cursor, cfg["station_1_in"],  start, end, "all")
-                    s1_ng_r0_ = count_unique_objects_r0(cursor, cfg["station_1_out_ng"], start, end, "ng")
-                    s1_g_r0_ = s1_in_r0_ - s1_ng_r0_
+                    s1_ng_r0_  = count_unique_objects_r0(cursor, cfg["station_1_out_ng"], start, end, "ng")
+                    s1_g_r0_   = s1_in_r0_ - s1_ng_r0_
 
-                    s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  start, end, "all")
-                    s1_n_ = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "ng")
-                    s1_g_ = s1_in_ - s1_n_
+                    s1_in_     = count_unique_objects(cursor, cfg["station_1_in"],  start, end, "all")
+                    s1_n_      = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "ng")
 
-                    s2_in_  = count_unique_objects(cursor, cfg["station_2_in"],  start, end, "all")
-                    s2_n_ = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
-                    s2_g_ = s2_in_ - s2_n_
+                    s2_in_     = count_unique_objects(cursor, cfg["station_2_in"],  start, end, "all")
+                    s2_n_      = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
 
+                    # FPY yield
                     FPY_yield_shifts.append({
                         "label": label,
                         "start": start.isoformat(),
                         "end": end.isoformat(),
                         "yield": compute_yield(s1_g_r0_, s1_ng_r0_),
                         "good": s1_g_r0_,
-                        "ng": s1_ng_r0_
+                        "ng":   s1_ng_r0_
                     })
+
+                    # --- RWK yield: count distinct modules whose LAST pass @ station 1 is good ---
+                    cursor.execute("""
+                        SELECT COUNT(DISTINCT p.object_id) AS cnt
+                        FROM productions p
+                        JOIN stations s ON p.station_id = s.id
+                        WHERE s.name = %s
+                        AND p.start_time BETWEEN %s AND %s
+                    """, (cfg["station_1_in"], start, end))
+                    total_started = cursor.fetchone()["cnt"] or 0
+
+                    sql_last_good = """
+                    WITH last1 AS (
+                        SELECT p.object_id,
+                            p.esito,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY p.object_id
+                                ORDER BY p.start_time DESC
+                            ) AS rn
+                        FROM productions p
+                        JOIN stations s ON p.station_id = s.id
+                        WHERE s.name = %s
+                        AND p.start_time BETWEEN %s AND %s
+                    )
+                    SELECT COUNT(*) AS cnt
+                    FROM last1
+                    WHERE rn = 1 AND esito <> 6
+                    """
+                    cursor.execute(sql_last_good, (cfg["station_1_in"], start, end))
+                    final_good_shift = cursor.fetchone()["cnt"] or 0
+
+                    rwk_failed = total_started - final_good_shift
 
                     RWK_yield_shifs.append({
                         "label": label,
                         "start": start.isoformat(),
                         "end": end.isoformat(),
-                        "yield": compute_yield(s1_g_, s2_in_),
-                        "good": s1_g_,
-                        "ng": s2_n_,
+                        "yield": compute_yield(final_good_shift, rwk_failed),
+                        "good": final_good_shift,
+                        "ng":   rwk_failed,
                         "station_1_in": s1_in_,
                         "station_1_out_ng": s1_n_,
                         "station_2_in": s2_in_
                     })
 
-                    # throughput
+                    # Throughput (sum of distinct entries on station 1 + station 2)
                     tot = (count_unique_objects(cursor, cfg["station_1_in"], start, end, "all") +
                         count_unique_objects(cursor, cfg["station_2_in"], start, end, "all"))
                     ng = s1_n_
@@ -833,16 +912,16 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                         "end": end.isoformat(),
                         "total": tot,
                         "ng": ng,
-                        "scrap" : s2_n_
-
+                        "scrap": s2_n_
                     })
 
+                # Insert current shift’s yield at the front
                 FPY_yield_shifts.insert(0, {
                     "label": label,
                     "start": shift_start.isoformat(),
                     "end": now.isoformat(),
                     "good": s1_in_r0 - s1_ng_r0,
-                    "ng": s1_ng_r0,
+                    "ng":   s1_ng_r0,
                     "yield": fpy_y
                 })
 
@@ -859,11 +938,10 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 # -------- last 8 h bins (yield + throughput) -----
                 last_8h_throughput, FPY_y8h, RWK_y8h = [], [], []
                 for label, h_start, h_end in get_last_8h_bins(now):
-                    # THROUGHPUT
+                    # Throughput (distinct entries on station 1 + station 2)
                     tot  = (count_unique_objects(cursor, cfg["station_1_in"], h_start, h_end, "all") +
                             count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all")) or 0
                     ng   = (count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng")) or 0
-
                     scrap = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
 
                     last_8h_throughput.append({
@@ -875,18 +953,10 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                         "scrap": scrap
                     })
 
-                    # YIELDS PER STATION
-                    s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  h_start, h_end, "all") or 0
-                    s1_n_ = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
-                    s1_g_ = s1_in_ - s1_n_
-
-                    s1_in_r0_  = count_unique_objects_r0(cursor, cfg["station_1_in"],  h_start, h_end, "all") or 0
-                    s1_ng_r0_ = count_unique_objects_r0(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
-                    s1_g_r0_ = s1_in_r0_ - s1_ng_r0_
-
-                    s2_in_  = count_unique_objects(cursor, cfg["station_2_in"],  h_start, h_end, "all") or 0
-                    s2_n_ = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
-                    s2_g_ = s2_in_ - s2_n_
+                    # FPY yield per 8h bin (first-pass only)
+                    s1_in_r0_  = count_unique_objects_r0(cursor, cfg["station_1_in"], h_start, h_end, "all") or 0
+                    s1_ng_r0_  = count_unique_objects_r0(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
+                    s1_g_r0_   = s1_in_r0_ - s1_ng_r0_
 
                     FPY_y8h.append({
                         "hour": label,
@@ -897,14 +967,47 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                         "end":   h_end.isoformat(),
                     })
 
+                    # RWK yield per 8h bin (based on each module’s final result at Station 1)
+                    cursor.execute("""
+                        SELECT COUNT(DISTINCT p.object_id) AS cnt
+                        FROM productions p
+                        JOIN stations s ON p.station_id = s.id
+                        WHERE s.name = %s
+                        AND p.start_time BETWEEN %s AND %s
+                    """, (cfg["station_1_in"], h_start, h_end))
+                    total_started_h = cursor.fetchone()["cnt"] or 0
+
+
+                    sql_last_good_h = """
+                    WITH last1 AS (
+                        SELECT p.object_id,
+                            p.esito,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY p.object_id
+                                ORDER BY p.start_time DESC
+                            ) AS rn
+                        FROM productions p
+                        JOIN stations s ON p.station_id = s.id
+                        WHERE s.name = %s
+                        AND p.start_time BETWEEN %s AND %s
+                    )
+                    SELECT COUNT(*) AS cnt
+                    FROM last1
+                    WHERE rn = 1 AND esito <> 6
+                    """
+                    cursor.execute(sql_last_good_h, (cfg["station_1_in"], h_start, h_end))
+                    final_good_h = cursor.fetchone()["cnt"] or 0
+
+                    rwk_failed_h = total_started_h - final_good_h
+
                     RWK_y8h.append({
                         "hour": label,
-                        "station_1_in": s1_in_,
-                        "station_1_out_ng": s1_n_,
-                        "station_2_in": s2_in_,
-                        "good": s1_g_,
-                        "ng":   s2_in_,
-                        "yield": compute_yield(s1_g_, s2_in_),
+                        "station_1_in": total_started_h,
+                        "station_1_out_ng": s1_ng_r0_,  # NG from R0
+                        "station_2_in": count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all") or 0,
+                        "good": final_good_h,
+                        "ng":   rwk_failed_h,
+                        "yield": compute_yield(final_good_h, rwk_failed_h),
                         "start": h_start.isoformat(),
                         "end":   h_end.isoformat(),
                     })
@@ -1672,9 +1775,32 @@ def _update_snapshot_ell_new(bufferIds: List[str]) -> dict:
                 good_after_rework = count_good_after_rework_buffer(cursor, shift_start, shift_end)
                 value_gauge_2     = round((good_after_rework / s2_g) * 100, 2) if s2_g else 0.0
 
-                # Yields
+                # ----- FPY -----
                 fpy_y = compute_yield(s1_g_r0, s1_ng_r0)
-                rwk_y = compute_yield(s1_g, s2_in) ##TODO FIX THIS SHIT
+
+                # ----- RWK (final-good / total-started) -----
+                total_started = s1_in
+
+                sql_final_good = """
+                WITH last1 AS (
+                    SELECT p.object_id,
+                        p.esito,
+                        ROW_NUMBER() OVER (PARTITION BY p.object_id
+                                            ORDER BY p.start_time DESC) AS rn
+                    FROM ell_productions_buffer p
+                    JOIN stations s ON p.station_id = s.id
+                    WHERE s.name = %s
+                    AND p.start_time BETWEEN %s AND %s
+                )
+                SELECT COUNT(*) AS cnt
+                FROM last1
+                WHERE rn = 1 AND esito <> 6            -- good on last pass
+                """
+                cursor.execute(sql_final_good, (cfg["station_1_in"], shift_start, shift_end))
+                final_good = cursor.fetchone()["cnt"] or 0
+
+                rwk_y = compute_yield(final_good, total_started - final_good)
+
 
                 # -------- last 3 shifts yield + throughput -------
                 FPY_yield_shifts, RWK_yield_shifs, shift_throughput = [], [], []
@@ -1701,13 +1827,41 @@ def _update_snapshot_ell_new(bufferIds: List[str]) -> dict:
                         "ng": s1_ng_r0_
                     })
 
+                    # --- RWK yield for that shift ---
+                    cursor.execute("""
+                        SELECT COUNT(DISTINCT p.object_id) AS cnt
+                        FROM ell_productions_buffer p
+                        JOIN stations s ON p.station_id = s.id
+                        WHERE s.name = %s
+                        AND p.start_time BETWEEN %s AND %s
+                    """, (cfg["station_1_in"], start, end))
+                    total_started = cursor.fetchone()["cnt"] or 0
+
+                    sql_last_good_shift = """
+                    WITH last1 AS (
+                        SELECT p.object_id, p.esito,
+                            ROW_NUMBER() OVER (PARTITION BY p.object_id
+                                                ORDER BY p.start_time DESC) AS rn
+                        FROM ell_productions_buffer p
+                        JOIN stations s ON p.station_id = s.id
+                        WHERE s.name = %s
+                        AND p.start_time BETWEEN %s AND %s
+                    )
+                    SELECT COUNT(*) AS cnt
+                    FROM last1
+                    WHERE rn = 1 AND esito <> 6
+                    """
+                    cursor.execute(sql_last_good_shift, (cfg["station_1_in"], start, end))
+                    final_good_shift = cursor.fetchone()["cnt"] or 0
+                    rwk_failed = total_started - final_good_shift
+
                     RWK_yield_shifs.append({
                         "label": label,
                         "start": start.isoformat(),
-                        "end": end.isoformat(),
-                        "yield": compute_yield(s1_g_, s2_in_),
-                        "good": s1_g_,
-                        "ng": s2_n_,
+                        "end":   end.isoformat(),
+                        "yield": compute_yield(final_good_shift, rwk_failed),
+                        "good":  final_good_shift,        # modules whose last pass @ S1 is good
+                        "ng":    rwk_failed,              # those still NG at end of shift
                         "station_1_in": s1_in_,
                         "station_1_out_ng": s1_n_,
                         "station_2_in": s2_in_
@@ -1787,14 +1941,42 @@ def _update_snapshot_ell_new(bufferIds: List[str]) -> dict:
                         "end":   h_end.isoformat(),
                     })
 
+                    # --- RWK yield per 8 h ---
+                    cursor.execute("""
+                        SELECT COUNT(DISTINCT p.object_id) AS cnt
+                        FROM ell_productions_buffer p
+                        JOIN stations s ON p.station_id = s.id
+                        WHERE s.name = %s
+                        AND p.start_time BETWEEN %s AND %s
+                    """, (cfg["station_1_in"], h_start, h_end))
+                    total_started_h = cursor.fetchone()["cnt"] or 0
+
+                    sql_last_good_h = """
+                    WITH last1 AS (
+                        SELECT p.object_id, p.esito,
+                            ROW_NUMBER() OVER (PARTITION BY p.object_id
+                                                ORDER BY p.start_time DESC) AS rn
+                        FROM ell_productions_buffer p
+                        JOIN stations s ON p.station_id = s.id
+                        WHERE s.name = %s
+                        AND p.start_time BETWEEN %s AND %s
+                    )
+                    SELECT COUNT(*) AS cnt
+                    FROM last1
+                    WHERE rn = 1 AND esito <> 6
+                    """
+                    cursor.execute(sql_last_good_h, (cfg["station_1_in"], h_start, h_end))
+                    final_good_h = cursor.fetchone()["cnt"] or 0
+                    rwk_failed_h = total_started_h - final_good_h
+
                     RWK_y8h.append({
                         "hour": label,
-                        "station_1_in": s1_in_,
-                        "station_1_out_ng": s1_n_,
-                        "station_2_in": s2_in_,
-                        "good": s1_g_,
-                        "ng":   s2_in_,
-                        "yield": compute_yield(s1_g_, s2_in_),
+                        "station_1_in": total_started_h,
+                        "station_1_out_ng": s1_ng_r0_,    # NG on first pass
+                        "station_2_in": s2_in_,           # just for reference / UI
+                        "good":  final_good_h,            # last-pass good
+                        "ng":    rwk_failed_h,            # still NG
+                        "yield": compute_yield(final_good_h, rwk_failed_h),
                         "start": h_start.isoformat(),
                         "end":   h_end.isoformat(),
                     })
@@ -1882,14 +2064,16 @@ def _update_snapshot_ell_new(bufferIds: List[str]) -> dict:
                 # ===================== 4. Buffer‑ID defect trace  =====================
                 buffer_defect_summary = []
                 bufferIds = [b.strip() for b in bufferIds if b and b.strip()]
+                print('Buffer IDs:', bufferIds)
                 if bufferIds:
                     placeholders = ",".join(["%s"] * len(bufferIds))
                     cursor.execute(
                         f"""
                         SELECT 
-                            o.id_modulo,
-                            p.id AS production_id,
-                            SUM(p.station_id = 3) AS rwk_count,
+                        o.id_modulo,
+                        COALESCE(p.id, 0) AS production_id,
+                        SUM(p.station_id = 3) AS rwk_count,
+                        COALESCE(
                             JSON_ARRAYAGG(
                                 JSON_OBJECT(
                                     'defect_id', od.defect_id,
@@ -1900,17 +2084,19 @@ def _update_snapshot_ell_new(bufferIds: List[str]) -> dict:
                                         END,
                                     'extra_data', IFNULL(od.extra_data,'')
                                 )
-                            ) AS defects
-                        FROM objects o
-                        JOIN productions p
-                            ON p.object_id = o.id 
-                        AND p.esito = 6
-                        LEFT JOIN object_defects od 
-                            ON od.production_id = p.id
-                        LEFT JOIN defects d 
-                            ON d.id = od.defect_id
-                        WHERE o.id_modulo IN ({placeholders})
-                        GROUP BY o.id_modulo, p.id
+                            ),
+                            JSON_ARRAY()
+                        ) AS defects
+                    FROM objects o
+                    LEFT JOIN productions p
+                        ON p.object_id = o.id
+                    AND p.esito = 6
+                    LEFT JOIN object_defects od 
+                        ON od.production_id = p.id
+                    LEFT JOIN defects d 
+                        ON d.id = od.defect_id
+                    WHERE o.id_modulo IN ({placeholders})
+                    GROUP BY o.id_modulo, p.id;
                         """,
                         bufferIds,
                     )

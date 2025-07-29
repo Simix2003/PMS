@@ -588,7 +588,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      widget.ng_2.toString(),
+                                                      widget.ng_1.toString(),
                                                       style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
@@ -957,6 +957,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                       title: 'Pareto Shift',
                       target: '',
                       icon: Icons.bar_chart_rounded,
+                      qg2_defects_value: widget.ng_tot.toString(),
                       zone: 'ELL',
                     ),
                   ),

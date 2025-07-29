@@ -830,8 +830,8 @@ async def read_data(
         if channel_id.startswith("STR"):
             try:
                 # Read 4 integers directly from the current DB buffer
-                data["cell_G"]    = extract_swapped_int(buffer, STR_OFFSETS[0], start_byte)
-                data["cell_NG"]   = extract_swapped_int(buffer, STR_OFFSETS[1], start_byte)
+                data["cell_G"]    = extract_int(buffer, STR_OFFSETS[0], start_byte)
+                data["cell_NG"]   = extract_int(buffer, STR_OFFSETS[1], start_byte)
                 data["string_NG"]  = extract_int(buffer, STR_OFFSETS[2], start_byte)
                 data["string_G"] = extract_int(buffer, STR_OFFSETS[3], start_byte)
 

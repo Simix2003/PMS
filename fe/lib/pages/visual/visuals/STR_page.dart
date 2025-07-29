@@ -2386,7 +2386,6 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                         color: Colors.black, width: 0.5),
                                     columnWidths: const {
                                       0: FlexColumnWidth(1),
-                                      1: FlexColumnWidth(1),
                                       2: FlexColumnWidth(1),
                                     },
                                     children: [
@@ -2397,13 +2396,6 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                           Padding(
                                             padding: EdgeInsets.all(8),
                                             child: Text("Macchina",
-                                                style: TextStyle(
-                                                    fontWeight:
-                                                        FontWeight.bold)),
-                                          ),
-                                          Padding(
-                                            padding: EdgeInsets.all(4),
-                                            child: Text("Frequenza",
                                                 style: TextStyle(
                                                     fontWeight:
                                                         FontWeight.bold)),
@@ -2464,7 +2456,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                           children: [
                             Expanded(
                               child: VPFDefectsHorizontalBarChartSTR(
-                                defectLabels: widget.defectLabels,
+                                defectLabels: widget.defectVPFLabels,
                                 Counts: widget.VpfDefectsCounts,
                               ),
                             ),

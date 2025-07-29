@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../shared/services/api_service.dart';
@@ -28,7 +30,8 @@ class StopButton extends StatelessWidget {
       icon: const Icon(Icons.timer, color: Colors.white),
       label: const Text(
         'Nuovo Fermo',
-        style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Colors.white),
+        style: TextStyle(
+            fontSize: 30, fontWeight: FontWeight.bold, color: Colors.white),
       ),
       onPressed: () {
         showDialog(
@@ -101,21 +104,16 @@ class _StopDialogState extends State<_StopDialog> {
       status: 'OPEN',
       linkedProductionId: widget.linkedProductionId,
     );
-    if (res != null && res['stop'] != null) {
-      _stopId = res['stop']['id'];
+    if (res != null && res['status'] == 'ok') {
+      _stopId = res['stop_id'];
       _start = now;
-      _running = true;
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        setState(() {
-          _elapsed = DateTime.now().difference(_start!);
-        });
-      });
       widget.onStopStarted?.call({
+        'id': _stopId,
         'station': _selectedStation,
         'reason': _reasonCtrl.text,
         'start': _start,
       });
-      setState(() {});
+      Navigator.pop(context); // CLOSE the dialog
     }
   }
 
@@ -129,8 +127,15 @@ class _StopDialogState extends State<_StopDialog> {
         operatorId: 'NO OPERATOR',
       );
     }
-    widget.onStopsUpdated?.call();
-    if (mounted) Navigator.pop(context);
+
+    // Wait for VisualPage to reload stops (via fetchZoneData)
+    if (widget.onStopsUpdated != null) {
+      await Future.sync(widget.onStopsUpdated!); // ensure async completion
+    }
+
+    if (mounted) {
+      Navigator.pop(context); // close only after table is refreshed
+    }
   }
 
   String _formatDuration(Duration d) {
@@ -153,20 +158,23 @@ class _StopDialogState extends State<_StopDialog> {
             items: _stationNameToId.keys
                 .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                 .toList(),
-            onChanged: _running ? null : (v) => setState(() => _selectedStation = v),
+            onChanged:
+                _running ? null : (v) => setState(() => _selectedStation = v),
           ),
           TextField(
             controller: _reasonCtrl,
             decoration: const InputDecoration(labelText: 'Motivo'),
             enabled: !_running,
           ),
-          if (_running) Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: Text(
-              _formatDuration(_elapsed),
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          if (_running)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(
+                _formatDuration(_elapsed),
+                style:
+                    const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
         ],
       ),
       actions: [

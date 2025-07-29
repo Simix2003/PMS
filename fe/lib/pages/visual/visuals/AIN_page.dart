@@ -7,7 +7,6 @@ import '../../../shared/services/api_service.dart';
 import '../escalation_visual.dart';
 import 'dart:async';
 import '../stop_visual.dart';
-import '../visual_page.dart';
 
 class AinVisualsPage extends StatefulWidget {
   final int shift_target;
@@ -203,15 +202,37 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
 
   void _onStopStarted(Map<String, dynamic> stop) {
     _stopTimer?.cancel();
-    _runningStop = stop;
-    _stopTimer = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+    setState(() {
+      _runningStop = stop;
+    });
+    _stopTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
   }
 
   void _onStopEnded() {
+    print('Stop ended');
     _stopTimer?.cancel();
     _runningStop = null;
     widget.onStopsUpdated?.call();
+    print('Stops updated');
     setState(() {});
+  }
+
+  Future<void> _stopRunningStop() async {
+    print('Stopping running stop');
+    if (_runningStop == null) return;
+    final id = _runningStop!['id'];
+    print('Stop ID: $id');
+    if (id != null) {
+      await ApiService().updateStopStatus(
+        stopId: id,
+        newStatus: 'CLOSED',
+        changedAt: DateTime.now().toIso8601String().split('.').first,
+        operatorId: 'NO OPERATOR',
+      );
+    }
+    print('Stop ID updated');
+    _onStopEnded();
   }
 
   String _formatDuration(Duration d) {
@@ -230,8 +251,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
           children: [
             Flexible(
               flex: 4,
-              child: // Shift target (moduli)
-                  GestureDetector(
+              child: GestureDetector(
                 onTap: () {
                   showTargetEditDialog(
                     title: 'Target Produzione Shift',
@@ -287,9 +307,10 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
 
         const SizedBox(height: 12),
 
-        // ────── VALUES FIRST ROW ──────
+        // ────── FIRST DATA ROW ──────
         Row(
           children: [
+            // LEFT – Bussing + Throughput
             Flexible(
               flex: 4,
               child: Container(
@@ -302,7 +323,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                 ),
                 child: Column(
                   children: [
-                    // First row with 2 cards
                     Flexible(
                       child: Row(
                         children: [
@@ -313,20 +333,16 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                 Flexible(
                                   child: Column(
                                     children: [
-                                      // Row titles (aligned with the two card columns)
                                       Row(
                                         children: [
-                                          const SizedBox(
-                                            width: 100,
-                                          ), // aligns with the AIN 1 / AIN 2 label
+                                          const SizedBox(width: 100),
                                           Flexible(
                                             child: Center(
                                               child: Text(
                                                 'Bussing IN',
                                                 style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 18,
-                                                ),
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 18),
                                               ),
                                             ),
                                           ),
@@ -336,31 +352,22 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                               child: Text(
                                                 'NG Bussing OUT',
                                                 style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 18,
-                                                ),
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 18),
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
-
                                       const SizedBox(height: 8),
-
-                                      // First row of cards
                                       Flexible(
                                         child: Row(
                                           children: [
-                                            Text(
-                                              'AIN 1',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 24,
-                                                color: Colors.black,
-                                              ),
-                                            ),
-
-                                            // 🔴 First Circle
+                                            Text('AIN 1',
+                                                style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 24,
+                                                    color: Colors.black)),
                                             const SizedBox(width: 8),
                                             Container(
                                               width: widget.circleSize,
@@ -371,7 +378,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
-
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: Card(
@@ -403,10 +409,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                                 ),
                                               ),
                                             ),
-
                                             const SizedBox(width: 24),
-
-                                            // 🟢 Second Circle
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
@@ -428,9 +431,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                                 ),
                                               ),
                                             ),
-
                                             const SizedBox(width: 8),
-
                                             Flexible(
                                               child: Card(
                                                 color: Colors.white,
@@ -465,21 +466,15 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                         ),
                                       ),
                                       const SizedBox(height: 8),
-
-                                      // Second row of cards
                                       Flexible(
                                         child: Row(
                                           children: [
-                                            Text(
-                                              'AIN 2',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 24,
-                                                color: Colors.black,
-                                              ),
-                                            ),
-                                            SizedBox(width: 8),
-
+                                            Text('AIN 2',
+                                                style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 24,
+                                                    color: Colors.black)),
+                                            const SizedBox(width: 8),
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
@@ -489,7 +484,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
-                                            SizedBox(width: 8),
+                                            const SizedBox(width: 8),
                                             Flexible(
                                               child: Card(
                                                 color: Colors.white,
@@ -521,7 +516,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                               ),
                                             ),
                                             const SizedBox(width: 24),
-                                            // 🟢 Second Circle
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
@@ -543,7 +537,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                                 ),
                                               ),
                                             ),
-
                                             const SizedBox(width: 8),
                                             Flexible(
                                               child: Card(
@@ -594,7 +587,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Second row with 1 card that fills all remaining space
                     Flexible(
                       child: HourlyBarChart(
                         data: widget.hourlyData,
@@ -606,6 +598,8 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                 ),
               ),
             ),
+
+            // CENTER – Yield + Comparison Chart
             Flexible(
               flex: 3,
               child: Container(
@@ -618,7 +612,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                 ),
                 child: Column(
                   children: [
-                    // First row with 2 cards
                     Flexible(
                       child: Row(
                         children: [
@@ -629,7 +622,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                 Flexible(
                                   child: Column(
                                     children: [
-                                      // Row titles
                                       Row(
                                         children: [
                                           Flexible(
@@ -645,14 +637,10 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                           ),
                                         ],
                                       ),
-
                                       const SizedBox(height: 8),
-
-                                      // First row of cards
                                       Flexible(
                                         child: Row(
                                           children: [
-                                            // Circle
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
@@ -673,20 +661,15 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                                 ),
                                               ),
                                             ),
-
-                                            const SizedBox(
-                                              width: 8,
-                                            ),
-
+                                            const SizedBox(width: 8),
                                             Flexible(
                                               child: Card(
                                                 color: Colors.white,
                                                 child: Container(
                                                   decoration: BoxDecoration(
                                                     border: Border.all(
-                                                      color: widget.textColor,
-                                                      width: 1,
-                                                    ),
+                                                        color: widget.textColor,
+                                                        width: 1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             12),
@@ -695,13 +678,13 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      '${widget.currentYield_1.toString()}%',
+                                                      '${widget.currentYield_1}%',
                                                       style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 32,
-                                                        color: widget.textColor,
-                                                      ),
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 32,
+                                                          color:
+                                                              widget.textColor),
                                                     ),
                                                   ),
                                                 ),
@@ -710,12 +693,9 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                           ],
                                         ),
                                       ),
-
-                                      // Second row of cards
                                       Flexible(
                                         child: Row(
                                           children: [
-                                            // Circle
                                             Container(
                                               width: widget.circleSize,
                                               height: widget.circleSize,
@@ -736,19 +716,15 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                                 ),
                                               ),
                                             ),
-
-                                            const SizedBox(
-                                              width: 8,
-                                            ),
+                                            const SizedBox(width: 8),
                                             Flexible(
                                               child: Card(
                                                 color: Colors.white,
                                                 child: Container(
                                                   decoration: BoxDecoration(
                                                     border: Border.all(
-                                                      color: widget.textColor,
-                                                      width: 1,
-                                                    ),
+                                                        color: widget.textColor,
+                                                        width: 1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             12),
@@ -757,13 +733,13 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                                       .symmetric(vertical: 12),
                                                   child: Center(
                                                     child: Text(
-                                                      '${widget.currentYield_2.toString()}%',
+                                                      '${widget.currentYield_2}%',
                                                       style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 32,
-                                                        color: widget.textColor,
-                                                      ),
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 32,
+                                                          color:
+                                                              widget.textColor),
                                                     ),
                                                   ),
                                                 ),
@@ -783,23 +759,24 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                             flex: 3,
                             child: YieldComparisonBarChart(
                               data: widget.mergedShiftData,
-                              target: yield_target as double,
+                              target: yield_target.toDouble(),
                             ),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Second row with 1 card that fills all remaining space
                     Yield2LineChart(
                       hourlyData1: widget.yieldLast8h_1,
                       hourlyData2: widget.yieldLast8h_2,
-                      target: yield_target as double,
+                      target: yield_target.toDouble(),
                     ),
                   ],
                 ),
               ),
             ),
+
+            // RIGHT – Escalation + Traffic Light
             Flexible(
               flex: 2,
               child: Container(
@@ -817,7 +794,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Left side: Traffic light + text
                         Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -830,37 +806,25 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                               closedCount: widget.counts['closed'] ?? 0,
                             ),
                             const SizedBox(height: 8),
-                            (widget.last_n_shifts > 0)
-                                ? Text(
-                                    'Ultimi ${widget.last_n_shifts} Shift',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  )
-                                : Text(
-                                    'Ultimo Shift',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                            Text(
+                              widget.last_n_shifts > 0
+                                  ? 'Ultimi ${widget.last_n_shifts} Shift'
+                                  : 'Ultimo Shift',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ],
                         ),
-                        const SizedBox(
-                          width: 48,
-                        ),
-
-                        // Right side: Escalation button
+                        const SizedBox(width: 48),
                         EscalationButton(
                           last_n_shifts: widget.last_n_shifts,
                           onEscalationsUpdated: refreshEscalationTrafficLight,
                         ),
                       ],
                     ),
-                    Spacer(),
-
-                    // Legend
+                    const Spacer(),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -868,17 +832,17 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                             color: widget.errorColor,
                             role: 'Head of production',
                             time: '> 4h'),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         LegendRow(
                             color: widget.warningColor,
                             role: 'Shift Manager',
                             time: '2h << 4h'),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         LegendRow(
                             color: widget.okColor, role: 'Chiusi', time: ''),
                       ],
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
@@ -889,7 +853,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
         // ────── SECOND HEADER ROW ──────
         Row(
           children: [
-            // LEFT SIDE – UPTIME/DOWNTIME
             Flexible(
               flex: 3,
               child: HeaderBox(
@@ -898,8 +861,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                 icon: Icons.timer_outlined,
               ),
             ),
-
-            // RIGHT SIDE – Pareto + NG Card
             Flexible(
               flex: 3,
               child: Row(
@@ -922,9 +883,10 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
 
         const SizedBox(height: 12),
 
-        // ────── SECOND ROW ──────
+        // ────── SECOND DATA ROW ──────
         Row(
           children: [
+            // LEFT – Gauges + Stop Table
             Flexible(
               flex: 3,
               child: Container(
@@ -937,7 +899,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                 ),
                 child: Row(
                   children: [
-                    // LEFT COLUMN (2 stacked rows)
                     Flexible(
                       flex: 2,
                       child: Column(
@@ -963,7 +924,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                     Column(
                                       children: [
                                         SizedBox(
-                                          width: 200, // radius * 2
+                                          width: 200,
                                           child: Column(
                                             children: [
                                               AnimatedRadialGauge(
@@ -1040,7 +1001,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                               ),
                             ),
                           ),
-                          //const TopDefectsPieChart(),
                           Flexible(
                             child: Card(
                               elevation: 10,
@@ -1062,7 +1022,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                     Column(
                                       children: [
                                         SizedBox(
-                                          width: 200, // radius * 2
+                                          width: 200,
                                           child: Column(
                                             children: [
                                               AnimatedRadialGauge(
@@ -1206,23 +1166,46 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                       ),
                                       if (_runningStop != null)
                                         TableRow(
-                                          decoration: const BoxDecoration(color: Color(0xFFFFF3E0)),
+                                          decoration: const BoxDecoration(
+                                              color: Color(0xFFFFF3E0)),
                                           children: [
                                             Padding(
                                               padding: const EdgeInsets.all(8),
-                                              child: Text(_runningStop!['reason'] ?? '', style: const TextStyle(fontSize: 24)),
+                                              child: Text(
+                                                  _runningStop!['reason'] ?? '',
+                                                  style: const TextStyle(
+                                                      fontSize: 24)),
                                             ),
                                             Padding(
                                               padding: const EdgeInsets.all(8),
-                                              child: Text(_runningStop!['station'] ?? '', style: const TextStyle(fontSize: 24)),
-                                            ),
-                                            const Padding(
-                                              padding: EdgeInsets.all(8),
-                                              child: Text('-'),
+                                              child: Text(
+                                                  _runningStop!['station'] ??
+                                                      '',
+                                                  style: const TextStyle(
+                                                      fontSize: 24)),
                                             ),
                                             Padding(
                                               padding: const EdgeInsets.all(8),
-                                              child: Text(_formatDuration(DateTime.now().difference(_runningStop!['start'] as DateTime))),
+                                              child: ElevatedButton(
+                                                onPressed: _stopRunningStop,
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      Colors.redAccent,
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8),
+                                                ),
+                                                child: const Text('Stop'),
+                                              ),
+                                            ),
+                                            Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Text(_formatDuration(
+                                                  DateTime.now().difference(
+                                                      _runningStop!['start']
+                                                          as DateTime))),
                                             ),
                                           ],
                                         ),
@@ -1232,27 +1215,27 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                 ),
                               ),
                             ),
+                            const SizedBox(height: 8),
+                            StopButton(
+                              lastNShifts: widget.last_n_shifts,
+                              onStopsUpdated: _onStopEnded,
+                              onStopStarted: _onStopStarted,
+                            ),
                           ],
-                          ),
-                          const SizedBox(height: 8),
-                          StopButton(
-                            lastNShifts: widget.last_n_shifts,
-                            onStopsUpdated: _onStopEnded,
-                            onStopStarted: _onStopStarted,
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
               ),
             ),
+
+            // RIGHT – Defects Charts
             Flexible(
               flex: 3,
               child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: 400, // ← set your maximum height here
+                constraints: const BoxConstraints(
+                  maxHeight: 400,
                 ),
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 16),
@@ -1272,7 +1255,6 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // RIGHT COLUMN (1 full-height card)
                       Flexible(
                         flex: 2,
                         child: Column(
@@ -1286,7 +1268,8 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                               ),
                             ),
                             Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 4.0),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4.0),
                               child: Text(
                                 'Sviluppato da 3SUN Process Eng, \nCapgemini, empowered by Bottero',
                                 textAlign: TextAlign.center,

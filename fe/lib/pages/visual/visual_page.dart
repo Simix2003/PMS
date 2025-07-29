@@ -1017,12 +1017,10 @@ class _VisualPageState extends State<VisualPage> {
     print("⏳ Scheduling first refresh in ${initialDelay.inSeconds} seconds");
 
     Future.delayed(initialDelay, () {
-      print("🔁 Hourly refresh triggered");
       fetchZoneData();
 
       // Start regular hourly timer
       _hourlyRefreshTimer = Timer.periodic(Duration(hours: 1), (_) {
-        print("🔁 Hourly refresh triggered (loop)");
         fetchZoneData();
       });
     });
@@ -1056,7 +1054,6 @@ class _VisualPageState extends State<VisualPage> {
       builder: (_, escList, __) {
         final counts =
             calculateEscalationCounts(escList); // escList is the real list 👍
-        print('counts: $counts');
 
         return Scaffold(
           backgroundColor: Colors.white,
@@ -1108,7 +1105,9 @@ class _VisualPageState extends State<VisualPage> {
                                 ain2VPFCounts: ain2VPFCounts,
                                 last_n_shifts: last_n_shifts,
                                 qg2_defects_value: qg2_defects_value,
-                                onStopsUpdated: fetchZoneData,
+                                onStopsUpdated: () {
+                                  fetchAinZoneData();
+                                },
                               )
                             : widget.zone == "VPF"
                                 ? VpfVisualsPage(
@@ -1244,7 +1243,9 @@ class _VisualPageState extends State<VisualPage> {
 
                                             lastNShifts: last_n_shifts,
                                             counts: counts,
-                                            onStopsUpdated: fetchZoneData,
+                                            onStopsUpdated: () {
+                                              fetchZoneData();
+                                            },
                                           )
                                         : const Center(
                                             child: Text(

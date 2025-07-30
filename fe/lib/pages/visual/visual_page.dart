@@ -952,18 +952,36 @@ class _VisualPageState extends State<VisualPage> {
           hourLabels =
               hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
 
-          // ─── Fermi Data ───────────────────────────────
           final fermiRaw =
               List<Map<String, dynamic>>.from(data['fermi_data'] ?? []);
           dataFermi = [];
+          zoneAvailability.clear();
+          availableTime = 0;
 
           for (final entry in fermiRaw) {
-            if (entry.containsKey("Available_Time_1")) {
-              availableTime_1 =
-                  int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
-            } else if (entry.containsKey("Available_Time_2")) {
-              availableTime_2 =
-                  int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
+            if (entry.containsKey('station') &&
+                entry.containsKey('available_time')) {
+              final stationName = entry['station'].toString();
+              final stationId = _stationIdFromName(stationName);
+              final avail = int.tryParse(entry['available_time'].toString()) ?? 0;
+              zoneAvailability[stationId] = avail;
+
+              dataFermi.add([
+                stationName,
+                entry['count']?.toString() ?? '0',
+                entry['time']?.toString() ?? '0'
+              ]);
+
+            } else if (entry.keys.any((k) => k.startsWith('Available_Time_'))) {
+              final key = entry.keys.first;
+              final stationName = key.replaceFirst('Available_Time_', '');
+              final stationId = _stationIdFromName(stationName);
+              final avail = int.tryParse(entry[key].toString()) ?? 0;
+              zoneAvailability[stationId] = avail;
+
+            } else if (entry.containsKey('Available_Time_Total')) {
+              availableTime = int.tryParse(entry['Available_Time_Total'].toString()) ?? 0;
+
             } else {
               dataFermi.add([
                 entry['causale']?.toString() ?? '',
@@ -973,7 +991,6 @@ class _VisualPageState extends State<VisualPage> {
               ]);
             }
           }
-
           // ─── QG2 Defects (combine totals) ──────────────────────────────
           final topDefectsQG2 =
               List<Map<String, dynamic>>.from(data['top_defects_qg2'] ?? []);

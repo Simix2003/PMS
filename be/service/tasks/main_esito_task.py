@@ -318,7 +318,7 @@ async def background_task(plc_connection: PLCConnection, full_station_id: str):
         try:
             # Ensure connection is alive or try reconnect
             if not plc_connection.connected or not plc_connection.is_connected():
-                #logger.warning(f"PLC disconnected for {full_station_id}, Skipping Esito stuff")
+                await asyncio.sleep(1)          # << NEW (was a tight loop)
                 continue  # Retry after delay
 
             paths = get_channel_config(line_name, channel_id)

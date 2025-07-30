@@ -129,7 +129,8 @@ Versions:
 "2.4.0" - Visual Management for ELL
 "2.4.1" - Improvements on MBJ view
 
-"2.4.5" - Finished STR and new ELL visuals
+"2.4.5" - Finished new ELL visuals
+"2.4.6" Completed STR, managed loss of connection, fixed Bugs
 
 ## OWASP dependency verification
 

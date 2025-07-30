@@ -23,9 +23,9 @@ logger = logging.getLogger(__name__)
 process_start_time = time.time()
 
 # Lettura variabili build-time
-build_date = os.getenv("BUILD_DATE", "26/06/2025")
-app_version = os.getenv("APP_VERSION", "2.4.0")
-git_commit = os.getenv("GIT_COMMIT", "DEV/0a12d46")
+build_date = os.getenv("BUILD_DATE", "31/07/2025")
+app_version = os.getenv("APP_VERSION", "2.4.6")
+git_commit = os.getenv("GIT_COMMIT", "main_simone")
 
 # --- Utility ---
 

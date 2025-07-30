@@ -2503,14 +2503,14 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                           ),
                                           children: [
                                             Padding(
-                                              padding: const EdgeInsets.all(8),
+                                              padding: const EdgeInsets.all(15),
                                               child: Text(
                                                   _runningStop!['reason'] ?? '',
                                                   style: const TextStyle(
                                                       fontSize: 24)),
                                             ),
                                             Padding(
-                                              padding: const EdgeInsets.all(8),
+                                              padding: const EdgeInsets.all(15),
                                               child: Text(
                                                   _runningStop!['station'] ??
                                                       '',
@@ -2518,7 +2518,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       fontSize: 24)),
                                             ),
                                             Padding(
-                                              padding: const EdgeInsets.all(8),
+                                              padding: const EdgeInsets.all(15),
                                               child: (_runningStop!['status'] ==
                                                       'OPEN')
                                                   ? ElevatedButton(
@@ -2542,7 +2542,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                       .shrink(), // hide only when closed
                                             ),
                                             Padding(
-                                              padding: const EdgeInsets.all(8),
+                                              padding: const EdgeInsets.all(15),
                                               child: Text(_formatDuration(
                                                   DateTime.now().difference(
                                                       _runningStop!['start']

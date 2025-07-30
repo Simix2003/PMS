@@ -387,8 +387,6 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 cursor.execute(sql_open)
                 open_rows = cursor.fetchall()
 
-                from datetime import datetime
-
                 for row in open_rows:
                     elapsed_min = int((datetime.now() - row["start_time"]).total_seconds() // 60)
                     stop_entry = {
@@ -1398,7 +1396,6 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
         """
         cur.execute(sql_open, (*STATION_IDS,))
         open_rows = cur.fetchall()
-        from datetime import datetime
         for row in open_rows:
             elapsed_min = int((datetime.now() - row["start_time"]).total_seconds() // 60)
             stop_entry = {

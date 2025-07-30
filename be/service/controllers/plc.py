@@ -1,14 +1,13 @@
-# plc.py
 import asyncio
 import snap7.client as c
 import snap7.util as u
-from snap7.type import Area
-from snap7.type import Parameter
+from snap7.type import Area, Parameter
 import logging
 import time
 from threading import Lock, Thread
 import os
 import sys
+import socket
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +25,24 @@ class PLCConnection:
         self.connected = False
         self.status_callback = status_callback
         self._connect()
-        print("Current timeout:", self.client.get_param(Parameter.PingTimeout))
         Thread(target=self._background_reconnector, daemon=True).start()
+
+    def _check_tcp_port(self, port=102, timeout=1.0):
+        try:
+            with socket.create_connection((self.ip_address, port), timeout=timeout):
+                return True
+        except (socket.timeout, ConnectionRefusedError, OSError) as e:
+            logger.warning(f"🔍 Port {port} check failed for {self.ip_address}: {e}")
+            return False
 
     def _background_reconnector(self):
         while True:
             if not self.connected or not self.is_connected():
-                logger.warning(f"🔌 PLC {self.ip_address} offline, tentando reconnessione...")
-                self._try_connect()
+                if self._check_tcp_port():
+                    logger.debug(f"🔎 Port 102 open, trying Snap7 reconnect…")
+                    self._try_connect()
+                else:
+                    logger.warning(f"🚫 Cannot reach PLC {self.ip_address} on port 102")
             time.sleep(10)
 
     def _try_connect(self):
@@ -44,6 +53,9 @@ class PLCConnection:
         try:
             self.client = c.Client()
             self.client.set_connection_type(3)
+            self.client.set_param(Parameter.PingTimeout, 5000)
+            self.client.set_param(Parameter.SendTimeout, 5000)
+            self.client.set_param(Parameter.RecvTimeout, 5000)
             self.client.connect(self.ip_address, self.rack, self.slot)
             if self.client.get_connected():
                 self.connected = True
@@ -60,6 +72,9 @@ class PLCConnection:
 
     def _connect(self):
         try:
+            self.client.set_param(Parameter.PingTimeout, 5000)
+            self.client.set_param(Parameter.SendTimeout, 5000)
+            self.client.set_param(Parameter.RecvTimeout, 5000)
             self.client.connect(self.ip_address, self.rack, self.slot)
             if self.client.get_connected():
                 self.connected = True
@@ -70,22 +85,14 @@ class PLCConnection:
         except Exception as e:
             self.connected = False
             logger.error(f"❌ Failed to connect to PLC at {self.ip_address}: {str(e)}")
-    
+
     def _recover_on_error(self, context: str, exc: Exception):
-        """
-        Handles any PLC I/O error gracefully:
-        - Marks the connection as down
-        - Logs the issue
-        - Leaves reconnecting to the background thread (non-blocking)
-        """
         self.connected = False
         try:
             self.client.disconnect()
         except Exception:
             pass
-        logger.error(
-            f"⚠️ PLC communication error in {context}: {exc}. Connection marked as down."
-        )
+        logger.error(f"⚠️ PLC communication error in {context}: {exc}. Connection marked as down.")
 
     def is_connected(self):
         try:
@@ -96,6 +103,10 @@ class PLCConnection:
 
     def _ensure_connection(self):
         if not self.connected or not self.is_connected():
+            if self._check_tcp_port():
+                self._try_connect()
+            else:
+                logger.error(f"🚫 PLC {self.ip_address} port 102 unreachable")
             self.connected = False
 
     def _safe_callback(self, status):
@@ -125,13 +136,13 @@ class PLCConnection:
         with self.lock:
             self._ensure_connection()
             if not self.connected:
-                return False  # safe default
+                return False
             try:
                 byte_array = self.client.db_read(db_number, byte_index, 1)
                 return u.get_bool(byte_array, 0, bit_index)
             except Exception as e:
                 self._recover_on_error(f"read_bool DB{db_number}", e)
-                return False  # safe default
+                return False
 
     def write_bool(self, db_number, byte_index, bit_index, value, max_retries=3):
         t0 = time.perf_counter()
@@ -155,7 +166,6 @@ class PLCConnection:
                 except Exception as e:
                     logger.warning(f"⚠️ Write attempt {attempt+1}/{max_retries} failed: {e}")
                     if attempt == max_retries - 1:
-                        # Only trigger recovery after last failure
                         self._recover_on_error(f"write_bool DB{db_number}", e)
                     time.sleep(0.05 * (2 ** attempt))
 
@@ -189,7 +199,6 @@ class PLCConnection:
                 except Exception as e:
                     logger.warning(f"⚠️ Write attempt {attempt+1}/{max_retries} failed: DB{db_number}, b{byte_index}:{bit_index}: {e}")
                     if attempt == max_retries - 1:
-                        # Trigger reconnect only on last failure
                         self._recover_on_error(f"write_bool_new DB{db_number}", e)
                     time.sleep(0.05 * (2 ** attempt))
 
@@ -201,13 +210,13 @@ class PLCConnection:
         with self.lock:
             self._ensure_connection()
             if not self.connected:
-                return 0  # safe default
+                return 0
             try:
                 byte_array = self.client.db_read(db_number, byte_index, 2)
                 return u.get_int(byte_array, 0)
             except Exception as e:
                 self._recover_on_error(f"read_integer DB{db_number}", e)
-                return 0  # safe default
+                return 0
 
     def write_integer(self, db_number, byte_index, value):
         t0 = time.perf_counter()
@@ -314,21 +323,18 @@ class PLCConnection:
                 with self.lock:
                     self._ensure_connection()
                     if not self.connected:
-                        return bytearray(size)  # fallback safe
+                        return bytearray(size)
                     try:
                         part = self.client.db_read(db_number, start_byte + offset, chunk_size)
                         buffer.extend(part)
                         break
                     except Exception as e:
-                        # Full traceback for debugging
                         logger.exception(
-                            f"⚠️ Chunk read failed DB{db_number}[{start_byte+offset}:{chunk_size}], "
-                            f"attempt {attempt}/2"
+                            f"⚠️ Chunk read failed DB{db_number}[{start_byte+offset}:{chunk_size}], attempt {attempt}/2"
                         )
                         if attempt == 2:
-                            # Mark connection as down and return safe buffer
                             self._recover_on_error(f"db_read DB{db_number}", e)
                             return bytearray(size)
-                        time.sleep(0.05)  # short delay before retry
+                        time.sleep(0.05)
             offset += chunk_size
         return buffer

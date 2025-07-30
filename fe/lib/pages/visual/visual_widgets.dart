@@ -611,7 +611,6 @@ class TopDefectsPieChart extends StatelessWidget {
 }
 
 List<TableRow> buildCustomRows(List<List<String>> data) {
-  print('Fermi received: $data');
   return data.map((row) {
     return TableRow(
       decoration: const BoxDecoration(color: Colors.white),

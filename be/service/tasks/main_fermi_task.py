@@ -62,7 +62,7 @@ async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
     while True:
         try:
             if not plc_connection.connected or not plc_connection.is_connected():
-                logger.warning(f"PLC disconnected for {ip}:{slot}, Skipping Fermi")
+                #logger.warning(f"PLC disconnected for {ip}:{slot}, Skipping Fermi")
                 continue
 
             # Read trigger buffer once

@@ -2181,7 +2181,7 @@ def _update_snapshot_ell_new(bufferIds: List[str]) -> dict:
                         {
                             "object_id": row["id_modulo"],
                             "production_id": row["production_id"],
-                            "rework_count": int(row["rwk_count"]),
+                            "rework_count": int(row["rwk_count"] or 0),
                             "defects": json.loads(row["defects"]) if row["defects"] else [],
                         }
                         for row in cursor.fetchall()

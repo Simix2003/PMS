@@ -8,12 +8,28 @@ from threading import Lock, Thread
 import os
 import sys
 import socket
+import traceback
 
 logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.config.config import WRITE_TO_PLC
 
+# Create a dedicated logger for DB read errors
+db_read_logger = logging.getLogger("db_read_errors")
+db_read_logger.setLevel(logging.ERROR)
+
+# Ensure only one handler is added
+if not db_read_logger.handlers:
+    log_dir = os.path.join(os.path.dirname(__file__), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    file_handler = logging.FileHandler(os.path.join(log_dir, "plc_db_read_errors.log"))
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s\n"
+        "--------------------------------------------------------------\n"
+    )
+    file_handler.setFormatter(formatter)
+    db_read_logger.addHandler(file_handler)
 
 class PLCConnection:
     def __init__(self, ip_address, slot, status_callback=None):
@@ -314,27 +330,54 @@ class PLCConnection:
                 return None
 
     def db_read(self, db_number: int, start_byte: int, size: int) -> bytearray:
-        CHUNK = 200
+        CHUNK = 1000          # one-shot read (≤ PDU length) :contentReference[oaicite:6]{index=6}
         buffer = bytearray()
         offset = 0
+
         while offset < size:
-            chunk_size = min(CHUNK, size - offset)
+            chunk = min(CHUNK, size - offset)
             for attempt in (1, 2):
                 with self.lock:
                     self._ensure_connection()
                     if not self.connected:
                         return bytearray(size)
+
+                    # ----- measure real network/PLC latency -----
+                    t0 = time.perf_counter()
                     try:
-                        part = self.client.db_read(db_number, start_byte + offset, chunk_size)
+                        part = self.client.db_read(db_number, start_byte + offset, chunk)
+                        dt  = time.perf_counter() - t0
+                        logger.debug(f"DB{db_number}[{start_byte+offset}:{chunk}] "
+                                    f"OK in {dt:.3f}s")
                         buffer.extend(part)
                         break
+
                     except Exception as e:
-                        logger.exception(
-                            f"⚠️ Chunk read failed DB{db_number}[{start_byte+offset}:{chunk_size}], attempt {attempt}/2"
+                        dt  = time.perf_counter() - t0
+                        plc_ok   = False
+                        cpu_state = "n/a"
+                        try:
+                            plc_ok = self.client.get_connected()
+                            cpu_state = self.client.get_cpu_state()  # RUN/STOP
+                        except Exception:
+                            pass
+
+                        msg = (
+                            f"DB READ ERROR  | DB{db_number}"
+                            f" offset={start_byte+offset} len={chunk} "
+                            f"attempt={attempt}/2\n"
+                            f"Elapsed={dt:.3f}s  PLC_connected={plc_ok} "
+                            f"CPU_state={cpu_state}\n"
+                            f"ErrorType={type(e).__name__}  Details={e}\n"
+                            f"Trace:\n{traceback.format_exc()}"
                         )
+
+                        logger.error(msg)
+                        db_read_logger.error(msg)
+
                         if attempt == 2:
                             self._recover_on_error(f"db_read DB{db_number}", e)
                             return bytearray(size)
                         time.sleep(0.05)
-            offset += chunk_size
+            offset += chunk
         return buffer

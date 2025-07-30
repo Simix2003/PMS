@@ -55,7 +55,7 @@ async def get_overlay_config(
                 "rectangles": config.get("rectangles", [])
             }
 
-    logging.warning("No matching path found. Returning fallback with empty image URL.")
+    #logging.warning("No matching path found. Returning fallback with empty image URL.")
     return {"image_url": "", "rectangles": []}
 
 

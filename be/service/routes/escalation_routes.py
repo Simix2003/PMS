@@ -10,7 +10,8 @@ from service.connections.mysql import (
     get_mysql_connection,
     create_stop,
     update_stop_status,
-    get_stops_for_station,
+    get_escalations_for_station,
+    get_machine_stops_for_station,
     get_stop_with_levels,
     update_stop_reason,
 )
@@ -32,7 +33,7 @@ STATION_NAME_TO_ID = {
 def build_escalation_list(conn, shifts_back: int = 3) -> list[dict]:
     items: list[dict] = []
     for name, sid in STATION_NAME_TO_ID.items():
-        stops = get_stops_for_station(sid, conn, shifts_back)
+        stops = get_escalations_for_station(sid, conn, shifts_back)
         for stop in stops:
             items.append({
                 "id": stop["id"],
@@ -125,14 +126,26 @@ async def api_update_reason(payload: Dict[str, Any]):
 # Get stops for a station
 # -------------------------
 @router.get("/api/escalation/get_stops/{station_id}")
-async def api_get_stops(station_id: int, shifts_back: int = 3):
-    try:
-        with get_mysql_connection() as conn:
-            stops = get_stops_for_station(station_id, conn, shifts_back)
-        return {"status": "ok", "stops": stops}
-    except Exception as e:
-        logger.error(f"Error fetching stops: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+async def api_get_stops(station_id: int, shifts_back: int = 3, include_open: int = 0):
+    with get_mysql_connection() as conn:
+        stops = get_escalations_for_station(
+            station_id,
+            conn,
+            shifts_back,
+            include_open=bool(include_open)
+        )
+    return {"status": "ok", "stops": stops}
+
+@router.get("/api/stops/get_machine_stops/{station_id}")
+async def api_get_machine_stops(station_id: int, shifts_back: int = 3, include_open: int = 0):
+    with get_mysql_connection() as conn:
+        stops = get_machine_stops_for_station(
+            station_id,
+            conn,
+            shifts_back,
+            include_open=bool(include_open)
+        )
+    return {"status": "ok", "stops": stops}
 
 # -------------------------
 # Get full stop + escalation levels

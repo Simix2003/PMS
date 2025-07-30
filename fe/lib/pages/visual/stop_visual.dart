@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../shared/services/api_service.dart';
-import 'package:intl/intl.dart';
 
 class StopButton extends StatelessWidget {
   final int lastNShifts;
@@ -69,7 +68,6 @@ class _StopDialog extends StatefulWidget {
 class _StopDialogState extends State<_StopDialog> {
   final ApiService _api = ApiService();
 
-  // UI + Data state
   final TextEditingController _reasonCtrl = TextEditingController();
   final TextEditingController _editReasonCtrl = TextEditingController();
   final Map<String, int> _stationNameToId = const {
@@ -83,14 +81,8 @@ class _StopDialogState extends State<_StopDialog> {
   };
 
   bool _busy = false;
-  bool _showClosed = false;
   int? _selectedIndex;
   String? _selectedStation;
-  int? _stopId;
-
-  Timer? _timer;
-  DateTime? _start;
-  Duration _elapsed = Duration.zero;
   bool _editingReason = false;
 
   List<Map<String, dynamic>> _stops = [];
@@ -99,16 +91,25 @@ class _StopDialogState extends State<_StopDialog> {
   void initState() {
     super.initState();
     _fetchStops();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_start != null && mounted) {
-        setState(() => _elapsed = DateTime.now().difference(_start!));
+
+    // Rebuild every minute to refresh durations
+    Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+
+    // Refresh stop list every 30 seconds
+    Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (mounted) {
+        await _fetchStops(
+          keepSelectedId:
+              _selectedIndex != null ? _stops[_selectedIndex!]['id'] : null,
+        );
       }
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _reasonCtrl.dispose();
     _editReasonCtrl.dispose();
     super.dispose();
@@ -119,8 +120,11 @@ class _StopDialogState extends State<_StopDialog> {
     final List<Map<String, dynamic>> newList = [];
 
     for (final entry in _stationNameToId.entries) {
-      final res = await _api.getStopsForStation(entry.value,
-          shiftsBack: widget.lastNShifts);
+      final res = await _api.getStopsForStation(
+        entry.value,
+        shiftsBack: widget.lastNShifts,
+        includeOpen: true, // Ensure OPEN stops are included
+      );
       if (res != null && res['status'] == 'ok' && res['stops'] != null) {
         for (final s in res['stops']) {
           if (s['stop_type'] == 'STOP') {
@@ -130,23 +134,14 @@ class _StopDialogState extends State<_StopDialog> {
       }
     }
 
-    // --- Ensure current running stop stays in the list ---
-    if (_stopId != null && newList.every((e) => e['id'] != _stopId)) {
-      newList.add({
-        'id': _stopId,
-        'title': _reasonCtrl.text,
-        'status': 'OPEN',
-        'station': _selectedStation,
-        'start_time': _start,
-        'end_time': null,
-      });
-    }
-
-    newList.sort((a, b) => b['id'].compareTo(a['id']));
+    newList.sort((a, b) {
+      if (a['status'] == 'OPEN' && b['status'] != 'OPEN') return -1;
+      if (a['status'] != 'OPEN' && b['status'] == 'OPEN') return 1;
+      return b['id'].compareTo(a['id']);
+    });
 
     if (keepSelectedId != null) {
-      final active = newList.where((e) => e['status'] != 'CLOSED').toList();
-      final idx = active.indexWhere((e) => e['id'] == keepSelectedId);
+      final idx = newList.indexWhere((e) => e['id'] == keepSelectedId);
       _selectedIndex = idx >= 0 ? idx : null;
     }
 
@@ -154,9 +149,6 @@ class _StopDialogState extends State<_StopDialog> {
       _stops = newList;
       _busy = false;
     });
-    if (_stopId == null || _stops.every((s) => s['status'] != 'OPEN')) {
-      widget.onStopsUpdated?.call();
-    }
   }
 
   Map<String, dynamic> _normalizeStop(Map<String, dynamic> s,
@@ -179,12 +171,13 @@ class _StopDialogState extends State<_StopDialog> {
 
   Future<void> _startStop() async {
     if (_selectedStation == null || _reasonCtrl.text.isEmpty) return;
+    setState(() => _busy = true); // show spinner
     final now = DateTime.now();
 
     final res = await _api.createStop(
       stationId: _stationNameToId[_selectedStation!]!,
       startTime: now.toIso8601String().split('.').first,
-      operatorId: 'NO OPERATOR',
+      operatorId: 'TOTEM',
       stopType: 'STOP',
       reason: _reasonCtrl.text,
       status: 'OPEN',
@@ -192,29 +185,35 @@ class _StopDialogState extends State<_StopDialog> {
     );
 
     if (res != null && res['status'] == 'ok') {
-      _stopId = res['stop_id'];
-      _start = now;
-      _elapsed = Duration.zero;
       widget.onStopStarted?.call({
-        'id': _stopId,
+        'id': res['stop_id'],
         'station': _selectedStation,
         'reason': _reasonCtrl.text,
-        'start': _start,
+        'start': now,
       });
-      await _fetchStops(keepSelectedId: _stopId);
+
+      await _fetchStops(keepSelectedId: res['stop_id']);
+    }
+
+    setState(() => _busy = false); // hide spinner
+
+    // Automatically close the dialog after starting
+    if (mounted) {
+      Navigator.of(context).pop();
     }
   }
 
   Future<void> _stopStop() async {
-    if (_stopId != null) {
-      await _api.updateStopStatus(
-        stopId: _stopId!,
-        newStatus: 'CLOSED',
-        changedAt: DateTime.now().toIso8601String().split('.').first,
-        operatorId: 'NO OPERATOR',
-      );
-      await _fetchStops();
-    }
+    if (_selectedIndex == null) return;
+    final id = _stops[_selectedIndex!]['id'];
+
+    await _api.updateStopStatus(
+      stopId: id,
+      newStatus: 'CLOSED',
+      changedAt: DateTime.now().toIso8601String().split('.').first,
+      operatorId: 'NO OPERATOR',
+    );
+    await _fetchStops();
   }
 
   Future<void> _updateReason(int id) async {
@@ -267,7 +266,6 @@ class _StopDialogState extends State<_StopDialog> {
   @override
   Widget build(BuildContext context) {
     final activeStops = _stops.where((e) => e['status'] != 'CLOSED').toList();
-    final closedStops = _stops.where((e) => e['status'] == 'CLOSED').toList();
 
     return Material(
       color: Colors.black.withOpacity(0.5),
@@ -291,20 +289,31 @@ class _StopDialogState extends State<_StopDialog> {
             borderRadius: BorderRadius.circular(20),
             child: Stack(
               children: [
-                Row(
-                  children: [
-                    _buildSidebar(activeStops),
-                    Expanded(
-                      child: _showClosed
-                          ? _buildClosedView(closedStops)
-                          : (_selectedIndex == null ||
-                                  _selectedIndex! >= activeStops.length)
-                              ? _buildCreateForm()
-                              : _buildDetail(activeStops[_selectedIndex!]),
-                    ),
-                  ],
+                Positioned.fill(
+                  child: (_selectedIndex == null ||
+                          _selectedIndex! >= activeStops.length)
+                      ? _buildCreateForm()
+                      : _buildDetail(activeStops[_selectedIndex!]),
                 ),
                 if (_busy) _buildLoadingOverlay(),
+
+                // ─── Close Button ──────────────────────────
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).pop(), // closes dialog
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close, color: Colors.black),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -313,189 +322,6 @@ class _StopDialogState extends State<_StopDialog> {
     );
   }
 
-  // ---- Sidebar ----
-  Widget _buildSidebar(List activeStops) {
-    return Container(
-      width: 320,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE5E5E7), width: 1)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFFE5E5E7))),
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF2F2F7),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: const Icon(Icons.close,
-                        size: 18, color: Color(0xFF8E8E93)),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                const Text(
-                  'Fermi',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1C1C1E),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: GestureDetector(
-              onTap: () => setState(() => _selectedIndex = null),
-              child: Container(
-                width: double.infinity,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF007AFF),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF007AFF).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add, color: Colors.white, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'Nuovo Fermo',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: activeStops.isEmpty
-                ? const Center(child: Text('Nessun fermo attivo'))
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemCount: activeStops.length,
-                    itemBuilder: (_, i) {
-                      final e = activeStops[i];
-                      final isSelected = _selectedIndex == i;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: GestureDetector(
-                          onTap: () => setState(() => _selectedIndex = i),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(0xFF007AFF).withOpacity(0.1)
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
-                              border: isSelected
-                                  ? Border.all(color: const Color(0xFF007AFF))
-                                  : null,
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: _statusColor(e['status'])
-                                        .withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Icon(_statusIcon(e['status']),
-                                      color: _statusColor(e['status']),
-                                      size: 18),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    e['title'],
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w500,
-                                      color: isSelected
-                                          ? const Color(0xFF007AFF)
-                                          : const Color(0xFF1C1C1E),
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFFE5E5E7))),
-            ),
-            child: GestureDetector(
-              onTap: () => setState(() => _showClosed = true),
-              child: Container(
-                width: double.infinity,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: _showClosed
-                      ? const Color(0xFF34C759)
-                      : const Color(0xFFF2F2F7),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.history,
-                        color: _showClosed
-                            ? Colors.white
-                            : const Color(0xFF8E8E93)),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Fermi Chiusi',
-                      style: TextStyle(
-                        color: _showClosed
-                            ? Colors.white
-                            : const Color(0xFF8E8E93),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---- Create Form ----
   Widget _buildCreateForm() {
     return Container(
       padding: const EdgeInsets.all(32),
@@ -554,10 +380,9 @@ class _StopDialogState extends State<_StopDialog> {
     );
   }
 
-  // ---- Detail (running or open stop) ----
   Widget _buildDetail(Map<String, dynamic> stop) {
-    final start = stop['start_time'] ?? DateTime.now();
-    final duration = DateTime.now().difference(start);
+    final DateTime start = stop['start_time'] ?? DateTime.now();
+    final Duration duration = DateTime.now().difference(start);
 
     return Container(
       padding: const EdgeInsets.all(32),
@@ -668,30 +493,6 @@ class _StopDialogState extends State<_StopDialog> {
     );
   }
 
-  // ---- Closed list ----
-  Widget _buildClosedView(List closed) {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      child: closed.isEmpty
-          ? const Center(child: Text('Nessun fermo chiuso'))
-          : ListView.builder(
-              itemCount: closed.length,
-              itemBuilder: (_, i) {
-                final e = closed[i];
-                final start = e['start_time'] ?? DateTime.now();
-                final end = e['end_time'] ?? start;
-                final duration = end.difference(start);
-                return ListTile(
-                  title: Text(e['title']),
-                  subtitle: Text(
-                      "${DateFormat('dd/MM HH:mm').format(start)} - ${DateFormat('dd/MM HH:mm').format(end)} • ${_formatDuration(duration)}"),
-                  trailing: Icon(Icons.check_circle, color: Colors.green),
-                );
-              }),
-    );
-  }
-
-  // ---- Busy Overlay ----
   Widget _buildLoadingOverlay() {
     return Positioned.fill(
       child: Container(

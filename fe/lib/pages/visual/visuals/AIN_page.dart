@@ -203,7 +203,11 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
   void _onStopStarted(Map<String, dynamic> stop) {
     _stopTimer?.cancel();
     setState(() {
-      _runningStop = stop;
+      _runningStop = {
+        ...stop,
+        'status': 'OPEN', // ensure it's marked open
+        'start': stop['start'] ?? DateTime.now(), // ensure start time is valid
+      };
     });
     _stopTimer =
         Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
@@ -211,13 +215,14 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
 
   void _onStopEnded() {
     _stopTimer?.cancel();
-    _runningStop = null;
-    widget.onStopsUpdated?.call();
-    setState(() {});
+    setState(() {
+      _runningStop = null;
+    });
   }
 
   Future<void> _stopRunningStop() async {
     if (_runningStop == null) return;
+
     final id = _runningStop!['id'];
     if (id != null) {
       await ApiService().updateStopStatus(
@@ -227,7 +232,18 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
         operatorId: 'NO OPERATOR',
       );
     }
-    _onStopEnded();
+
+    // Stop the local timer and clear the active stop
+    _stopTimer?.cancel();
+    setState(() {
+      _runningStop = null;
+    });
+
+    // Trigger parent refresh so `widget.dataFermi` reloads from MySQL
+    if (widget.onStopsUpdated != null) {
+      widget
+          .onStopsUpdated!(); // fetch latest stop list (including new CLOSED state)
+    }
   }
 
   String _formatDuration(Duration d) {
@@ -1161,8 +1177,14 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                       ),
                                       if (_runningStop != null)
                                         TableRow(
-                                          decoration: const BoxDecoration(
-                                              color: Color(0xFFFFF3E0)),
+                                          decoration: BoxDecoration(
+                                            color: _runningStop!['status'] ==
+                                                    'CLOSED'
+                                                ? Colors
+                                                    .white // default background for closed
+                                                : const Color(
+                                                    0xFFFFF3E0), // highlighted if still open
+                                          ),
                                           children: [
                                             Padding(
                                               padding: const EdgeInsets.all(8),
@@ -1181,19 +1203,27 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                             ),
                                             Padding(
                                               padding: const EdgeInsets.all(8),
-                                              child: ElevatedButton(
-                                                onPressed: _stopRunningStop,
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      Colors.redAccent,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 8),
-                                                ),
-                                                child: const Text('Stop'),
-                                              ),
+                                              child: (_runningStop!['status'] ==
+                                                      'OPEN')
+                                                  ? ElevatedButton(
+                                                      onPressed:
+                                                          _stopRunningStop,
+                                                      style: ElevatedButton
+                                                          .styleFrom(
+                                                        backgroundColor:
+                                                            Colors.redAccent,
+                                                        foregroundColor:
+                                                            Colors.white,
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                horizontal: 12,
+                                                                vertical: 8),
+                                                      ),
+                                                      child: const Text('Stop'),
+                                                    )
+                                                  : const SizedBox
+                                                      .shrink(), // hide only when closed
                                             ),
                                             Padding(
                                               padding: const EdgeInsets.all(8),

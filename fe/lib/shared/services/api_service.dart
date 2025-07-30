@@ -1074,15 +1074,36 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>?> getStopsForStation(int stationId,
-      {int shiftsBack = 3}) async {
+  Future<Map<String, dynamic>?> getStopsForStation(
+    int stationId, {
+    int shiftsBack = 3,
+    bool includeOpen = false,
+  }) async {
     final url = Uri.parse(
-        '$baseUrl/api/escalation/get_stops/$stationId?shifts_back=$shiftsBack');
+      '$baseUrl/api/escalation/get_stops/$stationId?shifts_back=$shiftsBack&include_open=${includeOpen ? 1 : 0}',
+    );
     final response = await http.get(url);
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
       print("Failed to load stops: ${response.body}");
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getMachineStopsForStation(
+    int stationId, {
+    int shiftsBack = 3,
+    bool includeOpen = false,
+  }) async {
+    final url = Uri.parse(
+      '$baseUrl/api/stops/get_machine_stops/$stationId?shifts_back=$shiftsBack&include_open=${includeOpen ? 1 : 0}',
+    );
+    final response = await http.get(url);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print("Failed to load machine stops: ${response.body}");
       return null;
     }
   }

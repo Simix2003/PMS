@@ -135,15 +135,11 @@ class _VisualPageState extends State<VisualPage> {
 
   Map<String, int> calculateEscalationCounts(
       List<Map<String, dynamic>> escalations) {
-    print('escalations');
-    print(escalations);
     final shiftManager =
         escalations.where((e) => e['status'] == 'SHIFT_MANAGER').length;
     final headOfProduction =
         escalations.where((e) => e['status'] == 'HEAD_OF_PRODUCTION').length;
     final closed = escalations.where((e) => e['status'] == 'CLOSED').length;
-
-    print('Returning: $shiftManager, $headOfProduction, $closed');
 
     return {
       'shiftManager': shiftManager,
@@ -548,26 +544,36 @@ class _VisualPageState extends State<VisualPage> {
   Future<void> _fetchEscalations() async {
     final api = ApiService();
     final List<Map<String, dynamic>> newEsc = [];
+
     for (final entry in _stationNameToId.entries) {
-      final res =
+      // Escalation stops
+      final escRes =
           await api.getStopsForStation(entry.value, shiftsBack: last_n_shifts);
-      if (res != null && res['status'] == 'ok' && res['stops'] != null) {
-        for (final stop in res['stops']) {
-          newEsc.add({
-            'id': stop['id'],
-            'title': stop['reason'],
-            'status': stop['status'],
-            'station': entry.key,
-            'start_time': DateTime.parse(stop['start_time']),
-            'end_time': stop['end_time'] != null
-                ? DateTime.parse(stop['end_time'])
-                : null,
-          });
-        }
+      // Machine stops (STOP type)
+      final stopRes = await api.getMachineStopsForStation(entry.value,
+          shiftsBack: last_n_shifts);
+
+      final combined = [
+        ...(escRes?['stops'] ?? []),
+        ...(stopRes?['stops'] ?? []),
+      ];
+
+      for (final stop in combined) {
+        newEsc.add({
+          'id': stop['id'],
+          'title': stop['reason'],
+          'status': stop['status'],
+          'station': entry.key,
+          'start_time': DateTime.parse(stop['start_time']),
+          'end_time': stop['end_time'] != null
+              ? DateTime.parse(stop['end_time'])
+              : null,
+        });
       }
     }
+
     newEsc.sort((a, b) => b['id'].compareTo(a['id']));
-    escalations.value = newEsc;
+    escalations.value = List<Map<String, dynamic>>.from(newEsc); // clone
   }
 
   void _initializeEscalationWebSocket() {
@@ -1106,7 +1112,8 @@ class _VisualPageState extends State<VisualPage> {
                                 last_n_shifts: last_n_shifts,
                                 qg2_defects_value: qg2_defects_value,
                                 onStopsUpdated: () {
-                                  fetchAinZoneData();
+                                  fetchZoneData(); // Refresh the entire zone (fermi + metrics)
+                                  _fetchEscalations(); // 2️⃣ pull fresh STOP & ESCALATION list
                                 },
                               )
                             : widget.zone == "VPF"
@@ -1244,7 +1251,8 @@ class _VisualPageState extends State<VisualPage> {
                                             lastNShifts: last_n_shifts,
                                             counts: counts,
                                             onStopsUpdated: () {
-                                              fetchZoneData();
+                                              fetchZoneData(); // Refresh the entire zone (fermi + metrics)
+                                              _fetchEscalations(); // 2️⃣ pull fresh STOP & ESCALATION list
                                             },
                                           )
                                         : const Center(

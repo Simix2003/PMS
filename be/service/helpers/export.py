@@ -6,9 +6,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.worksheet.worksheet import Worksheet
-from openpyxl.styles import PatternFill
+from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.cell import WriteOnlyCell
-from openpyxl.cell.cell import Cell
 import pandas as pd
 from collections import defaultdict
 from typing import Dict, Any, List
@@ -62,53 +61,82 @@ def clean_old_exports(max_age_hours: int = 2):
                 os.remove(path)
 
 def export_full_excel(data: dict, progress_callback=None) -> str:
-    """Generate the Excel file and optionally report progress."""
+    """
+    Generate the Excel file and stream progress updates.
+    Handles row-level errors inside sheets (via _append_dataframe).
+    Always sends "done" to stop frontend shimmer.
+    """
     filename = f"Esportazione_PMS_{datetime.now().strftime('%d-%m-%Y.%H-%M')}.xlsx"
     filepath = os.path.join(EXPORT_DIR, filename)
 
-    if progress_callback:
-        progress_callback("init")
-
-    wb = Workbook(write_only=True)
-
-    total_modules = len(data.get("id_moduli", []))
-    progress_state = {
-        "callback": progress_callback,
-        "current": 0,
-        "total": total_modules,
-        "seen": set(),
-        "sheet": None,
-    }
-
-    if progress_callback:
-        progress_callback("start_sheets", progress_state["current"], progress_state["total"])
-
-    for sheet_name in SHEET_NAMES:
-        func = SHEET_FUNCTIONS.get(sheet_name)
-        assert func is not None, f"Sheet function not found for sheet '{sheet_name}'"
-
-        progress_state["sheet"] = sheet_name
-        progress_state["last_key"] = None
-
-        ws = wb.create_sheet(title=sheet_name)
-        result = func(ws, data, progress=progress_state)
+    try:
+        total_modules = len(data.get("id_moduli", [])) or 1  # Avoid zero total
 
         if progress_callback:
-            progress_callback(f"finished:{sheet_name}", progress_state["current"], progress_state["total"])
+            progress_callback("init", 0, total_modules)
 
-        # Only keep sheet if result is True or function is not boolean-returning (e.g., Metadata)
-        if result is False:
-            wb.remove(ws)
+        wb = Workbook(write_only=True)
 
-    if progress_callback:
-        progress_callback("saving")
+        progress_state = {
+            "callback": progress_callback,
+            "current": 0,
+            "total": total_modules,
+            "seen": set(),
+            "sheet": None,
+        }
 
-    wb.save(filepath)
+        if progress_callback:
+            progress_callback("start_sheets", 0, total_modules)
 
-    if progress_callback:
-        progress_callback("done")
+        for sheet_name in SHEET_NAMES:
+            func = SHEET_FUNCTIONS.get(sheet_name)
+            if not func:
+                continue
 
-    return filename
+            progress_state["sheet"] = sheet_name
+            progress_state["last_key"] = None
+
+            ws = wb.create_sheet(title=sheet_name)
+
+            try:
+                # Each sheet function calls _append_dataframe internally,
+                # which now skips bad rows instead of crashing the sheet.
+                result = func(ws, data, progress=progress_state)
+            except Exception as e:
+                # Log but don't kill the whole export
+                import traceback
+                traceback.print_exc()
+                # Write a red placeholder row so sheet isn't empty
+                from openpyxl.cell import WriteOnlyCell
+                from openpyxl.styles import Font, PatternFill
+
+                placeholder = WriteOnlyCell(ws, value=f"Sheet failed: {sheet_name}")
+                placeholder.font = Font(color="FF0000", bold=True)
+                placeholder.fill = PatternFill(start_color="FFFFAAAA", end_color="FFFFAAAA", fill_type="solid")
+                ws.append([placeholder])
+                result = True  # Keep sheet
+
+            if progress_callback:
+                progress_callback(f"finished:{sheet_name}",
+                                  progress_state["current"],
+                                  progress_state["total"])
+
+        if progress_callback:
+            progress_callback("saving", progress_state["current"], progress_state["total"])
+
+        wb.save(filepath)
+
+        if progress_callback:
+            progress_callback("done", progress_state["total"], progress_state["total"])
+
+        return filename
+
+    except Exception:
+        # Ensure frontend shimmer stops even if export fails completely
+        if progress_callback:
+            progress_callback("error", 0, 1)
+            progress_callback("done", 1, 1)
+        raise
 
 def autofit_columns(ws, align_center_for: Optional[Set[str]] = None):
     """
@@ -241,95 +269,103 @@ FILL_QG = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid
 # Excel helpers --------------------------------------------------------------
 
 def _append_dataframe(
-    ws: Worksheet,
+    ws,
     df: pd.DataFrame,
     zebra_key: str = "Module Id",
     progress: dict | None = None,
     align_center_for: Optional[Set[str]] = None,
     grey_cells: Optional[Set[tuple[int, str]]] = None,
+    update_every: int = 200,  # report progress every 200 rows
 ):
-    """Write *df* to *ws* with a blue/white zebra pattern keyed on *zebra_key*."""
+    """
+    Write a DataFrame to Excel with zebra striping and progress updates.
+    Handles IllegalCharacterError by skipping bad rows instead of failing.
+    """
     if align_center_for is None:
         align_center_for = set()
 
+    def sanitize_value(val):
+        """Remove illegal XML characters from strings for Excel safety."""
+        if val is None:
+            return ""
+        if isinstance(val, str):
+            return ''.join(c for c in val if ord(c) >= 32 or c in ("\n", "\r", "\t"))
+        return val
+
+    def mark_row_as_removed(reason="ROW REMOVED: invalid characters"):
+        """Insert a placeholder row with a red background to flag skipped rows."""
+        placeholder = WriteOnlyCell(ws, value=reason)
+        placeholder.font = Font(color="FF0000", bold=True)
+        placeholder.fill = PatternFill(start_color="FFFFAAAA", end_color="FFFFAAAA", fill_type="solid")
+        ws.append([placeholder])
+
     current_key = None
     current_fill = FILL_WHITE
-
     columns = list(df.columns)
     max_lens = [len(str(c)) for c in columns]
 
+    # Header row
     header_cells = [WriteOnlyCell(ws, value=c) for c in columns]
     ws.append(header_cells)
 
-    # 🩺 Check if zebra_key exists, else disable zebra logic
-    if zebra_key in df.columns:
-        zebra_idx = df.columns.get_loc(zebra_key)
-    else:
-        zebra_idx = None  # disable zebra striping
+    zebra_idx = df.columns.get_loc(zebra_key) if zebra_key in df.columns else None
+    cb = progress.get("callback") if progress else None
+    current_sheet = progress.get("sheet") if progress else "unknown"
+    grey_lookup = set(grey_cells or set())
 
+    # Reset seen for progress tracking per sheet
     if progress and zebra_idx is not None:
-        current_sheet = progress.get("sheet")
-        unique_modules = df.iloc[:, zebra_idx].nunique()
         if progress.get("last_key") != current_sheet:
             progress["current"] = 0
             progress["seen"] = set()
             progress["last_key"] = current_sheet
-        progress["total"] = unique_modules
-        cb = progress.get("callback")
-        if cb:
-            cb(f"creating:{current_sheet}", progress["current"], progress["total"])
+        progress["total"] = df.iloc[:, zebra_idx].nunique() or len(df)
 
-    grey_cells = grey_cells or set()
-    # Pre-compute mapping for faster lookups
-    grey_lookup = set(grey_cells)
-
+    # Iterate rows with error handling
     for row_idx, row_tuple in enumerate(df.itertuples(index=False, name=None), start=2):
-        if zebra_idx is not None:
-            key_value = row_tuple[zebra_idx]
-            if key_value != current_key:
-                current_fill = FILL_BLUE if current_fill == FILL_WHITE else FILL_WHITE
-                current_key = key_value
+        try:
+            # Zebra striping logic
+            if zebra_idx is not None:
+                key_value = row_tuple[zebra_idx]
+                if key_value != current_key:
+                    current_fill = FILL_BLUE if current_fill == FILL_WHITE else FILL_WHITE
+                    current_key = key_value
 
-        row_cells: List[Cell] = []
-        for idx, val in enumerate(row_tuple):
-            col = columns[idx]
-            if col in {"Checkin - PMS", "Checkout - PMS"} and val:
-                try:
-                    val = val.strftime("%d.%m.%y %H:%M:%S")
-                except Exception:
-                    pass
-            cell = WriteOnlyCell(ws, value=val)
-            if (row_idx, col) in grey_lookup:
-                cell.fill = FILL_QG
-            else:
-                cell.fill = current_fill
-            if col in align_center_for:
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-            else:
-                cell.alignment = Alignment(horizontal="left", vertical="center")
-            row_cells.append(cell)
-            val_len = len(str(val)) if val is not None else 0
-            if val_len > max_lens[idx]:
-                max_lens[idx] = val_len
+            # Build row cells with sanitization
+            row_cells = []
+            for idx, val in enumerate(row_tuple):
+                col = columns[idx]
+                if col in {"Checkin - PMS", "Checkout - PMS"} and val:
+                    try:
+                        val = val.strftime("%d.%m.%y %H:%M:%S")
+                    except Exception:
+                        pass
+                val = sanitize_value(val)
+                cell = WriteOnlyCell(ws, value=val)
+                cell.fill = FILL_QG if (row_idx, col) in grey_lookup else current_fill
+                cell.alignment = Alignment(horizontal="center" if col in align_center_for else "left",
+                                           vertical="center")
+                row_cells.append(cell)
+                max_lens[idx] = max(max_lens[idx], len(str(val)) if val is not None else 0)
 
-        ws.append(row_cells)
+            ws.append(row_cells)
 
+        except Exception:
+            # If row can't be written (illegal chars, openpyxl crash), flag it
+            mark_row_as_removed()
+
+        # Progress update
         if progress and zebra_idx is not None:
             key_value = row_tuple[zebra_idx]
             if key_value not in progress.get("seen", set()):
                 progress.setdefault("seen", set()).add(key_value)
                 progress["current"] += 1
-                cb = progress.get("callback")
-                if cb:
-                    cb(
-                        f"creating:{progress.get('sheet')}",
-                        progress["current"],
-                        progress["total"],
-                    )
+            if cb and row_idx % update_every == 0:
+                cb(f"creating:{current_sheet}", progress["current"], progress["total"])
 
+    # Auto-fit column widths
     for idx, width in enumerate(max_lens, start=1):
         ws.column_dimensions[get_column_letter(idx)].width = width + 2
-
 # ---------------------------------------------------------------------------
 # Sheet generators -----------------------------------------------------------
 # ---------------------------------------------------------------------------

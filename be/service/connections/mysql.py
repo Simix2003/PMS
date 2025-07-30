@@ -872,20 +872,84 @@ def get_shift_start(now: datetime):
     shift_hour, shift_minute = map(int, SHIFT_START_TIMES[-1].split(":"))
     return datetime(yesterday.year, yesterday.month, yesterday.day, shift_hour, shift_minute)
 
-def get_stops_for_station(station_id: int, conn, shifts_back: int = 3):
-    """Get stops for a station within last N shifts."""
+def get_machine_stops_for_station(
+    station_id: int,
+    conn,
+    shifts_back: int = 3,
+    include_open: bool = True
+):
+    """Fetch STOP entries for a station within last N shifts, with debug logging."""
     now = datetime.now()
     current_shift_start = get_shift_start(now)
-    target_start_time = current_shift_start - timedelta(hours=SHIFT_DURATION_HOURS * (shifts_back-1))
+    target_start_time = current_shift_start - timedelta(hours=SHIFT_DURATION_HOURS * (shifts_back - 1))
+
+    print(f"[DEBUG] get_machine_stops_for_station() called")
+    print(f"        station_id={station_id}, shifts_back={shifts_back}, include_open={include_open}")
+    print(f"        current_shift_start={current_shift_start}, target_start_time={target_start_time}")
+
+    # End any stale transaction so SELECT sees latest rows
+    conn.commit()
+    conn.begin()
 
     with conn.cursor() as cursor:
         query = """
-        SELECT id, station_id, start_time, end_time, stop_time, operator_id, type, reason, status, linked_production_id, created_at
+        SELECT id, station_id, start_time, end_time, stop_time,
+               operator_id, type, reason, status, linked_production_id, created_at
         FROM stops
-        WHERE station_id = %s AND type = %s AND start_time >= %s
-        ORDER BY start_time DESC
+        WHERE station_id = %s
+          AND type = 'STOP'
+          AND (
+              start_time >= %s
+              OR end_time >= %s
+              OR (status = 'OPEN' AND start_time >= %s AND %s)
+          )
+        ORDER BY id DESC
         """
-        params = (station_id, "ESCALATION", target_start_time)
+        params = (
+            station_id,
+            target_start_time,
+            target_start_time,
+            target_start_time,
+            int(include_open),
+        )
+        print(f"[DEBUG] Executing query with params: {params}")
+        cursor.execute(query, params)
+        results = cursor.fetchall()
+        print(f"[DEBUG] Query returned {len(results)} rows")
+        for row in results:
+            print(f"        ROW: {row}")
+
+    return results
+
+def get_escalations_for_station(
+    station_id: int,
+    conn,
+    shifts_back: int = 3,
+    include_open: bool = True
+):
+    """Fetch ESCALATION entries for a station within last N shifts, always forcing fresh data."""
+    now = datetime.now()
+    current_shift_start = get_shift_start(now)
+    target_start_time = current_shift_start - timedelta(hours=SHIFT_DURATION_HOURS * (shifts_back - 1))
+
+    # End any stale transaction so SELECT sees latest rows
+    conn.commit()
+    conn.begin()
+
+    with conn.cursor() as cursor:
+        query = """
+        SELECT id, station_id, start_time, end_time, stop_time,
+               operator_id, type, reason, status, linked_production_id, created_at
+        FROM stops
+        WHERE station_id = %s
+          AND type = 'ESCALATION'
+          AND (
+              start_time >= %s
+              OR (status = 'OPEN' AND start_time >= %s AND %s)
+          )
+        ORDER BY id DESC
+        """
+        params = (station_id, target_start_time, target_start_time, int(include_open))
         cursor.execute(query, params)
         results = cursor.fetchall()
     return results

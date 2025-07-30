@@ -305,7 +305,7 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                     })
 
                 # -------- fermi_data calculation --------
-                # get top 4 stops in current shift
+                # Calculate availability + get top 4 stops + include OPEN stops
 
                 # Query total stop time for station 29
                 sql_total_29 = """
@@ -326,7 +326,6 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 total_stop_time_minutes_29 = total_stop_time_29 / 60
                 available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
 
-
                 # Query total stop time for station 30
                 sql_total_30 = """
                     SELECT SUM(
@@ -346,9 +345,8 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 total_stop_time_minutes_30 = total_stop_time_30 / 60
                 available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
 
-
-                # Query top 4 stops for both stations
-                sql = """
+                # Query top 4 stops (grouped) for both stations
+                sql_top = """
                     SELECT s.name AS station_name, st.reason,
                         COUNT(*) AS n_occurrences,
                         SUM(
@@ -366,7 +364,7 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                     ORDER BY total_time DESC
                     LIMIT 4
                 """
-                cursor.execute(sql, (shift_start, shift_end))
+                cursor.execute(sql_top, (shift_start, shift_end))
                 fermi_data = []
                 for row in cursor.fetchall():
                     total_minutes = round(row["total_time"] / 60)
@@ -377,9 +375,32 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                         "time": total_minutes
                     })
 
+                # Query all currently OPEN stops (not grouped)
+                sql_open = """
+                    SELECT s.name AS station_name, st.reason, st.start_time
+                    FROM stops st
+                    JOIN stations s ON st.station_id = s.id
+                    WHERE st.type = 'STOP'
+                    AND st.status = 'OPEN'
+                    AND st.station_id IN (29, 30)
+                """
+                cursor.execute(sql_open)
+                for row in cursor.fetchall():
+                    elapsed_min = int((datetime.now() - row["start_time"]).total_seconds() // 60)
+                    stop_entry = {
+                        "causale": row["reason"] or "Fermo",
+                        "station": row["station_name"],
+                        "count": 1,  # one active stop
+                        "time": elapsed_min
+                    }
+                    # Only insert if not already in grouped list
+                    if not any(f["causale"] == stop_entry["causale"] and f["station"] == stop_entry["station"] for f in fermi_data):
+                        fermi_data.insert(0, stop_entry)  # Put active stops at top
+
                 # Append both available times at the end
                 fermi_data.append({"Available_Time_1": f"{available_time_29}"})
                 fermi_data.append({"Available_Time_2": f"{available_time_30}"})
+
 
                 # -------- top_defects_qg2 calculation from productions + object_defects --------
                 # 1️⃣ Query productions table for esito 6 on stations 1+2
@@ -2359,6 +2380,7 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
         data = global_state.visual_data[zone]
         shift_start, shift_end = get_shift_window(ts)
         with get_mysql_connection() as conn:
+            conn.commit()  # Ensures no old snapshot
             with conn.cursor() as cursor:
                 try:
                     # Total stop time for station 29 (include running stops)

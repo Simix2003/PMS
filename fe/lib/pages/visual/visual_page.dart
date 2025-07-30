@@ -511,30 +511,27 @@ class _VisualPageState extends State<VisualPage> {
         availableTime = 0; // keep total if still sent
 
         for (final entry in fermiRaw) {
-          // Case 1: Detailed stop info (station, count, time, availability)
-          if (entry.containsKey("station") &&
-              entry.containsKey("available_time")) {
-            final stationName = entry["station"].toString();
-            final stationId = _stationIdFromName(stationName);
-            final avail = int.tryParse(entry["available_time"].toString()) ?? 0;
-            zoneAvailability[stationId] = avail;
-
+          // Case 1: Stop details (has causale + station)
+          if (entry.containsKey("causale") && entry.containsKey("station")) {
             dataFermi.add([
-              stationName,
-              entry['count']?.toString() ?? '0',
-              entry['time']?.toString() ?? '0'
+              entry['causale']?.toString() ?? '', // Tipo Fermata (Reason)
+              entry['station']?.toString() ?? '', // Macchina
+              entry['count']?.toString() ?? '0', // Frequenza
+              entry['time']?.toString() ?? '0', // Fermo Cumulato (min)
             ]);
+          }
 
-            // Case 2: Per-station availability as Available_Time_STRxx
-          } else if (entry.keys.any((k) => k.startsWith("Available_Time_"))) {
-            final key = entry.keys.first; // e.g., "Available_Time_STR01"
+          // Case 2: Availability entries (Available_Time_STRxx)
+          if (entry.keys.any((k) => k.startsWith("Available_Time_"))) {
+            final key = entry.keys.first;
             final stationName = key.replaceFirst("Available_Time_", "");
             final stationId = _stationIdFromName(stationName);
             final avail = int.tryParse(entry[key].toString()) ?? 0;
             zoneAvailability[stationId] = avail;
+          }
 
-            // Case 3: Total availability
-          } else if (entry.containsKey("Available_Time_Total")) {
+          // Case 3: Overall availability
+          if (entry.containsKey("Available_Time_Total")) {
             availableTime =
                 int.tryParse(entry["Available_Time_Total"].toString()) ?? 0;
           }
@@ -963,7 +960,8 @@ class _VisualPageState extends State<VisualPage> {
                 entry.containsKey('available_time')) {
               final stationName = entry['station'].toString();
               final stationId = _stationIdFromName(stationName);
-              final avail = int.tryParse(entry['available_time'].toString()) ?? 0;
+              final avail =
+                  int.tryParse(entry['available_time'].toString()) ?? 0;
               zoneAvailability[stationId] = avail;
 
               dataFermi.add([
@@ -971,17 +969,15 @@ class _VisualPageState extends State<VisualPage> {
                 entry['count']?.toString() ?? '0',
                 entry['time']?.toString() ?? '0'
               ]);
-
             } else if (entry.keys.any((k) => k.startsWith('Available_Time_'))) {
               final key = entry.keys.first;
               final stationName = key.replaceFirst('Available_Time_', '');
               final stationId = _stationIdFromName(stationName);
               final avail = int.tryParse(entry[key].toString()) ?? 0;
               zoneAvailability[stationId] = avail;
-
             } else if (entry.containsKey('Available_Time_Total')) {
-              availableTime = int.tryParse(entry['Available_Time_Total'].toString()) ?? 0;
-
+              availableTime =
+                  int.tryParse(entry['Available_Time_Total'].toString()) ?? 0;
             } else {
               dataFermi.add([
                 entry['causale']?.toString() ?? '',

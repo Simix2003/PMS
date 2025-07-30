@@ -236,7 +236,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
         stopId: id,
         newStatus: 'CLOSED',
         changedAt: DateTime.now().toIso8601String().split('.').first,
-        operatorId: 'NO OPERATOR',
+        operatorId: 'TOTEM',
       );
     }
 

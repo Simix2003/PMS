@@ -320,12 +320,15 @@ class PLCConnection:
                         buffer.extend(part)
                         break
                     except Exception as e:
-                        if attempt == 1:
-                            logger.warning(f"⚠️ Chunk read failed DB{db_number}[{start_byte+offset}:{chunk_size}] ({e}), retrying once…")
-                            time.sleep(0.05)
-                        else:
+                        # Full traceback for debugging
+                        logger.exception(
+                            f"⚠️ Chunk read failed DB{db_number}[{start_byte+offset}:{chunk_size}], "
+                            f"attempt {attempt}/2"
+                        )
+                        if attempt == 2:
+                            # Mark connection as down and return safe buffer
                             self._recover_on_error(f"db_read DB{db_number}", e)
-                            return bytearray(size)  # safe fallback
+                            return bytearray(size)
+                        time.sleep(0.05)  # short delay before retry
             offset += chunk_size
         return buffer
-

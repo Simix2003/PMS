@@ -15,7 +15,7 @@ void main() async {
   final pathSegments = uri.pathname!.split('/')..removeWhere((e) => e.isEmpty);
   final zone = pathSegments.isNotEmpty
       ? pathSegments.first
-      : 'AIN'; // Change this for testing with ZONES
+      : 'STR'; // Change this for testing with ZONES
 
   runApp(MyApp(zone: zone));
 }

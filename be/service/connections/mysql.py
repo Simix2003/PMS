@@ -89,7 +89,7 @@ def load_channels_from_db() -> tuple[dict, dict]:
             continue
 
         line_name = get_line_name(row["line_id"])
-        if not line_name:
+        if not line_name or line_name != "Linea2":
             continue
 
         try:
@@ -883,10 +883,6 @@ def get_machine_stops_for_station(
     current_shift_start = get_shift_start(now)
     target_start_time = current_shift_start - timedelta(hours=SHIFT_DURATION_HOURS * (shifts_back - 1))
 
-    print(f"[DEBUG] get_machine_stops_for_station() called")
-    print(f"        station_id={station_id}, shifts_back={shifts_back}, include_open={include_open}")
-    print(f"        current_shift_start={current_shift_start}, target_start_time={target_start_time}")
-
     # End any stale transaction so SELECT sees latest rows
     conn.commit()
     conn.begin()
@@ -912,12 +908,8 @@ def get_machine_stops_for_station(
             target_start_time,
             int(include_open),
         )
-        print(f"[DEBUG] Executing query with params: {params}")
         cursor.execute(query, params)
         results = cursor.fetchall()
-        print(f"[DEBUG] Query returned {len(results)} rows")
-        for row in results:
-            print(f"        ROW: {row}")
 
     return results
 

@@ -6,6 +6,7 @@ import 'package:ix_monitor/pages/visual/visual_widgets.dart';
 import '../../../shared/services/api_service.dart';
 import '../escalation_visual.dart';
 import 'dart:async';
+
 import '../stop_visual.dart';
 
 class StrVisualsPage extends StatefulWidget {
@@ -208,7 +209,11 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
   void _onStopStarted(Map<String, dynamic> stop) {
     _stopTimer?.cancel();
     setState(() {
-      _runningStop = stop;
+      _runningStop = {
+        ...stop,
+        'status': 'OPEN', // ensure it's marked open
+        'start': stop['start'] ?? DateTime.now(), // ensure start time is valid
+      };
     });
     _stopTimer =
         Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
@@ -216,13 +221,15 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
   void _onStopEnded() {
     _stopTimer?.cancel();
-    _runningStop = null;
+    setState(() {
+      _runningStop = null;
+    });
     widget.onStopsUpdated?.call();
-    setState(() {});
   }
 
   Future<void> _stopRunningStop() async {
     if (_runningStop == null) return;
+
     final id = _runningStop!['id'];
     if (id != null) {
       await ApiService().updateStopStatus(
@@ -232,7 +239,18 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
         operatorId: 'NO OPERATOR',
       );
     }
-    _onStopEnded();
+
+    // Stop the local timer and clear the active stop
+    _stopTimer?.cancel();
+    setState(() {
+      _runningStop = null;
+    });
+
+    // Trigger parent refresh so `widget.dataFermi` reloads from MySQL
+    if (widget.onStopsUpdated != null) {
+      widget
+          .onStopsUpdated!(); // fetch latest stop list (including new CLOSED state)
+    }
   }
 
   String _formatDuration(Duration d) {
@@ -1858,7 +1876,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                       target: '',
                       icon: Icons.bar_chart_rounded,
                       qg2_defects_value: widget.qg2DefectsValue.toString(),
-                      zone: 'AIN',
+                      zone: 'STR',
                     ),
                   ),
                 ],
@@ -2433,10 +2451,10 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                     border: TableBorder.all(
                                         color: Colors.black, width: 0.5),
                                     columnWidths: const {
-                                      0: FlexColumnWidth(1),
-                                      1: FlexColumnWidth(
-                                          1), // add second column width
+                                      0: FlexColumnWidth(2),
+                                      1: FlexColumnWidth(1),
                                       2: FlexColumnWidth(1),
+                                      3: FlexColumnWidth(1),
                                     },
                                     children: [
                                       const TableRow(
@@ -2445,15 +2463,21 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                         children: [
                                           Padding(
                                             padding: EdgeInsets.all(8),
-                                            child: Text("Macchina",
+                                            child: Text("Tipo \nFermata",
                                                 style: TextStyle(
                                                     fontWeight:
                                                         FontWeight.bold)),
                                           ),
                                           Padding(
                                             padding: EdgeInsets.all(8),
-                                            child: Text(
-                                                "Frequenza", // or leave blank if not used
+                                            child: Text("Macchina",
+                                                style: TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                          ),
+                                          Padding(
+                                            padding: EdgeInsets.all(4),
+                                            child: Text("Frequenza",
                                                 style: TextStyle(
                                                     fontWeight:
                                                         FontWeight.bold)),
@@ -2469,9 +2493,22 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       ),
                                       if (_runningStop != null)
                                         TableRow(
-                                          decoration: const BoxDecoration(
-                                              color: Color(0xFFFFF3E0)),
+                                          decoration: BoxDecoration(
+                                            color: _runningStop!['status'] ==
+                                                    'CLOSED'
+                                                ? Colors
+                                                    .white // default background for closed
+                                                : const Color(
+                                                    0xFFFFF3E0), // highlighted if still open
+                                          ),
                                           children: [
+                                            Padding(
+                                              padding: const EdgeInsets.all(8),
+                                              child: Text(
+                                                  _runningStop!['reason'] ?? '',
+                                                  style: const TextStyle(
+                                                      fontSize: 24)),
+                                            ),
                                             Padding(
                                               padding: const EdgeInsets.all(8),
                                               child: Text(
@@ -2482,19 +2519,27 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             ),
                                             Padding(
                                               padding: const EdgeInsets.all(8),
-                                              child: ElevatedButton(
-                                                onPressed: _stopRunningStop,
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      Colors.redAccent,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 8),
-                                                ),
-                                                child: const Text('Stop'),
-                                              ),
+                                              child: (_runningStop!['status'] ==
+                                                      'OPEN')
+                                                  ? ElevatedButton(
+                                                      onPressed:
+                                                          _stopRunningStop,
+                                                      style: ElevatedButton
+                                                          .styleFrom(
+                                                        backgroundColor:
+                                                            Colors.redAccent,
+                                                        foregroundColor:
+                                                            Colors.white,
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                horizontal: 12,
+                                                                vertical: 8),
+                                                      ),
+                                                      child: const Text('Stop'),
+                                                    )
+                                                  : const SizedBox
+                                                      .shrink(), // hide only when closed
                                             ),
                                             Padding(
                                               padding: const EdgeInsets.all(8),
@@ -2505,32 +2550,23 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             ),
                                           ],
                                         ),
-                                      ...buildCustomRows(widget.dataFermi)
-                                          .map((row) {
-                                        // Ensure every row has 3 children
-                                        final cells =
-                                            List<Widget>.from(row.children);
-                                        while (cells.length < 3) {
-                                          cells.add(
-                                              const SizedBox()); // fill empty cells
-                                        }
-                                        return TableRow(children: cells);
-                                      }),
+                                      ...buildCustomRows(widget.dataFermi),
                                     ],
                                   ),
                                 ),
                               ),
+                            ),
+                            const SizedBox(height: 8),
+                            StopButton(
+                              lastNShifts: widget.lastNShifts,
+                              onStopsUpdated: _onStopEnded,
+                              onStopStarted: _onStopStarted,
                             ),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 8),
-                    StopButton(
-                      lastNShifts: widget.lastNShifts,
-                      onStopsUpdated: _onStopEnded,
-                      onStopStarted: _onStopStarted,
-                    ),
                   ],
                 ),
               ),

@@ -828,12 +828,16 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> fetchVisualDataForAin() async {
-    final response =
-        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=AIN'));
+  static Future<Map<String, dynamic>> fetchVisualDataForAin(
+      {bool forceRefresh = false}) async {
+    final cacheFlag = forceRefresh ? 'false' : 'true';
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/visual_data?zone=AIN&useCache=$cacheFlag'),
+    );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
+      print('Fetched AIN data: $data');
 
       return {
         ...data,
@@ -915,16 +919,19 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> fetchVisualDataForStr() async {
-    final response =
-        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=STR'));
+  static Future<Map<String, dynamic>> fetchVisualDataForStr(
+      {bool forceRefresh = false}) async {
+    final cacheFlag = forceRefresh ? 'false' : 'true';
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/visual_data?zone=STR&useCache=$cacheFlag'),
+    );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
 
       return {
         ...data,
-        // Station inputs (fix typo statopm_3_in -> station_3_in)
+        // Station inputs
         'station_1_in': data['station_1_in'] ?? 0,
         'station_2_in': data['station_2_in'] ?? 0,
         'station_3_in': data['station_3_in'] ?? 0,
@@ -945,30 +952,30 @@ class ApiService {
         'station_4_scrap': data['station_4_scrap'] ?? 0,
         'station_5_scrap': data['station_5_scrap'] ?? 0,
 
-        // Yields (default 100% when no data)
+        // Yields (default to 100%)
         'station_1_yield': data['station_1_yield'] ?? 100,
         'station_2_yield': data['station_2_yield'] ?? 100,
         'station_3_yield': data['station_3_yield'] ?? 100,
         'station_4_yield': data['station_4_yield'] ?? 100,
         'station_5_yield': data['station_5_yield'] ?? 100,
 
-        // Yield history (map backend keys correctly)
+        // Yield history (backend keys mapped)
         'str_yield_shifts': data['str_yield_shifts'] ?? [],
         'overall_yield_shifts': data['overall_yield_shifts'] ?? [],
         'str_yield_last_8h': data['str_yield_last_8h'] ?? [],
         'overall_yield_last_8h': data['overall_yield_last_8h'] ?? [],
 
-        // Throughput and stops
+        // Throughput, downtime, and stops
         'shift_throughput': data['shift_throughput'] ?? [],
         'fermi_data': data['fermi_data'] ?? [],
 
-        // Defects data
+        // Defect data
         'top_defects_qg2': data['top_defects_qg2'] ?? [],
         'total_defects_qg2': data['total_defects_qg2'] ?? 0,
         'top_defects_vpf': data['top_defects_vpf'] ?? [],
       };
     } else {
-      throw Exception('Failed to load zone data');
+      throw Exception('Failed to load STR zone data');
     }
   }
 

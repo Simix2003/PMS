@@ -218,6 +218,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
     setState(() {
       _runningStop = null;
     });
+    widget.onStopsUpdated?.call();
   }
 
   Future<void> _stopRunningStop() async {

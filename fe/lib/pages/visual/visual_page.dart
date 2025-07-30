@@ -164,7 +164,9 @@ class _VisualPageState extends State<VisualPage> {
 
   Future<void> fetchAinZoneData() async {
     try {
-      final response = await ApiService.fetchVisualDataForAin();
+      final response =
+          await ApiService.fetchVisualDataForAin(forceRefresh: true);
+
       setState(() {
         bussingIn_1 = response['station_1_in'] ?? 0;
         bussingIn_2 = response['station_2_in'] ?? 0;
@@ -412,7 +414,8 @@ class _VisualPageState extends State<VisualPage> {
 
   Future<void> fetchStrZoneData() async {
     try {
-      final response = await ApiService.fetchVisualDataForStr();
+      final response =
+          await ApiService.fetchVisualDataForStr(forceRefresh: true);
 
       setState(() {
         final stations = [1, 2, 3, 4, 5];
@@ -442,11 +445,16 @@ class _VisualPageState extends State<VisualPage> {
         overallShifts = List<Map<String, dynamic>>.from(
             response['overall_yield_shifts'] ?? []);
 
-        // Merge shift yields for chart (label, yield, good, NG)
         mergedShiftData = List.generate(strShifts.length, (i) {
+          final strYield = strShifts[i]['yield'] ?? 100;
+          final overallYield = (i < overallShifts.length)
+              ? overallShifts[i]['yield'] ?? 100
+              : 100;
+
           return {
             'shift': strShifts[i]['label'],
-            'yield': strShifts[i]['yield'] ?? 100,
+            'STR_Yield': strYield, // STR Yield (dark blue bar)
+            'Overall_Yield': overallYield, // Overall Yield (light blue bar)
             'good': strShifts[i]['good'] ?? 0,
             'ng': strShifts[i]['ng'] ?? 0,
           };
@@ -503,23 +511,30 @@ class _VisualPageState extends State<VisualPage> {
         availableTime = 0; // keep total if still sent
 
         for (final entry in fermiRaw) {
+          // Case 1: Detailed stop info (station, count, time, availability)
           if (entry.containsKey("station") &&
               entry.containsKey("available_time")) {
-            // Store per-station availability
             final stationName = entry["station"].toString();
-            final stationId =
-                _stationIdFromName(stationName); // Helper to map names to 1-5
+            final stationId = _stationIdFromName(stationName);
             final avail = int.tryParse(entry["available_time"].toString()) ?? 0;
             zoneAvailability[stationId] = avail;
 
-            // Also store station downtime info (for table/chart)
             dataFermi.add([
               stationName,
               entry['count']?.toString() ?? '0',
               entry['time']?.toString() ?? '0'
             ]);
+
+            // Case 2: Per-station availability as Available_Time_STRxx
+          } else if (entry.keys.any((k) => k.startsWith("Available_Time_"))) {
+            final key = entry.keys.first; // e.g., "Available_Time_STR01"
+            final stationName = key.replaceFirst("Available_Time_", "");
+            final stationId = _stationIdFromName(stationName);
+            final avail = int.tryParse(entry[key].toString()) ?? 0;
+            zoneAvailability[stationId] = avail;
+
+            // Case 3: Total availability
           } else if (entry.containsKey("Available_Time_Total")) {
-            // Optional overall availability
             availableTime =
                 int.tryParse(entry["Available_Time_Total"].toString()) ?? 0;
           }
@@ -546,34 +561,26 @@ class _VisualPageState extends State<VisualPage> {
     final List<Map<String, dynamic>> newEsc = [];
 
     for (final entry in _stationNameToId.entries) {
-      // Escalation stops
+      // Only Escalations
       final escRes =
           await api.getStopsForStation(entry.value, shiftsBack: last_n_shifts);
-      // Machine stops (STOP type)
-      final stopRes = await api.getMachineStopsForStation(entry.value,
-          shiftsBack: last_n_shifts);
 
-      final combined = [
-        ...(escRes?['stops'] ?? []),
-        ...(stopRes?['stops'] ?? []),
-      ];
-
-      for (final stop in combined) {
+      for (final esc in escRes?['stops'] ?? []) {
         newEsc.add({
-          'id': stop['id'],
-          'title': stop['reason'],
-          'status': stop['status'],
+          'id': esc['id'],
+          'title': esc['reason'],
+          'status': esc['status'],
           'station': entry.key,
-          'start_time': DateTime.parse(stop['start_time']),
-          'end_time': stop['end_time'] != null
-              ? DateTime.parse(stop['end_time'])
-              : null,
+          'start_time': DateTime.parse(esc['start_time']),
+          'end_time':
+              esc['end_time'] != null ? DateTime.parse(esc['end_time']) : null,
         });
       }
     }
 
     newEsc.sort((a, b) => b['id'].compareTo(a['id']));
-    escalations.value = List<Map<String, dynamic>>.from(newEsc); // clone
+    escalations.value = List<Map<String, dynamic>>.from(newEsc);
+    print('🛑 Escalations updated: ${escalations.value}');
   }
 
   void _initializeEscalationWebSocket() {

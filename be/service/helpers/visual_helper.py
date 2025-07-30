@@ -305,8 +305,6 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                     })
 
                 # -------- fermi_data calculation --------
-                # Calculate availability + get top 4 stops + include OPEN stops
-
                 # Query total stop time for station 29
                 sql_total_29 = """
                     SELECT SUM(
@@ -366,7 +364,9 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 """
                 cursor.execute(sql_top, (shift_start, shift_end))
                 fermi_data = []
-                for row in cursor.fetchall():
+                top_rows = cursor.fetchall()
+
+                for row in top_rows:
                     total_minutes = round(row["total_time"] / 60)
                     fermi_data.append({
                         "causale": row["reason"],
@@ -385,17 +385,20 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                     AND st.station_id IN (29, 30)
                 """
                 cursor.execute(sql_open)
-                for row in cursor.fetchall():
+                open_rows = cursor.fetchall()
+
+                from datetime import datetime
+
+                for row in open_rows:
                     elapsed_min = int((datetime.now() - row["start_time"]).total_seconds() // 60)
                     stop_entry = {
                         "causale": row["reason"] or "Fermo",
                         "station": row["station_name"],
-                        "count": 1,  # one active stop
+                        "count": 1,
                         "time": elapsed_min
                     }
-                    # Only insert if not already in grouped list
                     if not any(f["causale"] == stop_entry["causale"] and f["station"] == stop_entry["station"] for f in fermi_data):
-                        fermi_data.insert(0, stop_entry)  # Put active stops at top
+                        fermi_data.insert(0, stop_entry)
 
                 # Append both available times at the end
                 fermi_data.append({"Available_Time_1": f"{available_time_29}"})
@@ -835,9 +838,6 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                     AND p.start_time BETWEEN %s AND %s
                 """, (*stations_ng, shift_start, shift_end))
                 rows = cursor.fetchall()
-                print(f"[ELL DEBUG]   Total NG objects fetched: {len(rows)}")
-                for r in rows[:10]:  # print just first 10 for brevity
-                    print(f"    - Obj {r['object_id']} at {r['station']} ({r['start_time']})")
 
                 # Yields
                 # FPY = good on first pass / total first-pass
@@ -1265,14 +1265,14 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
             station_scrap[f"station_{idx}_scrap"] = c
             station_yield[f"station_{idx}_yield"] = compute_yield(g, n)
 
-        # 2. Last 3 shifts (aggregate)
+        # 2. Last 3 shifts (calculate STR yield and Overall yield identically for now)
         str_yield_shifts, overall_yield_shifts, shift_throughput = [], [], []
         for label, st, et in get_previous_shifts(now):
-            good_shift, ng_shift = 0, 0
-            for sid in STATION_IDS:
-                good_shift += _sum_for_window(cur, "string_G", sid, st, et)
-                ng_shift += _sum_for_window(cur, "string_NG", sid, st, et)
+            good_shift = sum(_sum_for_window(cur, "string_G", sid, st, et) for sid in STATION_IDS)
+            ng_shift = sum(_sum_for_window(cur, "string_NG", sid, st, et) for sid in STATION_IDS)
+            scrap_shift = sum(_sum_for_window(cur, "cell_NG", sid, st, et) for sid in STATION_IDS)
 
+            # STR Yield (zone view)
             str_yield_shifts.append({
                 "label": label,
                 "start": st.isoformat(),
@@ -1280,36 +1280,36 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "yield": compute_yield(good_shift, ng_shift),
                 "good": good_shift,
                 "ng": ng_shift,
+                "scrap": scrap_shift
             })
 
-            g2 = _sum_for_window(cur, "string_G", 5, st, et)   # STR02 only
-            n2 = _sum_for_window(cur, "string_NG", 5, st, et)
+            # Overall Yield (calculated same way for now)
             overall_yield_shifts.append({
                 "label": label,
                 "start": st.isoformat(),
                 "end": et.isoformat(),
-                "yield": compute_yield(g2, n2),
-                "good": g2,
-                "ng": n2,
+                "yield": compute_yield(good_shift, ng_shift),
+                "good": good_shift,
+                "ng": ng_shift
             })
 
+            # Throughput (also for all stations combined)
             shift_throughput.append({
                 "label": label,
                 "start": st.isoformat(),
                 "end": et.isoformat(),
                 "total": good_shift + ng_shift,
                 "ng": ng_shift,
-                "scrap": sum(_sum_for_window(cur, "cell_NG", sid, st, et) for sid in STATION_IDS),
+                "scrap": scrap_shift
             })
 
-        # 3. Last 8 hourly bins
+        # 3. Last 8 hourly bins (calculate STR yield and Overall yield identically for now)
         str_y8h, overall_y8h = [], []
         for label, hs, he in get_last_8h_bins(now):
-            good_bin, ng_bin = 0, 0
-            for sid in STATION_IDS:
-                good_bin += _sum_for_window(cur, "string_G", sid, hs, he)
-                ng_bin += _sum_for_window(cur, "string_NG", sid, hs, he)
+            good_bin = sum(_sum_for_window(cur, "string_G", sid, hs, he) for sid in STATION_IDS)
+            ng_bin = sum(_sum_for_window(cur, "string_NG", sid, hs, he) for sid in STATION_IDS)
 
+            # STR Yield (zone view)
             str_y8h.append({
                 "hour": label,
                 "start": hs.isoformat(),
@@ -1319,55 +1319,97 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "yield": compute_yield(good_bin, ng_bin),
             })
 
-            g2 = _sum_for_window(cur, "string_G", 5, hs, he)
-            n2 = _sum_for_window(cur, "string_NG", 5, hs, he)
+            # Overall Yield (same calculation for now)
             overall_y8h.append({
                 "hour": label,
                 "start": hs.isoformat(),
                 "end": he.isoformat(),
-                "good": g2,
-                "ng": n2,
-                "yield": compute_yield(g2, n2),
+                "good": good_bin,
+                "ng": ng_bin,
+                "yield": compute_yield(good_bin, ng_bin),
             })
 
-        # 4. Station stops (availability) – Always include all STR stations
+
+        # 4. Station stops (availability) – mirror AIN fermi_data style
+        fermi_data = []
+        SHIFT_DURATION_MINUTES = 480
+        station_labels = {4: "STR01", 5: "STR02", 6: "STR03", 7: "STR04", 8: "STR05"}
+
+        for sid in STATION_IDS:
+            sql_total = """
+                SELECT SUM(
+                    CASE 
+                        WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                        ELSE st.stop_time
+                    END
+                ) AS total_time
+                FROM stops st
+                WHERE st.type = 'STOP'
+                AND st.station_id = %s
+                AND st.start_time BETWEEN %s AND %s
+            """
+            cur.execute(sql_total, (sid, shift_start, shift_end))
+            row = cur.fetchone() or {}
+            total_secs = row.get("total_time") or 0
+            total_min = total_secs / 60
+            available = max(0, round(100 - (total_min / SHIFT_DURATION_MINUTES * 100)))
+            fermi_data.append({f"Available_Time_{station_labels[sid]}": f"{available}"})
+
+
+        # Top 4 stops (grouped) across all STR stations
         placeholders = ','.join(['%s'] * len(STATION_IDS))
-        cur.execute(f"""
-            SELECT s.name AS station_name, st.station_id,
-                COUNT(*) AS n_occurrences, SUM(st.stop_time) AS total_time
+        sql_top = f"""
+            SELECT s.name AS station_name, st.reason,
+                COUNT(*) AS n_occurrences,
+                SUM(
+                    CASE 
+                        WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                        ELSE st.stop_time
+                    END
+                ) AS total_time
             FROM stops st
             JOIN stations s ON st.station_id = s.id
-            WHERE st.type='STOP'
-            AND st.start_time BETWEEN %s AND %s
+            WHERE st.type = 'STOP'
             AND st.station_id IN ({placeholders})
-            GROUP BY st.station_id
-        """, (shift_start, shift_end, *STATION_IDS))
-
-        # Pre-fill all STR stations with zeros
-        SHIFT_DURATION_MINUTES = 480
-        fermi_data = []
-        station_defaults = {sid: {"station": f"STR0{sid-3}", "count": 0, "time": 0, "available_time": 100}
-                            for sid in STATION_IDS}
-
-        # Overwrite defaults with actual query results
-        for row in cur.fetchall():
-            sid = row["station_id"]
-            stop_min = round((row["total_time"] or 0) / 60)
-            availability = max(0, round(100 - (stop_min / SHIFT_DURATION_MINUTES * 100)))
-            station_defaults[sid] = {
-                "station": row["station_name"],  # use DB name (should match STRxx)
+            AND st.start_time BETWEEN %s AND %s
+            GROUP BY st.station_id, st.reason
+            ORDER BY total_time DESC
+            LIMIT 4
+        """
+        cur.execute(sql_top, (*STATION_IDS, shift_start, shift_end))
+        top_rows = cur.fetchall()
+        for row in top_rows:
+            total_minutes = round(row["total_time"] / 60)
+            fermi_data.insert(0, {
+                "causale": row["reason"],
+                "station": row["station_name"],
                 "count": row["n_occurrences"],
-                "time": stop_min,
-                "available_time": availability,
+                "time": total_minutes
+            })
+
+        # Currently OPEN stops (not grouped)
+        sql_open = f"""
+            SELECT s.name AS station_name, st.reason, st.start_time
+            FROM stops st
+            JOIN stations s ON st.station_id = s.id
+            WHERE st.type = 'STOP'
+            AND st.status = 'OPEN'
+            AND st.station_id IN ({placeholders})
+        """
+        cur.execute(sql_open, (*STATION_IDS,))
+        open_rows = cur.fetchall()
+        from datetime import datetime
+        for row in open_rows:
+            elapsed_min = int((datetime.now() - row["start_time"]).total_seconds() // 60)
+            stop_entry = {
+                "causale": row["reason"] or "Fermo",
+                "station": row["station_name"],
+                "count": 1,
+                "time": elapsed_min
             }
-
-        # Collect all 5 stations (ensures every station is present)
-        fermi_data = list(station_defaults.values())
-
-        # Compute overall availability (total downtime of all)
-        total_stop_time = sum(item["time"] for item in fermi_data)
-        overall_availability = max(0, round(100 - (total_stop_time / SHIFT_DURATION_MINUTES * 100)))
-        fermi_data.append({"Available_Time_Total": overall_availability})
+            if not any(f.get("causale") == stop_entry["causale"] and f.get("station") == stop_entry["station"]
+                       for f in fermi_data):
+                fermi_data.insert(0, stop_entry)
 
         # 5. Top defects (QG2) — extract into helper if reused
         sql_prod = """
@@ -1453,7 +1495,6 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 })
 
             top_defects_vpf = sorted(vpf_results, key=lambda x: x["total"], reverse=True)[:5]
-
 
     return {
         **station_in,
@@ -2104,7 +2145,6 @@ def _update_snapshot_ell_new(bufferIds: List[str]) -> dict:
                 # ===================== 4. Buffer‑ID defect trace  =====================
                 buffer_defect_summary = []
                 bufferIds = [b.strip() for b in bufferIds if b and b.strip()]
-                print('Buffer IDs:', bufferIds)
                 if bufferIds:
                     placeholders = ",".join(["%s"] * len(bufferIds))
                     cursor.execute(
@@ -2248,12 +2288,13 @@ def _update_snapshot_str(
     Incrementally update the in-memory STR snapshot using per-module deltas
     from str_visual_snapshot. PLC resets counters after each module, so we
     sum the deltas manually instead of fixed +1 increments.
+    Matches the full aggregation logic from _compute_snapshot_str().
     """
     cfg = ZONE_SOURCES["STR"]
     current_shift_start, _ = get_shift_window(ts)
     hour = ts.hour
 
-    # Properly handle night shift (22:00–06:00)
+    # Determine current shift label (S1/S2/S3)
     if 6 <= hour < 14:
         current_shift_label = "S1"
     elif 14 <= hour < 22:
@@ -2267,7 +2308,7 @@ def _update_snapshot_str(
     if not st_id:
         return
 
-    # Fetch last snapshot values (cell/string counts)
+    # Fetch latest module counts from DB
     cell_g = cell_ng = string_g = string_ng = 0
     try:
         with get_mysql_connection() as conn:
@@ -2294,7 +2335,7 @@ def _update_snapshot_str(
     for i in range(1, 6):
         in_key = f"station_{i}_in"
         out_key = f"station_{i}_out_ng"
-        if in_key not in data:  # ensure initialized
+        if in_key not in data:
             data[in_key] = 0
         if out_key not in data:
             data[out_key] = 0
@@ -2308,7 +2349,7 @@ def _update_snapshot_str(
         good = data.get(f"station_{i}_in", 0) - data.get(f"station_{i}_out_ng", 0)
         data[f"station_{i}_yield"] = compute_yield(good, data.get(f"station_{i}_out_ng", 0))
 
-    # Shift throughput (all STR stations)
+    # Update shift throughput (total and NG counts for all STR stations)
     is_in = any(station_name in cfg[f"station_{i}_in"] for i in range(1, 6))
     is_ng = esito == 6 and any(station_name in cfg[f"station_{i}_out_ng"] for i in range(1, 6))
     for shift in data.get("shift_throughput", []):
@@ -2319,26 +2360,24 @@ def _update_snapshot_str(
                 shift["ng"] += string_ng
             break
 
-    # STR aggregate yield (all 5 stations)
+    # Update STR aggregate yield (all 5 stations)
     for shift in data.get("str_yield_shifts", []):
+        if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+            shift["good"] += string_g
+            shift["ng"] += string_ng
+            shift["scrap"] = shift.get("scrap", 0) + cell_ng  # scrap totals
+            shift["yield"] = compute_yield(shift["good"], shift["ng"])
+            break
+
+    # Update Overall yield (now also all 5 stations, same as STR for now)
+    for shift in data.get("overall_yield_shifts", []):
         if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
             shift["good"] += string_g
             shift["ng"] += string_ng
             shift["yield"] = compute_yield(shift["good"], shift["ng"])
             break
 
-    # Overall yield (only STR02)
-    if station_name in cfg["station_2_in"] or (esito == 6 and station_name in cfg["station_2_out_ng"]):
-        for shift in data.get("overall_yield_shifts", []):
-            if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-                if esito == 6:
-                    shift["ng"] += string_ng
-                else:
-                    shift["good"] += string_g
-                shift["yield"] = compute_yield(shift["good"], shift["ng"])
-                break
-
-    # Hourly bins (rolling last 8 hours)
+    # Hourly bins (rolling last 8 hours) for both STR and Overall (identical)
     hour_start = ts.replace(minute=0, second=0, microsecond=0)
     hour_label = hour_start.strftime("%H:%M")
 
@@ -2350,7 +2389,7 @@ def _update_snapshot_str(
                 entry["ng"] += add_ng
                 entry["yield"] = compute_yield(entry["good"], entry["ng"])
                 break
-        else:  # Create new bin if not present
+        else:
             new_entry = {
                 "hour": hour_label,
                 "start": hour_start.isoformat(),
@@ -2364,8 +2403,7 @@ def _update_snapshot_str(
 
     if is_in or is_ng:
         touch("str_yield_last_8h", string_g, string_ng)
-    if station_name in cfg["station_2_in"] or (esito == 6 and station_name in cfg["station_2_out_ng"]):
-        touch("overall_yield_last_8h", string_g if esito != 6 else 0, string_ng)
+        touch("overall_yield_last_8h", string_g, string_ng)
 
 def refresh_fermi_data(zone: str, ts: datetime) -> None:
     """

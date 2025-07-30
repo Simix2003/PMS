@@ -18,7 +18,7 @@ def initialize_visual_cache():
 
 # ──────────────────────────────────────────────────
 @router.get("/api/visual_data")
-async def get_visual_data(zone: str = Query(...)):
+async def get_visual_data(zone: str = Query(...), useCache: bool = Query(True)):
     if zone not in global_state.visual_data:
         raise HTTPException(status_code=404, detail="Unknown zone")
 
@@ -28,7 +28,7 @@ async def get_visual_data(zone: str = Query(...)):
     last_hour = cached_data.get("__last_hour")
 
     # Force recompute if the hour has changed
-    if last_hour != current_hour:
+    if last_hour != current_hour or not useCache:
         logger.debug(f"🕒 Hour changed: recomputing snapshot for {zone}")
         cached_data = compute_zone_snapshot(zone, now=now)
         cached_data["__last_hour"] = current_hour

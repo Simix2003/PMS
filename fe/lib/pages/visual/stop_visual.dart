@@ -24,13 +24,13 @@ class StopButton extends StatelessWidget {
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.orange.withOpacity(0.85),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         elevation: 10,
       ),
       icon: const Icon(Icons.timer, color: Colors.white),
       label: const Text(
-        'Fermi',
+        'Aggiungi nuovo Fermo',
         style: TextStyle(fontSize: 18, color: Colors.white),
       ),
       onPressed: () {
@@ -214,6 +214,7 @@ class _StopDialogState extends State<_StopDialog> {
       operatorId: 'NO OPERATOR',
     );
     await _fetchStops();
+    widget.onStopsUpdated?.call();
   }
 
   Future<void> _updateReason(int id) async {

@@ -2399,8 +2399,8 @@ class YieldComparisonSTRBarChart extends StatelessWidget {
                       borderData: FlBorderData(show: false),
                       barGroups: List.generate(orderedData.length, (index) {
                         final item = orderedData[index];
-                        if (item['bussing1'] == null ||
-                            item['bussing2'] == null) {
+                        if (item['STR_Yield'] == null ||
+                            item['Overall_Yield'] == null) {
                           return BarChartGroupData(
                             showingTooltipIndicators: [0, 1],
                             x: index,
@@ -2429,14 +2429,14 @@ class YieldComparisonSTRBarChart extends StatelessWidget {
                             barRods: [
                               BarChartRodData(
                                 fromY: 0,
-                                toY: item['bussing1'],
+                                toY: item['STR_Yield'],
                                 width: 40,
                                 color: Colors.blue.shade900,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               BarChartRodData(
                                 fromY: 0,
-                                toY: item['bussing2'],
+                                toY: item['Overall_Yield'],
                                 width: 40,
                                 color: Colors.lightBlue.shade200,
                                 borderRadius: BorderRadius.circular(4),

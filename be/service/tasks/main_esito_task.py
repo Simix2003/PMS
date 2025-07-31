@@ -501,11 +501,21 @@ async def handle_end_cycle(
     logger.debug(f"[{full_station_id}] read_data", timer_1 - timer_0)
     
     t11 = time.perf_counter()
-    plc_executor.submit( plc_connection.write_bool,
+    queue_size_arch = get_executor_status(plc_executor)["queue_size"]
+    t_write_start = time.perf_counter()
+    future_arch = plc_executor.submit(
+        plc_connection.write_bool,
         pezzo_archivia_conf["db"],
         pezzo_archivia_conf["byte"],
         pezzo_archivia_conf["bit"],
-        True)
+        True,
+    )
+    await asyncio.wrap_future(future_arch)
+    t_write_done = time.perf_counter()
+    log_duration(
+        f"[{full_station_id}] archivio TRUE (queue_size={queue_size_arch})",
+        t_write_done - t_write_start,
+    )
 
     #await asyncio.get_event_loop().run_in_executor(
     #    plc_executor,
@@ -516,11 +526,21 @@ async def handle_end_cycle(
     #    True,
     #)
     if esito_conf:
-        plc_executor.submit(plc_connection.write_bool,
+        queue_size_esito = get_executor_status(plc_executor)["queue_size"]
+        t_esito_start = time.perf_counter()
+        future_esito = plc_executor.submit(
+            plc_connection.write_bool,
             esito_conf["db"],
             esito_conf["byte"],
             esito_conf["bit"],
-            False)
+            False,
+        )
+        await asyncio.wrap_future(future_esito)
+        t_esito_end = time.perf_counter()
+        log_duration(
+            f"[{full_station_id}] esito FALSE (queue_size={queue_size_esito})",
+            t_esito_end - t_esito_start,
+        )
         #await asyncio.get_event_loop().run_in_executor(
         #    plc_executor,
         #    plc_connection.write_bool,
@@ -530,7 +550,10 @@ async def handle_end_cycle(
         #    False,
         #)
     t_write_end = time.perf_counter()
-    log_duration(f"[{full_station_id}] from PLC TRUE to write_bool(TRUE)", t_write_end - t_plc_detect)
+    log_duration(
+        f"[{full_station_id}] from PLC TRUE to write_bool(TRUE)",
+        t_write_end - t_plc_detect,
+    )
 
     if result:
         production_id = incomplete_productions.get(full_station_id)
@@ -672,20 +695,26 @@ async def on_trigger_change(
     # Write TRUE
     t10 = time.perf_counter()
     if not debug:
+        queue_size = get_executor_status(plc_executor)["queue_size"]
         t_pre = time.perf_counter()
-        plc_executor.submit(plc_connection.write_bool,
-            pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True)
-        #await asyncio.get_event_loop().run_in_executor(
-        #    plc_executor, plc_connection.write_bool,
-        #    pezzo_conf["db"], pezzo_conf["byte"], pezzo_conf["bit"], True
-        #)
+        future = plc_executor.submit(
+            plc_connection.write_bool,
+            pezzo_conf["db"],
+            pezzo_conf["byte"],
+            pezzo_conf["bit"],
+            True,
+        )
+        await asyncio.wrap_future(future)
         t_post = time.perf_counter()
 
         durations["executor_queue"] = t_pre - t10
         durations["write_TRUE"] = t_post - t_pre
 
-        if durations["write_TRUE"] > 0.5:
-            logger.warning(f"[{full_id}] ⏱ write_TRUE={durations['write_TRUE']:.3f}s | queue={durations['executor_queue']:.3f}s")
+        log_fn = logger.warning if durations["write_TRUE"] > 0.5 else logger.debug
+        log_fn(
+            f"[{full_id}] ⏱ write_TRUE={durations['write_TRUE']:.3f}s | "
+            f"queue_delay={durations['executor_queue']:.3f}s | queue_size={queue_size}"
+        )
 
     # Broadcast
     await broadcast(line_name, channel_id, {

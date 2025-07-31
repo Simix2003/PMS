@@ -37,9 +37,9 @@ class PLCConnection:
         self.lock = Lock()
         self.client = c.Client()
         self.client.set_connection_type(3)
-        self.client.set_param(Parameter.PingTimeout, 500)
-        self.client.set_param(Parameter.SendTimeout, 500)
-        self.client.set_param(Parameter.RecvTimeout, 500)
+        self.client.set_param(Parameter.PingTimeout, 5000)
+        self.client.set_param(Parameter.SendTimeout, 5000)
+        self.client.set_param(Parameter.RecvTimeout, 5000)
         self.ip_address = ip_address
         self.rack = 0
         self.slot = slot
@@ -47,6 +47,7 @@ class PLCConnection:
         self.status_callback = status_callback
         self.max_chunk = max_chunk
         self._connect()
+        self._reconnect_count = 0
         Thread(target=self._background_reconnector, daemon=True).start()
 
     def _check_tcp_port(self, port=102, timeout=1.0):
@@ -58,55 +59,75 @@ class PLCConnection:
             return False
 
     def _background_reconnector(self):
+        last_attempt = 0
         while True:
+            now = time.time()
             if not self.connected or not self.is_connected():
-                if self._check_tcp_port():
-                    logger.debug(f"🔎 Port 102 open, trying Snap7 reconnect…")
-                    self._try_connect()
-                else:
-                    logger.warning(f"🚫 Cannot reach PLC {self.ip_address} on port 102")
-            time.sleep(10)
+                if now - last_attempt > 5:
+                    last_attempt = now
+                    if self._check_tcp_port():
+                        logger.debug(f"🔎 Port 102 open, trying Snap7 reconnect…")
+                        self._try_connect()
+                    else:
+                        logger.warning(f"🚫 Cannot reach PLC {self.ip_address} on port 102")
+            time.sleep(1)
+
 
     def _try_connect(self):
-        try:
-            self.client.disconnect()
-        except Exception:
-            pass
-        try:
-            self.client = c.Client()
-            self.client.set_connection_type(3)
-            self.client.set_param(Parameter.PingTimeout, 500)
-            self.client.set_param(Parameter.SendTimeout, 500)
-            self.client.set_param(Parameter.RecvTimeout, 500)
-            self.client.connect(self.ip_address, self.rack, self.slot)
-            if self.client.get_connected():
-                self.connected = True
-                self._safe_callback("CONNECTED")
-                logger.info(f"✅ PLC {self.ip_address} reconnected")
-            else:
+        self._reconnect_count += 1
+        if self._reconnect_count % 10 == 0:
+            logger.warning(f"⚠️ Reconnect count for {self.ip_address}: {self._reconnect_count}")
+        with self.lock:
+            try:
+                if self.client.get_connected():
+                    self.client.disconnect()
+            except Exception:
+                pass
+
+            try:
+                # Don't recreate the client — reuse existing one
+                self.client.set_connection_type(3)
+                self.client.set_param(Parameter.PingTimeout, 5000)
+                self.client.set_param(Parameter.SendTimeout, 5000)
+                self.client.set_param(Parameter.RecvTimeout, 5000)
+
+                self.client.connect(self.ip_address, self.rack, self.slot)
+
+                if self.client.get_connected():
+                    self.connected = True
+                    self._safe_callback("CONNECTED")
+                    logger.info(f"✅ PLC {self.ip_address} reconnected")
+                else:
+                    self.connected = False
+                    self._safe_callback("DISCONNECTED")
+                    logger.warning(f"❌ PLC {self.ip_address} still unreachable")
+            except Exception as e:
                 self.connected = False
                 self._safe_callback("DISCONNECTED")
-                logger.warning(f"❌ PLC {self.ip_address} still unreachable")
-        except Exception as e:
-            self.connected = False
-            self._safe_callback("DISCONNECTED")
-            logger.error(f"❌ Failed PLC reconnect {self.ip_address}: {e}")
+                logger.error(f"❌ Failed PLC reconnect {self.ip_address}: {e}")
 
     def _connect(self):
-        try:
-            self.client.set_param(Parameter.PingTimeout, 500)
-            self.client.set_param(Parameter.SendTimeout, 500)
-            self.client.set_param(Parameter.RecvTimeout, 500)
-            self.client.connect(self.ip_address, self.rack, self.slot)
-            if self.client.get_connected():
-                self.connected = True
-                logger.debug(f"🟢 Connected to PLC at {self.ip_address}")
-            else:
+        with self.lock:
+            try:
+                if self.client.get_connected():
+                    self.client.disconnect()
+            except Exception:
+                pass
+            try:
+                self.client.set_connection_type(3)
+                self.client.set_param(Parameter.PingTimeout, 5000)
+                self.client.set_param(Parameter.SendTimeout, 5000)
+                self.client.set_param(Parameter.RecvTimeout, 5000)
+                self.client.connect(self.ip_address, self.rack, self.slot)
+                if self.client.get_connected():
+                    self.connected = True
+                    logger.debug(f"🟢 Connected to PLC at {self.ip_address}")
+                else:
+                    self.connected = False
+                    logger.error(f"❌ Connection refused by PLC {self.ip_address}")
+            except Exception as e:
                 self.connected = False
-                logger.error(f"❌ Connection refused by PLC {self.ip_address}")
-        except Exception as e:
-            self.connected = False
-            logger.error(f"❌ Initial connect to PLC {self.ip_address} failed: {e}")
+                logger.error(f"❌ Initial connect to PLC {self.ip_address} failed: {e}")
 
     def _recover_on_error(self, context: str, exc: Exception):
         self.connected = False
@@ -114,7 +135,9 @@ class PLCConnection:
             self.client.disconnect()
         except Exception:
             pass
-        logger.error(f"⚠️ PLC comms error in {context}: {exc}. Connection marked down.")
+        logger.error(
+            f"⚠️ PLC {self.ip_address} comms error in {context}: {exc}. Connection marked down."
+        )
 
     def is_connected(self):
         try:
@@ -124,6 +147,10 @@ class PLCConnection:
             return False
 
     def _ensure_connection(self):
+        now = time.time()
+        if now - getattr(self, '_last_check', 0) < 1.0:
+            return
+        self._last_check = now
         if not self.connected or not self.is_connected():
             if self._check_tcp_port():
                 self._try_connect()

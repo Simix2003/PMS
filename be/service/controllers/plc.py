@@ -8,21 +8,18 @@ from threading import Lock, Thread
 import os
 import sys
 import socket
-import traceback
 
 logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.config.config import WRITE_TO_PLC
 
-DEFAULT_CHUNK   = 480           # 240-222 B for S7-1200/1500, 480 is always safe
+DEFAULT_CHUNK   = 480           # safe chunk size for DB reads
 MAX_BACKOFF_SEC = 5.0           # exponential back-off ceiling
 
-# Create a dedicated logger for DB read errors
+# Dedicated logger for DB read errors
 db_read_logger = logging.getLogger("db_read_errors")
 db_read_logger.setLevel(logging.ERROR)
-
-# Ensure only one handler is added
 if not db_read_logger.handlers:
     log_dir = os.path.join(os.path.dirname(__file__), "logs")
     os.makedirs(log_dir, exist_ok=True)
@@ -39,13 +36,17 @@ class PLCConnection:
                  status_callback=None):
         self.lock = Lock()
         self.client = c.Client()
+        self.client.set_connection_type(3)
+        self.client.set_param(Parameter.PingTimeout, 500)
+        self.client.set_param(Parameter.SendTimeout, 500)
+        self.client.set_param(Parameter.RecvTimeout, 500)
         self.ip_address = ip_address
         self.rack = 0
         self.slot = slot
         self.connected = False
         self.status_callback = status_callback
-        self._connect()
         self.max_chunk = max_chunk
+        self._connect()
         Thread(target=self._background_reconnector, daemon=True).start()
 
     def _check_tcp_port(self, port=102, timeout=1.0):
@@ -69,43 +70,43 @@ class PLCConnection:
     def _try_connect(self):
         try:
             self.client.disconnect()
-        except:
+        except Exception:
             pass
         try:
             self.client = c.Client()
             self.client.set_connection_type(3)
-            self.client.set_param(Parameter.PingTimeout, 5000)
-            self.client.set_param(Parameter.SendTimeout, 5000)
-            self.client.set_param(Parameter.RecvTimeout, 5000)
+            self.client.set_param(Parameter.PingTimeout, 500)
+            self.client.set_param(Parameter.SendTimeout, 500)
+            self.client.set_param(Parameter.RecvTimeout, 500)
             self.client.connect(self.ip_address, self.rack, self.slot)
             if self.client.get_connected():
                 self.connected = True
                 self._safe_callback("CONNECTED")
-                logger.info(f"✅ PLC {self.ip_address} riconnesso")
+                logger.info(f"✅ PLC {self.ip_address} reconnected")
             else:
                 self.connected = False
                 self._safe_callback("DISCONNECTED")
-                logger.warning(f"❌ PLC {self.ip_address} ancora irraggiungibile")
+                logger.warning(f"❌ PLC {self.ip_address} still unreachable")
         except Exception as e:
             self.connected = False
             self._safe_callback("DISCONNECTED")
-            logger.error(f"❌ Fallita reconnessione PLC {self.ip_address}: {e}")
+            logger.error(f"❌ Failed PLC reconnect {self.ip_address}: {e}")
 
     def _connect(self):
         try:
-            self.client.set_param(Parameter.PingTimeout, 5000)
-            self.client.set_param(Parameter.SendTimeout, 5000)
-            self.client.set_param(Parameter.RecvTimeout, 5000)
+            self.client.set_param(Parameter.PingTimeout, 500)
+            self.client.set_param(Parameter.SendTimeout, 500)
+            self.client.set_param(Parameter.RecvTimeout, 500)
             self.client.connect(self.ip_address, self.rack, self.slot)
             if self.client.get_connected():
                 self.connected = True
                 logger.debug(f"🟢 Connected to PLC at {self.ip_address}")
             else:
                 self.connected = False
-                logger.error(f"❌ PLC at {self.ip_address} refused connection.")
+                logger.error(f"❌ Connection refused by PLC {self.ip_address}")
         except Exception as e:
             self.connected = False
-            logger.error(f"❌ Failed to connect to PLC at {self.ip_address}: {str(e)}")
+            logger.error(f"❌ Initial connect to PLC {self.ip_address} failed: {e}")
 
     def _recover_on_error(self, context: str, exc: Exception):
         self.connected = False
@@ -113,13 +114,13 @@ class PLCConnection:
             self.client.disconnect()
         except Exception:
             pass
-        logger.error(f"⚠️ PLC communication error in {context}: {exc}. Connection marked as down.")
+        logger.error(f"⚠️ PLC comms error in {context}: {exc}. Connection marked down.")
 
     def is_connected(self):
         try:
             return self.client.get_connected()
         except Exception as e:
-            logger.error(f"❌ Error checking connection: {str(e)}")
+            logger.error(f"❌ Error checking connection: {e}")
             return False
 
     def _ensure_connection(self):
@@ -139,7 +140,7 @@ class PLCConnection:
                 try:
                     asyncio.run(self.status_callback(status))
                 except Exception as e:
-                    logger.error(f"❌ Failed to run status callback: {e}")
+                    logger.error(f"❌ Status callback failed: {e}")
 
     def disconnect(self):
         with self.lock:
@@ -149,7 +150,7 @@ class PLCConnection:
                     self.connected = False
                     logger.debug(f"🔴 Disconnected from PLC at {self.ip_address}")
                 except Exception as e:
-                    logger.error(f"Error during disconnect: {str(e)}")
+                    logger.error(f"Error during disconnect: {e}")
             else:
                 logger.debug(f"PLC at {self.ip_address} was already disconnected")
 
@@ -167,28 +168,40 @@ class PLCConnection:
 
     def write_bool(self, db_number, byte_index, bit_index, value, max_retries=3):
         if not WRITE_TO_PLC:
-            logger.debug("SKIPPED write_bool DB%04d b%d:%d = %s", db_number,
-                        byte_index, bit_index, value)
+            logger.debug("SKIPPED write_bool DB%04d b%d:%d = %s",
+                         db_number, byte_index, bit_index, value)
             return
-        payload = bytearray([1 << bit_index if value else 0])
-        backoff = 0.05
+
+        backoff = 0.01
         for attempt in range(max_retries):
             with self.lock:
                 self._ensure_connection()
                 if not self.connected:
                     return
                 try:
+                    # Read current byte and compute new value
+                    orig = self.client.db_read(db_number, byte_index, 1)
+                    orig_val = orig[0]
+                    new_val = (orig_val | (1 << bit_index)) if value else (orig_val & ~(1 << bit_index))
+                    if orig_val == new_val:
+                        logger.debug("No-op write_bool(DB%d, byte %d, bit %d): already %s",
+                                     db_number, byte_index, bit_index, value)
+                        return
+
+                    payload = bytearray([new_val])
                     t0 = time.perf_counter()
                     self.client.write_area(Area.DB, db_number, byte_index, payload)
                     dt = time.perf_counter() - t0
-                    log = logger.warning if dt > .25 else logger.debug
+
+                    log = logger.warning if dt > 0.05 else logger.debug
                     log("%s ⏱ write_bool(DB%d, byte %d, bit %d) %.3fs",
                         self.ip_address, db_number, byte_index, bit_index, dt)
                     return
                 except Exception as e:
                     logger.warning("⚠️ write attempt %d/%d failed: %s",
-                                attempt + 1, max_retries, e)
+                                   attempt + 1, max_retries, e)
                     self._recover_on_error(f"write_bool DB{db_number}", e)
+
             time.sleep(backoff)
             backoff = min(backoff * 2, MAX_BACKOFF_SEC)
 
@@ -198,30 +211,30 @@ class PLCConnection:
             if not self.connected:
                 return 0
             try:
-                byte_array = self.client.db_read(db_number, byte_index, 2)
-                return u.get_int(byte_array, 0)
+                data = self.client.db_read(db_number, byte_index, 2)
+                return u.get_int(data, 0)
             except Exception as e:
                 self._recover_on_error(f"read_integer DB{db_number}", e)
                 return 0
 
     def write_integer(self, db_number, byte_index, value):
-        t0 = time.perf_counter()
         if not WRITE_TO_PLC:
             logger.debug(f"[SKIPPED] write_integer(DB{db_number}, byte {byte_index}) = {value}")
             return
+        t0 = time.perf_counter()
         with self.lock:
             self._ensure_connection()
             if not self.connected:
                 return
             try:
-                byte_array = self.client.db_read(db_number, byte_index, 2)
-                u.set_int(byte_array, 0, value)
-                self.client.db_write(db_number, byte_index, byte_array)
+                data = self.client.db_read(db_number, byte_index, 2)
+                u.set_int(data, 0, value)
+                self.client.write_area(Area.DB, db_number, byte_index, data)
             except Exception as e:
                 self._recover_on_error(f"write_integer DB{db_number}", e)
-            duration = time.perf_counter() - t0
-            log = logger.warning if duration > 0.25 else logger.debug
-            log(f"{self.ip_address} ⏱ write_integer(DB{db_number}, byte {byte_index}) took {duration:.3f}s")
+        duration = time.perf_counter() - t0
+        log = logger.warning if duration > 0.25 else logger.debug
+        log(f"{self.ip_address} ⏱ write_integer(DB{db_number}, byte {byte_index}) {duration:.3f}s")
 
     def read_string(self, db_number, byte_index, max_size):
         with self.lock:
@@ -229,39 +242,33 @@ class PLCConnection:
             if not self.connected:
                 return None
             try:
-                byte_array = self.client.db_read(db_number, byte_index, max_size + 2)
-                actual_size = byte_array[1]
-                string_data = byte_array[2:2 + actual_size]
-                return ''.join(map(chr, string_data))
+                raw = self.client.db_read(db_number, byte_index, max_size + 2)
+                length = raw[1]
+                return raw[2:2+length].decode('ascii', errors='ignore')
             except Exception as e:
                 self._recover_on_error(f"read_string DB{db_number}", e)
                 return None
 
     def write_string(self, db_number, byte_index, value, max_size):
-        t0 = time.perf_counter()
         if not WRITE_TO_PLC:
-            logger.debug(f"[SKIPPED] write_string(DB{db_number}, byte {byte_index}) = '{value}' (WRITE_TO_PLC=False)")
+            logger.debug(f"[SKIPPED] write_string(DB{db_number}, byte {byte_index}) = '{value}'")
             return
+        t0 = time.perf_counter()
         with self.lock:
             self._ensure_connection()
             if not self.connected:
                 return
-
-            def attempt_write():
-                byte_array = bytearray(max_size + 2)
-                byte_array[0] = max_size
-                byte_array[1] = len(value[:max_size])
-                for i, c in enumerate(value[:max_size]):
-                    byte_array[i + 2] = ord(c)
-                self.client.db_write(db_number, byte_index, byte_array)
-
+            ba = bytearray(max_size + 2)
+            ba[0] = max_size
+            ba[1] = len(value := value[:max_size])
+            ba[2:2+len(value)] = value.encode('ascii', errors='ignore')
             try:
-                attempt_write()
+                self.client.write_area(Area.DB, db_number, byte_index, ba)
             except Exception as e:
                 self._recover_on_error(f"write_string DB{db_number}", e)
-            duration = time.perf_counter() - t0
-            log = logger.warning if duration > 0.25 else logger.debug
-            log(f"{self.ip_address} ⏱ write_string(DB{db_number}, byte {byte_index}) took {duration:.3f}s")
+        duration = time.perf_counter() - t0
+        log = logger.warning if duration > 0.25 else logger.debug
+        log(f"{self.ip_address} ⏱ write_string(DB{db_number}, byte {byte_index}) {duration:.3f}s")
 
     def read_byte(self, db_number, byte_index):
         with self.lock:
@@ -269,8 +276,8 @@ class PLCConnection:
             if not self.connected:
                 return None
             try:
-                byte_array = self.client.db_read(db_number, byte_index, 1)
-                return byte_array[0]
+                ba = self.client.db_read(db_number, byte_index, 1)
+                return ba[0]
             except Exception as e:
                 self._recover_on_error(f"read_byte DB{db_number}", e)
                 return None
@@ -281,8 +288,8 @@ class PLCConnection:
             if not self.connected:
                 return None
             try:
-                byte_array = self.client.db_read(db_number, byte_index, 8)
-                return u.get_dt(byte_array, 0)
+                ba = self.client.db_read(db_number, byte_index, 8)
+                return u.get_dt(ba, 0)
             except Exception as e:
                 self._recover_on_error(f"read_date_time DB{db_number}", e)
                 return None
@@ -293,30 +300,31 @@ class PLCConnection:
             if not self.connected:
                 return None
             try:
-                byte_array = self.client.db_read(db_number, byte_index, 4)
-                return u.get_real(byte_array, 0)
+                ba = self.client.db_read(db_number, byte_index, 4)
+                return u.get_real(ba, 0)
             except Exception as e:
                 self._recover_on_error(f"read_real DB{db_number}", e)
                 return None
 
     def db_read(self, db_number: int, start_byte: int, size: int) -> bytearray:
         chunk_size = min(self.max_chunk, size)
-        buffer, offset = bytearray(), 0
-        backoff = 0.05                 # start at 50 ms
+        buffer = bytearray()
+        offset = 0
+        backoff = 0.05
         while offset < size:
             chunk = min(chunk_size, size - offset)
             with self.lock:
                 self._ensure_connection()
                 if not self.connected:
-                    return bytearray(size)      # zero-filled fallback
+                    return bytearray(size)
                 try:
                     t0 = time.perf_counter()
                     part = self.client.db_read(db_number, start_byte + offset, chunk)
                     logger.debug("DB%04d[%d:%d] OK in %.3fs",
-                                db_number, start_byte + offset, chunk,
-                                time.perf_counter() - t0)
+                                 db_number, start_byte + offset, chunk,
+                                 time.perf_counter() - t0)
                     buffer.extend(part)
-                    backoff = 0.05              # reset after success
+                    backoff = 0.05
                     offset += chunk
                 except Exception as e:
                     self._recover_on_error(f"db_read DB{db_number}", e)

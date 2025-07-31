@@ -68,3 +68,6 @@ xml_index = {}
 visual_data: dict[str, dict] = {}
 visual_data_lock = Lock()
 last_sent: dict[str, dict] = {}
+
+db_range_cache: dict[str, tuple[int, int]] = {}
+

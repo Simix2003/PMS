@@ -818,8 +818,10 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>?> getQGStations() async {
-    final response = await http.get(Uri.parse('$baseUrl/api/tablet_stations'));
+  Future<Map<String, dynamic>?> getQGStations({String? lineName}) async {
+    final uri = Uri.parse('$baseUrl/api/tablet_stations')
+        .replace(queryParameters: lineName != null ? {'line_name': lineName} : null);
+    final response = await http.get(uri);
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {

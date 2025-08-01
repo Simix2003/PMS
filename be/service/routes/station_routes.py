@@ -17,6 +17,7 @@ from service.connections.mysql import get_mysql_connection
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 @router.get("/api/station_for_object")
 async def get_station_for_object(id_modulo: str):
     try:
@@ -29,14 +30,17 @@ async def get_station_for_object(id_modulo: str):
 
                 obj_id = obj["id"]
 
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT s.name AS station_name
                     FROM productions p
                     JOIN stations s ON p.station_id = s.id
                     WHERE p.object_id = %s AND s.type = 'qc'
                     ORDER BY p.end_time DESC
                     LIMIT 1
-                """, (obj_id,))
+                """,
+                    (obj_id,),
+                )
                 row = cursor.fetchone()
                 if not row:
                     raise HTTPException(status_code=404, detail="QC station not found for this object.")
@@ -46,6 +50,7 @@ async def get_station_for_object(id_modulo: str):
     except Exception as e:
         logger.error(f"Error in get_station_for_object({id_modulo}): {e}")
         raise HTTPException(status_code=500, detail="Server error.")
+
 
 @router.post("/api/set_outcome")
 async def set_outcome(request: Request):
@@ -70,8 +75,7 @@ async def set_outcome(request: Request):
     read_conf = config["id_modulo"]
     try:
         current_object_id = await asyncio.to_thread(
-            plc_connection.read_string,
-            read_conf["db"], read_conf["byte"], read_conf["length"]
+            plc_connection.read_string, read_conf["db"], read_conf["byte"], read_conf["length"]
         )
     except Exception as e:
         logger.error(f"Error reading PLC data: {e}")
@@ -82,28 +86,43 @@ async def set_outcome(request: Request):
                 return JSONResponse(status_code=409, content={"error": "Stale object, already processed or expired."})
 
     logger.debug(f"Outcome '{outcome.upper()}' written for object {object_id} on {line_name}.{channel_id}")
-    await broadcast(line_name, channel_id, {
-        "trigger": None,
-        "objectId": object_id,
-        "outcome": outcome
-    })
+    await broadcast(line_name, channel_id, {"trigger": None, "objectId": object_id, "outcome": outcome})
 
     return {"status": "ok"}
 
+
 @router.get("/api/tablet_stations")
-async def get_qg_stations():
+async def get_qg_stations(line_name: str | None = None):
     try:
         with get_mysql_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT name, display_name 
-                    FROM stations 
+                if line_name:
+                    cursor.execute(
+                        """
+                    SELECT s.name, s.display_name
+                    FROM stations s
+                    JOIN production_lines pl ON s.line_id = pl.id
+                    WHERE s.type IN ('qc', 'rework')
+                      AND s.config IS NOT NULL
+                      AND s.config != ''
+                      AND s.plc IS NOT NULL
+                      AND s.plc != ''
+                      AND pl.name = %s
+                    """,
+                        (line_name,),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                    SELECT name, display_name
+                    FROM stations
                     WHERE type IN ('qc', 'rework')
-                    AND config IS NOT NULL 
-                    AND config != ''
-                    AND plc IS NOT NULL 
-                    AND plc != ''
-                """)
+                      AND config IS NOT NULL
+                      AND config != ''
+                      AND plc IS NOT NULL
+                      AND plc != ''
+                    """
+                    )
                 stations = cursor.fetchall()
         return {"stations": stations}
     except Exception as e:

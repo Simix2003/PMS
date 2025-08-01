@@ -74,19 +74,28 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _startup();
   }
 
-  Future<void> _startup() async {
-    final response = await apiService.getQGStations();
+  Future<void> _reloadStations() async {
+    final response = await apiService.getQGStations(lineName: selectedLine);
     if (response != null && response["stations"] != null) {
       final stations = response["stations"] as List<dynamic>;
       setState(() {
+        availableChannels = [""];
+        stationDisplayNames = {'': '🔧 Selezionare Stazione'};
         for (var s in stations) {
           final name = s["name"];
           final displayName = s["display_name"];
           availableChannels.add(name);
           stationDisplayNames[name] = displayName;
         }
+        if (!availableChannels.contains(selectedChannel)) {
+          selectedChannel = "";
+        }
       });
     }
+  }
+
+  Future<void> _startup() async {
+    await _reloadStations();
 
     if (selectedChannel.isEmpty) return;
     _connectWebSocket();
@@ -809,13 +818,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             ),
                           );
                         }).toList(),
-                        onChanged: (newLine) {
+                        onChanged: (newLine) async {
                           if (newLine != null && newLine != selectedLine) {
                             setState(() {
                               selectedLine = newLine;
-                              _fetchPLCStatus();
-                              _connectWebSocket(); // reconnect with new line
                             });
+                            await _reloadStations();
+                            _fetchPLCStatus();
+                            _connectWebSocket(); // reconnect with new line
                           }
                         },
                       ),

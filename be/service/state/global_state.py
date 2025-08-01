@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 import os
-from threading import Lock
+from threading import Lock, RLock
 from dotenv import load_dotenv, find_dotenv
 from pymysql.cursors import DictCursor
 from pymysqlpool import ConnectionPool
@@ -35,6 +35,13 @@ mysql_pool = ConnectionPool(
     pre_create_num=15,
     **MYSQL_CONFIG
 )
+
+zone_locks = {
+    "ELL": RLock(),
+    "AIN": RLock(),
+    "VPF": RLock(),
+    "STR": RLock()
+}
 
 # Thread-safe DB executor
 executor = ThreadPoolExecutor(max_workers=20)

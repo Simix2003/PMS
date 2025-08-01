@@ -6,18 +6,16 @@ import os
 import sys
 import copy
 from collections import defaultdict
-from threading import RLock 
 from typing import Dict, DefaultDict, Any, List, Optional
 import json
 from statistics import median
+import time
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection
 from service.config.config import ZONE_SOURCES, TARGETS_FILE, DEFAULT_TARGETS
 from service.state import global_state
 from service.routes.broadcast import broadcast_zone_update
-
-_update_lock = RLock()
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +195,14 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
         logger.exception(f"compute_zone_snapshot() FAILED for zone={zone}: {e}")
         raise
 
+def timed(fn):
+    def wrapper(*args, **kwargs):
+        t0 = time.perf_counter()
+        res = fn(*args, **kwargs)
+        duration = time.perf_counter() - t0
+        logger.warning(f"{fn.__name__} took {duration:.3f}s")
+        return res
+    return wrapper
 # ─────────────────────────────────────────────────────────────────────────────
 def _compute_snapshot_ain(now: datetime) -> dict:
     try:
@@ -1525,7 +1531,8 @@ def update_visual_data_on_new_module(
         global_state.visual_data[zone] = compute_zone_snapshot(zone, now=ts)
         return
 
-    with _update_lock:
+    # ✅ Per-zone lock: does NOT block other zones or the line
+    with global_state.zone_locks[zone]:
         current_shift_start, _ = get_shift_window(ts)
         data = global_state.visual_data[zone]
         cached_shift_start = data.get("__shift_start")
@@ -1539,7 +1546,6 @@ def update_visual_data_on_new_module(
         elif zone == "AIN":
             _update_snapshot_ain(data, station_name, esito, ts)
         elif zone == "ELL":
-            #_update_snapshot_ell(data, station_name, esito, ts, cycle_time, reentered, object_id)
             new_snapshot = _update_snapshot_ell_new(bufferIds)
             data.clear()
             data.update(new_snapshot)
@@ -1551,7 +1557,12 @@ def update_visual_data_on_new_module(
 
         try:
             payload = copy.deepcopy(data)
-            loop = asyncio.get_event_loop()
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
             if loop.is_running():
                 loop.call_soon_threadsafe(
                     lambda: asyncio.create_task(
@@ -1559,17 +1570,10 @@ def update_visual_data_on_new_module(
                     )
                 )
             else:
-                # fallback: run from outside loop (e.g., background thread)
-                asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
-        except RuntimeError as e:
-            # This happens if there's no loop at all (e.g., in a thread without asyncio)
-            try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+                loop.run_until_complete(
+                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                )
                 loop.close()
-            except Exception as e2:
-                logger.warning(f"Failed to run broadcast_zone_update for {zone} in fallback loop: {e2}")
         except Exception as e:
             logger.warning(f"Could not schedule WebSocket update for {zone}: {e}")
 
@@ -2407,142 +2411,144 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
     Refresh fermi_data for the zone (to be called after stop insert/update).
     Includes open stops (end_time IS NULL) so they show live in VisualPage.
     """
-    with _update_lock:
-        if zone not in global_state.visual_data:
-            logger.warning(f"Cannot refresh fermi_data for unknown zone: {zone}")
-            return
+    if zone not in global_state.visual_data:
+        logger.warning(f"Cannot refresh fermi_data for unknown zone: {zone}")
+        return
 
-        data = global_state.visual_data[zone]
-        shift_start, shift_end = get_shift_window(ts)
+    shift_start, shift_end = get_shift_window(ts)
+
+    try:
+        fermi_data = []
+        available_time_29 = 0
+        available_time_30 = 0
+
         with get_mysql_connection() as conn:
             conn.commit()  # Ensures no old snapshot
             with conn.cursor() as cursor:
-                try:
-                    # Total stop time for station 29 (include running stops)
-                    sql_total_29 = """
-                        SELECT SUM(
-                            CASE 
-                                WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
-                                ELSE st.stop_time
-                            END
-                        ) AS total_time
-                        FROM stops st
-                        WHERE st.type = 'STOP'
-                          AND st.station_id = 29
-                          AND st.start_time BETWEEN %s AND %s
-                    """
-                    cursor.execute(sql_total_29, (shift_start, shift_end))
-                    row29 = cursor.fetchone() or {}
-                    total_stop_time_29 = row29.get("total_time") or 0
-                    total_stop_time_minutes_29 = total_stop_time_29 / 60
-                    available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
+                # Total stop time for station 29
+                cursor.execute("""
+                    SELECT SUM(
+                        CASE 
+                            WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                            ELSE st.stop_time
+                        END
+                    ) AS total_time
+                    FROM stops st
+                    WHERE st.type = 'STOP'
+                      AND st.station_id = 29
+                      AND st.start_time BETWEEN %s AND %s
+                """, (shift_start, shift_end))
+                row29 = cursor.fetchone() or {}
+                total_stop_time_minutes_29 = (row29.get("total_time") or 0) / 60
+                available_time_29 = max(0, round(100 - (total_stop_time_minutes_29 / 480 * 100)))
 
-                    # Total stop time for station 30 (include running stops)
-                    sql_total_30 = """
-                        SELECT SUM(
-                            CASE 
-                                WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
-                                ELSE st.stop_time
-                            END
-                        ) AS total_time
-                        FROM stops st
-                        WHERE st.type = 'STOP'
-                          AND st.station_id = 30
-                          AND st.start_time BETWEEN %s AND %s
-                    """
-                    cursor.execute(sql_total_30, (shift_start, shift_end))
-                    row30 = cursor.fetchone() or {}
-                    total_stop_time_30 = row30.get("total_time") or 0
-                    total_stop_time_minutes_30 = total_stop_time_30 / 60
-                    available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
+                # Total stop time for station 30
+                cursor.execute("""
+                    SELECT SUM(
+                        CASE 
+                            WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                            ELSE st.stop_time
+                        END
+                    ) AS total_time
+                    FROM stops st
+                    WHERE st.type = 'STOP'
+                      AND st.station_id = 30
+                      AND st.start_time BETWEEN %s AND %s
+                """, (shift_start, shift_end))
+                row30 = cursor.fetchone() or {}
+                total_stop_time_minutes_30 = (row30.get("total_time") or 0) / 60
+                available_time_30 = max(0, round(100 - (total_stop_time_minutes_30 / 480 * 100)))
 
-                    # Top 4 stop reasons (include running stops)
-                    sql = """
-                        SELECT s.name AS station_name,
-                               st.reason,
-                               COUNT(*) AS n_occurrences,
-                               SUM(
-                                   CASE 
-                                       WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
-                                       ELSE st.stop_time
-                                   END
-                               ) AS total_time
-                        FROM stops st
-                        JOIN stations s ON st.station_id = s.id
-                        WHERE st.type = 'STOP'
-                          AND st.station_id IN (29, 30)
-                          AND st.start_time BETWEEN %s AND %s
-                        GROUP BY st.station_id, st.reason
-                        ORDER BY total_time DESC
-                        LIMIT 4
-                    """
-                    cursor.execute(sql, (shift_start, shift_end))
-                    fermi_data = []
-                    for row in cursor.fetchall():
-                        total_minutes = round(row["total_time"] / 60)
-                        fermi_data.append({
-                            "causale": row["reason"],
-                            "station": row["station_name"],
-                            "count": row["n_occurrences"],
-                            "time": total_minutes
-                        })
+                # Top 4 stop reasons
+                cursor.execute("""
+                    SELECT s.name AS station_name,
+                           st.reason,
+                           COUNT(*) AS n_occurrences,
+                           SUM(
+                               CASE 
+                                   WHEN st.end_time IS NULL THEN TIMESTAMPDIFF(SECOND, st.start_time, NOW())
+                                   ELSE st.stop_time
+                               END
+                           ) AS total_time
+                    FROM stops st
+                    JOIN stations s ON st.station_id = s.id
+                    WHERE st.type = 'STOP'
+                      AND st.station_id IN (29, 30)
+                      AND st.start_time BETWEEN %s AND %s
+                    GROUP BY st.station_id, st.reason
+                    ORDER BY total_time DESC
+                    LIMIT 4
+                """, (shift_start, shift_end))
+                for row in cursor.fetchall():
+                    total_minutes = round(row["total_time"] / 60)
+                    fermi_data.append({
+                        "causale": row["reason"],
+                        "station": row["station_name"],
+                        "count": row["n_occurrences"],
+                        "time": total_minutes
+                    })
 
-                    # Append available times
-                    fermi_data.append({"Available_Time_1": f"{available_time_29}"})
-                    fermi_data.append({"Available_Time_2": f"{available_time_30}"})
+        fermi_data.append({"Available_Time_1": f"{available_time_29}"})
+        fermi_data.append({"Available_Time_2": f"{available_time_30}"})
 
-                    # Save & broadcast
-                    data["fermi_data"] = fermi_data
+        # ✅ Update shared memory under per-zone lock
+        with global_state.zone_locks[zone]:
+            global_state.visual_data[zone]["fermi_data"] = fermi_data
+            payload = copy.deepcopy(global_state.visual_data[zone])
 
-                    payload = copy.deepcopy(data)
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        loop.call_soon_threadsafe(
-                            lambda: asyncio.create_task(
-                                broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
-                            )
-                        )
-                    else:
-                        asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
+        # 🔄 Robust asyncio broadcast
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-                except Exception as e:
-                    logger.exception(f"Error refreshing fermi_data for zone={zone}: {e}")
+        if loop.is_running():
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                )
+            )
+        else:
+            loop.run_until_complete(
+                broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+            )
+            loop.close()
+
+    except Exception as e:
+        logger.exception(f"Error refreshing fermi_data for zone={zone}: {e}")
 
 def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
     """
     Refresh top_defects_qg2 for the zone (based on esito=6 in current shift).
     """
+    if zone not in global_state.visual_data:
+        logger.warning(f"Cannot refresh top_defects_qg2 for unknown zone: {zone}")
+        return
+
+    shift_start, shift_end = get_shift_window(ts)
+
     try:
-        with _update_lock:
-            if zone not in global_state.visual_data:
-                logger.warning(f"Cannot refresh top_defects_qg2 for unknown zone: {zone}")
-                return
+        top_defects = []
+        total_defects = 0
 
-            data = global_state.visual_data[zone]
-            shift_start, shift_end = get_shift_window(ts)
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                sql_productions = """
+                    SELECT id, station_id
+                    FROM productions
+                    WHERE esito = 6
+                    AND station_id IN (1, 2)
+                    AND start_time BETWEEN %s AND %s
+                """
+                cursor.execute(sql_productions, (shift_start, shift_end))
+                rows = cursor.fetchall()
 
-            with get_mysql_connection() as conn:
-                with conn.cursor() as cursor:
-                    # 1️⃣ NG productions
-                    sql_productions = """
-                        SELECT id, station_id
-                        FROM productions
-                        WHERE esito = 6
-                        AND station_id IN (1, 2)
-                        AND start_time BETWEEN %s AND %s
-                    """
-                    cursor.execute(sql_productions, (shift_start, shift_end))
-                    rows = cursor.fetchall()
+                production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
+                production_ids_2 = [row['id'] for row in rows if row['station_id'] == 2]
+                all_production_ids = production_ids_1 + production_ids_2
 
-                    production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
-                    production_ids_2 = [row['id'] for row in rows if row['station_id'] == 2]
-                    all_production_ids = production_ids_1 + production_ids_2
-
-                    if not all_production_ids:
-                        data["top_defects_qg2"] = []
-                        return
-
-                    # 2️⃣ Join with object_defects
+                if all_production_ids:
                     placeholders = ','.join(['%s'] * len(all_production_ids))
                     sql_defects = f"""
                         SELECT od.production_id, d.category
@@ -2560,9 +2566,9 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
                     for row in rows:
                         pid = row['production_id']
                         cat = row['category']
-                        station_id = production_station_map.get(pid)
-                        if station_id:
-                            defect_counter[cat][station_id].add(pid)
+                        sid = production_station_map.get(pid)
+                        if sid:
+                            defect_counter[cat][sid].add(pid)
 
                     full_results = []
                     for category, stations in defect_counter.items():
@@ -2576,33 +2582,35 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
                             "total": total
                         })
 
-                    # Compute total over all categories ✅
-                    data['total_defects_qg2'] = sum(r["total"] for r in full_results)
-
+                    total_defects = sum(r["total"] for r in full_results)
                     top5 = sorted(full_results, key=lambda r: r["total"], reverse=True)[:5]
-                    data["top_defects_qg2"] = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in top5]
+                    top_defects = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in top5]
 
-                    payload = copy.deepcopy(data)
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            loop.call_soon_threadsafe(
-                                lambda: asyncio.create_task(
-                                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
-                                )
-                            )
-                        else:
-                            asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
-                    except RuntimeError:
-                        # No loop in current thread — create one manually
-                        try:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                            loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
-                            loop.close()
-                        except Exception as e:
-                            logger.warning(f"[refresh_top_defects_qg2] fallback WebSocket update failed for {zone}: {e}")
+        # ✅ Lock only during shared memory update
+        with global_state.zone_locks[zone]:
+            data = global_state.visual_data[zone]
+            data["top_defects_qg2"] = top_defects
+            data["total_defects_qg2"] = total_defects
+            payload = copy.deepcopy(data)
 
+        # 🔄 Robust asyncio handling for WebSocket broadcast
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if loop.is_running():
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                )
+            )
+        else:
+            loop.run_until_complete(
+                broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+            )
+            loop.close()
 
     except Exception as e:
         logger.exception(f"Exception in refresh_top_defects_qg2: {e}")
@@ -2612,39 +2620,32 @@ def refresh_top_defects_vpf(zone: str, ts: datetime) -> None:
     Refresh top_defects_vpf for the zone (based on esito=6 at station_id=56 in current shift,
     and only defects with defect_id in (12, 14, 15)), split by original station_id (29 or 30 → ain1/ain2).
     """
+    if zone not in global_state.visual_data:
+        logger.warning(f"Cannot refresh top_defects_vpf for unknown zone: {zone}")
+        return
+
+    shift_start, shift_end = get_shift_window(ts)
+    top_defects = []
+
     try:
-        with _update_lock:
-            if zone not in global_state.visual_data:
-                logger.warning(f"Cannot refresh top_defects_vpf for unknown zone: {zone}")
-                return
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                sql_productions = """
+                    SELECT p56.id, origin.station_id AS origin_station
+                    FROM productions p56
+                    JOIN productions origin ON p56.object_id = origin.object_id
+                    WHERE p56.esito = 6
+                    AND p56.station_id = 56
+                    AND p56.start_time BETWEEN %s AND %s
+                    AND origin.station_id IN (29, 30)
+                """
+                cursor.execute(sql_productions, (shift_start, shift_end))
+                rows = cursor.fetchall()
+                production_ids = [row["id"] for row in rows]
+                production_station_map = {row["id"]: row["origin_station"] for row in rows}
 
-            data = global_state.visual_data[zone]
-            shift_start, shift_end = get_shift_window(ts)
-
-            with get_mysql_connection() as conn:
-                with conn.cursor() as cursor:
-
-                    # 1️⃣ Get NG productions at station 56, with origin station 29 or 30
-                    sql_productions = """
-                        SELECT p56.id, origin.station_id AS origin_station
-                        FROM productions p56
-                        JOIN productions origin ON p56.object_id = origin.object_id
-                        WHERE p56.esito = 6
-                        AND p56.station_id = 56
-                        AND p56.start_time BETWEEN %s AND %s
-                        AND origin.station_id IN (29, 30)
-                    """
-                    cursor.execute(sql_productions, (shift_start, shift_end))
-                    rows = cursor.fetchall()
-                    production_ids = [row['id'] for row in rows]
-                    production_station_map = {row['id']: row['origin_station'] for row in rows}
-
-                    if not production_ids:
-                        data["top_defects_vpf"] = []
-                        return
-
-                    # 2️⃣ Filter by defect_id IN (12, 14, 15)
-                    placeholders = ','.join(['%s'] * len(production_ids))
+                if production_ids:
+                    placeholders = ",".join(["%s"] * len(production_ids))
                     sql_defects = f"""
                         SELECT od.production_id, d.category
                         FROM object_defects od
@@ -2655,55 +2656,53 @@ def refresh_top_defects_vpf(zone: str, ts: datetime) -> None:
                     cursor.execute(sql_defects, production_ids)
                     rows = cursor.fetchall()
 
-                    # 3️⃣ Count by category and origin station (29 → ain1, 30 → ain2)
                     defect_counter: DefaultDict[str, Dict[int, int]] = defaultdict(lambda: {29: 0, 30: 0})
                     for row in rows:
                         pid = row["production_id"]
-                        category = row["category"]
-                        origin_station = production_station_map.get(pid)
-                        if isinstance(origin_station, int) and origin_station in (29, 30):
-                            defect_counter[category][origin_station] += 1
+                        cat = row["category"]
+                        origin = production_station_map.get(pid)
+                        if origin is not None and origin in (29, 30):
+                            defect_counter[cat][origin] += 1
 
-
-                    # 4️⃣ Aggregate + top 5 by total
                     full_results = []
-                    for category, stations in defect_counter.items():
-                        c29 = stations[29]
-                        c30 = stations[30]
+                    for cat, counts in defect_counter.items():
+                        c29 = counts[29]
+                        c30 = counts[30]
                         total = c29 + c30
                         full_results.append({
-                            "label": category,
-                            "ain1": c29,  # 29
-                            "ain2": c30,  # 30
+                            "label": cat,
+                            "ain1": c29,
+                            "ain2": c30,
                             "total": total
                         })
 
                     top5 = sorted(full_results, key=lambda r: r["total"], reverse=True)[:5]
-                    data["top_defects_vpf"] = [
-                        {"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]}
-                        for r in top5
-                    ]
+                    top_defects = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in top5]
 
-                    payload = copy.deepcopy(data)
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            loop.call_soon_threadsafe(
-                                lambda: asyncio.create_task(
-                                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
-                                )
-                            )
-                        else:
-                            asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
-                    except RuntimeError:
-                        # No loop in current thread — create one manually
-                        try:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                            loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
-                            loop.close()
-                        except Exception as e:
-                            logger.warning(f"[refresh_fermi_data] fallback WebSocket update failed for {zone}: {e}")
+        # ✅ Per-zone lock only during shared memory update
+        with global_state.zone_locks[zone]:
+            data = global_state.visual_data[zone]
+            data["top_defects_vpf"] = top_defects
+            payload = copy.deepcopy(data)
+
+        # 🔄 Safe asyncio broadcast
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if loop.is_running():
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                )
+            )
+        else:
+            loop.run_until_complete(
+                broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+            )
+            loop.close()
 
     except Exception as e:
         logger.exception(f"Exception in refresh_top_defects_vpf: {e}")
@@ -2713,38 +2712,34 @@ def refresh_top_defects_ell(zone: str, ts: datetime) -> None:
     Refresh top_defects for the ELL zone, based on esito=6 at station_id in (1, 2, 9)
     and count per defect category, split into min1 (station 1), min2 (station 2), and ell (station 9).
     """
+    if zone not in global_state.visual_data:
+        logger.warning(f"Cannot refresh top_defects_ell for unknown zone: {zone}")
+        return
+
+    shift_start, shift_end = get_shift_window(ts)
+    top_defects = []
+
     try:
-        with _update_lock:
-            if zone not in global_state.visual_data:
-                logger.warning(f"Cannot refresh top_defects_ell for unknown zone: {zone}")
-                return
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                sql_productions = """
+                    SELECT id, station_id
+                    FROM productions
+                    WHERE esito = 6
+                    AND station_id IN (1, 2, 9)
+                    AND start_time BETWEEN %s AND %s
+                """
+                cursor.execute(sql_productions, (shift_start, shift_end))
+                rows = cursor.fetchall()
 
-            data = global_state.visual_data[zone]
-            shift_start, shift_end = get_shift_window(ts)
+                production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
+                production_ids_2 = [row['id'] for row in rows if row['station_id'] == 2]
+                production_ids_9 = [row['id'] for row in rows if row['station_id'] == 9]
 
-            with get_mysql_connection() as conn:
-                with conn.cursor() as cursor:
-                    # 1️⃣ Query NG productions at stations 1, 2, 9
-                    sql_productions = """
-                        SELECT id, station_id
-                        FROM productions
-                        WHERE esito = 6
-                        AND station_id IN (1, 2, 9)
-                        AND start_time BETWEEN %s AND %s
-                    """
-                    cursor.execute(sql_productions, (shift_start, shift_end))
-                    rows = cursor.fetchall()
-
-                    production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
-                    production_ids_2 = [row['id'] for row in rows if row['station_id'] == 2]
-                    production_ids_9 = [row['id'] for row in rows if row['station_id'] == 9]
-
-                    all_ids = tuple(production_ids_1 + production_ids_2 + production_ids_9)
-                    if not all_ids:
-                        data["top_defects"] = []
-                        return
-
-                    # 2️⃣ Join with object_defects + defects
+                all_ids = tuple(production_ids_1 + production_ids_2 + production_ids_9)
+                if not all_ids:
+                    top_defects = []
+                else:
                     sql_defects = """
                         SELECT od.production_id, d.category
                         FROM object_defects od
@@ -2766,7 +2761,6 @@ def refresh_top_defects_ell(zone: str, ts: datetime) -> None:
                         if sid:
                             defect_counter[category][sid].add(pid)
 
-                    # 3️⃣ Aggregate
                     full_results = []
                     for category, stations in defect_counter.items():
                         min1 = len(stations[1])
@@ -2782,27 +2776,34 @@ def refresh_top_defects_ell(zone: str, ts: datetime) -> None:
                         })
 
                     top5 = sorted(full_results, key=lambda r: r["total"], reverse=True)[:5]
-                    data["top_defects"] = [
+                    top_defects = [
                         {"label": r["label"], "min1": r["min1"], "min2": r["min2"], "ell": r["ell"]}
                         for r in top5
                     ]
 
-                    payload = copy.deepcopy(data)
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            loop.call_soon_threadsafe(
-                                lambda: asyncio.create_task(
-                                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
-                                )
-                            )
-                        else:
-                            asyncio.run(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
-                    except RuntimeError:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload))
-                        loop.close()
+        # ✅ Only lock shared memory during write
+        with global_state.zone_locks[zone]:
+            data = global_state.visual_data[zone]
+            data["top_defects"] = top_defects
+            payload = copy.deepcopy(data)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        if loop.is_running():
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+                )
+            )
+        else:
+            loop.run_until_complete(
+                broadcast_zone_update(line_name="Linea2", zone=zone, payload=payload)
+            )
+            loop.close()
 
     except Exception as e:
         logger.exception(f"Exception in refresh_top_defects_ell: {e}")
@@ -2816,7 +2817,6 @@ def refresh_median_cycle_time_vpf(now: Optional[datetime] = None) -> float:
     try:
         with get_mysql_connection() as conn:
             with conn.cursor() as cursor:
-
                 sql_speed_data = """
                     SELECT p.cycle_time
                     FROM productions p
@@ -2835,18 +2835,18 @@ def refresh_median_cycle_time_vpf(now: Optional[datetime] = None) -> float:
 
                 new_median = median(cycle_times)
 
-                # ✅ Update in-memory data
-                with _update_lock:
-                    vpf_data = global_state.visual_data.get("VPF")
-                    if (
-                        vpf_data and
-                        isinstance(vpf_data.get("speed_ratio"), list) and
-                        vpf_data["speed_ratio"]
-                    ):
-                        vpf_data["speed_ratio"][0]["medianSec"] = new_median
-                        logger.info(f"Updated VPF medianSec to {new_median:.2f} sec")
+        # ✅ Update shared memory under VPF lock only
+        with global_state.zone_locks["VPF"]:
+            vpf_data = global_state.visual_data.get("VPF")
+            if (
+                vpf_data and
+                isinstance(vpf_data.get("speed_ratio"), list) and
+                vpf_data["speed_ratio"]
+            ):
+                vpf_data["speed_ratio"][0]["medianSec"] = new_median
+                logger.info(f"Updated VPF medianSec to {new_median:.2f} sec")
 
-                return new_median
+        return new_median
 
     except Exception as e:
         logger.exception(f"Failed to refresh VPF median cycle time: {e}")
@@ -2861,7 +2861,6 @@ def refresh_median_cycle_time_ELL(now: Optional[datetime] = None) -> float:
     try:
         with get_mysql_connection() as conn:
             with conn.cursor() as cursor:
-
                 sql_speed_data = """
                     SELECT p.cycle_time
                     FROM productions p
@@ -2880,18 +2879,18 @@ def refresh_median_cycle_time_ELL(now: Optional[datetime] = None) -> float:
 
                 new_median = median(cycle_times)
 
-                # ✅ Update in-memory data
-                with _update_lock:
-                    ell_data = global_state.visual_data.get("ELL")
-                    if (
-                        ell_data and
-                        isinstance(ell_data.get("speed_ratio"), list) and
-                        ell_data["speed_ratio"]
-                    ):
-                        ell_data["speed_ratio"][0]["medianSec"] = new_median
-                        logger.info(f"Updated ELL medianSec to {new_median:.2f} sec")
+        # ✅ Update shared memory under ELL lock only
+        with global_state.zone_locks["ELL"]:
+            ell_data = global_state.visual_data.get("ELL")
+            if (
+                ell_data and
+                isinstance(ell_data.get("speed_ratio"), list) and
+                ell_data["speed_ratio"]
+            ):
+                ell_data["speed_ratio"][0]["medianSec"] = new_median
+                logger.info(f"Updated ELL medianSec to {new_median:.2f} sec")
 
-                return new_median
+        return new_median
 
     except Exception as e:
         logger.exception(f"Failed to refresh ELL median cycle time: {e}")
@@ -2909,131 +2908,123 @@ def refresh_vpf_defects_data(now: datetime) -> None:
         'NG7.1': [(93, 'LMN01'), (47, 'LMN02')],
     }
 
-    try:
-        if now is None:
-            now = datetime.now()
+    if now is None:
+        now = datetime.now()
 
-        with _update_lock:
-            if "VPF" not in global_state.visual_data:
+    shift_start, shift_end = get_shift_window(now)
+    defects_vpf = []
+    eq_defects = {
+        cat: {station_name: 0 for _, station_name in stations}
+        for cat, stations in category_station_map.items()
+    }
+
+    try:
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                # 1️⃣ NG production IDs at VPF (first pass only)
+                cursor.execute("""
+                    SELECT p56.id
+                    FROM productions p56
+                    WHERE p56.esito = 6
+                    AND p56.station_id = 56
+                    AND p56.start_time BETWEEN %s AND %s
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM productions p_prev
+                        WHERE p_prev.object_id = p56.object_id
+                          AND p_prev.station_id = 56
+                          AND p_prev.start_time < p56.start_time
+                    )
+                """, (shift_start, shift_end))
+                vpf_rows = cursor.fetchall()
+                vpf_prod_ids = [row["id"] for row in vpf_rows]
+
+                # 2️⃣ Defects summary
+                if vpf_prod_ids:
+                    placeholders = ','.join(['%s'] * len(vpf_prod_ids))
+                    cursor.execute(f"""
+                        SELECT d.category, COUNT(*) AS count
+                        FROM object_defects od
+                        JOIN defects d ON od.defect_id = d.id
+                        WHERE od.production_id IN ({placeholders})
+                        GROUP BY d.category
+                    """, vpf_prod_ids)
+                    defects_vpf = [
+                        {"label": row["category"], "count": row["count"]}
+                        for row in cursor.fetchall()
+                    ]
+
+                # 3️⃣ eq_defects per NG category and path
+                if vpf_prod_ids:
+                    placeholders = ','.join(['%s'] * len(vpf_prod_ids))
+                    cursor.execute(f"""
+                        SELECT d.category, p.object_id
+                        FROM object_defects od
+                        JOIN defects d ON d.id = od.defect_id
+                        JOIN productions p ON p.id = od.production_id
+                        WHERE od.production_id IN ({placeholders})
+                    """, vpf_prod_ids)
+                    defect_to_objects = defaultdict(set)
+                    for row in cursor.fetchall():
+                        defect_to_objects[row["category"]].add(row["object_id"])
+
+                    for cat, stations in category_station_map.items():
+                        station_ids = [sid for sid, _ in stations]
+                        station_names = {sid: name for sid, name in stations}
+                        object_ids = defect_to_objects.get(cat, set())
+                        if not object_ids or not station_ids:
+                            continue
+
+                        obj_ph = ','.join(['%s'] * len(object_ids))
+                        stn_ph = ','.join(['%s'] * len(station_ids))
+                        cursor.execute(f"""
+                            SELECT p.station_id, COUNT(DISTINCT p.object_id) AS count
+                            FROM productions p
+                            WHERE p.object_id IN ({obj_ph})
+                              AND p.station_id IN ({stn_ph})
+                              AND p.start_time < (
+                                  SELECT MIN(p2.start_time)
+                                  FROM productions p2
+                                  WHERE p2.station_id = 56
+                                    AND p2.object_id = p.object_id
+                              )
+                            GROUP BY p.station_id
+                        """, (*object_ids, *station_ids))
+                        for row in cursor.fetchall():
+                            sid = row["station_id"]
+                            count = row["count"]
+                            station_name = station_names.get(sid)
+                            if station_name:
+                                eq_defects[cat][station_name] = count
+
+        # ✅ Update shared memory under VPF lock
+        with global_state.zone_locks["VPF"]:
+            data = global_state.visual_data.get("VPF")
+            if not data:
                 logger.warning("VPF zone data not found in global_state")
                 return
+            data["defects_vpf"] = defects_vpf
+            data["eq_defects"] = eq_defects
+            payload = copy.deepcopy(data)
 
-            data = global_state.visual_data["VPF"]
-            shift_start, shift_end = get_shift_window(now)
-            with get_mysql_connection() as conn:
-                with conn.cursor() as cursor:
+        # 🔄 Safe asyncio broadcast
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-                    # Get NG production IDs (first occurrence at station 56)
-                    sql_vpf_productions = """
-                        SELECT p56.id
-                        FROM productions p56
-                        WHERE p56.esito = 6
-                        AND p56.station_id = 56
-                        AND p56.start_time BETWEEN %s AND %s
-                        AND NOT EXISTS (
-                            SELECT 1
-                            FROM productions p_prev
-                            WHERE p_prev.object_id = p56.object_id
-                                AND p_prev.station_id = 56
-                                AND p_prev.start_time < p56.start_time
-                        )
-                    """
-                    cursor.execute(sql_vpf_productions, (shift_start, shift_end))
-                    vpf_rows = cursor.fetchall()
-                    vpf_prod_ids = [row["id"] for row in vpf_rows]
-
-                    # --- defects_vpf ---
-                    if not vpf_prod_ids:
-                        data["defects_vpf"] = []
-                    else:
-                        placeholders = ','.join(['%s'] * len(vpf_prod_ids))
-                        sql_vpf_defects = f"""
-                            SELECT d.category, COUNT(*) AS count
-                            FROM object_defects od
-                            JOIN defects d ON od.defect_id = d.id
-                            WHERE od.production_id IN ({placeholders})
-                            GROUP BY d.category
-                        """
-                        cursor.execute(sql_vpf_defects, vpf_prod_ids)
-                        data["defects_vpf"] = [
-                            {"label": row["category"], "count": row["count"]}
-                            for row in cursor.fetchall()
-                        ]
-
-                    # --- eq_defects ---
-                    eq_defects = {
-                        cat: {station_name: 0 for _, station_name in station_info}
-                        for cat, station_info in category_station_map.items()
-                    }
-
-                    if vpf_prod_ids:
-                        sql_defect_objects = f"""
-                            SELECT d.category, p.object_id
-                            FROM object_defects od
-                            JOIN defects d ON d.id = od.defect_id
-                            JOIN productions p ON p.id = od.production_id
-                            WHERE od.production_id IN ({','.join(['%s'] * len(vpf_prod_ids))})
-                        """
-                        cursor.execute(sql_defect_objects, vpf_prod_ids)
-                        defect_to_objects = defaultdict(set)
-                        for row in cursor.fetchall():
-                            defect_to_objects[row["category"]].add(row["object_id"])
-
-                        for cat, station_info in category_station_map.items():
-                            station_ids = [sid for sid, _ in station_info]
-                            station_names = {sid: name for sid, name in station_info}
-                            object_ids = defect_to_objects.get(cat, set())
-                            if not station_ids or not object_ids:
-                                continue
-
-                            obj_ph = ','.join(['%s'] * len(object_ids))
-                            stn_ph = ','.join(['%s'] * len(station_ids))
-
-                            sql_check_passages = f"""
-                                SELECT p.station_id, COUNT(DISTINCT p.object_id) AS count
-                                FROM productions p
-                                WHERE p.object_id IN ({obj_ph})
-                                AND p.station_id IN ({stn_ph})
-                                AND p.start_time < (
-                                    SELECT MIN(p2.start_time)
-                                    FROM productions p2
-                                    WHERE p2.station_id = 56
-                                        AND p2.object_id = p.object_id
-                                )
-                                GROUP BY p.station_id
-                            """
-                            cursor.execute(sql_check_passages, (*object_ids, *station_ids))
-                            for row in cursor.fetchall():
-                                sid = row["station_id"]
-                                count = row["count"]
-                                station_name = station_names.get(sid)
-                                if station_name:
-                                    eq_defects[cat][station_name] = count
-
-                    data["eq_defects"] = eq_defects
-
-                    # --- Broadcast update ---
-                    payload = copy.deepcopy(data)
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            loop.call_soon_threadsafe(
-                                lambda: asyncio.create_task(
-                                    broadcast_zone_update(line_name="Linea2", zone="VPF", payload=payload)
-                                )
-                            )
-                        else:
-                            asyncio.run(broadcast_zone_update(line_name="Linea2", zone="VPF", payload=payload))
-                    except RuntimeError:
-                        # No loop in current thread — create one manually
-                        try:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                            loop.run_until_complete(broadcast_zone_update(line_name="Linea2", zone="VPF", payload=payload))
-                            loop.close()
-                        except Exception as e:
-                            logger.warning(f"[VPF] fallback WebSocket update failed for VPF: {e}")
-
+        if loop.is_running():
+            loop.call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    broadcast_zone_update(line_name="Linea2", zone="VPF", payload=payload)
+                )
+            )
+        else:
+            loop.run_until_complete(
+                broadcast_zone_update(line_name="Linea2", zone="VPF", payload=payload)
+            )
+            loop.close()
 
     except Exception as e:
         logger.exception(f"refresh_vpf_defects_data() FAILED: {e}")

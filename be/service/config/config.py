@@ -141,6 +141,10 @@ print('Terminal log level is', LOGS_TERMINAL)
 WRITE_TO_PLC = config_ini.getboolean("plc", "WRITE_TO_PLC", fallback=True)
 print('PLC write flag is', WRITE_TO_PLC)
 
+# PLC write flag
+ELL_VISUAL = config_ini.getboolean("visuals", "ELL_VISUAL", fallback=False)
+print('ELL visual flag is', ELL_VISUAL)
+
 print('Debug value is', debug)
 
 ML_MODELS_DIR = BASE_DIR / "models"

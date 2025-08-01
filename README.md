@@ -131,7 +131,6 @@ Versions:
 
 "2.4.5" - Finished new ELL visuals
 "2.4.6" Completed STR, managed loss of connection, fixed Bugs
-"2.4.7" - `/api/tablet_stations` accepts optional `line_name` filter
 
 ## OWASP dependency verification
 

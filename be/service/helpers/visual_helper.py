@@ -9,11 +9,10 @@ from collections import defaultdict
 from typing import Dict, DefaultDict, Any, List, Optional
 import json
 from statistics import median
-import time
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection
-from service.config.config import ZONE_SOURCES, TARGETS_FILE, DEFAULT_TARGETS
+from service.config.config import ELL_VISUAL, ZONE_SOURCES, TARGETS_FILE, DEFAULT_TARGETS
 from service.state import global_state
 from service.routes.broadcast import broadcast_zone_update
 
@@ -195,14 +194,6 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
         logger.exception(f"compute_zone_snapshot() FAILED for zone={zone}: {e}")
         raise
 
-def timed(fn):
-    def wrapper(*args, **kwargs):
-        t0 = time.perf_counter()
-        res = fn(*args, **kwargs)
-        duration = time.perf_counter() - t0
-        logger.warning(f"{fn.__name__} took {duration:.3f}s")
-        return res
-    return wrapper
 # ─────────────────────────────────────────────────────────────────────────────
 def _compute_snapshot_ain(now: datetime) -> dict:
     try:
@@ -1546,9 +1537,11 @@ def update_visual_data_on_new_module(
         elif zone == "AIN":
             _update_snapshot_ain(data, station_name, esito, ts)
         elif zone == "ELL":
-            new_snapshot = _update_snapshot_ell_new(bufferIds)
-            data.clear()
-            data.update(new_snapshot)
+            if not ELL_VISUAL:
+                return
+            updated = _update_snapshot_ell(bufferIds)
+            global_state.visual_data[zone] = updated
+            data = updated
         elif zone == "STR":
             _update_snapshot_str(data, station_name, esito, ts)
         else:
@@ -1798,7 +1791,7 @@ def count_good_after_rework_buffer(cursor, start, end):
     cursor.execute(sql, (start, end, start, end))
     return cursor.fetchone()["cnt"] or 0
 
-def _update_snapshot_ell_new(bufferIds: List[str]) -> dict:
+def _update_snapshot_ell(bufferIds: List[str]) -> dict:
     try:
         now = datetime.now()
 

@@ -174,10 +174,17 @@ def time_to_seconds(time_val: timedelta) -> int:
     return time_val.seconds if isinstance(time_val, timedelta) else 0
 
 def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
+    """Return the data snapshot for ``zone``.
+
+    ``now`` is evaluated once and then passed to every helper involved in the
+    computation (``_compute_snapshot_*``, ``get_shift_window`` …).  Using a
+    single reference timestamp prevents subtle off-by-one issues when a shift or
+    hour boundary is crossed while the snapshot is being built.
+    """
+
     try:
         if now is None:
             now = datetime.now()
-        #now = now - timedelta(days=14)
 
         if zone == "VPF":
             return _compute_snapshot_vpf(now)
@@ -197,9 +204,6 @@ def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 def _compute_snapshot_ain(now: datetime) -> dict:
     try:
-        if now is None:
-            now = datetime.now()
-
         hour_start = now.replace(minute=0, second=0, microsecond=0)
         cfg = ZONE_SOURCES["AIN"]
 
@@ -385,7 +389,7 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 open_rows = cursor.fetchall()
 
                 for row in open_rows:
-                    elapsed_min = int((datetime.now() - row["start_time"]).total_seconds() // 60)
+                    elapsed_min = int((now - row["start_time"]).total_seconds() // 60)
                     stop_entry = {
                         "causale": row["reason"] or "Fermo",
                         "station": row["station_name"],
@@ -557,9 +561,6 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
     }
 
     try:
-        if now is None:
-            now = datetime.now()
-
         hour_start = now.replace(minute=0, second=0, microsecond=0)
         cfg = ZONE_SOURCES["VPF"]
         shift_start, shift_end = get_shift_window(now)
@@ -730,9 +731,6 @@ def count_good_after_rework(cursor, start, end):
 
 def _compute_snapshot_ell(now: datetime) -> dict:
     try:
-        if now is None:
-            now = datetime.now()
-
         hour_start = now.replace(minute=0, second=0, microsecond=0)
         cfg = ZONE_SOURCES["ELL"]
 
@@ -1158,7 +1156,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
             "value_gauge_2": value_gauge_2 #
             }
 
-def _compute_snapshot_str(now: datetime | None) -> dict:
+def _compute_snapshot_str(now: datetime) -> dict:
     """
     Build the full STR snapshot from str_visual_snapshot.
 
@@ -1173,9 +1171,6 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
         7 : STR04
         8 : STR05
     """
-    if now is None:
-        now = datetime.now()
-
     hour_start = now.replace(minute=0, second=0, microsecond=0)
     shift_start, shift_end = get_shift_window(now)
     STATION_IDS = [4, 5, 6, 7, 8]  # STR stations
@@ -1339,7 +1334,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
         cur.execute(sql_open, (*STATION_IDS,))
         open_rows = cur.fetchall()
         for row in open_rows:
-            elapsed_min = int((datetime.now() - row["start_time"]).total_seconds() // 60)
+            elapsed_min = int((now - row["start_time"]).total_seconds() // 60)
             stop_entry = {
                 "causale": row["reason"] or "Fermo",
                 "station": row["station_name"],

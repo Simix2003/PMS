@@ -11,7 +11,7 @@ import json
 from statistics import median
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import get_mysql_connection
+from service.connections.mysql import get_mysql_connection, get_mysql_read_connection
 from service.config.config import ELL_VISUAL, ZONE_SOURCES, TARGETS_FILE, DEFAULT_TARGETS
 from service.state import global_state
 from service.routes.broadcast import broadcast_zone_update
@@ -57,9 +57,21 @@ def get_shift_label(now: datetime) -> str:
     else:
         return "S3"
 
-def count_unique_objects(cursor, station_names, start, end, esito_filter):
-    placeholders = ", ".join(["%s"] * len(station_names))
-    params = station_names + [start, end]
+def count_unique_objects(cursor, station_groups, start, end, esito_filter):
+    """Count unique objects for multiple station groups in a single query.
+
+    ``station_groups`` can be either a list of station names (preserving the
+    previous behaviour and returning a single integer) or a list of
+    ``(station_names, alias)`` tuples.  In the latter case the function returns
+    a dictionary mapping each alias to its count.
+    """
+
+    # Backwards compatibility: allow a single list of station names
+    single_group = False
+    if station_groups and isinstance(station_groups[0], str):
+        station_groups = [(station_groups, "__cnt")]
+        single_group = True
+
     if esito_filter == "good":
         esito_condition = "AND p.esito IN (1, 5, 7)"
     elif esito_filter == "ng":
@@ -67,26 +79,46 @@ def count_unique_objects(cursor, station_names, start, end, esito_filter):
     else:
         esito_condition = ""
 
-    sql = f"""
-        SELECT COUNT(*) AS cnt
-        FROM (
-            SELECT p.object_id
+    subqueries = []
+    params = []
+    for names, alias in station_groups:
+        placeholders = ", ".join(["%s"] * len(names))
+        params.extend(names + [start, end])
+        subqueries.append(
+            f"""
+            SELECT '{alias}' AS grp, p.object_id
             FROM productions p
             JOIN stations s ON p.station_id = s.id
             WHERE s.name IN ({placeholders})
-            AND p.end_time BETWEEN %s AND %s
-            {esito_condition}
-            AND NOT EXISTS (
-                SELECT 1
-                FROM productions p2
-                WHERE p2.object_id = p.object_id
-                AND p2.station_id = p.station_id
-                AND p2.end_time > p.end_time
-            )
+              AND p.end_time BETWEEN %s AND %s
+              {esito_condition}
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM productions p2
+                  WHERE p2.object_id = p.object_id
+                    AND p2.station_id = p.station_id
+                    AND p2.end_time > p.end_time
+              )
+            """
+        )
+
+    sql = f"""
+        SELECT grp, COUNT(*) AS cnt
+        FROM (
+            {' UNION ALL '.join(subqueries)}
         ) AS latest_productions
+        GROUP BY grp
     """
+
     cursor.execute(sql, tuple(params))
-    return cursor.fetchone()["cnt"] or 0
+    rows = cursor.fetchall()
+    result = {alias: 0 for _, alias in station_groups}
+    for row in rows:
+        result[row["grp"]] = row["cnt"] or 0
+
+    if single_group:
+        return result["__cnt"]
+    return result
 
 def count_unique_objects_r0(cursor, station_names, start, end, esito_filter):
     placeholders = ", ".join(["%s"] * len(station_names))
@@ -173,33 +205,95 @@ def compute_yield(good: int, ng: int):
 def time_to_seconds(time_val: timedelta) -> int:
     return time_val.seconds if isinstance(time_val, timedelta) else 0
 
-def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
-    """Return the data snapshot for ``zone``.
+def _dispatch_snapshot(zone: str, now: datetime) -> dict:
+    """Select the proper snapshot computation for the given zone."""
+    if zone == "VPF":
+        return _compute_snapshot_vpf(now)
+    if zone == "AIN":
+        return _compute_snapshot_ain(now)
+    if zone == "ELL":
+        return _compute_snapshot_ell(now)
+    if zone == "STR":
+        return _compute_snapshot_str(now)
+    raise ValueError(f"Unknown zone: {zone}")
 
-    ``now`` is evaluated once and then passed to every helper involved in the
-    computation (``_compute_snapshot_*``, ``get_shift_window`` …).  Using a
-    single reference timestamp prevents subtle off-by-one issues when a shift or
-    hour boundary is crossed while the snapshot is being built.
+
+def _schedule_snapshot(zone: str, now: datetime, shift: str, missing: bool):
+    """Submit snapshot computation to the background executor.
+
+    If ``missing`` is True the call will wait for completion and return the
+    resulting snapshot; otherwise it returns immediately after scheduling.
     """
 
-    try:
-        if now is None:
-            now = datetime.now()
+    def _update_cache(fut):
+        try:
+            data = fut.result()
+            data["__timestamp"] = datetime.now().isoformat()
+            data["__shift"] = shift
+            with global_state.visual_data_lock:
+                global_state.visual_data[zone] = data
+                global_state.visual_futures.pop(zone, None)
+        except Exception as exc:  # pragma: no cover - logging path
+            logger.exception(
+                f"compute_zone_snapshot() FAILED for zone={zone}: {exc}"
+            )
+            with global_state.visual_data_lock:
+                global_state.visual_futures.pop(zone, None)
 
-        if zone == "VPF":
-            return _compute_snapshot_vpf(now)
-        elif zone == "AIN":
-            return _compute_snapshot_ain(now)
-        elif zone == "ELL":
-            return _compute_snapshot_ell(now)
-        elif zone == "STR":
-            return _compute_snapshot_str(now)
-        else:
-            raise ValueError(f"Unknown zone: {zone}")
+    with global_state.visual_data_lock:
+        future = global_state.visual_futures.get(zone)
+        if future is None or future.done():
+            future = global_state.executor.submit(_dispatch_snapshot, zone, now)
+            global_state.visual_futures[zone] = future
+            future.add_done_callback(_update_cache)
 
-    except Exception as e:
-        logger.exception(f"compute_zone_snapshot() FAILED for zone={zone}: {e}")
-        raise
+    if missing:
+        result = future.result()
+        result["__timestamp"] = datetime.now().isoformat()
+        result["__shift"] = shift
+        with global_state.visual_data_lock:
+            global_state.visual_data[zone] = result
+            global_state.visual_futures.pop(zone, None)
+        return result
+    return None
+
+
+def compute_zone_snapshot(zone: str, now: datetime | None = None, *, force_refresh: bool = False) -> dict:
+    """Return the cached snapshot for ``zone``.
+
+    Snapshot computation is off‑loaded to a background thread. The cached value
+    is returned immediately while the refresh happens asynchronously. Only when
+    no cache is available do we wait for the computation to finish.
+    """
+
+    if now is None:
+        now = datetime.now()
+
+    shift = get_shift_label(now)
+
+    with global_state.visual_data_lock:
+        cached = copy.deepcopy(global_state.visual_data.get(zone))
+
+    cache_missing = cached is None
+    stale = False
+    if cached:
+        ts_str = cached.get("__timestamp")
+        cached_shift = cached.get("__shift")
+        try:
+            ts = datetime.fromisoformat(ts_str) if ts_str else now
+        except ValueError:
+            ts = now
+        stale = (now - ts >= timedelta(hours=1)) or (cached_shift != shift)
+
+    if force_refresh:
+        stale = True
+
+    if cache_missing or stale:
+        result = _schedule_snapshot(zone, now, shift, cache_missing)
+        if result is not None:
+            return copy.deepcopy(result)
+
+    return cached if cached is not None else {}
 
 # ─────────────────────────────────────────────────────────────────────────────
 def _compute_snapshot_ain(now: datetime) -> dict:
@@ -209,13 +303,37 @@ def _compute_snapshot_ain(now: datetime) -> dict:
 
         shift_start, shift_end = get_shift_window(now)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
+                cursor.execute(
+                    "SET SESSION TRANSACTION READ ONLY, READ COMMITTED"
+                )
                 # -------- current shift totals / yield ----------
-                s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
-                s2_in  = count_unique_objects(cursor, cfg["station_2_in"],  shift_start, shift_end, "all")
-                s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
-                s2_ng  = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "ng")
+                counts_in = count_unique_objects(
+                    cursor,
+                    [
+                        (cfg["station_1_in"], "s1_in"),
+                        (cfg["station_2_in"], "s2_in"),
+                    ],
+                    shift_start,
+                    shift_end,
+                    "all",
+                )
+                counts_ng = count_unique_objects(
+                    cursor,
+                    [
+                        (cfg["station_1_out_ng"], "s1_ng"),
+                        (cfg["station_2_out_ng"], "s2_ng"),
+                    ],
+                    shift_start,
+                    shift_end,
+                    "ng",
+                )
+
+                s1_in = counts_in["s1_in"]
+                s2_in = counts_in["s2_in"]
+                s1_ng = counts_ng["s1_ng"]
+                s2_ng = counts_ng["s2_ng"]
                 s1_g   = s1_in - s1_ng
                 s2_g   = s2_in - s2_ng
                 s1_y   = compute_yield(s1_g, s1_ng)
@@ -226,11 +344,31 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 qc_stations = cfg["station_1_out_ng"] + cfg["station_2_out_ng"]
                 for label, start, end in get_previous_shifts(now):
                     # yields
-                    s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  start, end, "all")
-                    s2_in_  = count_unique_objects(cursor, cfg["station_2_in"],  start, end, "all")
-                    s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "ng")
+                    counts_in = count_unique_objects(
+                        cursor,
+                        [
+                            (cfg["station_1_in"], "s1_in"),
+                            (cfg["station_2_in"], "s2_in"),
+                        ],
+                        start,
+                        end,
+                        "all",
+                    )
+                    counts_ng = count_unique_objects(
+                        cursor,
+                        [
+                            (cfg["station_1_out_ng"], "s1_ng"),
+                            (cfg["station_2_out_ng"], "s2_ng"),
+                        ],
+                        start,
+                        end,
+                        "ng",
+                    )
+                    s1_in_ = counts_in["s1_in"]
+                    s2_in_ = counts_in["s2_in"]
+                    s1_n = counts_ng["s1_ng"]
+                    s2_n = counts_ng["s2_ng"]
                     s1_g = s1_in_ - s1_n
-                    s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
                     s2_g = s2_in_ - s2_n
 
                     s1_yield_shifts.append({
@@ -252,8 +390,7 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                     })
 
                     # throughput
-                    tot = (count_unique_objects(cursor, cfg["station_1_in"], start, end, "all") +
-                        count_unique_objects(cursor, cfg["station_2_in"], start, end, "all"))
+                    tot = s1_in_ + s2_in_
                     ng = s1_n + s2_n
                     shift_throughput.append({
                         "label": label,
@@ -266,11 +403,36 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 # -------- last 8 h bins (yield + throughput) -----
                 last_8h_throughput, s1_y8h, s2_y8h = [], [], []
                 for label, h_start, h_end in get_last_8h_bins(now):
-                    # THROUGHPUT
-                    tot  = (count_unique_objects(cursor, cfg["station_1_in"], h_start, h_end, "all") +
-                            count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all")) or 0
-                    ng   = (count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") +
-                            count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng")) or 0
+                    counts_in = count_unique_objects(
+                        cursor,
+                        [
+                            (cfg["station_1_in"], "s1_in"),
+                            (cfg["station_2_in"], "s2_in"),
+                        ],
+                        h_start,
+                        h_end,
+                        "all",
+                    )
+                    counts_ng = count_unique_objects(
+                        cursor,
+                        [
+                            (cfg["station_1_out_ng"], "s1_ng"),
+                            (cfg["station_2_out_ng"], "s2_ng"),
+                        ],
+                        h_start,
+                        h_end,
+                        "ng",
+                    )
+
+                    s1_in_ = counts_in["s1_in"]
+                    s2_in_ = counts_in["s2_in"]
+                    s1_n = counts_ng["s1_ng"]
+                    s2_n = counts_ng["s2_ng"]
+                    s1_g = s1_in_ - s1_n
+                    s2_g = s2_in_ - s2_n
+
+                    tot = s1_in_ + s2_in_
+                    ng = s1_n + s2_n
 
                     last_8h_throughput.append({
                         "hour": label,
@@ -279,14 +441,6 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                         "total": tot,
                         "ng": ng
                     })
-
-                    # YIELDS PER STATION
-                    s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  h_start, h_end, "all") or 0
-                    s2_in_  = count_unique_objects(cursor, cfg["station_2_in"],  h_start, h_end, "all") or 0
-                    s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
-                    s1_g = s1_in_ - s1_n
-                    s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
-                    s2_g = s2_in_ - s2_n
 
                     s1_y8h.append({
                         "hour": label,
@@ -565,8 +719,11 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
         cfg = ZONE_SOURCES["VPF"]
         shift_start, shift_end = get_shift_window(now)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
+                cursor.execute(
+                    "SET SESSION TRANSACTION READ ONLY, READ COMMITTED"
+                )
                 s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
                 s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
                 s1_g   = s1_in - s1_ng
@@ -736,8 +893,11 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
         shift_start, shift_end = get_shift_window(now)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
+                cursor.execute(
+                    "SET SESSION TRANSACTION READ ONLY, READ COMMITTED"
+                )
 
                 def count_objects_with_esito_ng(cursor, station_name, start, end):
                     sql = """
@@ -784,9 +944,32 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 conn.commit()
 
                 # First pass stats
-                s1_in = count_unique_objects(cursor, cfg["station_1_in"], shift_start, shift_end, "all")
+                counts_in = count_unique_objects(
+                    cursor,
+                    [
+                        (cfg["station_1_in"], "s1_in"),
+                        (cfg["station_2_in"], "s2_in"),
+                    ],
+                    shift_start,
+                    shift_end,
+                    "all",
+                )
+                counts_ng = count_unique_objects(
+                    cursor,
+                    [
+                        (cfg["station_1_out_ng"], "s1_ng"),
+                        (cfg["station_2_out_ng"], "s2_ng"),
+                        (cfg["station_qg_1"], "qg2_ng_1"),
+                        (cfg["station_qg_2"], "qg2_ng_2"),
+                    ],
+                    shift_start,
+                    shift_end,
+                    "ng",
+                )
+
+                s1_in = counts_in["s1_in"]
                 s1_in_r0 = count_unique_objects_r0(cursor, cfg["station_1_in"], shift_start, shift_end, "all")
-                s1_ng = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
+                s1_ng = counts_ng["s1_ng"]
                 s1_ng_r0 = count_unique_objects_r0(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
                 s1_g = s1_in - s1_ng
                 s1_g_r0 = s1_in_r0 - s1_ng_r0
@@ -796,8 +979,8 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 s2_g_r0 = s2_in_r0 - s2_ng_r0
 
                 # Rework stats
-                s2_in = count_unique_objects(cursor, cfg["station_2_in"], shift_start, shift_end, "all")
-                s2_ng = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "ng")
+                s2_in = counts_in["s2_in"]
+                s2_ng = counts_ng["s2_ng"]
                 s2_g = s2_in - s2_ng
 
                 value_gauge_1 = round((s2_g_r0 / s2_in_r0) * 100, 2) if s2_in_r0 else 0.0
@@ -810,11 +993,8 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 value_gauge_2 = round((good_after_rework / s2_g) * 100, 2) if s2_g else 0.0
 
                 # --- NG Counters ---
-                s1_ng = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
-
-                qg2_ng_1 = count_unique_objects(cursor, cfg["station_qg_1"], shift_start, shift_end, "ng")
-                qg2_ng_2 = count_unique_objects(cursor, cfg["station_qg_2"], shift_start, shift_end, "ng")
-
+                qg2_ng_1 = counts_ng["qg2_ng_1"]
+                qg2_ng_2 = counts_ng["qg2_ng_2"]
                 qg2_ng = qg2_ng_1 + qg2_ng_2
 
                 # Combined NG across ELL (station_1) + QG2_1 + QG2_2 (deduplicated by object_id)
@@ -1186,7 +1366,10 @@ def _compute_snapshot_str(now: datetime) -> dict:
         )
         return cur.fetchone()["val"] or 0
 
-    with get_mysql_connection() as conn, conn.cursor() as cur:
+    with get_mysql_read_connection() as conn, conn.cursor() as cur:
+      cur.execute(
+              "SET SESSION TRANSACTION READ ONLY, READ COMMITTED"
+          )
         station_in, station_ng, station_scrap, station_yield = {}, {}, {}, {}
 
         # 1. Current shift totals per station

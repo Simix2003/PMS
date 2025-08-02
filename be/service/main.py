@@ -6,6 +6,7 @@ import logging.config
 import logging.handlers
 import json
 import time
+from datetime import datetime
 from typing import AsyncGenerator
 from contextlib import asynccontextmanager
 import uvicorn
@@ -112,11 +113,15 @@ if sys.platform.startswith("win"):
 # Local imports
 from controllers.plc import PLCConnection
 from service.controllers.debug_plc import FakePLCConnection
-from service.config.config import CHANNELS, IMAGES_DIR, LOG_FILE, PLC_DB_RANGES, LOGS_FILE, LOGS_TERMINAL, debug
+from service.config.config import CHANNELS, IMAGES_DIR, LOG_FILE, PLC_DB_RANGES, LOGS_FILE, LOGS_TERMINAL, ZONE_SOURCES, debug
 from service.connections.mysql import get_mysql_connection, load_channels_from_db
 from service.tasks.main_esito_task import background_task
 from service.tasks.main_fermi_task import fermi_task
-from service.helpers.visual_helper import refresh_median_cycle_time_ELL, refresh_median_cycle_time_vpf
+from service.helpers.visual_helper import (
+    refresh_median_cycle_time_ELL,
+    refresh_median_cycle_time_vpf,
+    compute_zone_snapshot,
+)
 from service.state.global_state import (
     plc_connections,
     stop_threads,
@@ -127,6 +132,7 @@ from service.state.global_state import (
     executor,
     db_write_queue,
 )
+from service.state import global_state
 from service.routes.plc_routes import router as plc_router
 from service.routes.issue_routes import router as issue_router
 from service.routes.warning_routes import router as warning_router
@@ -140,7 +146,7 @@ from service.routes.websocket_routes import router as websocket_router
 from service.routes.health_check_routes import router as health_check_router
 from service.routes.mbj_routes import router as mbj_router
 from service.routes.ml_routes import router as ml_router
-from service.routes.visual_routes import initialize_visual_cache, router as visual_router
+from service.routes.visual_routes import router as visual_router
 from service.routes.escalation_routes import router as escalation_router
 #from service.routes.simix_rca_routes import router as simix_rca_router
 
@@ -228,13 +234,20 @@ async def async_get_refreshed_settings():
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(executor, get_refreshed_settings)
 
-async def start_background_tasks():
-    try:
-        initialize_visual_cache()
-        logger.debug("visual_data cache initialized")
-    except Exception as e:
-        logger.error(f"visual_data cache init failed: {e}")
+async def warm_visual_cache():
+    """Pre-compute visual snapshots for all zones before serving requests."""
+    loop = asyncio.get_running_loop()
+    tasks = [loop.run_in_executor(executor, compute_zone_snapshot, zone) for zone in ZONE_SOURCES]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    current_hour = datetime.now().strftime("%Y-%m-%d %H")
+    for zone, res in zip(ZONE_SOURCES.keys(), results):
+        if isinstance(res, Exception):
+            logger.error(f"visual snapshot preload failed for {zone}: {res}")
+        else:
+            res["__last_hour"] = current_hour
+            global_state.visual_data[zone] = res
 
+async def start_background_tasks():
     # Start queue for deferred DB writes
     db_write_queue.start()
 
@@ -329,6 +342,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.error(f"CHANNEL loading failed: {e}")
         raise
+
+    # Preload visual cache so first requests use warm data
+    try:
+        await warm_visual_cache()
+        logger.debug("visual_data cache preloaded")
+    except Exception as e:
+        logger.error(f"visual_data cache preload failed: {e}")
 
     # Settings reload (non-blocking)
     asyncio.create_task(async_get_refreshed_settings())

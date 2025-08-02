@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, Future
 import os
 from threading import Lock, RLock
 from typing import List
@@ -34,6 +34,18 @@ MYSQL_CONFIG = {
     "autocommit": False,
 }
 
+# Read-only pool config
+MYSQL_READ_CONFIG = {
+    "host": MYSQL_HOST,
+    "user": MYSQL_USER,
+    "password": MYSQL_PASSWORD,
+    "database": MYSQL_DB,
+    "port": MYSQL_PORT,
+    "cursorclass": DictCursor,
+    "autocommit": True,
+    "isolation_level": "READ COMMITTED",
+}
+
 # Connection pool (5 initial, 10 max)
 mysql_pool = ConnectionPool(
     name="ix_monitor_pool",
@@ -41,6 +53,15 @@ mysql_pool = ConnectionPool(
     maxsize=25,
     pre_create_num=15,
     **MYSQL_CONFIG
+)
+
+# Read-only connection pool
+mysql_read_pool = ConnectionPool(
+    name="ix_monitor_read_pool",
+    size=15,
+    maxsize=25,
+    pre_create_num=15,
+    **MYSQL_READ_CONFIG
 )
 
 zone_locks = {
@@ -92,6 +113,7 @@ xml_index = {}
 # Visual snapshot state
 visual_data: dict[str, dict] = {}
 visual_data_lock = Lock()
+visual_futures: dict[str, Future] = {}
 last_sent: dict[str, dict] = {}
 
 db_range_cache: dict[str, tuple[int, int]] = {}

@@ -14,27 +14,17 @@ logger = logging.getLogger(__name__)
 
 def initialize_visual_cache():
     for zone in ZONE_SOURCES:
-        global_state.visual_data[zone] = compute_zone_snapshot(zone)
+        compute_zone_snapshot(zone)
 
 # ──────────────────────────────────────────────────
 @router.get("/api/visual_data")
 async def get_visual_data(zone: str = Query(...), useCache: bool = Query(True)):
-    if zone not in global_state.visual_data:
+    if zone not in ZONE_SOURCES:
         raise HTTPException(status_code=404, detail="Unknown zone")
 
     now = datetime.now()
-    current_hour = now.strftime("%Y-%m-%d %H")
-    cached_data = global_state.visual_data[zone]
-    last_hour = cached_data.get("__last_hour")
-
-    # Force recompute if the hour has changed
-    if last_hour != current_hour or not useCache:
-        logger.debug(f"🕒 Hour changed: recomputing snapshot for {zone}")
-        cached_data = compute_zone_snapshot(zone, now=now)
-        cached_data["__last_hour"] = current_hour
-        global_state.visual_data[zone] = cached_data
-
-    return dict(cached_data)
+    data = compute_zone_snapshot(zone, now=now, force_refresh=not useCache)
+    return dict(data)
 
 @router.get("/api/visual_targets")
 async def get_visual_targets():

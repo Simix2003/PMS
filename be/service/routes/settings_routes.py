@@ -6,7 +6,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.config.settings import load_settings, save_settings, AllSettings
-from service.connections.mysql import get_mysql_connection
+from service.connections.mysql import get_mysql_read_connection
 from service.config.config import CHANNELS
 
 router = APIRouter()
@@ -54,7 +54,7 @@ def get_refreshed_settings():
 
 @router.get("/api/lines")
 def get_production_lines():
-    with get_mysql_connection() as conn:
+    with get_mysql_read_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute("SELECT name, display_name FROM production_lines ORDER BY id")
             lines = cursor.fetchall()

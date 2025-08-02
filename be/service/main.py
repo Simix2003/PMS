@@ -113,7 +113,7 @@ if sys.platform.startswith("win"):
 from controllers.plc import PLCConnection
 from service.controllers.debug_plc import FakePLCConnection
 from service.config.config import CHANNELS, IMAGES_DIR, LOG_FILE, PLC_DB_RANGES, LOGS_FILE, LOGS_TERMINAL, debug
-from service.connections.mysql import get_mysql_connection, load_channels_from_db
+from service.connections.mysql import get_mysql_read_connection, load_channels_from_db
 from service.tasks.main_esito_task import background_task
 from service.tasks.main_fermi_task import fermi_task
 from service.helpers.visual_helper import refresh_median_cycle_time_ELL, refresh_median_cycle_time_vpf
@@ -343,7 +343,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     finally:
         logger.debug("SHUTDOWN phase")
         try:
-            with get_mysql_connection() as conn:
+            with get_mysql_read_connection() as conn:
                 conn.close()
             logger.debug("MySQL disconnected")
         except Exception as e:

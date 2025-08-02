@@ -12,7 +12,13 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.temp_data import load_temp_data, save_temp_data
-from service.connections.mysql import get_mysql_connection, insert_defects, update_esito, check_stringatrice_warnings
+from service.connections.mysql import (
+    get_mysql_read_connection,
+    get_mysql_write_connection,
+    insert_defects,
+    update_esito,
+    check_stringatrice_warnings,
+)
 from service.helpers.helpers import get_channel_config
 from service.state.global_state import plc_connections, incomplete_productions
 from service.config.settings import load_settings
@@ -59,7 +65,7 @@ async def set_issues(request: Request):
 
     if production_id:
         try:
-            with get_mysql_connection() as conn:
+            with get_mysql_write_connection() as conn:
                 with conn.cursor() as cursor:
                     result = {
                         "Id_Modulo": object_id,
@@ -72,7 +78,7 @@ async def set_issues(request: Request):
 
                 conn.commit()
 
-            with get_mysql_connection() as conn:
+            with get_mysql_write_connection() as conn:
             # You can call this outside the context manager if it doesn't use the same `conn`
                 await check_stringatrice_warnings(line_name, conn, get_current_settings())
 
@@ -147,7 +153,7 @@ async def get_issues_for_object(
                 return JSONResponse(status_code=404, content={"error": "esito_scarto_compilato not found in mapping"})
             target = paths["esito_scarto_compilato"]
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 # 1. Trova l'object_id
                 cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))

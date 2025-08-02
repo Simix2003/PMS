@@ -12,7 +12,7 @@ from service.helpers.helpers import get_channel_config
 from service.state.global_state import plc_connections
 from service.routes.broadcast import broadcast
 from service.config.config import debug
-from service.connections.mysql import get_mysql_connection
+from service.connections.mysql import get_mysql_read_connection
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 @router.get("/api/station_for_object")
 async def get_station_for_object(id_modulo: str):
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM objects WHERE id_modulo = %s", (id_modulo,))
                 obj = cursor.fetchone()
@@ -94,7 +94,7 @@ async def set_outcome(request: Request):
 @router.get("/api/tablet_stations")
 async def get_qg_stations(line_name: str | None = None):
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 if line_name:
                     cursor.execute(

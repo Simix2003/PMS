@@ -7,7 +7,13 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import check_existing_production, get_last_station_id_from_productions, get_mysql_connection, insert_initial_production_data, update_production_final
+from service.connections.mysql import (
+    check_existing_production,
+    get_last_station_id_from_productions,
+    get_mysql_write_connection,
+    insert_initial_production_data,
+    update_production_final,
+)
 
 def wait_until_file_is_ready(file_path: str, timeout: int = 10) -> bool:
     """Wait until file is readable and not locked."""
@@ -52,7 +58,7 @@ def handle_new_xml_file(file_path: str):
         fine_buona = (esito == 1)
         fine_scarto = (esito == 6)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_write_connection() as conn:
             #print(id_modulo, station_name, data_inizio, esito)
             # Check if this event already exists
             if check_existing_production(id_modulo, station_name, data_inizio, conn):
@@ -75,7 +81,7 @@ def handle_new_xml_file(file_path: str):
             "Last_Station": last_station_id,
         }
 
-        with get_mysql_connection() as conn:
+        with get_mysql_write_connection() as conn:
             production_id = insert_initial_production_data(initial_data, station_name, conn, esito=2)
 
         if not production_id:

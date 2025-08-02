@@ -12,7 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.helpers.helpers import generate_time_buckets
 from service.config.config import CHANNELS
-from service.connections.mysql import get_mysql_connection
+from service.connections.mysql import get_mysql_read_connection
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ async def get_graph_data(request: Request):
     extra_filter = payload.get("extra_filter")
 
     logger.debug("\n--- API /graph_data called ---")
-    with get_mysql_connection() as conn:
+    with get_mysql_read_connection() as conn:
         result: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
         # ── Prepare date_format and shift SQL if needed ─────────────────────────
@@ -280,7 +280,7 @@ async def productions_summary(
     end_time: Optional[str] = Query(default=None),
 ):
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 params = []
                 where_clause = "WHERE 1=1"

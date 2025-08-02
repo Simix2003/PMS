@@ -46,24 +46,32 @@ ELL_DEFECT_MAP = {
     "NG PMS Backlight": 10,           # 'Bad Soldering'
 }
 
-def log_pool_status(tag: str = ""):
-    pool = global_state.mysql_pool
+def log_pool_status(pool, tag: str = ""):
     try:
-        total = pool.total_num      # total number of connections in the pool
-        available = pool.available_num  # number of available (free) connections
-        used = total - available    # number of used connections
+        total = pool.total_num
+        available = pool.available_num
+        used = total - available
         logger.info(f"[POOL] {tag} → used={used}, available={available}, total={total}")
     except Exception as e:
         logger.warning(f"[POOL] Failed to log status: {e}")
 
-def get_mysql_connection():
-    conn = global_state.mysql_pool.get_connection()
-    #log_pool_status("GET")
+
+def get_mysql_write_connection():
+    conn = global_state.mysql_write_pool.get_connection()
     return conn
+
+
+def get_mysql_read_connection():
+    conn = global_state.mysql_read_pool.get_connection()
+    return conn
+
+
+# Backwards compatibility
+get_mysql_connection = get_mysql_write_connection
 
 def get_line_name(line_id: int):
     """Return the production line name for a given ID."""
-    with get_mysql_connection() as conn:
+    with get_mysql_read_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute("SELECT name FROM production_lines WHERE id = %s", (line_id,))
             row = cursor.fetchone()
@@ -76,7 +84,7 @@ def load_channels_from_db() -> tuple[dict, dict]:
     2. PLC DB RANGES dict: {(ip, slot): {db_number: {'min': x, 'max': y}}}
     """
     # ✅ Use connection pool (automatically reused and closed)
-    with get_mysql_connection() as conn:
+    with get_mysql_read_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute("SELECT id, line_id, name, config, plc FROM stations")
             rows = cursor.fetchall()

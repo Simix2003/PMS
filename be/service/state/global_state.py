@@ -23,7 +23,7 @@ MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "Master36!")
 MYSQL_DB = os.getenv("MYSQL_DB", "ix_monitor")
 MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
 
-# Pool config
+# Shared pool config
 MYSQL_CONFIG = {
     "host": MYSQL_HOST,
     "user": MYSQL_USER,
@@ -31,16 +31,26 @@ MYSQL_CONFIG = {
     "database": MYSQL_DB,
     "port": MYSQL_PORT,
     "cursorclass": DictCursor,
-    "autocommit": False,
 }
 
-# Connection pool (5 initial, 10 max)
-mysql_pool = ConnectionPool(
-    name="ix_monitor_pool",
+# Write pool – smaller, transactional
+MYSQL_WRITE_CONFIG = {"autocommit": False, **MYSQL_CONFIG}
+mysql_write_pool = ConnectionPool(
+    name="ix_monitor_write_pool",
+    size=5,
+    maxsize=10,
+    pre_create_num=5,
+    **MYSQL_WRITE_CONFIG
+)
+
+# Read pool – larger, autocommit enabled
+MYSQL_READ_CONFIG = {"autocommit": True, **MYSQL_CONFIG}
+mysql_read_pool = ConnectionPool(
+    name="ix_monitor_read_pool",
     size=15,
-    maxsize=25,
+    maxsize=30,
     pre_create_num=15,
-    **MYSQL_CONFIG
+    **MYSQL_READ_CONFIG
 )
 
 zone_locks = {

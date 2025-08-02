@@ -13,7 +13,7 @@ from datetime import timedelta, datetime
 # Extend Python path per import interni progetto
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import get_mysql_connection
+from service.connections.mysql import get_mysql_read_connection
 from service.state.global_state import plc_connections
 
 router = APIRouter()
@@ -35,7 +35,7 @@ def get_uptime() -> str:
 
 def check_database_connection() -> Dict[str, str]:
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT 1")
         return {"status": "ok", "message": "MySQL OK"}

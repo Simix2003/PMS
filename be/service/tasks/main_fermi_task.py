@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import create_stop, get_mysql_connection
+from service.connections.mysql import create_stop, get_mysql_write_connection
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
 from service.config.config import CHANNELS, PLC_DB_RANGES, debug
@@ -279,7 +279,7 @@ async def insert_fermo_data(data, conn):
 async def process_fermo_update(data):
     """Background task: insert stop data and refresh visuals."""
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_write_connection() as conn:
             await insert_fermo_data(data, conn)
 
         ts = data.get("DataInizio") or datetime.now()

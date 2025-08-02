@@ -11,7 +11,7 @@ import json
 from statistics import median
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import get_mysql_connection
+from service.connections.mysql import get_mysql_read_connection
 from service.config.config import ELL_VISUAL, ZONE_SOURCES, TARGETS_FILE, DEFAULT_TARGETS
 from service.state import global_state
 from service.routes.broadcast import broadcast_zone_update
@@ -205,7 +205,7 @@ def _compute_snapshot_ain(now: datetime) -> dict:
 
         shift_start, shift_end = get_shift_window(now)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 # -------- current shift totals / yield ----------
                 s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
@@ -564,7 +564,7 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
         cfg = ZONE_SOURCES["VPF"]
         shift_start, shift_end = get_shift_window(now)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
                 s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
@@ -738,7 +738,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
         shift_start, shift_end = get_shift_window(now)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
 
                 def count_objects_with_esito_ng(cursor, station_name, start, end):
@@ -1191,7 +1191,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
         )
         return cur.fetchone()["val"] or 0
 
-    with get_mysql_connection() as conn, conn.cursor() as cur:
+    with get_mysql_read_connection() as conn, conn.cursor() as cur:
         station_in, station_ng, station_scrap, station_yield = {}, {}, {}, {}
 
         # 1. Current shift totals per station
@@ -1983,7 +1983,7 @@ def _update_snapshot_ell_new(
 
         # ===================== 4. Buffer‑ID defect trace  =====================
         if bufferIds:
-            with get_mysql_connection() as conn:
+            with get_mysql_read_connection() as conn:
                 with conn.cursor() as cursor:
                     bufferIds = [b.strip() for b in bufferIds if b and b.strip()]
                     if bufferIds:
@@ -2070,7 +2070,7 @@ def _update_snapshot_ell(bufferIds: List[str]) -> dict:
 
         shift_start, shift_end = get_shift_window(now)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
 
                 def count_objects_with_esito_ng(cursor, station_name, start, end):
@@ -2575,7 +2575,7 @@ def _update_snapshot_str(
     # Fetch latest module counts from DB
     cell_g = cell_ng = string_g = string_ng = 0
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("""
                     SELECT cell_G, cell_NG, string_G, string_NG
@@ -2685,7 +2685,7 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
         available_time_29 = 0
         available_time_30 = 0
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             conn.commit()  # Ensures no old snapshot
             with conn.cursor() as cursor:
                 # Total stop time for station 29
@@ -2795,7 +2795,7 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
         top_defects = []
         total_defects = 0
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 sql_productions = """
                     SELECT id, station_id
@@ -2891,7 +2891,7 @@ def refresh_top_defects_vpf(zone: str, ts: datetime) -> None:
     top_defects = []
 
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 sql_productions = """
                     SELECT p56.id, origin.station_id AS origin_station
@@ -2983,7 +2983,7 @@ def refresh_top_defects_ell(zone: str, ts: datetime) -> None:
     top_defects = []
 
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 sql_productions = """
                     SELECT id, station_id
@@ -3078,7 +3078,7 @@ def refresh_median_cycle_time_vpf(now: Optional[datetime] = None) -> float:
     shift_start, shift_end = get_shift_window(now)
 
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 sql_speed_data = """
                     SELECT p.cycle_time
@@ -3122,7 +3122,7 @@ def refresh_median_cycle_time_ELL(now: Optional[datetime] = None) -> float:
     shift_start, shift_end = get_shift_window(now)
 
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 sql_speed_data = """
                     SELECT p.cycle_time
@@ -3182,7 +3182,7 @@ def refresh_vpf_defects_data(now: datetime) -> None:
     }
 
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 # 1️⃣ NG production IDs at VPF (first pass only)
                 cursor.execute("""

@@ -17,7 +17,7 @@ from transformers import AutoTokenizer, AutoModel
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.config.config import KNOWN_DEFECTS, DEFECT_SIMILARITY_MODEL_PATH
-from service.connections.mysql import get_mysql_connection
+from service.connections.mysql import get_mysql_read_connection
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -131,7 +131,7 @@ def filter_outliers(values, factor=1.5):
 
 async def run_eta_prediction(production_id: int):
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 # Step 1: Get defects for this production_id
                 cursor.execute("""
@@ -238,7 +238,7 @@ async def predict_eta(req: PredictionRequest):
 @router.post("/api/ml/predict_eta_by_id_modulo")
 async def predict_eta_by_id_modulo(req: EtaByModuloRequest):
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 # Step 1: Resolve id_modulo → object.id
                 cursor.execute("""

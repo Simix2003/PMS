@@ -7,7 +7,13 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import get_mysql_connection, insert_defects, insert_initial_production_data, update_production_final, insert_str_data
+from service.connections.mysql import (
+    get_mysql_write_connection,
+    insert_defects,
+    insert_initial_production_data,
+    update_production_final,
+    insert_str_data,
+)
 from service.connections.temp_data import remove_temp_issues
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
@@ -59,7 +65,7 @@ async def process_final_update(
     t0 = time.perf_counter()
     print('Entering Final Update')
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_write_connection() as conn:
             with conn.cursor() as cursor:
                 t3 = time.perf_counter()
                 success, final_esito, end_time = await run_in_thread(
@@ -222,7 +228,7 @@ async def process_final_update(
 async def process_mirror_ell_production(row: dict) -> None:
     """Background task to mirror production into the ELL buffer."""
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_write_connection() as conn:
             await run_in_thread(mirror_ell_production, row, conn)
     except Exception as e:  # pragma: no cover - best effort logging
         logger.warning(f"process_mirror_production failed: {e}")
@@ -230,7 +236,7 @@ async def process_mirror_ell_production(row: dict) -> None:
 async def insert_defects_async(*args, **kwargs) -> None:
     """Wrapper to run insert_defects in thread with its own connection."""
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_write_connection() as conn:
             with conn.cursor() as cursor:
                 await run_in_thread(
                     insert_defects,
@@ -244,7 +250,7 @@ async def insert_defects_async(*args, **kwargs) -> None:
 async def insert_str_data_async(*args, **kwargs) -> None:
     """Wrapper to run insert_str_data in thread with its own connection."""
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_write_connection() as conn:
             with conn.cursor() as cursor:
                 await run_in_thread(
                     insert_str_data,
@@ -257,7 +263,7 @@ async def insert_str_data_async(*args, **kwargs) -> None:
 
 async def mirror_defects_async(rows):
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_write_connection() as conn:
             await run_in_thread(mirror_defects, rows, conn)
     except Exception as e:
         logger.warning(f"mirror_defects_async failed: {e}")
@@ -271,7 +277,7 @@ async def process_initial_production(
 ) -> None:
     """Background task to insert initial production and mirror if needed."""
     try:
-        with get_mysql_connection() as conn:
+        with get_mysql_write_connection() as conn:
             prod_id = await run_in_thread(
                 insert_initial_production_data,
                 initial_data,

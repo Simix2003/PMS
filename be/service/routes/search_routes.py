@@ -11,7 +11,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.config.config import COLUMN_MAP
-from service.connections.mysql import get_mysql_connection
+from service.connections.mysql import get_mysql_read_connection
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -337,7 +337,7 @@ async def search_results(request: Request):
                 MIN(od.extra_data) AS extra_data
             """
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 if show_all_events:
                     # First: Get object_ids that match filters

@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.helpers.export import EXPORT_DIR, clean_old_exports, export_full_excel
 from service.routes.broadcast import broadcast_export_progress
 from service.config.settings import load_settings
-from service.connections.mysql import get_mysql_connection
+from service.connections.mysql import get_mysql_read_connection
 
 router = APIRouter()
 
@@ -58,7 +58,7 @@ def export_objects(background_tasks: BackgroundTasks, data: dict = Body(...)):
 
     send_progress("db_connect")
 
-    conn = get_mysql_connection()
+    conn = get_mysql_read_connection()
     if not conn:
         return JSONResponse(status_code=500, content={"error": "MySQL connection not available"})
 
@@ -197,7 +197,7 @@ def daily_export(background_tasks: BackgroundTasks, data: dict = Body(...)):
     start_dt = datetime.combine(now.date() - timedelta(days=1), dt_time(hour=6))
     end_dt = datetime.combine(now.date(), dt_time(hour=5, minute=59, second=59))
 
-    conn = get_mysql_connection()
+    conn = get_mysql_read_connection()
     if not conn:
         return JSONResponse(status_code=500, content={"error": "MySQL connection not available"})
 

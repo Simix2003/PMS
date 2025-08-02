@@ -12,7 +12,11 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import get_mysql_connection, save_warning_on_mysql
+from service.connections.mysql import (
+    get_mysql_read_connection,
+    get_mysql_write_connection,
+    save_warning_on_mysql,
+)
 from service.routes.broadcast import broadcast_stringatrice_warning
 from service.helpers.helpers import compress_base64_to_jpeg_blob
 
@@ -21,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 @router.get("/api/warnings/{line_name}")
 def get_unacknowledged_warnings(line_name: str):
-    with get_mysql_connection() as conn:
+    with get_mysql_read_connection() as conn:
         with conn.cursor(DictCursor) as cursor:
             cursor.execute("""
                 SELECT w.*, p.photo
@@ -41,7 +45,7 @@ def get_unacknowledged_warnings(line_name: str):
 
 @router.post("/api/warnings/acknowledge/{warning_id}")
 def acknowledge_warning(warning_id: int):
-    with get_mysql_connection() as conn:
+    with get_mysql_write_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute("""
                 UPDATE stringatrice_warnings
@@ -54,7 +58,7 @@ def acknowledge_warning(warning_id: int):
 
 @router.post("/api/suppress_warning")
 async def suppress_warning(payload: dict):
-    with get_mysql_connection() as conn:
+    with get_mysql_write_connection() as conn:
         try:
             line = payload.get("line_name")
             timestamp_raw = payload.get("timestamp")
@@ -85,7 +89,7 @@ async def suppress_warning(payload: dict):
 
 @router.post("/api/warnings/suppress_with_photo")
 async def suppress_with_photo(data: dict = Body(...)):
-    with get_mysql_connection() as conn:
+    with get_mysql_write_connection() as conn:
 
         line_name = data["line_name"]
         timestamp_raw = data["timestamp"]
@@ -147,7 +151,7 @@ if debug:
             "display_name": station_display,
         }
 
-        with get_mysql_connection() as conn:
+        with get_mysql_write_connection() as conn:
             inserted_id = save_warning_on_mysql(
                 warning_payload,
                 conn,

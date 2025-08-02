@@ -59,6 +59,13 @@ def log_pool_status(tag: str = ""):
 def get_mysql_connection():
     conn = global_state.mysql_pool.get_connection()
     #log_pool_status("GET")
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SET SESSION TRANSACTION READ WRITE, REPEATABLE READ"
+            )
+    except Exception as e:
+        logger.warning(f"Failed to reset transaction mode: {e}")
     return conn
 
 def get_mysql_read_connection():

@@ -308,6 +308,9 @@ def _compute_snapshot_ain(now: datetime) -> dict:
 
         with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
+                cursor.execute(
+                    "SET SESSION TRANSACTION READ ONLY, READ COMMITTED"
+                )
                 # -------- current shift totals / yield ----------
                 counts_in = count_unique_objects(
                     cursor,
@@ -724,6 +727,9 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
 
         with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
+                cursor.execute(
+                    "SET SESSION TRANSACTION READ ONLY, READ COMMITTED"
+                )
                 s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
                 s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
                 s1_g   = s1_in - s1_ng
@@ -898,6 +904,9 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
         with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
+                cursor.execute(
+                    "SET SESSION TRANSACTION READ ONLY, READ COMMITTED"
+                )
 
                 def count_objects_with_esito_ng(cursor, station_name, start, end):
                     sql = """
@@ -1370,6 +1379,9 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
         return cur.fetchone()["val"] or 0
 
     with get_mysql_read_connection() as conn, conn.cursor() as cur:
+      cur.execute(
+              "SET SESSION TRANSACTION READ ONLY, READ COMMITTED"
+          )
         station_in, station_ng, station_scrap, station_yield = {}, {}, {}, {}
 
         # 1. Current shift totals per station

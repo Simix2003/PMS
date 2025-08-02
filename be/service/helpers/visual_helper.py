@@ -1468,7 +1468,7 @@ def update_visual_data_on_new_module(
         return
 
     # ✅ Per-zone lock: does NOT block other zones or the line
-    with global_state.zone_locks[zone]:
+    with global_state.zone_locks[zone].write_lock():
         current_shift_start, _ = get_shift_window(ts)
         data = global_state.visual_data[zone]
         cached_shift_start = data.get("__shift_start")
@@ -2755,7 +2755,7 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
         fermi_data.append({"Available_Time_2": f"{available_time_30}"})
 
         # ✅ Update shared memory under per-zone lock
-        with global_state.zone_locks[zone]:
+        with global_state.zone_locks[zone].write_lock():
             global_state.visual_data[zone]["fermi_data"] = fermi_data
             payload = copy.deepcopy(global_state.visual_data[zone])
 
@@ -2850,7 +2850,7 @@ def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
                     top_defects = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in top5]
 
         # ✅ Lock only during shared memory update
-        with global_state.zone_locks[zone]:
+        with global_state.zone_locks[zone].write_lock():
             data = global_state.visual_data[zone]
             data["top_defects_qg2"] = top_defects
             data["total_defects_qg2"] = total_defects
@@ -2943,7 +2943,7 @@ def refresh_top_defects_vpf(zone: str, ts: datetime) -> None:
                     top_defects = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in top5]
 
         # ✅ Per-zone lock only during shared memory update
-        with global_state.zone_locks[zone]:
+        with global_state.zone_locks[zone].write_lock():
             data = global_state.visual_data[zone]
             data["top_defects_vpf"] = top_defects
             payload = copy.deepcopy(data)
@@ -3045,7 +3045,7 @@ def refresh_top_defects_ell(zone: str, ts: datetime) -> None:
                     ]
 
         # ✅ Only lock shared memory during write
-        with global_state.zone_locks[zone]:
+        with global_state.zone_locks[zone].write_lock():
             data = global_state.visual_data[zone]
             data["top_defects"] = top_defects
             payload = copy.deepcopy(data)
@@ -3099,7 +3099,7 @@ def refresh_median_cycle_time_vpf(now: Optional[datetime] = None) -> float:
                 new_median = median(cycle_times)
 
         # ✅ Update shared memory under VPF lock only
-        with global_state.zone_locks["VPF"]:
+        with global_state.zone_locks["VPF"].write_lock():
             vpf_data = global_state.visual_data.get("VPF")
             if (
                 vpf_data and
@@ -3143,7 +3143,7 @@ def refresh_median_cycle_time_ELL(now: Optional[datetime] = None) -> float:
                 new_median = median(cycle_times)
 
         # ✅ Update shared memory under ELL lock only
-        with global_state.zone_locks["ELL"]:
+        with global_state.zone_locks["ELL"].write_lock():
             ell_data = global_state.visual_data.get("ELL")
             if (
                 ell_data and
@@ -3261,7 +3261,7 @@ def refresh_vpf_defects_data(now: datetime) -> None:
                                 eq_defects[cat][station_name] = count
 
         # ✅ Update shared memory under VPF lock
-        with global_state.zone_locks["VPF"]:
+        with global_state.zone_locks["VPF"].write_lock():
             data = global_state.visual_data.get("VPF")
             if not data:
                 logger.warning("VPF zone data not found in global_state")

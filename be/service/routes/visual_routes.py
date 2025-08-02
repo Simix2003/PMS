@@ -24,17 +24,22 @@ async def get_visual_data(zone: str = Query(...), useCache: bool = Query(True)):
 
     now = datetime.now()
     current_hour = now.strftime("%Y-%m-%d %H")
-    cached_data = global_state.visual_data[zone]
-    last_hour = cached_data.get("__last_hour")
+    lock = global_state.zone_locks[zone]
+
+    with lock.read_lock():
+        cached_data = dict(global_state.visual_data[zone])
+        last_hour = cached_data.get("__last_hour")
 
     # Force recompute if the hour has changed
     if last_hour != current_hour or not useCache:
         logger.debug(f"🕒 Hour changed: recomputing snapshot for {zone}")
-        cached_data = compute_zone_snapshot(zone, now=now)
-        cached_data["__last_hour"] = current_hour
-        global_state.visual_data[zone] = cached_data
+        new_data = compute_zone_snapshot(zone, now=now)
+        new_data["__last_hour"] = current_hour
+        with lock.write_lock():
+            global_state.visual_data[zone] = new_data
+        return dict(new_data)
 
-    return dict(cached_data)
+    return cached_data
 
 @router.get("/api/visual_targets")
 async def get_visual_targets():

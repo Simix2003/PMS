@@ -1,11 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor
 import os
-from threading import Lock, RLock
+from threading import Lock
 from typing import List
 from dotenv import load_dotenv, find_dotenv
 from pymysql.cursors import DictCursor
 from pymysqlpool import ConnectionPool
 from service.helpers.db_queue import DBWriteQueue
+from service.helpers.rwlock import ReadWriteLock
 from collections import defaultdict
 import sys
 
@@ -44,10 +45,10 @@ mysql_pool = ConnectionPool(
 )
 
 zone_locks = {
-    "ELL": RLock(),
-    "AIN": RLock(),
-    "VPF": RLock(),
-    "STR": RLock()
+    "ELL": ReadWriteLock(),
+    "AIN": ReadWriteLock(),
+    "VPF": ReadWriteLock(),
+    "STR": ReadWriteLock(),
 }
 
 STATION_TO_ZONES = defaultdict(set)  #use set instead of list for unique zones

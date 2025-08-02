@@ -1,4 +1,4 @@
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, Future
 import os
 from threading import Lock, RLock
 from typing import List
@@ -92,6 +92,7 @@ xml_index = {}
 # Visual snapshot state
 visual_data: dict[str, dict] = {}
 visual_data_lock = Lock()
+visual_futures: dict[str, Future] = {}
 last_sent: dict[str, dict] = {}
 
 db_range_cache: dict[str, tuple[int, int]] = {}

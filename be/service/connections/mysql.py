@@ -61,6 +61,10 @@ def get_mysql_connection():
     #log_pool_status("GET")
     return conn
 
+def get_mysql_read_connection():
+    conn = global_state.mysql_read_pool.get_connection()
+    return conn
+
 def get_line_name(line_id: int):
     """Return the production line name for a given ID."""
     with get_mysql_connection() as conn:

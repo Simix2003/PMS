@@ -1127,91 +1127,36 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 result = cursor.fetchone()
                 reentered_count = result["re_entered"] if result and "re_entered" in result else 0
 
-                # -------- speed_ratio (median vs current cycle time at station 3 = ReWork1) ------
-                sql_speed_data = """
-                    SELECT p.cycle_time
-                    FROM productions p
-                    WHERE p.station_id = 3
-                    AND p.cycle_time IS NOT NULL
-                    AND p.start_time BETWEEN %s AND %s
-                    ORDER BY p.start_time ASC
-                """
-                cursor.execute(sql_speed_data, (shift_start, shift_end))
-                raw_rows = cursor.fetchall()
-                cycle_times_all = [time_to_seconds(row["cycle_time"]) for row in raw_rows]
-
-                try:
-                    if len(cycle_times_all) >= 10:
-                        import numpy as np
-
-                        # Compute dynamic filtering bounds using 10th–90th percentile
-                        lower_bound = np.percentile(cycle_times_all, 10)
-                        upper_bound = np.percentile(cycle_times_all, 90)
-
-                        cycle_times = [t for t in cycle_times_all if lower_bound <= t <= upper_bound]
-                        logger.debug(f"[ELL] Cycle time filtered range: {lower_bound:.1f}–{upper_bound:.1f} sec")
-                    else:
-                        # Not enough data — use all values
-                        cycle_times = cycle_times_all
-                        lower_bound = min(cycle_times_all) if cycle_times_all else 0
-                        upper_bound = max(cycle_times_all) if cycle_times_all else 600
-                        logger.debug(f"[ELL] Using all cycle times — count: {len(cycle_times)}")
-
-                    if cycle_times:
-                        median_sec = median(cycle_times)
-                        current_sec = min(cycle_times[-1], float(upper_bound))
-                        max_sec = upper_bound  # reflects top of valid/filtered range
-                    else:
-                        median_sec = 0
-                        current_sec = 0
-                        max_sec = 600
-                        logger.debug(f"[ELL] No valid cycle times after filtering — setting all to 0/default")
-
-                    speed_ratio = [{
-                        "medianSec": median_sec,
-                        "currentSec": current_sec,
-                        "maxSec": max_sec
-                    }]
-                except Exception as e:
-                    logger.exception(f"[ELL] Failed computing speed_ratio: {e}")
-                    speed_ratio = [{
-                        "medianSec": 0,
-                        "currentSec": 0,
-                        "maxSec": 600
-                    }]
 
     except Exception as e:
         logger.exception(f"compute_zone_snapshot() FAILED for zone=ELL: {e}")
         raise
 
     return {
-            "station_1_in": s1_in,
-            "station_2_in": s2_in,
-            "station_1_ng_qg2": qg2_ng,
-            "station_1_out_ng": s1_ng,
-            "station_2_out_ng": s2_ng,
-            "ng_tot": ng_tot,
-            "station_1_r0_in": s1_in_r0,
-            "station_1_r0_ng": s1_ng_r0,
-            "station_2_r0_in":  s2_in_r0,
-            "station_2_r0_ng":  s2_ng_r0,
-            "station_1_esito_ng": s1_esito_ng,
-            "station_1_re_entered": reentered_count,
-            "FPY_yield": fpy_y,
-            "RWK_yield": rwk_y,
-            "FPY_yield_shifts": FPY_yield_shifts,
-            "RWK_yield_shifts": RWK_yield_shifs,
-            "FPY_yield_last_8h": FPY_y8h,
-            "RWK_yield_last_8h": RWK_y8h,
-            "shift_throughput": shift_throughput,
-            "last_8h_throughput": last_8h_throughput,
+            "station_1_in": s1_in, #
+            "station_2_in": s2_in, #
+            "station_1_ng_qg2": qg2_ng, #
+            "station_1_out_ng": s1_ng, #
+            "station_2_out_ng": s2_ng, #
+            "ng_tot": ng_tot, #
+            "station_1_r0_in": s1_in_r0, #
+            "station_1_r0_ng": s1_ng_r0, #
+            "station_2_r0_in":  s2_in_r0, #
+            "station_2_r0_ng":  s2_ng_r0, #
+            "FPY_yield": fpy_y, #
+            "RWK_yield": rwk_y, #
+            "FPY_yield_shifts": FPY_yield_shifts, #
+            "RWK_yield_shifts": RWK_yield_shifs, #
+            "FPY_yield_last_8h": FPY_y8h, #
+            "RWK_yield_last_8h": RWK_y8h, #
+            "shift_throughput": shift_throughput, #
+            "last_8h_throughput": last_8h_throughput, #
             "__shift_start": shift_start.isoformat(),
             "__last_hour": hour_start.isoformat(),
             "top_defects": top_defects,
-            "value_gauge_1": value_gauge_1,
-            "value_gauge_2": value_gauge_2,
-            "speed_ratio": speed_ratio,
-}
+            "value_gauge_1": value_gauge_1, #
+            "value_gauge_2": value_gauge_2 #
+            }
 
 def _compute_snapshot_str(now: datetime | None) -> dict:
     """
@@ -1537,11 +1482,11 @@ def update_visual_data_on_new_module(
         elif zone == "AIN":
             _update_snapshot_ain(data, station_name, esito, ts)
         elif zone == "ELL":
+            data.setdefault("latest_esito", {})
             if not ELL_VISUAL:
                 return
-            updated = _update_snapshot_ell(bufferIds)
-            global_state.visual_data[zone] = updated
-            data = updated
+            print('Calling _update_snapshot_ell_new()')
+            _update_snapshot_ell_new(data, station_name, esito, ts, cycle_time, bufferIds, object_id)
         elif zone == "STR":
             _update_snapshot_str(data, station_name, esito, ts)
         else:
@@ -1768,6 +1713,331 @@ def _update_snapshot_vpf(
 
         except Exception as e:
             logger.warning(f"Failed to parse cycle_time '{cycle_time}': {e}")
+
+def _update_snapshot_ell_new(
+    data: dict,
+    station_name: str,
+    esito: int,
+    ts: datetime,
+    cycle_time: Optional[str],
+    bufferIds: List[str] = [],
+    object_id: Optional[str] = None,
+    reentered: bool = False
+    ) -> None:
+
+    try:
+        cfg = ZONE_SOURCES["ELL"]
+        current_shift_start, _ = get_shift_window(ts)
+        current_shift_label = (
+            "S1" if 6 <= current_shift_start.hour < 14 else
+            "S2" if 14 <= current_shift_start.hour < 22 else
+            "S3"
+        )
+
+        # ———————————————————————————————————————————————————————————————
+        # 0. Ensure our helper sets exist on the `data` dict:
+        data.setdefault("s1_ng_set", set())                # for gauge 2 denominator fix
+        data.setdefault("reworked_set", set())             # modules good @RMI
+        data.setdefault("good_after_rework_set", set())    # modules good @ELL after RMI
+        # ———————————————————————————————————————————————————————————————
+
+        # 1. Update Counters
+        if not reentered:
+            if station_name in cfg["station_1_in"]:
+                data["station_1_in"] += 1
+                data["station_1_r0_in"] += 1
+            elif station_name in cfg["station_2_in"]:
+                data["station_2_in"] += 1
+                data["station_2_r0_in"] += 1
+        
+            if esito == 6:
+                if station_name in cfg['station_qg_1']:
+                    data["station_1_ng_qg2"] += 1
+                    data["ng_tot"] += 1
+                elif station_name in cfg['station_qg_2']:
+                    data["station_1_ng_qg2"] += 1
+                    data["ng_tot"] += 1
+                elif station_name in cfg["station_1_out_ng"]:
+                    data["station_1_r0_ng"] += 1
+                    data["station_1_esito_ng"] += 1
+                    data["station_1_out_ng"] += 1
+                    data["ng_tot"] += 1
+                elif station_name in cfg["station_2_out_ng"]:
+                    data["station_2_r0_ng"] += 1
+                    data["station_2_out_ng"] += 1
+        
+        if reentered:
+            if esito == 1:
+                if station_name in cfg["station_1_out_ng"]:
+                    data["station_1_out_ng"] -= 1
+                    data["ng_tot"] -= 1
+
+        # 1a. Track “distinct modules that hit NG at station 1”:
+        if station_name in cfg["station_1_in"] and esito == 6:
+            data["s1_ng_set"].add(object_id)
+
+        # 1b. Track “modules that passed rework”:
+        if station_name in cfg["station_2_in"] and esito != 6:
+            data["reworked_set"].add(object_id)
+
+        # 1c. Track “of those, who then passed at ELL”:
+        if station_name in cfg["station_1_in"] and esito != 6:
+            # only count if they were reworked
+            if object_id in data["reworked_set"]:
+                data["good_after_rework_set"].add(object_id)
+
+        # 2 Yield
+        # FPY = good on first pass / total first-pass
+        s1_good_r0 = data["station_1_r0_in"] - data["station_1_r0_ng"]
+        data["FPY_yield"] = compute_yield(s1_good_r0, data["station_1_r0_ng"])
+
+        #RWK = Good after being Reworked / total in
+
+        # Always track latest esito for RWK calculation
+        if station_name in cfg["station_1_in"] + cfg["station_1_out_ng"]:
+            data["latest_esito"][object_id] = esito
+        
+        latest_esito = data["latest_esito"]
+
+        total_started = data["station_1_r0_in"]  # First-pass only
+        final_good = sum(1 for e in latest_esito.values() if e != 6)
+        final_ng = total_started - final_good
+
+        data["RWK_yield"] = compute_yield(final_good, final_ng)
+
+        # ———————————————————————————————————————————————————————————————
+        # 3. Gauge 1: s2_g_r0 / s2_in_r0  (first‐pass yield @ RMI)
+        s2_in_r0 = data["station_2_r0_in"]
+        s2_g_r0  = s2_in_r0 - data["station_2_r0_ng"]
+        data["value_gauge_1"] = (
+            round((s2_g_r0 / s2_in_r0) * 100, 2)
+            if s2_in_r0 else
+            0.0
+        )
+
+        # 4. Gauge 2: good_after_rework / good_through_rework
+        #    ↳ SQL’s count_objects_with_esito_ng   ⇐ not needed any more
+        #    ↳ SQL’s count_good_after_rework
+        #       WITH reworked AS (… station_id=3 good …)
+        #       … good @ station_id=9 …
+        #
+        # In‐RAM equivalent:
+        total_reworked_good = len(data["reworked_set"])             # s2_g
+        total_good_after  = len(data["good_after_rework_set"])     # good_after_rework
+        data["value_gauge_2"] = (
+            round((total_good_after / total_reworked_good) * 100, 2)
+            if total_reworked_good else
+            0.0
+        )
+        # ———————————————————————————————————————————————————————————————
+
+        # 5 Update Throughput
+        def update_shift_throughput(thr_data):
+            is_in_station = station_name in cfg["station_1_in"] or station_name in cfg["station_2_in"]
+            is_ell_station = station_name in cfg["station_1_out_ng"]
+            is_scrap_station = station_name in cfg["station_2_out_ng"]
+
+            for shift in thr_data:
+                if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                    if is_in_station:
+                        shift["total"] += 1
+                    if esito == 6 and is_ell_station:
+                        shift["ng"] += 1
+                    if esito == 6 and is_scrap_station:
+                        shift["scrap"] += 1
+                    break
+
+        update_shift_throughput(data["shift_throughput"])
+
+        # 6 Update shift yields
+        def update_shift_yield_fpy(fpy_shift_data, is_r0_at_s1: bool):
+            if not is_r0_at_s1:
+                return
+            for shift in fpy_shift_data:
+                if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                    if esito == 6:
+                        shift["ng"] += 1
+                    else:
+                        shift["good"] += 1
+                    shift["yield"] = compute_yield(shift["good"], shift["ng"])
+                    break
+
+        def update_shift_yield_rwk(rwk_shift_data, station_name: str, object_id: Optional[str], esito: int):
+            if object_id is None:
+                return
+            # Track latest esito by object_id globally
+            latest_esito = data["latest_esito"]
+            latest_esito[object_id] = esito
+
+            # Recompute good/ng per shift
+            for shift in rwk_shift_data:
+                start_ts = shift["start"]
+                if shift["label"] == current_shift_label and start_ts == current_shift_start.isoformat():
+                    total_started = data["station_1_r0_in"]
+                    final_good = sum(1 for e in latest_esito.values() if e != 6)
+                    final_ng = total_started - final_good
+                    shift["good"] = final_good
+                    shift["ng"] = final_ng
+                    shift["yield"] = compute_yield(final_good, final_ng)
+                    break
+
+        # Update per-shift FPY
+        update_shift_yield_fpy(
+            data["FPY_yield_shifts"],
+            not reentered and station_name in cfg["station_1_out_ng"]
+        )
+
+        # Update per-shift RWK
+        update_shift_yield_rwk(
+            data["RWK_yield_shifts"],
+            station_name,
+            object_id,
+            esito
+        )
+
+        # 7 Update hourly bins
+        hour_start = ts.replace(minute=0, second=0, microsecond=0)
+        hour_label = hour_start.strftime("%H:%M")
+
+        def _touch_hourly_fpy():
+            if not reentered and station_name in cfg["station_1_out_ng"]:
+                lst = data["FPY_yield_last_8h"]
+                for entry in lst:
+                    if entry["hour"] == hour_label:
+                        if esito == 6:
+                            entry["ng"] += 1
+                        else:
+                            entry["good"] += 1
+                        entry["yield"] = compute_yield(entry["good"], entry["ng"])
+                        break
+                else:
+                    data["FPY_yield_last_8h"].append({
+                        "hour": hour_label,
+                        "start": hour_start.isoformat(),
+                        "end": (hour_start + timedelta(hours=1)).isoformat(),
+                        "good": 0 if esito == 6 else 1,
+                        "ng": 1 if esito == 6 else 0,
+                        "yield": compute_yield(0 if esito == 6 else 1, 1 if esito == 6 else 0)
+                    })
+                    data["FPY_yield_last_8h"][:] = data["FPY_yield_last_8h"][-8:]
+
+        def _touch_hourly_rwk():
+            if object_id is None:
+                return
+            # always update RWK using latest_esito
+            lst = data["RWK_yield_last_8h"]
+            final_good = sum(1 for e in data["latest_esito"].values() if e != 6)
+            total_started = data["station_1_r0_in"]
+            final_ng = total_started - final_good
+            yield_val = compute_yield(final_good, final_ng)
+
+            for entry in lst:
+                if entry["hour"] == hour_label:
+                    entry["good"] = final_good
+                    entry["ng"] = final_ng
+                    entry["yield"] = yield_val
+                    break
+            else:
+                data["RWK_yield_last_8h"].append({
+                    "hour": hour_label,
+                    "start": hour_start.isoformat(),
+                    "end": (hour_start + timedelta(hours=1)).isoformat(),
+                    "good": final_good,
+                    "ng": final_ng,
+                    "yield": yield_val
+                })
+                data["RWK_yield_last_8h"][:] = data["RWK_yield_last_8h"][-8:]
+
+        def _touch_hourly_throughput():
+            is_in_station = station_name in cfg["station_1_in"] or station_name in cfg["station_2_in"]
+            is_ell_station = station_name in cfg["station_1_out_ng"]
+            is_scrap_station = station_name in cfg["station_2_out_ng"]
+
+            if not (is_in_station or (esito == 6 and (is_ell_station or is_scrap_station))):
+                return
+
+            lst = data["last_8h_throughput"]
+            for entry in lst:
+                if entry["hour"] == hour_label:
+                    if is_in_station:
+                        entry["total"] += 1
+                    if esito == 6 and is_ell_station:
+                        entry["ng"] += 1
+                    if esito == 6 and is_scrap_station:
+                        entry["scrap"] += 1
+                    break
+            else:
+                lst.append({
+                    "hour": hour_label,
+                    "start": hour_start.isoformat(),
+                    "end": (hour_start + timedelta(hours=1)).isoformat(),
+                    "total": 1 if is_in_station else 0,
+                    "ng": 1 if esito == 6 and is_ell_station else 0,
+                    "scrap": 1 if esito == 6 and is_scrap_station else 0
+                })
+                lst[:] = lst[-8:]
+
+        _touch_hourly_fpy()
+        _touch_hourly_rwk()
+        _touch_hourly_throughput()
+
+        # ===================== 4. Buffer‑ID defect trace  =====================
+        if bufferIds:
+            with get_mysql_connection() as conn:
+                with conn.cursor() as cursor:
+                    bufferIds = [b.strip() for b in bufferIds if b and b.strip()]
+                    if bufferIds:
+                        placeholders = ",".join(["%s"] * len(bufferIds))
+                        cursor.execute(
+                            f"""
+                            SELECT 
+                            o.id_modulo,
+                            COALESCE(p.id, 0) AS production_id,
+                            SUM(p.station_id = 3) AS rwk_count,
+                            COALESCE(
+                                JSON_ARRAYAGG(
+                                    JSON_OBJECT(
+                                        'defect_id', od.defect_id,
+                                        'defect_type',
+                                            CASE 
+                                                WHEN od.defect_id = 1 THEN od.defect_type
+                                                ELSE COALESCE(d.category, 'Sconosciuto')
+                                            END,
+                                        'extra_data', IFNULL(od.extra_data,'')
+                                    )
+                                ),
+                                JSON_ARRAY()
+                            ) AS defects
+                        FROM objects o
+                        LEFT JOIN productions p
+                            ON p.object_id = o.id
+                        AND p.esito = 6
+                        LEFT JOIN object_defects od 
+                            ON od.production_id = p.id
+                        LEFT JOIN defects d 
+                            ON d.id = od.defect_id
+                        WHERE o.id_modulo IN ({placeholders})
+                        GROUP BY o.id_modulo, p.id;
+                            """,
+                            bufferIds,
+                        )
+                        data["bufferDefectSummary"] = [
+                            {
+                                "object_id": row["id_modulo"],
+                                "production_id": row["production_id"],
+                                "rework_count": int(row["rwk_count"] or 0),
+                                "defects": json.loads(row["defects"]) if row["defects"] else [],
+                            }
+                            for row in cursor.fetchall()
+                        ]
+        else:
+            data["bufferDefectSummary"] = []
+
+        print('data: ', data)
+
+    except Exception:
+        logger.exception("Error in _update_snapshot_ell_new()")
+        raise
 
 def count_good_after_rework_buffer(cursor, start, end):
     """

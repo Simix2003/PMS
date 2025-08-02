@@ -398,10 +398,6 @@ class _VisualPageState extends State<VisualPage> {
         value_gauge_2 =
             double.tryParse(response['value_gauge_2'].toString()) ?? 0.0;
 
-        // ─── Speed Ratio Chart ──────────────────────────
-        speedRatioData =
-            List<Map<String, dynamic>>.from(response['speed_ratio'] ?? []);
-
         isLoading = false;
       });
     } catch (e) {
@@ -802,6 +798,8 @@ class _VisualPageState extends State<VisualPage> {
       onMessage: (data) {
         if (!mounted) return;
 
+        print('📡 WebSocket message received: $data');
+
         setState(() {
           // ─── Station Metrics ───────────────────────────
           In_1 = toIntSafe(data['station_1_in']);
@@ -879,9 +877,6 @@ class _VisualPageState extends State<VisualPage> {
           value_gauge_1 = toDoubleSafe(data['value_gauge_1']);
           value_gauge_2 = toDoubleSafe(data['value_gauge_2']);
 
-          // ─── Speed Ratio Chart ──────────────────────────
-          speedRatioData =
-              List<Map<String, dynamic>>.from(data['speed_ratio'] ?? []);
         });
       },
       onDone: () => print("Visual WebSocket closed"),

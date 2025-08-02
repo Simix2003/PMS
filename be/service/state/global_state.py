@@ -1,10 +1,17 @@
 from concurrent.futures import ThreadPoolExecutor
 import os
 from threading import Lock, RLock
+from typing import List
 from dotenv import load_dotenv, find_dotenv
 from pymysql.cursors import DictCursor
 from pymysqlpool import ConnectionPool
 from service.helpers.db_queue import DBWriteQueue
+from collections import defaultdict
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from service.config.config import ZONE_SOURCES
 
 # Load .env variables
 load_dotenv(find_dotenv())
@@ -42,6 +49,17 @@ zone_locks = {
     "VPF": RLock(),
     "STR": RLock()
 }
+
+STATION_TO_ZONES = defaultdict(list)
+
+for zone, cfg in ZONE_SOURCES.items():
+    for v in cfg.values():
+        if isinstance(v, list):
+            for station in v:
+                STATION_TO_ZONES[station].append(zone)
+
+def get_zones_from_station(station: str) -> List[str]:
+    return STATION_TO_ZONES.get(station, [])
 
 # Thread-safe DB executor
 executor = ThreadPoolExecutor(max_workers=20)

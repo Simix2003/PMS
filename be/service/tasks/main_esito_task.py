@@ -4,7 +4,6 @@ import logging
 import time
 import os
 import sys
-from typing import Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
@@ -12,9 +11,10 @@ from service.connections.mysql import get_mysql_connection, insert_defects, inse
 from service.connections.temp_data import remove_temp_issues
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
-from service.config.config import PLC_DB_RANGES, ZONE_SOURCES, debug
+from service.config.config import PLC_DB_RANGES, debug
 from service.routes.broadcast import broadcast
 from service.state.global_state import (
+    get_zones_from_station,
     inizio_true_passato_flags,
     inizio_false_passato_flags,
     fine_true_passato_flags,
@@ -43,17 +43,6 @@ def log_duration(msg: str, duration: float, threshold: float = TIMING_THRESHOLD)
     log_fn = logger.warning if duration > threshold else logger.debug
     log_fn(f"{msg} in {duration:.3f}s")
 
-def get_zone_from_station(station: str) -> Optional[str]:
-    for zone, cfg in ZONE_SOURCES.items():
-        if station in (
-            cfg.get("station_1_in", []) +
-            cfg.get("station_2_in", []) +
-            cfg.get("station_1_out_ng", []) +
-            cfg.get("station_2_out_ng", [])
-        ):
-            return zone
-    return None
-
 async def process_final_update(
     full_station_id: str,
     line_name: str,
@@ -68,6 +57,7 @@ async def process_final_update(
 ) -> None:
     """Handle MySQL updates and visual refresh after sending PLC response."""
     t0 = time.perf_counter()
+    print('Entering Final Update')
     try:
         with get_mysql_connection() as conn:
             with conn.cursor() as cursor:
@@ -171,7 +161,9 @@ async def process_final_update(
                 except Exception as e:
                     logger.error(f"[{full_station_id}] Failed to insert STR snapshot: {e}")
             try:
-                zone = get_zone_from_station(channel_id)
+
+                zones = get_zones_from_station(channel_id)
+                print('zones: ', zones)
                 timestamp = (
                     datetime.fromisoformat(end_time)
                     if not isinstance(end_time, datetime)
@@ -191,29 +183,30 @@ async def process_final_update(
                         else None
                     )
                 bufferIds = result.get("BufferIds_Rework", [])
-                if zone and zone != "STR":
-                    async_tasks.append(
-                        asyncio.create_task(
-                            run_in_thread(
-                                update_visual_data_on_new_module,
-                                zone=zone,
-                                station_name=channel_id,
-                                esito=final_esito,
-                                ts=timestamp,
-                                cycle_time=result["Tempo_Ciclo"],
-                                reentered=bool(reentered),
-                                bufferIds=bufferIds,
-                                object_id=object_id,
+                for zone in zones:
+                    if zone:
+                        async_tasks.append(
+                            asyncio.create_task(
+                                run_in_thread(
+                                    update_visual_data_on_new_module,
+                                    zone=zone,
+                                    station_name=channel_id,
+                                    esito=final_esito,
+                                    ts=timestamp,
+                                    cycle_time=result["Tempo_Ciclo"],
+                                    reentered=bool(reentered),
+                                    bufferIds=bufferIds,
+                                    object_id=object_id,
+                                )
                             )
                         )
-                    )
-                    if zone == "AIN" and fine_scarto:
-                        async_tasks.append(asyncio.create_task(run_in_thread(refresh_top_defects_qg2, zone, timestamp)))
-                        async_tasks.append(asyncio.create_task(run_in_thread(refresh_top_defects_ell, "ELL", timestamp)))
-                    if zone == "ELL" and fine_scarto:
-                        async_tasks.append(asyncio.create_task(run_in_thread(refresh_top_defects_ell, zone, timestamp)))
-                else:
-                    logger.debug(f"Unknown zone for {channel_id} — skipping visual update")
+                        if zone == "AIN" and fine_scarto:
+                            async_tasks.append(asyncio.create_task(run_in_thread(refresh_top_defects_qg2, zone, timestamp)))
+                            async_tasks.append(asyncio.create_task(run_in_thread(refresh_top_defects_ell, "ELL", timestamp)))
+                        if zone == "ELL" and fine_scarto:
+                            async_tasks.append(asyncio.create_task(run_in_thread(refresh_top_defects_ell, zone, timestamp)))
+                    else:
+                        logger.debug(f"Unknown zone for {channel_id} — skipping visual update")
             except Exception as vis_err:  # pragma: no cover - best effort logging
                 logger.warning(f"Could not update visual_data for {channel_id}: {vis_err}")
 
@@ -517,14 +510,6 @@ async def handle_end_cycle(
         t_write_done - t_write_start,
     )
 
-    #await asyncio.get_event_loop().run_in_executor(
-    #    plc_executor,
-    #    plc_connection.write_bool,
-    #    pezzo_archivia_conf["db"],
-    #    pezzo_archivia_conf["byte"],
-    #    pezzo_archivia_conf["bit"],
-    #    True,
-    #)
     if esito_conf:
         queue_size_esito = get_executor_status(plc_executor)["queue_size"]
         t_esito_start = time.perf_counter()

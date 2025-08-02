@@ -11,7 +11,7 @@ import json
 from statistics import median
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.connections.mysql import get_mysql_connection
+from service.connections.mysql import get_mysql_connection, get_mysql_read_connection
 from service.config.config import ELL_VISUAL, ZONE_SOURCES, TARGETS_FILE, DEFAULT_TARGETS
 from service.state import global_state
 from service.routes.broadcast import broadcast_zone_update
@@ -205,7 +205,7 @@ def _compute_snapshot_ain(now: datetime) -> dict:
 
         shift_start, shift_end = get_shift_window(now)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 # -------- current shift totals / yield ----------
                 s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
@@ -564,7 +564,7 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
         cfg = ZONE_SOURCES["VPF"]
         shift_start, shift_end = get_shift_window(now)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
                 s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
@@ -738,7 +738,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
         shift_start, shift_end = get_shift_window(now)
 
-        with get_mysql_connection() as conn:
+        with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
 
                 def count_objects_with_esito_ng(cursor, station_name, start, end):
@@ -1191,7 +1191,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
         )
         return cur.fetchone()["val"] or 0
 
-    with get_mysql_connection() as conn, conn.cursor() as cur:
+    with get_mysql_read_connection() as conn, conn.cursor() as cur:
         station_in, station_ng, station_scrap, station_yield = {}, {}, {}, {}
 
         # 1. Current shift totals per station

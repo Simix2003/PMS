@@ -57,9 +57,21 @@ def get_shift_label(now: datetime) -> str:
     else:
         return "S3"
 
-def count_unique_objects(cursor, station_names, start, end, esito_filter):
-    placeholders = ", ".join(["%s"] * len(station_names))
-    params = station_names + [start, end]
+def count_unique_objects(cursor, station_groups, start, end, esito_filter):
+    """Count unique objects for multiple station groups in a single query.
+
+    ``station_groups`` can be either a list of station names (preserving the
+    previous behaviour and returning a single integer) or a list of
+    ``(station_names, alias)`` tuples.  In the latter case the function returns
+    a dictionary mapping each alias to its count.
+    """
+
+    # Backwards compatibility: allow a single list of station names
+    single_group = False
+    if station_groups and isinstance(station_groups[0], str):
+        station_groups = [(station_groups, "__cnt")]
+        single_group = True
+
     if esito_filter == "good":
         esito_condition = "AND p.esito IN (1, 5, 7)"
     elif esito_filter == "ng":
@@ -67,26 +79,46 @@ def count_unique_objects(cursor, station_names, start, end, esito_filter):
     else:
         esito_condition = ""
 
-    sql = f"""
-        SELECT COUNT(*) AS cnt
-        FROM (
-            SELECT p.object_id
+    subqueries = []
+    params = []
+    for names, alias in station_groups:
+        placeholders = ", ".join(["%s"] * len(names))
+        params.extend(names + [start, end])
+        subqueries.append(
+            f"""
+            SELECT '{alias}' AS grp, p.object_id
             FROM productions p
             JOIN stations s ON p.station_id = s.id
             WHERE s.name IN ({placeholders})
-            AND p.end_time BETWEEN %s AND %s
-            {esito_condition}
-            AND NOT EXISTS (
-                SELECT 1
-                FROM productions p2
-                WHERE p2.object_id = p.object_id
-                AND p2.station_id = p.station_id
-                AND p2.end_time > p.end_time
-            )
+              AND p.end_time BETWEEN %s AND %s
+              {esito_condition}
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM productions p2
+                  WHERE p2.object_id = p.object_id
+                    AND p2.station_id = p.station_id
+                    AND p2.end_time > p.end_time
+              )
+            """
+        )
+
+    sql = f"""
+        SELECT grp, COUNT(*) AS cnt
+        FROM (
+            {' UNION ALL '.join(subqueries)}
         ) AS latest_productions
+        GROUP BY grp
     """
+
     cursor.execute(sql, tuple(params))
-    return cursor.fetchone()["cnt"] or 0
+    rows = cursor.fetchall()
+    result = {alias: 0 for _, alias in station_groups}
+    for row in rows:
+        result[row["grp"]] = row["cnt"] or 0
+
+    if single_group:
+        return result["__cnt"]
+    return result
 
 def count_unique_objects_r0(cursor, station_names, start, end, esito_filter):
     placeholders = ", ".join(["%s"] * len(station_names))
@@ -208,10 +240,31 @@ def _compute_snapshot_ain(now: datetime) -> dict:
         with get_mysql_read_connection() as conn:
             with conn.cursor() as cursor:
                 # -------- current shift totals / yield ----------
-                s1_in  = count_unique_objects(cursor, cfg["station_1_in"],  shift_start, shift_end, "all")
-                s2_in  = count_unique_objects(cursor, cfg["station_2_in"],  shift_start, shift_end, "all")
-                s1_ng  = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
-                s2_ng  = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "ng")
+                counts_in = count_unique_objects(
+                    cursor,
+                    [
+                        (cfg["station_1_in"], "s1_in"),
+                        (cfg["station_2_in"], "s2_in"),
+                    ],
+                    shift_start,
+                    shift_end,
+                    "all",
+                )
+                counts_ng = count_unique_objects(
+                    cursor,
+                    [
+                        (cfg["station_1_out_ng"], "s1_ng"),
+                        (cfg["station_2_out_ng"], "s2_ng"),
+                    ],
+                    shift_start,
+                    shift_end,
+                    "ng",
+                )
+
+                s1_in = counts_in["s1_in"]
+                s2_in = counts_in["s2_in"]
+                s1_ng = counts_ng["s1_ng"]
+                s2_ng = counts_ng["s2_ng"]
                 s1_g   = s1_in - s1_ng
                 s2_g   = s2_in - s2_ng
                 s1_y   = compute_yield(s1_g, s1_ng)
@@ -222,11 +275,31 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 qc_stations = cfg["station_1_out_ng"] + cfg["station_2_out_ng"]
                 for label, start, end in get_previous_shifts(now):
                     # yields
-                    s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  start, end, "all")
-                    s2_in_  = count_unique_objects(cursor, cfg["station_2_in"],  start, end, "all")
-                    s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], start, end, "ng")
+                    counts_in = count_unique_objects(
+                        cursor,
+                        [
+                            (cfg["station_1_in"], "s1_in"),
+                            (cfg["station_2_in"], "s2_in"),
+                        ],
+                        start,
+                        end,
+                        "all",
+                    )
+                    counts_ng = count_unique_objects(
+                        cursor,
+                        [
+                            (cfg["station_1_out_ng"], "s1_ng"),
+                            (cfg["station_2_out_ng"], "s2_ng"),
+                        ],
+                        start,
+                        end,
+                        "ng",
+                    )
+                    s1_in_ = counts_in["s1_in"]
+                    s2_in_ = counts_in["s2_in"]
+                    s1_n = counts_ng["s1_ng"]
+                    s2_n = counts_ng["s2_ng"]
                     s1_g = s1_in_ - s1_n
-                    s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
                     s2_g = s2_in_ - s2_n
 
                     s1_yield_shifts.append({
@@ -248,8 +321,7 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                     })
 
                     # throughput
-                    tot = (count_unique_objects(cursor, cfg["station_1_in"], start, end, "all") +
-                        count_unique_objects(cursor, cfg["station_2_in"], start, end, "all"))
+                    tot = s1_in_ + s2_in_
                     ng = s1_n + s2_n
                     shift_throughput.append({
                         "label": label,
@@ -262,11 +334,36 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                 # -------- last 8 h bins (yield + throughput) -----
                 last_8h_throughput, s1_y8h, s2_y8h = [], [], []
                 for label, h_start, h_end in get_last_8h_bins(now):
-                    # THROUGHPUT
-                    tot  = (count_unique_objects(cursor, cfg["station_1_in"], h_start, h_end, "all") +
-                            count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all")) or 0
-                    ng   = (count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") +
-                            count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng")) or 0
+                    counts_in = count_unique_objects(
+                        cursor,
+                        [
+                            (cfg["station_1_in"], "s1_in"),
+                            (cfg["station_2_in"], "s2_in"),
+                        ],
+                        h_start,
+                        h_end,
+                        "all",
+                    )
+                    counts_ng = count_unique_objects(
+                        cursor,
+                        [
+                            (cfg["station_1_out_ng"], "s1_ng"),
+                            (cfg["station_2_out_ng"], "s2_ng"),
+                        ],
+                        h_start,
+                        h_end,
+                        "ng",
+                    )
+
+                    s1_in_ = counts_in["s1_in"]
+                    s2_in_ = counts_in["s2_in"]
+                    s1_n = counts_ng["s1_ng"]
+                    s2_n = counts_ng["s2_ng"]
+                    s1_g = s1_in_ - s1_n
+                    s2_g = s2_in_ - s2_n
+
+                    tot = s1_in_ + s2_in_
+                    ng = s1_n + s2_n
 
                     last_8h_throughput.append({
                         "hour": label,
@@ -275,14 +372,6 @@ def _compute_snapshot_ain(now: datetime) -> dict:
                         "total": tot,
                         "ng": ng
                     })
-
-                    # YIELDS PER STATION
-                    s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  h_start, h_end, "all") or 0
-                    s2_in_  = count_unique_objects(cursor, cfg["station_2_in"],  h_start, h_end, "all") or 0
-                    s1_n = count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
-                    s1_g = s1_in_ - s1_n
-                    s2_n = count_unique_objects(cursor, cfg["station_2_out_ng"], h_start, h_end, "ng") or 0
-                    s2_g = s2_in_ - s2_n
 
                     s1_y8h.append({
                         "hour": label,
@@ -786,9 +875,32 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 conn.commit()
 
                 # First pass stats
-                s1_in = count_unique_objects(cursor, cfg["station_1_in"], shift_start, shift_end, "all")
+                counts_in = count_unique_objects(
+                    cursor,
+                    [
+                        (cfg["station_1_in"], "s1_in"),
+                        (cfg["station_2_in"], "s2_in"),
+                    ],
+                    shift_start,
+                    shift_end,
+                    "all",
+                )
+                counts_ng = count_unique_objects(
+                    cursor,
+                    [
+                        (cfg["station_1_out_ng"], "s1_ng"),
+                        (cfg["station_2_out_ng"], "s2_ng"),
+                        (cfg["station_qg_1"], "qg2_ng_1"),
+                        (cfg["station_qg_2"], "qg2_ng_2"),
+                    ],
+                    shift_start,
+                    shift_end,
+                    "ng",
+                )
+
+                s1_in = counts_in["s1_in"]
                 s1_in_r0 = count_unique_objects_r0(cursor, cfg["station_1_in"], shift_start, shift_end, "all")
-                s1_ng = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
+                s1_ng = counts_ng["s1_ng"]
                 s1_ng_r0 = count_unique_objects_r0(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
                 s1_g = s1_in - s1_ng
                 s1_g_r0 = s1_in_r0 - s1_ng_r0
@@ -798,8 +910,8 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 s2_g_r0 = s2_in_r0 - s2_ng_r0
 
                 # Rework stats
-                s2_in = count_unique_objects(cursor, cfg["station_2_in"], shift_start, shift_end, "all")
-                s2_ng = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "ng")
+                s2_in = counts_in["s2_in"]
+                s2_ng = counts_ng["s2_ng"]
                 s2_g = s2_in - s2_ng
 
                 value_gauge_1 = round((s2_g_r0 / s2_in_r0) * 100, 2) if s2_in_r0 else 0.0
@@ -812,11 +924,8 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 value_gauge_2 = round((good_after_rework / s2_g) * 100, 2) if s2_g else 0.0
 
                 # --- NG Counters ---
-                s1_ng = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
-
-                qg2_ng_1 = count_unique_objects(cursor, cfg["station_qg_1"], shift_start, shift_end, "ng")
-                qg2_ng_2 = count_unique_objects(cursor, cfg["station_qg_2"], shift_start, shift_end, "ng")
-
+                qg2_ng_1 = counts_ng["qg2_ng_1"]
+                qg2_ng_2 = counts_ng["qg2_ng_2"]
                 qg2_ng = qg2_ng_1 + qg2_ng_2
 
                 # Combined NG across ELL (station_1) + QG2_1 + QG2_2 (deduplicated by object_id)

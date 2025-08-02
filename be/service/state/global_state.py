@@ -50,16 +50,16 @@ zone_locks = {
     "STR": RLock()
 }
 
-STATION_TO_ZONES = defaultdict(list)
+STATION_TO_ZONES = defaultdict(set)  #use set instead of list for unique zones
 
 for zone, cfg in ZONE_SOURCES.items():
     for v in cfg.values():
         if isinstance(v, list):
             for station in v:
-                STATION_TO_ZONES[station].append(zone)
+                STATION_TO_ZONES[station].add(zone)
 
 def get_zones_from_station(station: str) -> List[str]:
-    return STATION_TO_ZONES.get(station, [])
+    return list(STATION_TO_ZONES.get(station, []))
 
 # Thread-safe DB executor
 executor = ThreadPoolExecutor(max_workers=20)

@@ -123,6 +123,8 @@ def clean_for_json(obj):
         return [clean_for_json(v) for v in obj]
     elif isinstance(obj, Decimal):
         return float(obj)
+    elif isinstance(obj, set):  # 👈 FIX
+        return list(obj)
     else:
         return obj
 

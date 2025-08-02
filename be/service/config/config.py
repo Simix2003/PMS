@@ -142,7 +142,7 @@ WRITE_TO_PLC = config_ini.getboolean("plc", "WRITE_TO_PLC", fallback=True)
 print('PLC write flag is', WRITE_TO_PLC)
 
 # PLC write flag
-ELL_VISUAL = config_ini.getboolean("visuals", "ELL_VISUAL", fallback=False)
+ELL_VISUAL = config_ini.getboolean("visuals", "ELL_VISUAL", fallback=True)
 print('ELL visual flag is', ELL_VISUAL)
 
 print('Debug value is', debug)

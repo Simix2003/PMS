@@ -205,26 +205,95 @@ def compute_yield(good: int, ng: int):
 def time_to_seconds(time_val: timedelta) -> int:
     return time_val.seconds if isinstance(time_val, timedelta) else 0
 
-def compute_zone_snapshot(zone: str, now: datetime | None = None) -> dict:
-    try:
-        if now is None:
-            now = datetime.now()
-        #now = now - timedelta(days=14)
+def _dispatch_snapshot(zone: str, now: datetime) -> dict:
+    """Select the proper snapshot computation for the given zone."""
+    if zone == "VPF":
+        return _compute_snapshot_vpf(now)
+    if zone == "AIN":
+        return _compute_snapshot_ain(now)
+    if zone == "ELL":
+        return _compute_snapshot_ell(now)
+    if zone == "STR":
+        return _compute_snapshot_str(now)
+    raise ValueError(f"Unknown zone: {zone}")
 
-        if zone == "VPF":
-            return _compute_snapshot_vpf(now)
-        elif zone == "AIN":
-            return _compute_snapshot_ain(now)
-        elif zone == "ELL":
-            return _compute_snapshot_ell(now)
-        elif zone == "STR":
-            return _compute_snapshot_str(now)
-        else:
-            raise ValueError(f"Unknown zone: {zone}")
 
-    except Exception as e:
-        logger.exception(f"compute_zone_snapshot() FAILED for zone={zone}: {e}")
-        raise
+def _schedule_snapshot(zone: str, now: datetime, shift: str, missing: bool):
+    """Submit snapshot computation to the background executor.
+
+    If ``missing`` is True the call will wait for completion and return the
+    resulting snapshot; otherwise it returns immediately after scheduling.
+    """
+
+    def _update_cache(fut):
+        try:
+            data = fut.result()
+            data["__timestamp"] = datetime.now().isoformat()
+            data["__shift"] = shift
+            with global_state.visual_data_lock:
+                global_state.visual_data[zone] = data
+                global_state.visual_futures.pop(zone, None)
+        except Exception as exc:  # pragma: no cover - logging path
+            logger.exception(
+                f"compute_zone_snapshot() FAILED for zone={zone}: {exc}"
+            )
+            with global_state.visual_data_lock:
+                global_state.visual_futures.pop(zone, None)
+
+    with global_state.visual_data_lock:
+        future = global_state.visual_futures.get(zone)
+        if future is None or future.done():
+            future = global_state.executor.submit(_dispatch_snapshot, zone, now)
+            global_state.visual_futures[zone] = future
+            future.add_done_callback(_update_cache)
+
+    if missing:
+        result = future.result()
+        result["__timestamp"] = datetime.now().isoformat()
+        result["__shift"] = shift
+        with global_state.visual_data_lock:
+            global_state.visual_data[zone] = result
+            global_state.visual_futures.pop(zone, None)
+        return result
+    return None
+
+
+def compute_zone_snapshot(zone: str, now: datetime | None = None, *, force_refresh: bool = False) -> dict:
+    """Return the cached snapshot for ``zone``.
+
+    Snapshot computation is off‑loaded to a background thread. The cached value
+    is returned immediately while the refresh happens asynchronously. Only when
+    no cache is available do we wait for the computation to finish.
+    """
+
+    if now is None:
+        now = datetime.now()
+
+    shift = get_shift_label(now)
+
+    with global_state.visual_data_lock:
+        cached = copy.deepcopy(global_state.visual_data.get(zone))
+
+    cache_missing = cached is None
+    stale = False
+    if cached:
+        ts_str = cached.get("__timestamp")
+        cached_shift = cached.get("__shift")
+        try:
+            ts = datetime.fromisoformat(ts_str) if ts_str else now
+        except ValueError:
+            ts = now
+        stale = (now - ts >= timedelta(hours=1)) or (cached_shift != shift)
+
+    if force_refresh:
+        stale = True
+
+    if cache_missing or stale:
+        result = _schedule_snapshot(zone, now, shift, cache_missing)
+        if result is not None:
+            return copy.deepcopy(result)
+
+    return cached if cached is not None else {}
 
 # ─────────────────────────────────────────────────────────────────────────────
 def _compute_snapshot_ain(now: datetime) -> dict:

@@ -8,6 +8,7 @@ a = Analysis(
     datas=[],
     hiddenimports = [
     'pymysqlpool',
+    'snap7.type',
     'transformers.models.bert',
     'transformers.models.roberta',
     'transformers.models.deberta',

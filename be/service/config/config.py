@@ -145,6 +145,9 @@ print('PLC write flag is', WRITE_TO_PLC)
 ELL_VISUAL = config_ini.getboolean("visuals", "ELL_VISUAL", fallback=True)
 print('ELL visual flag is', ELL_VISUAL)
 
+RECONNECT_AFTER_MINS = config_ini.getint("connection", "RECONNECT_AFTER_MINS", fallback=60)
+print('Reconnect after minutes is', RECONNECT_AFTER_MINS)
+
 print('Debug value is', debug)
 
 ML_MODELS_DIR = BASE_DIR / "models"

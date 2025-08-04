@@ -1,18 +1,19 @@
 import asyncio
 import snap7.client as c
 import snap7.util as u
-from snap7.type import Area, Parameter
+import snap7.type as t
 import logging
 import time
 from threading import Lock, Thread
 import os
 import sys
 import socket
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from service.config.config import WRITE_TO_PLC
+from service.config.config import RECONNECT_AFTER_MINS, WRITE_TO_PLC
 
 DEFAULT_CHUNK   = 480           # safe chunk size for DB reads
 MAX_BACKOFF_SEC = 5.0           # exponential back-off ceiling
@@ -37,9 +38,9 @@ class PLCConnection:
         self.lock = Lock()
         self.client = c.Client()
         self.client.set_connection_type(3)
-        self.client.set_param(Parameter.PingTimeout, 5000)
-        self.client.set_param(Parameter.SendTimeout, 5000)
-        self.client.set_param(Parameter.RecvTimeout, 5000)
+        self.client.set_param(t.Parameter.PingTimeout, 5000)
+        self.client.set_param(t.Parameter.SendTimeout, 5000)
+        self.client.set_param(t.Parameter.RecvTimeout, 5000)
         self.ip_address = ip_address
         self.rack = 0
         self.slot = slot
@@ -49,6 +50,7 @@ class PLCConnection:
         self._connect()
         self._reconnect_count = 0
         Thread(target=self._background_reconnector, daemon=True).start()
+        Thread(target=self._reconnect_on_timer, daemon=True).start()
 
     def _check_tcp_port(self, port=102, timeout=1.0):
         try:
@@ -87,9 +89,9 @@ class PLCConnection:
             try:
                 # Don't recreate the client — reuse existing one
                 self.client.set_connection_type(3)
-                self.client.set_param(Parameter.PingTimeout, 5000)
-                self.client.set_param(Parameter.SendTimeout, 5000)
-                self.client.set_param(Parameter.RecvTimeout, 5000)
+                self.client.set_param(t.Parameter.PingTimeout, 5000)
+                self.client.set_param(t.Parameter.SendTimeout, 5000)
+                self.client.set_param(t.Parameter.RecvTimeout, 5000)
 
                 self.client.connect(self.ip_address, self.rack, self.slot)
 
@@ -106,6 +108,28 @@ class PLCConnection:
                 self._safe_callback("DISCONNECTED")
                 logger.error(f"❌ Failed PLC reconnect {self.ip_address}: {e}")
 
+    def _reconnect_on_timer(self):
+        while True:
+            logger.info(f"⏳ Next reconnect for PLC {self.ip_address} in {RECONNECT_AFTER_MINS} minutes")
+            time.sleep(RECONNECT_AFTER_MINS * 60)
+
+            start_time = datetime.now()
+            logger.info(f"🔁 [Timed Reconnect] START at {start_time.isoformat()} for PLC {self.ip_address}")
+
+            with self.lock:
+                try:
+                    self.client.disconnect()
+                    self.connected = False
+                except Exception:
+                    pass
+
+            time.sleep(0.5)
+            self._try_connect()
+
+            end_time = datetime.now()
+            elapsed = (end_time - start_time).total_seconds()
+            logger.info(f"✅ [Timed Reconnect] DONE for PLC {self.ip_address} — Start: {start_time.isoformat()}, End: {end_time.isoformat()}, Duration: {elapsed:.2f}s")
+
     def _connect(self):
         with self.lock:
             try:
@@ -115,9 +139,9 @@ class PLCConnection:
                 pass
             try:
                 self.client.set_connection_type(3)
-                self.client.set_param(Parameter.PingTimeout, 5000)
-                self.client.set_param(Parameter.SendTimeout, 5000)
-                self.client.set_param(Parameter.RecvTimeout, 5000)
+                self.client.set_param(t.Parameter.PingTimeout, 5000)
+                self.client.set_param(t.Parameter.SendTimeout, 5000)
+                self.client.set_param(t.Parameter.RecvTimeout, 5000)
                 self.client.connect(self.ip_address, self.rack, self.slot)
                 if self.client.get_connected():
                     self.connected = True
@@ -152,11 +176,7 @@ class PLCConnection:
             return
         self._last_check = now
         if not self.connected or not self.is_connected():
-            if self._check_tcp_port():
-                self._try_connect()
-            else:
-                logger.error(f"🚫 PLC {self.ip_address} port 102 unreachable")
-            self.connected = False
+            logger.info(f"🚫 PLC {self.ip_address} ENSURE CONNECTION FAILED")
 
     def _safe_callback(self, status):
         if self.status_callback:
@@ -196,37 +216,66 @@ class PLCConnection:
     def write_bool(self, db_number, byte_index, bit_index, value, max_retries=3):
         if not WRITE_TO_PLC:
             logger.debug("SKIPPED write_bool DB%04d b%d:%d = %s",
-                         db_number, byte_index, bit_index, value)
+                        db_number, byte_index, bit_index, value)
             return
 
         backoff = 0.01
         for attempt in range(max_retries):
+            t_attempt_start = time.perf_counter()
+
             with self.lock:
+                t_lock_acquired = time.perf_counter()
+
+                t_ensure_start = time.perf_counter()
                 self._ensure_connection()
+                t_ensure_end = time.perf_counter()
+                logger.debug(f"🔌 _ensure_connection took {t_ensure_end - t_ensure_start:.3f}s")
+
                 if not self.connected:
+                    logger.warning("⛔ Skipped write: PLC not connected")
                     return
+
                 try:
-                    # Read current byte and compute new value
+                    # Step 1: Read current byte
+                    t_read_start = time.perf_counter()
                     orig = self.client.db_read(db_number, byte_index, 1)
+                    t_read_end = time.perf_counter()
+                    logger.debug(f"📥 db_read took {t_read_end - t_read_start:.3f}s")
+
+                    # Step 2: Check if value already correct
+                    t_logic_start = time.perf_counter()
                     orig_val = orig[0]
                     new_val = (orig_val | (1 << bit_index)) if value else (orig_val & ~(1 << bit_index))
+                    t_logic_end = time.perf_counter()
+                    logger.debug(f"🧠 bit logic computation took {t_logic_end - t_logic_start:.6f}s")
+
                     if orig_val == new_val:
                         logger.debug("No-op write_bool(DB%d, byte %d, bit %d): already %s",
-                                     db_number, byte_index, bit_index, value)
+                                    db_number, byte_index, bit_index, value)
                         return
 
+                    # Step 3: Perform write
                     payload = bytearray([new_val])
-                    t0 = time.perf_counter()
-                    self.client.write_area(Area.DB, db_number, byte_index, payload)
-                    dt = time.perf_counter() - t0
+                    t_write_start = time.perf_counter()
+                    self.client.write_area(t.Area.DB, db_number, byte_index, payload)
+                    t_write_end = time.perf_counter()
 
-                    log = logger.warning if dt > 0.05 else logger.debug
-                    log("%s ⏱ write_bool(DB%d, byte %d, bit %d) %.3fs",
-                        self.ip_address, db_number, byte_index, bit_index, dt)
+                    write_duration = t_write_end - t_write_start
+                    log = logger.warning if write_duration > 0.05 else logger.debug
+                    log("%s ⏱ write_area(DB%d, byte %d, bit %d) took %.3fs",
+                        self.ip_address, db_number, byte_index, bit_index, write_duration)
+
+                    # Full timing for this attempt
+                    t_attempt_end = time.perf_counter()
+                    logger.debug(f"✅ Total write_bool attempt {attempt + 1} duration: {(t_attempt_end - t_attempt_start):.3f}s "
+                                f"(lock={t_lock_acquired - t_attempt_start:.3f}s, ensure={t_ensure_end - t_ensure_start:.3f}s, "
+                                f"read={t_read_end - t_read_start:.3f}s, write={write_duration:.3f}s)")
                     return
+
                 except Exception as e:
-                    logger.warning("⚠️ write attempt %d/%d failed: %s",
-                                   attempt + 1, max_retries, e)
+                    t_attempt_error = time.perf_counter()
+                    logger.warning("⚠️ write attempt %d/%d failed after %.3fs: %s",
+                                attempt + 1, max_retries, t_attempt_error - t_attempt_start, e)
                     self._recover_on_error(f"write_bool DB{db_number}", e)
 
             time.sleep(backoff)
@@ -256,7 +305,7 @@ class PLCConnection:
             try:
                 data = self.client.db_read(db_number, byte_index, 2)
                 u.set_int(data, 0, value)
-                self.client.write_area(Area.DB, db_number, byte_index, data)
+                self.client.write_area(t.Area.DB, db_number, byte_index, data)
             except Exception as e:
                 self._recover_on_error(f"write_integer DB{db_number}", e)
         duration = time.perf_counter() - t0
@@ -290,7 +339,7 @@ class PLCConnection:
             ba[1] = len(value := value[:max_size])
             ba[2:2+len(value)] = value.encode('ascii', errors='ignore')
             try:
-                self.client.write_area(Area.DB, db_number, byte_index, ba)
+                self.client.write_area(t.Area.DB, db_number, byte_index, ba)
             except Exception as e:
                 self._recover_on_error(f"write_string DB{db_number}", e)
         duration = time.perf_counter() - t0

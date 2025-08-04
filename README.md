@@ -131,6 +131,7 @@ Versions:
 
 "2.4.5" - Finished new ELL visuals
 "2.4.6" Completed STR, managed loss of connection, fixed Bugs
+"2.4.7" Fixed ELL update_snapshot, changed API
 
 ## OWASP dependency verification
 

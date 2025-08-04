@@ -1485,7 +1485,6 @@ def update_visual_data_on_new_module(
             data.setdefault("latest_esito", {})
             if not ELL_VISUAL:
                 return
-            print('Calling _update_snapshot_ell_new()')
             _update_snapshot_ell_new(data, station_name, esito, ts, cycle_time, bufferIds, object_id)
         elif zone == "STR":
             _update_snapshot_str(data, station_name, esito, ts)
@@ -2032,8 +2031,6 @@ def _update_snapshot_ell_new(
                         ]
         else:
             data["bufferDefectSummary"] = []
-
-        print('data: ', data)
 
     except Exception:
         logger.exception("Error in _update_snapshot_ell_new()")

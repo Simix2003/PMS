@@ -60,6 +60,8 @@ async def process_final_update(
 ) -> None:
     """Handle MySQL updates and visual refresh after sending PLC response."""
     t0 = time.perf_counter()
+    if channel_id == "RMI01":
+        logger.info(f"[{full_station_id}] process_final_update start")
     try:
         with get_mysql_connection() as conn:
             with conn.cursor() as cursor:
@@ -73,6 +75,10 @@ async def process_final_update(
                     fine_buona,
                     fine_scarto,
                 )
+                if channel_id == "RMI01":
+                    logger.info(
+                        f"[{full_station_id}] update_production_final took {time.perf_counter() - t3:.3f}s"
+                    )
 
         if success:
             async_tasks = []
@@ -221,12 +227,15 @@ async def process_final_update(
 
             if async_tasks:
                 await asyncio.gather(*async_tasks)
-
             print('FINAL UPDATE DONE on station', full_station_id)
 
     except Exception as e:
         logger.error(f"[{full_station_id}] Async final update failed: {e}")
     finally:
+        if channel_id == "RMI01":
+            logger.info(
+                f"[{full_station_id}] process_final_update took {time.perf_counter() - t0:.3f}s"
+            )
         incomplete_productions.pop(full_station_id, None)
         remove_temp_issues(line_name, channel_id, result.get("Id_Modulo"))
 
@@ -480,9 +489,12 @@ async def handle_end_cycle(
 ):
     """Process end-cycle logic in a background task."""
     full_station_id = f"{line_name}.{channel_id}"
-
     t_plc_detect = time.perf_counter()
     t0 = time.perf_counter()
+    if channel_id == "RMI01":
+        logger.info(
+            f"[{full_station_id}] EndCycle start: fine_buona={fine_buona}, fine_scarto={fine_scarto}"
+        )
     #if full_station_id =="Linea2.ELL01":
         #logger.info(f"Fine Ciclo on {full_station_id} TRUE ...")
 
@@ -503,6 +515,10 @@ async def handle_end_cycle(
         )
     timer_1 = time.perf_counter()
     logger.debug(f"[{full_station_id}] read_data", timer_1 - timer_0)
+    if channel_id == "RMI01":
+        logger.info(
+            f"[{full_station_id}] read_data took {timer_1 - timer_0:.3f}s"
+        )
     
     t11 = time.perf_counter()
     queue_size_arch = get_executor_status(plc_executor)["queue_size"]
@@ -516,12 +532,17 @@ async def handle_end_cycle(
     )
     await asyncio.wrap_future(future_arch)
     t_write_done = time.perf_counter()
+    duration_arch = t_write_done - t_write_start
     log_duration(
         f"[{full_station_id}] archivio TRUE (queue_size={queue_size_arch})",
-        t_write_done - t_write_start,
+        duration_arch,
         plc_connection,
         full_station_id,
     )
+    if channel_id == "RMI01":
+        logger.info(
+            f"[{full_station_id}] archivio TRUE took {duration_arch:.3f}s (queue_size={queue_size_arch})"
+        )
 
     if esito_conf:
         queue_size_esito = get_executor_status(plc_executor)["queue_size"]
@@ -535,12 +556,17 @@ async def handle_end_cycle(
         )
         await asyncio.wrap_future(future_esito)
         t_esito_end = time.perf_counter()
+        duration_esito = t_esito_end - t_esito_start
         log_duration(
             f"[{full_station_id}] esito FALSE (queue_size={queue_size_esito})",
-            t_esito_end - t_esito_start,
+            duration_esito,
             plc_connection,
             full_station_id,
         )
+        if channel_id == "RMI01":
+            logger.info(
+                f"[{full_station_id}] esito FALSE took {duration_esito:.3f}s (queue_size={queue_size_esito})"
+            )
         #await asyncio.get_event_loop().run_in_executor(
         #    plc_executor,
         #    plc_connection.write_bool,
@@ -550,12 +576,17 @@ async def handle_end_cycle(
         #    False,
         #)
     t_write_end = time.perf_counter()
+    total_plc_write = t_write_end - t_plc_detect
     log_duration(
         f"[{full_station_id}] from PLC TRUE to write_bool(TRUE)",
-        t_write_end - t_plc_detect,
+        total_plc_write,
         plc_connection,
         full_station_id,
     )
+    if channel_id == "RMI01":
+        logger.info(
+            f"[{full_station_id}] PLC write sequence took {total_plc_write:.3f}s"
+        )
 
     if result:
         production_id = incomplete_productions.get(full_station_id)
@@ -581,8 +612,12 @@ async def handle_end_cycle(
                 f"[{full_station_id}] Module was not found in incomplete productions. Wrote archivio bit anyway."
             )
 
-    #duration = time.perf_counter() - t0
-    #log_duration(f"[{full_station_id}] Total Fine Ciclo processing", duration)
+    duration_total = time.perf_counter() - t0
+    if channel_id == "RMI01":
+        logger.info(
+            f"[{full_station_id}] handle_end_cycle completed in {duration_total:.3f}s"
+        )
+    #log_duration(f"[{full_station_id}] Total Fine Ciclo processing", duration_total)
 
 def get_executor_status(executor):
     active_threads = sum(1 for t in executor._threads if t.is_alive())

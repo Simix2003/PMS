@@ -159,13 +159,13 @@ class PLCConnection:
             except Exception as e:
                 logger.exception(f"❌ Exception during disconnect: {e}")
 
-            time.sleep(1.0)
+        time.sleep(1.0)
 
-            try:
-                self._try_connect()
-                logger.info(f"✅ Reconnected to PLC at {self.ip_address}")
-            except Exception as e:
-                logger.exception(f"❌ Exception during reconnect: {e}")
+        try:
+            self._try_connect()
+            logger.info(f"✅ Reconnected to PLC at {self.ip_address}")
+        except Exception as e:
+            logger.exception(f"❌ Exception during reconnect: {e}")
 
 
     def _connect(self):

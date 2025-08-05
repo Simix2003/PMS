@@ -4,7 +4,7 @@ import snap7.util as u
 import snap7.type as t
 import logging
 import time
-from threading import Lock, Thread
+from threading import RLock, Thread
 import os
 import sys
 import socket
@@ -35,7 +35,7 @@ if not db_read_logger.handlers:
 class PLCConnection:
     def __init__(self, ip_address, slot, *, max_chunk: int = DEFAULT_CHUNK,
                  status_callback=None):
-        self.lock = Lock()
+        self.lock = RLock()
         self.client = c.Client()
         self.client.set_connection_type(3)
         self.client.set_param(t.Parameter.PingTimeout, 5000)
@@ -131,17 +131,17 @@ class PLCConnection:
                 try:
                     self.client.disconnect()
                     self.connected = False
-                except Exception:
-                    pass
-
-            time.sleep(1.0)
-            self._try_connect()
+                    time.sleep(1.0)  # move inside the lock
+                    self._try_connect()
+                except Exception as e:
+                    logger.exception(f"❌ Exception during timed reconnect: {e}")
 
             end_time = datetime.now()
             elapsed = (end_time - start_time).total_seconds()
             logger.info(
                 f"✅ [Timed Reconnect] DONE for PLC {self.ip_address} — Duration: {elapsed:.2f}s"
             )
+
 
     def force_reconnect(self, reason: str = "Manual trigger"):
         now = time.time()
@@ -151,6 +151,8 @@ class PLCConnection:
         self._last_manual_reconnect_ts = now
 
         logger.warning(f"🛠️ [Force Reconnect] Triggered due to: {reason}")
+        
+        # --- Disconnect inside lock ---
         with self.lock:
             try:
                 self.client.disconnect()
@@ -159,8 +161,10 @@ class PLCConnection:
             except Exception as e:
                 logger.exception(f"❌ Exception during disconnect: {e}")
 
-            time.sleep(1.0)
+        time.sleep(1.0)  # Outside the lock
 
+        # --- Reconnect inside lock again ---
+        with self.lock:
             try:
                 self._try_connect()
                 logger.info(f"✅ Reconnected to PLC at {self.ip_address}")

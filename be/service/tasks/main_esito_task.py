@@ -35,13 +35,16 @@ from service.helpers.ell_buffer import mirror_defects, mirror_ell_production
 
 logger = logging.getLogger(__name__)
 
-TIMING_THRESHOLD = 0.800
+TIMING_THRESHOLD = 1.0
 
 
-def log_duration(msg: str, duration: float, threshold: float = TIMING_THRESHOLD) -> None:
+def log_duration(msg: str, duration: float, plc_connection: PLCConnection, full_station_id: str, threshold: float = TIMING_THRESHOLD) -> None:
     """Log duration at WARNING level if above threshold else DEBUG."""
     log_fn = logger.warning if duration > threshold else logger.debug
     log_fn(f"{msg} in {duration:.3f}s")
+
+    if duration > threshold:
+        plc_connection.force_reconnect(reason=f"write_bool took {duration:.2f}s on {full_station_id}")
 
 async def process_final_update(
     full_station_id: str,
@@ -508,6 +511,8 @@ async def handle_end_cycle(
     log_duration(
         f"[{full_station_id}] archivio TRUE (queue_size={queue_size_arch})",
         t_write_done - t_write_start,
+        plc_connection,
+        full_station_id,
     )
 
     if esito_conf:
@@ -525,6 +530,8 @@ async def handle_end_cycle(
         log_duration(
             f"[{full_station_id}] esito FALSE (queue_size={queue_size_esito})",
             t_esito_end - t_esito_start,
+            plc_connection,
+            full_station_id,
         )
         #await asyncio.get_event_loop().run_in_executor(
         #    plc_executor,
@@ -538,6 +545,8 @@ async def handle_end_cycle(
     log_duration(
         f"[{full_station_id}] from PLC TRUE to write_bool(TRUE)",
         t_write_end - t_plc_detect,
+        plc_connection,
+        full_station_id,
     )
 
     if result:

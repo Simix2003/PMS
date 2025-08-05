@@ -48,6 +48,7 @@ class PLCConnection:
         self.status_callback = status_callback
         self.max_chunk = max_chunk
         self._connect()
+        self._last_manual_reconnect_ts = 0.0
         self._reconnect_count = 0
         Thread(target=self._background_reconnector, daemon=True).start()
         Thread(target=self._reconnect_on_timer, daemon=True).start()
@@ -113,6 +114,16 @@ class PLCConnection:
             logger.info(f"⏳ Next reconnect for PLC {self.ip_address} in {RECONNECT_AFTER_MINS} minutes")
             time.sleep(RECONNECT_AFTER_MINS * 60)
 
+            now = time.time()
+            elapsed_since_manual = now - self._last_manual_reconnect_ts
+            cooldown_secs = 10 * 60  # 10 minutes
+
+            if elapsed_since_manual < cooldown_secs:
+                logger.info(
+                    f"⏭️ [Timed Reconnect] Skipped for {self.ip_address} — manual reconnect was {elapsed_since_manual:.0f}s ago"
+                )
+                continue
+
             start_time = datetime.now()
             logger.info(f"🔁 [Timed Reconnect] START at {start_time.isoformat()} for PLC {self.ip_address}")
 
@@ -123,12 +134,32 @@ class PLCConnection:
                 except Exception:
                     pass
 
-            time.sleep(0.5)
+            time.sleep(1.0)
             self._try_connect()
 
             end_time = datetime.now()
             elapsed = (end_time - start_time).total_seconds()
-            logger.info(f"✅ [Timed Reconnect] DONE for PLC {self.ip_address} — Start: {start_time.isoformat()}, End: {end_time.isoformat()}, Duration: {elapsed:.2f}s")
+            logger.info(
+                f"✅ [Timed Reconnect] DONE for PLC {self.ip_address} — Duration: {elapsed:.2f}s"
+            )
+
+    def force_reconnect(self, reason: str = "Manual trigger"):
+        now = time.time()
+        # Avoid frequent reconnects
+        if now - self._last_manual_reconnect_ts < 10:
+            logger.warning(f"⏳ [Force Reconnect] Skipped (cooldown active)")
+            return
+        self._last_manual_reconnect_ts = now
+
+        logger.warning(f"🛠️ [Force Reconnect] Triggered due to: {reason}")
+        with self.lock:
+            try:
+                self.client.disconnect()
+            except Exception:
+                pass
+            time.sleep(1.0)
+            self._try_connect()
+
 
     def _connect(self):
         with self.lock:

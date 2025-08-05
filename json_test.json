@@ -1,24 +1,40 @@
 {
     "trigger": {
         "db": 19606,
-        "bit": 4,
-        "byte": 0
+        "bit": 3,
+        "byte": 451,
+        "plc": {
+            "ip": "192.168.32.2",
+            "slot": 0
+        }
     },
     "id_modulo": {
         "db": 19606,
-        "byte": 2,
-        "length": 20
+        "byte": 452,
+        "length": 20,
+        "plc": {
+            "ip": "192.168.32.2",
+            "slot": 0
+        }
     },
     "id_utente": {
         "db": 19606,
-        "byte": 24,
-        "length": 20
+        "byte": 474,
+        "length": 20,
+        "plc": {
+            "ip": "192.168.32.2",
+            "slot": 0
+        }
     },
     "fine_buona": {
         "db": 19606,
-        "bit": 5,
-        "byte": 0
-    },
+        "bit": 4,
+        "byte": 101,
+        "plc": {
+          "ip": "192.168.32.3",
+          "slot": 0
+        }
+      },
     "fine_fermo": {
         "db": 19102,
         "bit": 0,
@@ -26,8 +42,12 @@
     },
     "fine_scarto": {
         "db": 19606,
-        "bit": 6,
-        "byte": 0
+        "bit": 5,
+        "byte": 351,
+        "plc": {
+            "ip": "192.168.32.3",
+            "slot": 0
+        }
     },
     "evento_fermo": {
         "db": 19102,
@@ -56,8 +76,12 @@
     },
     "pezzo_archiviato": {
         "db": 19606,
-        "bit": 7,
-        "byte": 1002
+        "bit": 5,
+        "byte": 1001,
+        "plc": {
+            "ip": "192.168.32.3",
+            "slot": 0
+        }
     },
     "dati_pronti_fermi": {
         "db": 19100,
@@ -71,12 +95,11 @@
     },
     "pezzo_salvato_su_DB_con_inizio_ciclo": {
         "db": 19606,
-        "bit": 3,
-        "byte": 1000
-    },
-    "STR_data": {
-        "db": 19606,
-        "bit": 0,
-        "byte": 46
+        "bit": 5,
+        "byte": 1001,
+        "plc": {
+            "ip": "192.168.32.2",
+            "slot": 0
+        }
     }
 }

@@ -120,6 +120,13 @@ def load_channels_from_db() -> tuple[dict, dict]:
                 db = field["db"]
                 byte = field["byte"]
 
+                # Determine PLC: field-level override or station-level
+                field_plc = field.get("plc") or plc
+                if not field_plc or "ip" not in field_plc:
+                    continue
+
+                plc_key = (field_plc["ip"], field_plc.get("slot", 0))
+
                 # Estimate memory size
                 if "length" in field:
                     extra_bytes = field["length"] + 2

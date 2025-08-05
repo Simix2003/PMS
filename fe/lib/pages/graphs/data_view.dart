@@ -52,15 +52,19 @@ class _DataViewPageState extends State<DataViewPage> {
   double _thresholdSeconds = 3;
   bool showAsPercentage = false;
 
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
     _loadSettings();
     _initializeWebSocket();
+    setState(() => _isLoading = true);
     _fetchData().then((data) {
       if (mounted) {
         setState(() {
           _fetchedData = data;
+          _isLoading = false;
         });
       }
     });
@@ -108,10 +112,12 @@ class _DataViewPageState extends State<DataViewPage> {
         _initializeWebSocket(); // reconnect WebSocket for the new line
       });
 
+      setState(() => _isLoading = true);
       _fetchData().then((data) {
         if (mounted) {
           setState(() {
             _fetchedData = data;
+            _isLoading = false;
           });
         }
       });
@@ -189,10 +195,12 @@ class _DataViewPageState extends State<DataViewPage> {
         }
       });
 
+      setState(() => _isLoading = true);
       _fetchData().then((data) {
         if (mounted) {
           setState(() {
             _fetchedData = data;
+            _isLoading = false;
           });
         }
       });
@@ -404,6 +412,57 @@ class _DataViewPageState extends State<DataViewPage> {
     }
   }*/
 
+  Widget _buildErrorContent() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline_rounded, size: 60, color: Colors.red[400]),
+            const SizedBox(height: 16),
+            Text('Errore nel caricamento dei dati',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800])),
+            const SizedBox(height: 8),
+            Text(
+              '${_fetchedData!['error']}',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() => _isLoading = true);
+                _fetchData().then((data) {
+                  if (mounted) {
+                    setState(() {
+                      _fetchedData = data;
+                      _isLoading = false;
+                    });
+                  }
+                });
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text("Riprova"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF007AFF),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -534,143 +593,97 @@ class _DataViewPageState extends State<DataViewPage> {
           ),
         ],
       ),
-      body: _fetchedData == null
-          ? const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF007AFF),
-                strokeWidth: 3,
-              ),
-            )
-          : _fetchedData!.containsKey('error')
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline_rounded,
-                          size: 60,
-                          color: Colors.red[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Errore nel caricamento dei dati',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[800],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${_fetchedData!['error']}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            _fetchData().then((data) {
-                              if (mounted) {
-                                setState(() {
-                                  _fetchedData = data;
-                                });
-                              }
-                            });
-                          },
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text("Riprova"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF007AFF),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+      body: Stack(
+        children: [
+          _fetchedData == null
+              ? const Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF007AFF),
+                    strokeWidth: 6,
                   ),
                 )
-              : Builder(
-                  builder: (context) {
-                    final data = _fetchedData!;
+              : _fetchedData!.containsKey('error')
+                  ? _buildErrorContent()
+                  : Builder(
+                      builder: (context) {
+                        final data = _fetchedData!;
+                        final rawStationsMap = data['stations'] as Map;
+                        final stationsMap =
+                            rawStationsMap.cast<String, dynamic>();
+                        final stations = stationsMap.entries.toList();
 
-                    // 1) Take `data['stations']` (a LinkedHashMap<dynamic, dynamic>)
-                    //    and re‐cast it so Dart knows it’s Map<String, dynamic>.
-                    final rawStationsMap = data['stations'] as Map;
-                    final stationsMap = rawStationsMap.cast<String, dynamic>();
-                    final stations = stationsMap.entries.toList();
+                        final maxY = stations.map((entry) {
+                              final counts =
+                                  (entry.value as Map).cast<String, dynamic>();
+                              return (counts['good_count'] as int) +
+                                  (counts['bad_count'] as int);
+                            }).fold(0, (a, b) => a > b ? a : b) +
+                            20.0;
 
-                    // 2) When you go through each station entry, do a similar re‐cast for that nested map:
-                    final maxY = stations.map((entry) {
-                          // entry.value is dynamic, but really it’s a Map<String, dynamic> underneath
-                          final counts =
-                              (entry.value as Map).cast<String, dynamic>();
-                          return (counts['good_count'] as int) +
-                              (counts['bad_count'] as int);
-                        }).fold(0, (a, b) => a > b ? a : b) +
-                        20.toDouble();
+                        return SingleChildScrollView(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildHeaderCard(maxY, stations),
+                              const SizedBox(height: 24),
+                              _buildLineaOverviewCard(
+                                stations,
+                                selectedLine,
+                                lineDisplayNames,
+                                _selectedDate,
+                                _selectedRange,
+                                selectedStartTime,
+                                selectedEndTime,
+                                selectedTurno,
+                              ),
+                              const SizedBox(height: 24),
+                              ...['MIN01', 'MIN02', 'RMI01'].map((stationCode) {
+                                final entry = stations.firstWhere(
+                                  (e) => e.key == stationCode,
+                                  orElse: () => const MapEntry('', {}),
+                                );
+                                if (entry.key.isEmpty) return const SizedBox();
 
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildHeaderCard(maxY, stations),
-                          const SizedBox(height: 24),
-                          _buildLineaOverviewCard(
-                            stations,
-                            selectedLine,
-                            lineDisplayNames,
-                            _selectedDate,
-                            _selectedRange,
-                            selectedStartTime,
-                            selectedEndTime,
-                            selectedTurno,
+                                final stationData = Map<String, dynamic>.from(
+                                    (entry.value as Map)
+                                        .cast<String, dynamic>());
+
+                                if (stationCode == 'RMI01') {
+                                  stationData['good_count'] =
+                                      stationData['ok_op_count'] ?? 0;
+                                }
+                                final visualName =
+                                    stationData['display'] ?? entry.key;
+
+                                return StationCard(
+                                  station: visualName,
+                                  stationData: stationData,
+                                  selectedDate: _selectedDate,
+                                  selectedRange: _selectedRange,
+                                  selectedStartTime: selectedStartTime,
+                                  selectedEndTime: selectedEndTime,
+                                  turno: selectedTurno,
+                                  thresholdSeconds: _thresholdSeconds,
+                                );
+                              }).whereType<Widget>()
+                            ],
                           ),
-                          const SizedBox(height: 24),
-                          // Note how we re‐cast again before modifying stationData:
-                          ...['MIN01', 'MIN02', 'RMI01'].map((stationCode) {
-                            final entry = stations.firstWhere(
-                              (e) => e.key == stationCode,
-                              orElse: () => const MapEntry('', {}),
-                            );
-                            if (entry.key.isEmpty) return const SizedBox();
-
-                            // Cast the `entry.value` into Map<String, dynamic> safely:
-                            final stationData = Map<String, dynamic>.from(
-                                (entry.value as Map).cast<String, dynamic>());
-
-                            if (stationCode == 'RMI01') {
-                              stationData['good_count'] =
-                                  stationData['ok_op_count'] ?? 0;
-                            }
-                            final visualName =
-                                stationData['display'] ?? entry.key;
-
-                            return StationCard(
-                              station: visualName,
-                              stationData: stationData,
-                              selectedDate: _selectedDate,
-                              selectedRange: _selectedRange,
-                              selectedStartTime: selectedStartTime,
-                              selectedEndTime: selectedEndTime,
-                              turno: selectedTurno,
-                              thresholdSeconds: _thresholdSeconds,
-                            );
-                          }).whereType<Widget>()
-                        ],
-                      ),
-                    );
-                  },
+                        );
+                      },
+                    ),
+          if (_isLoading)
+            Container(
+              color: Colors.white.withOpacity(0.4),
+              child: const Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFF007AFF),
+                  strokeWidth: 6,
                 ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -1322,10 +1335,12 @@ class _DataViewPageState extends State<DataViewPage> {
           end ?? TimeOfDay(hour: 23, minute: 59); // default to 23:59
     });
 
+    setState(() => _isLoading = true);
     _fetchData().then((data) {
       if (mounted) {
         setState(() {
           _fetchedData = data;
+          _isLoading = false;
         });
       }
     });
@@ -1551,10 +1566,12 @@ class _DataViewPageState extends State<DataViewPage> {
           setState(() {
             selectedTurno = turno;
           });
+          setState(() => _isLoading = true);
           _fetchData().then((data) {
             if (mounted) {
               setState(() {
                 _fetchedData = data;
+                _isLoading = false;
               });
             }
           });

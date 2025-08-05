@@ -67,7 +67,6 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   final String operatorId = 'NO OPERATOR';
   Timer? _timer;
   bool _busy = false;
-  bool _showClosed = false;
   int? _selectedIndex;
 
   final stationNameToId = {
@@ -79,6 +78,15 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     "STR04": 7,
     "STR05": 8,
   };
+
+  String _getZoneFromStation(String stationName) {
+    const ainStations = {"AIN01", "AIN02"};
+    const strStations = {"STR01", "STR02", "STR03", "STR04", "STR05"};
+
+    if (ainStations.contains(stationName)) return "AIN";
+    if (strStations.contains(stationName)) return "STR";
+    return "Sconosciuta";
+  }
 
   final stopTypes = ["ESCALATION"];
   static const List<String> statusCreation = [
@@ -109,6 +117,17 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     super.initState();
     _fetchExistingStops();
     _timer = Timer.periodic(Duration(seconds: 1), (_) => setState(() {}));
+
+    Timer.periodic(const Duration(seconds: 30), (_) async {
+      final controller = DefaultTabController.of(context);
+      if (controller.index == 0) {
+        await _fetchExistingStops(
+          keepSelectedId: _selectedIndex != null
+              ? escalations.value[_selectedIndex!]['id']
+              : null,
+        );
+      }
+    });
   }
 
   @override
@@ -148,7 +167,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
 
   Future<void> _createNewEscalation() async {
     // FAKING THEM BECAUSE OF RICHARD
-    //ToDo: FIX THIS
+    //TODO: FIX THIS
     _newStation = _defaultStation;
     _newType = _defaultType;
 
@@ -303,24 +322,72 @@ class _EscalationDialogState extends State<_EscalationDialog> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: Stack(
-              children: [
-                Row(
-                  children: [
-                    _buildModernSidebar(activeEscalations),
-                    Expanded(
-                      child: _showClosed
-                          ? _buildModernClosedView(closedEscalations)
-                          : (_selectedIndex == null ||
-                                  _selectedIndex! >= activeEscalations.length)
-                              ? _buildModernCreateForm()
-                              : _buildModernDetail(
-                                  activeEscalations[_selectedIndex!]),
-                    ),
-                  ],
-                ),
-                if (_busy) _buildLoadingOverlay(),
-              ],
+            child: DefaultTabController(
+              length: 2,
+              child: Builder(
+                builder: (context) {
+                  return Stack(
+                    children: [
+                      Column(
+                        children: [
+                          const TabBar(
+                            indicatorColor: Color(0xFF007AFF),
+                            labelColor: Color(0xFF007AFF),
+                            unselectedLabelColor: Colors.black54,
+                            tabs: [
+                              Tab(text: 'Nuova Escalation'),
+                              Tab(text: 'Storico Escalation'),
+                            ],
+                          ),
+                          const Divider(height: 1),
+                          Expanded(
+                            child: TabBarView(
+                              children: [
+                                // Tab 0 — Active escalations view
+                                Row(
+                                  children: [
+                                    _buildModernSidebar(activeEscalations),
+                                    Expanded(
+                                      child: (_selectedIndex == null ||
+                                              _selectedIndex! >=
+                                                  activeEscalations.length)
+                                          ? _buildModernCreateForm()
+                                          : _buildModernDetail(
+                                              activeEscalations[
+                                                  _selectedIndex!],
+                                            ),
+                                    ),
+                                  ],
+                                ),
+
+                                // Tab 1 — Storico escalation view
+                                _buildModernClosedView(closedEscalations),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_busy) _buildLoadingOverlay(),
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: GestureDetector(
+                          onTap: () => Navigator.of(context).pop(),
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close, color: Colors.black),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -349,22 +416,6 @@ class _EscalationDialogState extends State<_EscalationDialog> {
             ),
             child: Row(
               children: [
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF2F2F7),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: const Icon(
-                      Icons.close,
-                      size: 18,
-                      color: Color(0xFF8E8E93),
-                    ),
-                  ),
-                ),
                 const SizedBox(width: 16),
                 const Text(
                   'Escalations',
@@ -518,51 +569,6 @@ class _EscalationDialogState extends State<_EscalationDialog> {
                     },
                   ),
           ),
-
-          // Closed Items Button
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              border: Border(
-                top: BorderSide(color: Color(0xFFE5E5E7), width: 1),
-              ),
-            ),
-            child: GestureDetector(
-              onTap: () => setState(() => _showClosed = true),
-              child: Container(
-                width: double.infinity,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: _showClosed
-                      ? const Color(0xFF34C759)
-                      : const Color(0xFFF2F2F7),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.history,
-                      color:
-                          _showClosed ? Colors.white : const Color(0xFF8E8E93),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Fermi Chiusi',
-                      style: TextStyle(
-                        color: _showClosed
-                            ? Colors.white
-                            : const Color(0xFF8E8E93),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -654,7 +660,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
           const Spacer(),
 
           // Save Button
-          Container(
+          SizedBox(
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
@@ -681,6 +687,126 @@ class _EscalationDialogState extends State<_EscalationDialog> {
     );
   }
 
+  List<Widget> _groupClosedByDayAndShift(List closed) {
+    final Map<String, Map<String, List<Map<String, dynamic>>>> grouped = {};
+
+    for (var e in closed) {
+      final DateTime start = _dt(e['start_time']);
+      final dayStr =
+          '${start.day.toString().padLeft(2, '0')}/${start.month.toString().padLeft(2, '0')}/${start.year}';
+
+      final shift = start.hour < 6
+          ? 'S3'
+          : start.hour < 14
+              ? 'S1'
+              : 'S2';
+
+      grouped.putIfAbsent(dayStr, () => {});
+      grouped[dayStr]!.putIfAbsent(shift, () => []);
+      grouped[dayStr]![shift]!.add(e);
+    }
+
+    final sortedDays = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return sortedDays.map((day) {
+      final shifts = grouped[day]!;
+      final sortedShifts =
+          ['S1', 'S2', 'S3'].where((s) => shifts.containsKey(s));
+
+      return Card(
+        margin: const EdgeInsets.only(bottom: 16),
+        child: ExpansionTile(
+          title: Text(day, style: const TextStyle(fontWeight: FontWeight.bold)),
+          children: sortedShifts.map((shift) {
+            final items = shifts[shift]!;
+
+            return ExpansionTile(
+              title: Text('Turno $shift'),
+              children: items.map((e) {
+                final start = _dt(e['start_time']);
+                final end = _dt(e['end_time'], fallback: start);
+                final duration = end.difference(start);
+
+                return ListTile(
+                  contentPadding: const EdgeInsets.all(16),
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF34C759).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(
+                      Icons.check_circle,
+                      color: Color(0xFF34C759),
+                      size: 24,
+                    ),
+                  ),
+                  title: Text(
+                    e['title'],
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1C1C1E),
+                    ),
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      "${DateFormat('dd/MM HH:mm', 'it_IT').format(start)} - ${DateFormat('dd/MM HH:mm', 'it_IT').format(end)} • ${_formatDuration(duration)}",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF8E8E93),
+                      ),
+                    ),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => _showClosedDetail(e),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF007AFF).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(
+                            Icons.info_outline,
+                            size: 18,
+                            color: Color(0xFF007AFF),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => _handleDelete(e),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF3B30).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(
+                            Icons.delete_outline,
+                            size: 18,
+                            color: Color(0xFFFF3B30),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            );
+          }).toList(),
+        ),
+      );
+    }).toList();
+  }
+
   Widget _buildModernClosedView(List closed) {
     return Container(
       padding: const EdgeInsets.all(32),
@@ -689,25 +815,8 @@ class _EscalationDialogState extends State<_EscalationDialog> {
         children: [
           Row(
             children: [
-              GestureDetector(
-                onTap: () => setState(() => _showClosed = false),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF2F2F7),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_ios,
-                    size: 16,
-                    color: Color(0xFF007AFF),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
               const Text(
-                'Fermi Chiusi',
+                'Escalation Chiuse',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w700,
@@ -730,7 +839,7 @@ class _EscalationDialogState extends State<_EscalationDialog> {
                         ),
                         SizedBox(height: 16),
                         Text(
-                          'Nessun fermo chiuso',
+                          'Nessuna escalation chiusa',
                           style: TextStyle(
                             fontSize: 18,
                             color: Color(0xFFAEAEB2),
@@ -739,97 +848,8 @@ class _EscalationDialogState extends State<_EscalationDialog> {
                       ],
                     ),
                   )
-                : ListView.builder(
-                    itemCount: closed.length,
-                    itemBuilder: (_, i) {
-                      final e = closed[i];
-                      final start = _dt(e['start_time']);
-                      final end = _dt(e['end_time'], fallback: start);
-                      final duration = end.difference(start);
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFE5E5E7)),
-                        ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(16),
-                          leading: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF34C759).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Icon(
-                              Icons.check_circle,
-                              color: Color(0xFF34C759),
-                              size: 24,
-                            ),
-                          ),
-                          title: Text(
-                            e['title'],
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1C1C1E),
-                            ),
-                          ),
-                          subtitle: Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              "${DateFormat('dd/MM HH:mm', 'it_IT').format(start)} - ${DateFormat('dd/MM HH:mm', 'it_IT').format(end)} • ${_formatDuration(duration)}",
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF8E8E93),
-                              ),
-                            ),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              GestureDetector(
-                                onTap: () => _showClosedDetail(e),
-                                child: Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF007AFF)
-                                        .withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: const Icon(
-                                    Icons.info_outline,
-                                    size: 18,
-                                    color: Color(0xFF007AFF),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: () => _handleDelete(e),
-                                child: Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFF3B30)
-                                        .withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: const Icon(
-                                    Icons.delete_outline,
-                                    size: 18,
-                                    color: Color(0xFFFF3B30),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                : ListView(
+                    children: _groupClosedByDayAndShift(closed),
                   ),
           ),
         ],
@@ -1333,8 +1353,8 @@ class _EscalationDialogState extends State<_EscalationDialog> {
                         children: [
                           Expanded(
                             child: _buildDetailInfoCard(
-                              "Stazione",
-                              esc['station'],
+                              "Zona",
+                              _getZoneFromStation(esc['station']),
                               Icons.precision_manufacturing,
                               const Color(0xFF007AFF),
                             ),

@@ -133,6 +133,7 @@ Versions:
 "2.4.6" Completed STR, managed loss of connection, fixed Bugs
 "2.4.7" Fixed ELL update_snapshot, changed API
 "2.4.8" Added Buffer page and Buffer Logic
+"2.4.9" Changed UI/UX/BE for Stops and Escalations
 
 ## OWASP dependency verification
 

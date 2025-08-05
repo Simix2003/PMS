@@ -1089,13 +1089,21 @@ class ApiService {
     bool includeOpen = false,
   }) async {
     final url = Uri.parse(
-      '$baseUrl/api/escalation/get_stops/$stationId?shifts_back=$shiftsBack&include_open=${includeOpen ? 1 : 0}',
+      '$baseUrl/api/escalation/get_stops/$stationId'
+      '?shifts_back=$shiftsBack&include_open=${includeOpen ? 1 : 0}',
     );
-    final response = await http.get(url);
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      print("Failed to load stops: ${response.body}");
+
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        debugPrint(
+            "⚠️ Failed to load stops: ${response.statusCode} → ${response.body}");
+        return null;
+      }
+    } catch (e) {
+      debugPrint("❌ Exception in getStopsForStation: $e");
       return null;
     }
   }
@@ -1106,13 +1114,22 @@ class ApiService {
     bool includeOpen = false,
   }) async {
     final url = Uri.parse(
-      '$baseUrl/api/stops/get_machine_stops/$stationId?shifts_back=$shiftsBack&include_open=${includeOpen ? 1 : 0}',
+      '$baseUrl/api/stops/get_machine_stops/$stationId'
+      '?shifts_back=$shiftsBack&include_open=${includeOpen ? 1 : 0}',
     );
-    final response = await http.get(url);
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      print("Failed to load machine stops: ${response.body}");
+
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        print(response.body);
+        return jsonDecode(response.body);
+      } else {
+        debugPrint(
+            "⚠️ Failed to load machine stops: ${response.statusCode} → ${response.body}");
+        return null;
+      }
+    } catch (e) {
+      debugPrint("❌ Exception in getMachineStopsForStation: $e");
       return null;
     }
   }

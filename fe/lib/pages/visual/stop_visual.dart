@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../shared/services/api_service.dart';
 
 class StopButton extends StatelessWidget {
@@ -32,7 +33,7 @@ class StopButton extends StatelessWidget {
       ),
       icon: const Icon(Icons.timer, color: Colors.white),
       label: const Text(
-        'Aggiungi nuovo Fermo',
+        'Fermi',
         style: TextStyle(fontSize: 18, color: Colors.white),
       ),
       onPressed: () {
@@ -82,7 +83,10 @@ class _StopDialogState extends State<_StopDialog> {
   String? _selectedStation;
   bool _editingReason = false;
 
-  List<Map<String, dynamic>> _stops = [];
+  List<Map<String, dynamic>> _stopsLive = [];
+  List<Map<String, dynamic>> _stopsHistory = [];
+
+  late TabController _tabController;
 
   @override
   void initState() {
@@ -111,12 +115,14 @@ class _StopDialogState extends State<_StopDialog> {
       if (mounted) setState(() {});
     });
 
-    // Refresh stop list every 30 seconds
     Timer.periodic(const Duration(seconds: 30), (_) async {
-      if (mounted) {
+      if (!mounted) return;
+
+      final controller = DefaultTabController.of(context);
+      if (controller.index == 0) {
         await _fetchStops(
           keepSelectedId:
-              _selectedIndex != null ? _stops[_selectedIndex!]['id'] : null,
+              _selectedIndex != null ? _stopsLive[_selectedIndex!]['id'] : null,
         );
       }
     });
@@ -134,14 +140,14 @@ class _StopDialogState extends State<_StopDialog> {
     final List<Map<String, dynamic>> newList = [];
 
     for (final entry in _stationNameToId.entries) {
-      final res = await _api.getStopsForStation(
+      final res = await _api.getMachineStopsForStation(
         entry.value,
         shiftsBack: widget.lastNShifts,
         includeOpen: true, // Ensure OPEN stops are included
       );
       if (res != null && res['status'] == 'ok' && res['stops'] != null) {
         for (final s in res['stops']) {
-          if (s['stop_type'] == 'STOP') {
+          if (s['type'] == 'STOP') {
             newList.add(_normalizeStop(s, station: entry.key));
           }
         }
@@ -160,7 +166,34 @@ class _StopDialogState extends State<_StopDialog> {
     }
 
     setState(() {
-      _stops = newList;
+      _stopsLive = newList;
+      _busy = false;
+    });
+  }
+
+  Future<void> _loadStopHistory() async {
+    setState(() => _busy = true);
+    final List<Map<String, dynamic>> newList = [];
+
+    for (final entry in _stationNameToId.entries) {
+      final res = await _api.getMachineStopsForStation(
+        entry.value,
+        shiftsBack: 21, // ≈ 7 days (3 shifts per day)
+        includeOpen: true,
+      );
+      if (res != null && res['status'] == 'ok' && res['stops'] != null) {
+        for (final s in res['stops']) {
+          if (s['type'] == 'STOP') {
+            newList.add(_normalizeStop(s, station: entry.key));
+          }
+        }
+      }
+    }
+
+    newList.sort((a, b) => b['start_time'].compareTo(a['start_time']));
+
+    setState(() {
+      _stopsHistory = newList;
       _busy = false;
     });
   }
@@ -219,7 +252,7 @@ class _StopDialogState extends State<_StopDialog> {
 
   Future<void> _stopStop() async {
     if (_selectedIndex == null) return;
-    final id = _stops[_selectedIndex!]['id'];
+    final id = _stopsLive[_selectedIndex!]['id'];
 
     await _api.updateStopStatus(
       stopId: id,
@@ -278,10 +311,517 @@ class _StopDialogState extends State<_StopDialog> {
     }
   }
 
+  Widget _buildDetailInfoCard(
+      String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F2F7),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF8E8E93),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1C1C1E),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDetailDialog(Map<String, dynamic> stop) async {
+    // Show loading state
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
+        ),
+      ),
+    );
+
+    // Call API to fetch detailed stop info (e.g., history)
+    final res = await ApiService().getStopDetails(stop['id']);
+
+    // Close loading dialog
+    Navigator.of(context).pop();
+
+    if (res == null || res['status'] != 'ok') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Errore durante il caricamento dei dettagli'),
+          backgroundColor: const Color(0xFFFF3B30),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final List history = res['stop']['levels'] ?? [];
+
+    final start = stop['start_time'] ?? DateTime.now();
+    final end = stop['end_time'] ?? DateTime.now();
+    final duration = end.difference(start);
+
+    showDialog(
+      context: context,
+      builder: (_) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: 500,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 40,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFFE5E5E7), width: 1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: _statusColor(stop['status']).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          _statusIcon(stop['status']),
+                          color: _statusColor(stop['status']),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Text(
+                          "Dettagli Fermo",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1C1C1E),
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2F2F7),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            size: 18,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Content
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF2F2F7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "Motivo",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF8E8E93),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              stop['title'] ?? '',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1C1C1E),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Info cards
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildDetailInfoCard(
+                              "Stazione",
+                              stop['station'] ?? '',
+                              Icons.precision_manufacturing,
+                              const Color(0xFF007AFF),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildDetailInfoCard(
+                              "Durata",
+                              _formatDuration(duration),
+                              Icons.timer,
+                              const Color(0xFF34C759),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildDetailInfoCard(
+                              "Inizio",
+                              DateFormat('dd/MM HH:mm:ss', 'it_IT')
+                                  .format(start),
+                              Icons.play_circle,
+                              const Color(0xFFFF9500),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildDetailInfoCard(
+                              "Fine",
+                              DateFormat('dd/MM HH:mm:ss', 'it_IT').format(end),
+                              Icons.stop_circle,
+                              const Color(0xFFFF3B30),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // History section
+                      const Text(
+                        "Storico Stati",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1C1C1E),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: _buildModernStatusHistory(history),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildModernStatusHistory(List history) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F2F7),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListView.separated(
+        padding: const EdgeInsets.all(12),
+        shrinkWrap: true,
+        itemCount: history.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (_, i) {
+          final entry = history[i];
+          final status = entry['status'];
+          final ts = DateTime.parse(entry['changed_at']);
+
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: _statusColor(status).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    _statusIcon(status),
+                    color: _statusColor(status),
+                    size: 14,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    status,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF1C1C1E),
+                    ),
+                  ),
+                ),
+                Text(
+                  DateFormat('dd/MM HH:mm:ss', 'it_IT').format(ts),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF8E8E93),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _deleteStop(int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Elimina Fermo'),
+        content: const Text('Sei sicuro di voler eliminare questo fermo?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Annulla')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Elimina')),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _api.deleteStop(id); // or updateStopStatus(..., "DELETED")
+      await _loadStopHistory();
+    }
+  }
+
+  Widget _buildStopHistoryView() {
+    final Map<String, Map<String, List<Map<String, dynamic>>>>
+        groupedByDayAndShift = {};
+
+    for (var stop in _stopsHistory) {
+      final dt = stop['start_time'] ?? DateTime.now();
+      final dayStr =
+          '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+
+      final shift = dt.hour < 6
+          ? 'S3'
+          : dt.hour < 14
+              ? 'S1'
+              : 'S2';
+
+      groupedByDayAndShift.putIfAbsent(dayStr, () => {});
+      groupedByDayAndShift[dayStr]!.putIfAbsent(shift, () => []);
+      groupedByDayAndShift[dayStr]![shift]!.add(stop);
+    }
+
+    final sortedDays = groupedByDayAndShift.keys.toList()
+      ..sort((a, b) => b.compareTo(a));
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: sortedDays.map((day) {
+        final shifts = groupedByDayAndShift[day]!;
+        final sortedShifts =
+            ['S1', 'S2', 'S3'].where((s) => shifts.containsKey(s)).toList();
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          child: ExpansionTile(
+            title:
+                Text(day, style: const TextStyle(fontWeight: FontWeight.bold)),
+            children: sortedShifts.map((shift) {
+              final stops = shifts[shift]!;
+              final totalDuration = stops.fold<Duration>(
+                Duration.zero,
+                (sum, s) {
+                  final start = s['start_time'] as DateTime?;
+                  final end = s['end_time'] as DateTime? ?? DateTime.now();
+                  return sum +
+                      (start != null ? end.difference(start) : Duration.zero);
+                },
+              );
+
+              return ExpansionTile(
+                title: Text('Turno $shift'),
+                subtitle:
+                    Text('Durata totale: ${_formatDuration(totalDuration)}'),
+                children: stops.map((s) {
+                  final start = s['start_time'] ?? DateTime.now();
+                  final end = s['end_time'] ?? DateTime.now();
+                  final duration = end.difference(start);
+
+                  return Container(
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE5E5E7)),
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(16),
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: _statusColor(s['status']).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          _statusIcon(s['status']),
+                          color: _statusColor(s['status']),
+                          size: 24,
+                        ),
+                      ),
+                      title: Text(
+                        s['title'],
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1C1C1E),
+                        ),
+                      ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          "${DateFormat('dd/MM HH:mm', 'it_IT').format(start)} - ${DateFormat('dd/MM HH:mm', 'it_IT').format(end)} • ${_formatDuration(duration)}",
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF8E8E93),
+                          ),
+                        ),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: () => _showDetailDialog(s),
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF007AFF).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(
+                                Icons.info_outline,
+                                size: 18,
+                                color: Color(0xFF007AFF),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => _deleteStop(s['id']),
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF3B30).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: Color(0xFFFF3B30),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              );
+            }).toList(),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final activeStops = _stops.where((e) => e['status'] != 'CLOSED').toList();
-
     return Material(
       color: Colors.black.withOpacity(0.5),
       child: Center(
@@ -302,34 +842,71 @@ class _StopDialogState extends State<_StopDialog> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: (_selectedIndex == null ||
-                          _selectedIndex! >= activeStops.length)
-                      ? _buildCreateForm()
-                      : _buildDetail(activeStops[_selectedIndex!]),
-                ),
-                if (_busy) _buildLoadingOverlay(),
+            child: DefaultTabController(
+              length: 2,
+              child: Builder(
+                builder: (context) {
+                  _tabController = DefaultTabController.of(context);
 
-                // ─── Close Button ──────────────────────────
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: GestureDetector(
-                    onTap: () => Navigator.of(context).pop(), // closes dialog
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withOpacity(0.2),
-                        shape: BoxShape.circle,
+                  _tabController.addListener(() {
+                    if (_tabController.index == 1 &&
+                        !_tabController.indexIsChanging) {
+                      _loadStopHistory(); // Only when switching to "Storico Fermi"
+                    }
+                  });
+
+                  return Stack(
+                    children: [
+                      // ─── Tabs Content ───────────────────────────────
+                      Positioned.fill(
+                        child: Column(
+                          children: [
+                            const TabBar(
+                              indicatorColor: Color(0xFF007AFF),
+                              labelColor: Color(0xFF007AFF),
+                              unselectedLabelColor: Colors.black54,
+                              tabs: [
+                                Tab(text: 'Nuovo Fermo'),
+                                Tab(text: 'Storico Fermi'),
+                              ],
+                            ),
+                            const Divider(height: 1),
+                            Expanded(
+                              child: TabBarView(
+                                children: [
+                                  (_selectedIndex == null ||
+                                          _selectedIndex! >= _stopsLive.length)
+                                      ? _buildCreateForm()
+                                      : _buildDetail(
+                                          _stopsLive[_selectedIndex!]),
+                                  _buildStopHistoryView(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: const Icon(Icons.close, color: Colors.black),
-                    ),
-                  ),
-                ),
-              ],
+                      if (_busy) _buildLoadingOverlay(),
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: GestureDetector(
+                          onTap: () => Navigator.of(context).pop(),
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close, color: Colors.black),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         ),

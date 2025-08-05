@@ -819,8 +819,8 @@ class ApiService {
   }
 
   Future<Map<String, dynamic>?> getQGStations({String? lineName}) async {
-    final uri = Uri.parse('$baseUrl/api/tablet_stations')
-        .replace(queryParameters: lineName != null ? {'line_name': lineName} : null);
+    final uri = Uri.parse('$baseUrl/api/tablet_stations').replace(
+        queryParameters: lineName != null ? {'line_name': lineName} : null);
     final response = await http.get(uri);
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -1159,6 +1159,45 @@ class ApiService {
     } else {
       print("❌ Failed to save visual targets: ${response.body}");
       return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>> fetchBufferDefectSummary({
+    required String plcIp,
+    required int db,
+    required int byte,
+    required int length,
+    int stringLength = 20,
+    bool debug = false,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/api/rwk_buffer_defects'
+      '?plc_ip=$plcIp'
+      '&db=$db'
+      '&byte=$byte'
+      '&length=$length'
+      '&string_length=$stringLength'
+      '&debug=$debug',
+    );
+
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      return {
+        'bufferIds': List<String>.from(data['BufferIds_Rework'] ?? []),
+        'bufferDefects': List<Map<String, dynamic>>.from(
+          (data['bufferDefectSummary'] ?? []).map((e) => {
+                'object_id': e['object_id'] ?? '',
+                'production_id': e['production_id'] ?? 0,
+                'rework_count': e['rework_count'] ?? 0,
+                'defects': List<Map<String, dynamic>>.from(e['defects'] ?? []),
+              }),
+        ),
+      };
+    } else {
+      throw Exception('Failed to fetch buffer defect data');
     }
   }
 

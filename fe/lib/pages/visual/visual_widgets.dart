@@ -4185,45 +4185,29 @@ class BufferChart extends StatefulWidget {
 
 class _BufferChartState extends State<BufferChart> {
   final ScrollController _scrollController = ScrollController();
-
-  Map<String, String> etaByObjectId = {}; // objectId → ETA string
-  Set<String> loadingETAs = {}; // prevent duplicate fetches
+  Map<String, String> etaByObjectId = {};
+  Set<String> loadingETAs = {};
 
   @override
   void didUpdateWidget(covariant BufferChart oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Check for new items in bufferDefectSummary
     for (final item in widget.bufferDefectSummary) {
       final objectId = item['object_id']?.toString();
       if (objectId != null &&
           !etaByObjectId.containsKey(objectId) &&
           !loadingETAs.contains(objectId)) {
         loadingETAs.add(objectId);
-        debugPrint("🔄 Fetching ETA for $objectId");
         _fetchEtaForObject(objectId);
       }
     }
   }
 
   Future<void> _fetchEtaForObject(String objectId) async {
-    debugPrint("🔄 Requesting ETA for objectId: $objectId");
-
     final result = await ApiService.predictReworkETAByObject(objectId);
-
     if (!mounted) return;
 
     final etaMin = result['etaInfo']?['eta_min'];
-    final noDefects = result['noDefectsFound'] ?? false;
-
-    if (etaMin != null) {
-      debugPrint("✅ ETA for $objectId: ${etaMin.toStringAsFixed(2)} min");
-    } else if (noDefects) {
-      debugPrint("⚠️ No defects found for $objectId");
-    } else {
-      debugPrint("❌ ETA not available for $objectId");
-    }
-
     final etaString = etaMin != null ? "${etaMin.round()} min" : "N/A";
 
     setState(() {
@@ -4263,46 +4247,81 @@ class _BufferChartState extends State<BufferChart> {
     }).toList();
   }
 
+  Color _etaColor(String eta) {
+    final min = int.tryParse(eta.replaceAll('min', '').trim());
+    if (min == null) return Colors.grey.shade500;
+    if (min < 5) return Colors.green;
+    if (min < 15) return Colors.orange;
+    return Colors.red;
+  }
+
   void _showExpandedDialog() {
     showDialog(
       context: context,
       builder: (context) {
         return Dialog(
+          backgroundColor: Colors.grey.shade100,
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.9,
             height: MediaQuery.of(context).size.height * 0.8,
-            child: Scaffold(
-              appBar: AppBar(
-                title: const Text("Buffer Difetti Espanso"),
-                automaticallyImplyLeading: false,
-                actions: [
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  )
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    height: 56,
+                    color: Colors.grey.shade200,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          "Buffer Difetti",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: defects.isEmpty
+                        ? const Center(
+                            child: Text("✅ Nessun modulo in buffer difetti"))
+                        : ListView.builder(
+                            itemCount: defects.length,
+                            padding: const EdgeInsets.all(16),
+                            itemBuilder: (context, index) {
+                              final defect = defects.reversed.toList()[index];
+                              final bgColor = index.isEven
+                                  ? Colors.grey.shade100
+                                  : Colors.grey.shade200;
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: bgColor,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(6),
+                                child: _DefectCard(
+                                  number: defect["id"],
+                                  name: defect["name"],
+                                  eta: defect["eta"],
+                                  etaColor: _etaColor(defect["eta"]),
+                                  rework: defect["rework"],
+                                  defectTypes: defect["defectTypes"],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
                 ],
-              ),
-              body: Padding(
-                padding: const EdgeInsets.all(16),
-                child: ListView.builder(
-                  itemCount: defects.length,
-                  itemBuilder: (context, index) {
-                    final defect = defects.reversed.toList()[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _DefectCard(
-                        number: defect["id"] as int,
-                        name: defect["name"] as String,
-                        eta: defect["eta"] as String,
-                        rework: defect["rework"] as int,
-                        defectTypes:
-                            (defect["defectTypes"] as List<String>?) ?? [],
-                      ),
-                    );
-                  },
-                ),
               ),
             ),
           ),
@@ -4311,54 +4330,90 @@ class _BufferChartState extends State<BufferChart> {
     );
   }
 
+  String get totalEtaSummary {
+    final etaValues = etaByObjectId.values
+        .map((e) => int.tryParse(e.replaceAll('min', '').trim()))
+        .whereType<int>()
+        .toList();
+
+    if (etaValues.isEmpty) return "ETA: ⏳...";
+
+    final totalMin = etaValues.fold(0, (sum, e) => sum + e);
+    return "ETA: $totalMin min";
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 10,
+      elevation: 6,
       color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "ReWork Buffer Difetti",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.open_in_full),
-                  onPressed: _showExpandedDialog,
-                  tooltip: "Espandi",
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                itemCount: defects.length,
-                itemBuilder: (context, index) {
-                  final defect = defects.reversed.toList()[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _DefectCard(
-                      number: defect["id"] as int,
-                      name: defect["name"] as String,
-                      eta: defect["eta"] as String,
-                      rework: defect["rework"] as int,
-                      defectTypes:
-                          (defect["defectTypes"] as List<String>?) ?? [],
-                    ),
-                  );
-                },
+      child: SizedBox(
+        height: 400, // 🔧 Make this height fixed or dynamic if needed
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        "Buffer RMI01",
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        totalEtaSummary,
+                        style:
+                            const TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.open_in_full),
+                    onPressed: _showExpandedDialog,
+                    tooltip: "Espandi",
+                  ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Expanded(
+                // ✅ FIX: this makes ListView take only remaining space
+                child: defects.isEmpty
+                    ? const Center(child: Text("Nessun modulo in buffer"))
+                    : ListView.builder(
+                        controller: _scrollController,
+                        itemCount: defects.length,
+                        itemBuilder: (context, index) {
+                          final defect = defects.reversed.toList()[index];
+                          final bgColor = index.isEven
+                              ? Colors.grey.shade100
+                              : Colors.grey.shade200;
+
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: bgColor,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(6),
+                            child: _DefectCard(
+                              number: defect["id"],
+                              name: defect["name"],
+                              eta: defect["eta"],
+                              etaColor: _etaColor(defect["eta"]),
+                              rework: defect["rework"],
+                              defectTypes: defect["defectTypes"],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -4369,6 +4424,7 @@ class _DefectCard extends StatelessWidget {
   final int number;
   final String name;
   final String eta;
+  final Color etaColor;
   final int rework;
   final List<String> defectTypes;
 
@@ -4376,6 +4432,7 @@ class _DefectCard extends StatelessWidget {
     required this.number,
     required this.name,
     required this.eta,
+    required this.etaColor,
     required this.rework,
     required this.defectTypes,
   });
@@ -4383,47 +4440,77 @@ class _DefectCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
         border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("#$number",
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(width: 12),
-              Expanded(child: Text(name, style: const TextStyle(fontSize: 16))),
-              Text("ETA: $eta", style: const TextStyle(color: Colors.orange)),
+              Text(
+                "#$number",
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: etaColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  "ETA: $eta",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: etaColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            name,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
           ),
           const SizedBox(height: 6),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.autorenew, size: 18, color: Colors.green),
-              const SizedBox(width: 4),
-              Text("x$rework",
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(width: 8),
+              const Icon(Icons.autorenew, size: 16),
+              const SizedBox(width: 6),
+              Text("x$rework"),
+              const SizedBox(width: 10),
               if (defectTypes.isNotEmpty)
                 Expanded(
                   child: Wrap(
                     spacing: 6,
-                    runSpacing: 4,
+                    runSpacing: 6,
                     children: defectTypes
-                        .map((type) => Chip(
-                              label: Text(type,
-                                  style: const TextStyle(fontSize: 12)),
-                              backgroundColor: Colors.red.shade100,
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                            ))
+                        .map(
+                          (type) => Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              type,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        )
                         .toList(),
                   ),
                 ),

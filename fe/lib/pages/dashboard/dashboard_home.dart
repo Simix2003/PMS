@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/graphs/data_view.dart';
+import '../home_page/buffer_page.dart';
 import '../home_page/home_page.dart';
 
 class DashboardHome extends StatefulWidget {
@@ -14,6 +15,7 @@ class _DashboardHomeState extends State<DashboardHome> {
 
   final List<Widget> _pages = [
     const HomePage(),
+    const BufferPage(plcIp: '192.168.32.2', db: 19603, byte: 0, length: 21),
     const DataViewPage(
       canSearch: false,
     )
@@ -30,6 +32,10 @@ class _DashboardHomeState extends State<DashboardHome> {
           BottomNavigationBarItem(
             icon: Icon(Icons.feedback),
             label: 'Difetti',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.storage),
+            label: 'Buffer',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.today),

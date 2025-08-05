@@ -322,31 +322,44 @@ class _VisualPageState extends State<VisualPage> {
 
   Future<void> fetchEllZoneData() async {
     try {
-      final response = await ApiService.fetchVisualDataForEll();
+      final visualResponse = await ApiService.fetchVisualDataForEll();
+
+      // 👇 Add this: fetch real-time buffer defects
+      final bufferResponse = await ApiService.fetchBufferDefectSummary(
+        plcIp: '192.168.32.2',
+        db: 19603,
+        byte: 0,
+        length: 21,
+        stringLength: 20,
+        debug: false,
+      );
+
+      print('Buffer response : $bufferResponse');
+
       setState(() {
-        In_1 = response['station_1_in'] ?? 0;
-        In_2 = response['station_2_in'] ?? 0;
-        ngOut_1 = response['station_1_out_ng'] ?? 0;
-        ngScrap = response['station_2_out_ng'] ?? 0;
-        qg2_ng = response['station_1_ng_qg2'] ?? 0;
+        In_1 = visualResponse['station_1_in'] ?? 0;
+        In_2 = visualResponse['station_2_in'] ?? 0;
+        ngOut_1 = visualResponse['station_1_out_ng'] ?? 0;
+        ngScrap = visualResponse['station_2_out_ng'] ?? 0;
+        qg2_ng = visualResponse['station_1_ng_qg2'] ?? 0;
 
-        ng_tot = response['ng_tot'] ?? 0;
+        ng_tot = visualResponse['ng_tot'] ?? 0;
 
-        currentFPYYield = response['FPY_yield'] ?? 100;
-        currentRWKYield = response['RWK_yield'] ?? 100;
+        currentFPYYield = visualResponse['FPY_yield'] ?? 100;
+        currentRWKYield = visualResponse['RWK_yield'] ?? 100;
 
         FPYLast8h = List<Map<String, dynamic>>.from(
-            response['FPY_yield_last_8h'] ?? []);
+            visualResponse['FPY_yield_last_8h'] ?? []);
         RWKLast8h = List<Map<String, dynamic>>.from(
-            response['RWK_yield_last_8h'] ?? []);
-        shiftThroughput =
-            List<Map<String, dynamic>>.from(response['shift_throughput'] ?? []);
+            visualResponse['RWK_yield_last_8h'] ?? []);
+        shiftThroughput = List<Map<String, dynamic>>.from(
+            visualResponse['shift_throughput'] ?? []);
         hourlyThroughput = List<Map<String, dynamic>>.from(
-            response['last_8h_throughput'] ?? []);
-        FPY_yield_shifts =
-            List<Map<String, dynamic>>.from(response['FPY_yield_shifts'] ?? []);
-        RWK_yield_shifs =
-            List<Map<String, dynamic>>.from(response['RWK_yield_shifts'] ?? []);
+            visualResponse['last_8h_throughput'] ?? []);
+        FPY_yield_shifts = List<Map<String, dynamic>>.from(
+            visualResponse['FPY_yield_shifts'] ?? []);
+        RWK_yield_shifs = List<Map<String, dynamic>>.from(
+            visualResponse['RWK_yield_shifts'] ?? []);
 
         final shiftCount = math.min(3, FPY_yield_shifts.length);
         mergedShiftData = List.generate(shiftCount, (index) {
@@ -377,9 +390,8 @@ class _VisualPageState extends State<VisualPage> {
         hourLabels =
             hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
 
-        // Parse Top Defects QG2
-        final topDefectsRaw =
-            List<Map<String, dynamic>>.from(response['top_defects'] ?? []);
+        final topDefectsRaw = List<Map<String, dynamic>>.from(
+            visualResponse['top_defects'] ?? []);
 
         defectLabels = [];
         min1Counts = [];
@@ -394,9 +406,20 @@ class _VisualPageState extends State<VisualPage> {
         }
 
         value_gauge_1 =
-            double.tryParse(response['value_gauge_1'].toString()) ?? 0.0;
+            double.tryParse(visualResponse['value_gauge_1'].toString()) ?? 0.0;
         value_gauge_2 =
-            double.tryParse(response['value_gauge_2'].toString()) ?? 0.0;
+            double.tryParse(visualResponse['value_gauge_2'].toString()) ?? 0.0;
+
+        bufferDefectSummary = List<Map<String, dynamic>>.from(
+          (bufferResponse['bufferDefects'] ?? []).map((e) => {
+                'object_id': e['object_id'] ?? '',
+                'production_id': e['production_id'] ?? 0,
+                'rework_count': e['rework_count'] ?? 0,
+                'defects': List<Map<String, dynamic>>.from(e['defects'] ?? []),
+              }),
+        );
+
+        print('bufferDefectSummary: $bufferDefectSummary');
 
         isLoading = false;
       });
@@ -871,12 +894,14 @@ class _VisualPageState extends State<VisualPage> {
             ellCounts.add(toIntSafe(defect['ell']));
           }
 
-          bufferDefectSummary = List<Map<String, dynamic>>.from(
-              data['bufferDefectSummary'] ?? []);
+          if (data['bufferDefectSummary'] != null) {
+            bufferDefectSummary =
+                List<Map<String, dynamic>>.from(data['bufferDefectSummary']);
+            print('bufferDefectSummary WebSocket: $bufferDefectSummary');
+          }
 
           value_gauge_1 = toDoubleSafe(data['value_gauge_1']);
           value_gauge_2 = toDoubleSafe(data['value_gauge_2']);
-
         });
       },
       onDone: () => print("Visual WebSocket closed"),

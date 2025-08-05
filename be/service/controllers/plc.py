@@ -145,7 +145,6 @@ class PLCConnection:
 
     def force_reconnect(self, reason: str = "Manual trigger"):
         now = time.time()
-        # Avoid frequent reconnects
         if now - self._last_manual_reconnect_ts < 10:
             logger.warning(f"⏳ [Force Reconnect] Skipped (cooldown active)")
             return
@@ -155,10 +154,18 @@ class PLCConnection:
         with self.lock:
             try:
                 self.client.disconnect()
-            except Exception:
-                pass
+                self.connected = False
+                logger.info(f"🔌 Disconnected client for {self.ip_address}")
+            except Exception as e:
+                logger.exception(f"❌ Exception during disconnect: {e}")
+
             time.sleep(1.0)
-            self._try_connect()
+
+            try:
+                self._try_connect()
+                logger.info(f"✅ Reconnected to PLC at {self.ip_address}")
+            except Exception as e:
+                logger.exception(f"❌ Exception during reconnect: {e}")
 
 
     def _connect(self):

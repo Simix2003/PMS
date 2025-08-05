@@ -2561,6 +2561,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                               lastNShifts: widget.lastNShifts,
                               onStopsUpdated: _onStopEnded,
                               onStopStarted: _onStopStarted,
+                              zone: 'STR',
                             ),
                           ],
                         ),

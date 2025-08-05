@@ -10,6 +10,7 @@ class StopButton extends StatelessWidget {
   final int? linkedProductionId;
   final VoidCallback? onStopsUpdated;
   final ValueChanged<Map<String, dynamic>>? onStopStarted;
+  final String zone;
 
   const StopButton({
     super.key,
@@ -17,6 +18,7 @@ class StopButton extends StatelessWidget {
     this.linkedProductionId,
     this.onStopsUpdated,
     this.onStopStarted,
+    required this.zone,
   });
 
   @override
@@ -41,6 +43,7 @@ class StopButton extends StatelessWidget {
             linkedProductionId: linkedProductionId,
             onStopsUpdated: onStopsUpdated,
             onStopStarted: onStopStarted,
+            zone: zone,
           ),
         );
       },
@@ -53,12 +56,14 @@ class _StopDialog extends StatefulWidget {
   final int? linkedProductionId;
   final VoidCallback? onStopsUpdated;
   final ValueChanged<Map<String, dynamic>>? onStopStarted;
+  final String zone;
 
   const _StopDialog({
     required this.lastNShifts,
     this.linkedProductionId,
     this.onStopsUpdated,
     this.onStopStarted,
+    required this.zone,
   });
 
   @override
@@ -70,15 +75,7 @@ class _StopDialogState extends State<_StopDialog> {
 
   final TextEditingController _reasonCtrl = TextEditingController();
   final TextEditingController _editReasonCtrl = TextEditingController();
-  final Map<String, int> _stationNameToId = const {
-    'AIN01': 29,
-    'AIN02': 30,
-    'STR01': 4,
-    'STR02': 5,
-    'STR03': 6,
-    'STR04': 7,
-    'STR05': 8,
-  };
+  late final Map<String, int> _stationNameToId;
 
   bool _busy = false;
   int? _selectedIndex;
@@ -90,6 +87,23 @@ class _StopDialogState extends State<_StopDialog> {
   @override
   void initState() {
     super.initState();
+    if (widget.zone == 'AIN') {
+      _stationNameToId = const {
+        'AIN01': 29,
+        'AIN02': 30,
+      };
+    } else if (widget.zone == 'STR') {
+      _stationNameToId = const {
+        'STR01': 4,
+        'STR02': 5,
+        'STR03': 6,
+        'STR04': 7,
+        'STR05': 8,
+      };
+    } else {
+      _stationNameToId = const {}; // fallback, or throw an error
+    }
+
     _fetchStops();
 
     // Rebuild every minute to refresh durations

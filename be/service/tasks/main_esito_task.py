@@ -227,7 +227,8 @@ async def process_final_update(
 
             if async_tasks:
                 await asyncio.gather(*async_tasks)
-            print('FINAL UPDATE DONE on station', full_station_id)
+
+            print('Completed modulo: %s on station %s' % (result.get("Id_Modulo"), full_station_id))
 
     except Exception as e:
         logger.error(f"[{full_station_id}] Async final update failed: {e}")

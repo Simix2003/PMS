@@ -1246,6 +1246,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                               lastNShifts: widget.last_n_shifts,
                               onStopsUpdated: _onStopEnded,
                               onStopStarted: _onStopStarted,
+                              zone: 'AIN',
                             ),
                           ],
                         ),

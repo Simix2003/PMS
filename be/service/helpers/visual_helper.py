@@ -729,6 +729,54 @@ def count_good_after_rework(cursor, start, end):
     return cursor.fetchone()["cnt"] or 0
 
 def _compute_snapshot_ell(now: datetime) -> dict:
+    def fpy_counts(cursor, station_name: str, start, end):
+        sql = f"""
+            WITH first_pass AS (
+                SELECT p.object_id,
+                    p.esito,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY p.object_id
+                        ORDER BY p.start_time ASC
+                    ) AS rn
+                FROM productions p
+                JOIN stations s ON p.station_id = s.id
+                WHERE s.name = %s
+                AND p.start_time BETWEEN %s AND %s
+            )
+            SELECT
+                COALESCE(SUM(esito <> 6), 0) AS good,
+                COALESCE(SUM(esito  = 6), 0) AS ng,
+                COUNT(*)                     AS total
+            FROM first_pass
+            WHERE rn = 1
+        """
+        cursor.execute(sql, (station_name, start, end))
+        return cursor.fetchone()
+
+    def rwk_counts(cursor, station_name: str, start, end):
+        sql = f"""
+            WITH last_pass AS (
+                SELECT p.object_id,
+                    p.esito,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY p.object_id
+                        ORDER BY p.start_time DESC
+                    ) AS rn
+                FROM productions p
+                JOIN stations s ON p.station_id = s.id
+                WHERE s.name = %s
+                AND p.start_time BETWEEN %s AND %s
+            )
+            SELECT
+                COALESCE(SUM(esito <> 6), 0) AS good,
+                COALESCE(SUM(esito  = 6), 0) AS ng,
+                COUNT(*)                     AS total
+            FROM last_pass
+            WHERE rn = 1
+        """
+        cursor.execute(sql, (station_name, start, end))
+        return cursor.fetchone()
+
     try:
         if now is None:
             now = datetime.now()
@@ -740,50 +788,6 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
         with get_mysql_connection() as conn:
             with conn.cursor() as cursor:
-
-                def count_objects_with_esito_ng(cursor, station_name, start, end):
-                    sql = """
-                        SELECT COUNT(DISTINCT p.object_id) AS cnt
-                        FROM productions p
-                        JOIN stations s ON p.station_id = s.id
-                        WHERE s.name = %s
-                        AND p.esito = 6
-                        AND p.start_time BETWEEN %s AND %s
-                    """
-                    cursor.execute(sql, (station_name, start, end))
-                    return cursor.fetchone()["cnt"] or 0
-                
-                # --- Wipe ELL buffer tables (SAFE if called hourly/shiftly) ---
-                cursor.execute("DELETE FROM ell_productions_buffer")
-                cursor.execute("DELETE FROM ell_defects_buffer")
-
-                # --- Refill buffer tables from current shift's data ---
-                # 1. Fill ell_productions_buffer
-                cursor.execute("""
-                    INSERT INTO ell_productions_buffer (id, object_id, station_id, start_time, end_time, esito)
-                    SELECT id, object_id, station_id, start_time, end_time, esito
-                    FROM productions
-                    WHERE station_id IN (1, 2, 3, 9)
-                    AND start_time BETWEEN %s AND %s
-                    AND esito <> 2
-                """, (shift_start, shift_end))
-
-                # 2. Fill ell_defects_buffer
-                cursor.execute("""
-                    INSERT INTO ell_defects_buffer (
-                        id, production_id, station_id, object_id, defect_id, defect_type,
-                        i_ribbon, stringa, ribbon_lato, s_ribbon, extra_data, photo_id, category
-                    )
-                    SELECT
-                        od.id, od.production_id, p.station_id, p.object_id, od.defect_id, od.defect_type,
-                        od.i_ribbon, od.stringa, od.ribbon_lato, od.s_ribbon, od.extra_data, od.photo_id, d.category
-                    FROM object_defects od
-                    JOIN productions p ON od.production_id = p.id
-                    JOIN defects d ON od.defect_id = d.id
-                    WHERE p.station_id IN (1, 2, 3, 9)
-                    AND p.start_time BETWEEN %s AND %s
-                """, (shift_start, shift_end))
-                conn.commit()
 
                 # First pass stats
                 s1_in = count_unique_objects(cursor, cfg["station_1_in"], shift_start, shift_end, "all")
@@ -802,14 +806,65 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 s2_ng = count_unique_objects(cursor, cfg["station_2_out_ng"], shift_start, shift_end, "ng")
                 s2_g = s2_in - s2_ng
 
-                value_gauge_1 = round((s2_g_r0 / s2_in_r0) * 100, 2) if s2_in_r0 else 0.0
+                # Gauge 1: re-entry rate
+                cursor.execute("""
+                    SELECT COUNT(*) AS multi_entry
+                    FROM (
+                        SELECT object_id
+                        FROM productions p
+                        JOIN stations s ON s.id = p.station_id
+                        WHERE s.name = %s
+                        AND p.start_time BETWEEN %s AND %s
+                        GROUP BY object_id
+                        HAVING COUNT(*) > 1
+                    ) AS sub
+                """, (cfg["station_1_in"], shift_start, shift_end))
 
-                # NEW: accurate numerator for value_gauge_2
-                s1_esito_ng = count_objects_with_esito_ng(cursor, cfg["station_1_in"], shift_start, shift_end)
+                multi_entry = cursor.fetchone()["multi_entry"] or 0
+
+                s2_in = count_unique_objects(cursor, cfg["station_2_in"], shift_start, shift_end, "all")
+
+
+                value_gauge_1 = round((multi_entry / s2_in) * 100, 2) if s2_in else 0.0
 
                 # ---- Gauge 2 ---------------------------------------------------------------
-                good_after_rework = count_good_after_rework(cursor, shift_start, shift_end)
-                value_gauge_2 = round((good_after_rework / s2_g) * 100, 2) if s2_g else 0.0
+                # Step 1 — Get all object_ids that passed station_1_in >1 times
+                cursor.execute("""
+                    SELECT object_id
+                    FROM productions p
+                    JOIN stations s ON s.id = p.station_id
+                    WHERE s.name = %s
+                    AND p.start_time BETWEEN %s AND %s
+                    GROUP BY object_id
+                    HAVING COUNT(*) > 1
+                """, (cfg["station_1_in"], shift_start, shift_end))
+
+                multi_entry_ids = [row["object_id"] for row in cursor.fetchall()]
+                multi_entry_count = len(multi_entry_ids)
+
+                if not multi_entry_ids:
+                    value_gauge_2 = 0.0
+                else:
+                    format_ids = ','.join(['%s'] * len(multi_entry_ids))
+                    cursor.execute(f"""
+                        WITH last_pass AS (
+                            SELECT p.object_id, p.esito,
+                                ROW_NUMBER() OVER (
+                                    PARTITION BY p.object_id
+                                    ORDER BY p.start_time DESC
+                                ) AS rn
+                            FROM productions p
+                            JOIN stations s ON s.id = p.station_id
+                            WHERE s.name = %s
+                            AND p.object_id IN ({format_ids})
+                        )
+                        SELECT COUNT(*) AS good_final
+                        FROM last_pass
+                        WHERE rn = 1 AND esito = 1
+                    """, (cfg["station_1_in"], *multi_entry_ids))
+
+                    good_final = cursor.fetchone()["good_final"] or 0
+                    value_gauge_2 = round((good_final / multi_entry_count) * 100, 2)
 
                 # --- NG Counters ---
                 s1_ng = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
@@ -834,40 +889,11 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 """, (*stations_ng, shift_start, shift_end))
                 rows = cursor.fetchall()
 
-                # Yields
-                # FPY = good on first pass / total first-pass
-                fpy_y = compute_yield(s1_g_r0, s1_ng_r0)
+                cnt_fpy = fpy_counts(cursor, cfg["station_1_in"][0], shift_start, now)
+                cnt_rwk = rwk_counts(cursor, cfg["station_1_in"][0], shift_start, now)
 
-                cursor.execute("""
-                    SELECT COUNT(DISTINCT p.object_id) AS cnt
-                    FROM productions p
-                    JOIN stations s ON p.station_id = s.id
-                    WHERE s.name = %s
-                    AND p.start_time BETWEEN %s AND %s
-                """, (cfg["station_1_in"], shift_start, shift_end))
-                total_started = cursor.fetchone()["cnt"] or 0
-
-                #–– Final‐good = each module’s last pass at station 1 was OK
-                sql = """
-                WITH last1 AS (
-                SELECT p.object_id, p.esito,
-                        ROW_NUMBER() OVER (PARTITION BY p.object_id
-                                            ORDER BY p.start_time DESC) AS rn
-                FROM productions p
-                JOIN stations s ON p.station_id = s.id
-                WHERE s.name = %s
-                    AND p.start_time BETWEEN %s AND %s
-                )
-                SELECT COUNT(*) AS cnt
-                FROM last1
-                WHERE rn = 1
-                AND esito <> 6
-                """
-                cursor.execute(sql, (cfg["station_1_in"], shift_start, shift_end))
-                final_good = cursor.fetchone()["cnt"] or 0
-
-                final_failed = total_started - final_good
-                rwk_y = compute_yield(final_good, final_failed)
+                fpy_y = compute_yield(cnt_fpy["good"], cnt_fpy["ng"])
+                rwk_y = compute_yield(cnt_rwk["good"], cnt_rwk["ng"])
 
                 # -------- last 3 shifts yield + throughput -------
                 FPY_yield_shifts, RWK_yield_shifs, shift_throughput = [], [], []
@@ -883,58 +909,25 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                     s2_in_     = count_unique_objects(cursor, cfg["station_2_in"],  start, end, "all")
                     s2_n_      = count_unique_objects(cursor, cfg["station_2_out_ng"], start, end, "ng")
 
-                    # FPY yield
+                    cnt_f = fpy_counts(cursor, cfg["station_1_in"][0], start, end)
+                    cnt_r = rwk_counts(cursor, cfg["station_1_in"][0], start, end)
+
                     FPY_yield_shifts.append({
                         "label": label,
                         "start": start.isoformat(),
                         "end": end.isoformat(),
-                        "yield": compute_yield(s1_g_r0_, s1_ng_r0_),
-                        "good": s1_g_r0_,
-                        "ng":   s1_ng_r0_
+                        "yield": compute_yield(cnt_f["good"], cnt_f["ng"]),
+                        "good": cnt_f["good"],
+                        "ng":   cnt_f["ng"]
                     })
-
-                    # --- RWK yield: count distinct modules whose LAST pass @ station 1 is good ---
-                    cursor.execute("""
-                        SELECT COUNT(DISTINCT p.object_id) AS cnt
-                        FROM productions p
-                        JOIN stations s ON p.station_id = s.id
-                        WHERE s.name = %s
-                        AND p.start_time BETWEEN %s AND %s
-                    """, (cfg["station_1_in"], start, end))
-                    total_started = cursor.fetchone()["cnt"] or 0
-
-                    sql_last_good = """
-                    WITH last1 AS (
-                        SELECT p.object_id,
-                            p.esito,
-                            ROW_NUMBER() OVER (
-                                PARTITION BY p.object_id
-                                ORDER BY p.start_time DESC
-                            ) AS rn
-                        FROM productions p
-                        JOIN stations s ON p.station_id = s.id
-                        WHERE s.name = %s
-                        AND p.start_time BETWEEN %s AND %s
-                    )
-                    SELECT COUNT(*) AS cnt
-                    FROM last1
-                    WHERE rn = 1 AND esito <> 6
-                    """
-                    cursor.execute(sql_last_good, (cfg["station_1_in"], start, end))
-                    final_good_shift = cursor.fetchone()["cnt"] or 0
-
-                    rwk_failed = total_started - final_good_shift
 
                     RWK_yield_shifs.append({
                         "label": label,
                         "start": start.isoformat(),
                         "end": end.isoformat(),
-                        "yield": compute_yield(final_good_shift, rwk_failed),
-                        "good": final_good_shift,
-                        "ng":   rwk_failed,
-                        "station_1_in": s1_in_,
-                        "station_1_out_ng": s1_n_,
-                        "station_2_in": s2_in_
+                        "yield": compute_yield(cnt_r["good"], cnt_r["ng"]),
+                        "good": cnt_r["good"],
+                        "ng":   cnt_r["ng"]
                     })
 
                     # Throughput (sum of distinct entries on station 1 + station 2)
@@ -993,58 +986,25 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                     s1_ng_r0_  = count_unique_objects_r0(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng") or 0
                     s1_g_r0_   = s1_in_r0_ - s1_ng_r0_
 
+                    cnt_f = fpy_counts(cursor, cfg["station_1_in"][0], h_start, h_end)
+                    cnt_r = rwk_counts(cursor, cfg["station_1_in"][0], h_start, h_end)
+
                     FPY_y8h.append({
                         "hour": label,
-                        "good": s1_g_r0_,
-                        "ng":   s1_ng_r0_,
-                        "yield": compute_yield(s1_g_r0_, s1_ng_r0_),
+                        "good": cnt_f["good"],
+                        "ng":   cnt_f["ng"],
+                        "yield": compute_yield(cnt_f["good"], cnt_f["ng"]),
                         "start": h_start.isoformat(),
-                        "end":   h_end.isoformat(),
+                        "end": h_end.isoformat(),
                     })
-
-                    # RWK yield per 8h bin (based on each module’s final result at Station 1)
-                    cursor.execute("""
-                        SELECT COUNT(DISTINCT p.object_id) AS cnt
-                        FROM productions p
-                        JOIN stations s ON p.station_id = s.id
-                        WHERE s.name = %s
-                        AND p.start_time BETWEEN %s AND %s
-                    """, (cfg["station_1_in"], h_start, h_end))
-                    total_started_h = cursor.fetchone()["cnt"] or 0
-
-
-                    sql_last_good_h = """
-                    WITH last1 AS (
-                        SELECT p.object_id,
-                            p.esito,
-                            ROW_NUMBER() OVER (
-                                PARTITION BY p.object_id
-                                ORDER BY p.start_time DESC
-                            ) AS rn
-                        FROM productions p
-                        JOIN stations s ON p.station_id = s.id
-                        WHERE s.name = %s
-                        AND p.start_time BETWEEN %s AND %s
-                    )
-                    SELECT COUNT(*) AS cnt
-                    FROM last1
-                    WHERE rn = 1 AND esito <> 6
-                    """
-                    cursor.execute(sql_last_good_h, (cfg["station_1_in"], h_start, h_end))
-                    final_good_h = cursor.fetchone()["cnt"] or 0
-
-                    rwk_failed_h = total_started_h - final_good_h
 
                     RWK_y8h.append({
                         "hour": label,
-                        "station_1_in": total_started_h,
-                        "station_1_out_ng": s1_ng_r0_,  # NG from R0
-                        "station_2_in": count_unique_objects(cursor, cfg["station_2_in"], h_start, h_end, "all") or 0,
-                        "good": final_good_h,
-                        "ng":   rwk_failed_h,
-                        "yield": compute_yield(final_good_h, rwk_failed_h),
+                        "good": cnt_r["good"],
+                        "ng":   cnt_r["ng"],
+                        "yield": compute_yield(cnt_r["good"], cnt_r["ng"]),
                         "start": h_start.isoformat(),
-                        "end":   h_end.isoformat(),
+                        "end": h_end.isoformat(),
                     })
 
                 # -------- top_defects_qg2 calculation from productions + object_defects --------
@@ -1127,6 +1087,72 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 result = cursor.fetchone()
                 reentered_count = result["re_entered"] if result and "re_entered" in result else 0
 
+                # ========== For real-time gauge tracking after restart ==========
+                # Multi-entry object_ids
+                cursor.execute("""
+                    SELECT object_id, COUNT(*) AS cnt
+                    FROM productions p
+                    JOIN stations s ON s.id = p.station_id
+                    WHERE s.name = %s AND p.start_time BETWEEN %s AND %s
+                    GROUP BY object_id
+                """, (cfg["station_1_in"], shift_start, now))
+
+                s1_entry_count = {}
+                multi_entry_set = set()
+                for row in cursor.fetchall():
+                    oid = row["object_id"]
+                    cnt = row["cnt"]
+                    s1_entry_count[oid] = cnt
+                    if cnt > 1:
+                        multi_entry_set.add(oid)
+
+                # s2_entry_set
+                cursor.execute("""
+                    SELECT DISTINCT object_id
+                    FROM productions p
+                    JOIN stations s ON s.id = p.station_id
+                    WHERE s.name = %s AND p.start_time BETWEEN %s AND %s
+                """, (cfg["station_2_in"], shift_start, now))
+                s2_entry_set = {row["object_id"] for row in cursor.fetchall()}
+
+                # s1_success_set: multi-entry modules with final esito = 1
+                s1_success_set = set()
+                if multi_entry_set:
+                    format_ids = ','.join(['%s'] * len(multi_entry_set))
+                    cursor.execute(f"""
+                        WITH last_pass AS (
+                            SELECT p.object_id, p.esito,
+                                ROW_NUMBER() OVER (
+                                    PARTITION BY p.object_id
+                                    ORDER BY p.start_time DESC
+                                ) AS rn
+                            FROM productions p
+                            JOIN stations s ON s.id = p.station_id
+                            WHERE s.name = %s
+                            AND p.object_id IN ({format_ids})
+                        )
+                        SELECT object_id
+                        FROM last_pass
+                        WHERE rn = 1 AND esito = 1
+                    """, (cfg["station_1_in"], *multi_entry_set))
+                    s1_success_set = {row["object_id"] for row in cursor.fetchall()}
+
+                # latest_esito + latest_ts
+                cursor.execute("""
+                    SELECT object_id, esito, start_time
+                    FROM productions p
+                    JOIN stations s ON s.id = p.station_id
+                    WHERE s.name IN (%s, %s) AND p.start_time BETWEEN %s AND %s
+                """, (*cfg["station_1_in"], *cfg["station_1_out_ng"], shift_start, now))
+
+                latest_esito, latest_ts = {}, {}
+                for row in cursor.fetchall():
+                    oid = row["object_id"]
+                    ts = row["start_time"]
+                    if oid not in latest_ts or ts > latest_ts[oid]:
+                        latest_ts[oid] = ts
+                        latest_esito[oid] = row["esito"]
+
 
     except Exception as e:
         logger.exception(f"compute_zone_snapshot() FAILED for zone=ELL: {e}")
@@ -1155,7 +1181,13 @@ def _compute_snapshot_ell(now: datetime) -> dict:
             "__last_hour": hour_start.isoformat(),
             "top_defects": top_defects,
             "value_gauge_1": value_gauge_1, #
-            "value_gauge_2": value_gauge_2 #
+            "value_gauge_2": value_gauge_2, #
+            "s1_entry_count": s1_entry_count,
+            "s2_entry_set": s2_entry_set,
+            "multi_entry_set": multi_entry_set,
+            "s1_success_set": s1_success_set,
+            "latest_esito": latest_esito,
+            "latest_ts": {k: v.isoformat() for k, v in latest_ts.items()}
             }
 
 def _compute_snapshot_str(now: datetime | None) -> dict:
@@ -1723,6 +1755,20 @@ def _update_snapshot_ell_new(
     reentered: bool = False
     ) -> None:
 
+    def _get_shift_label_and_start(ts_str: str):
+        ts = datetime.fromisoformat(ts_str)
+        shift_start, _ = get_shift_window(ts)
+        label = (
+            "S1" if 6 <= shift_start.hour < 14 else
+            "S2" if 14 <= shift_start.hour < 22 else
+            "S3"
+        )
+        return label, shift_start
+
+    def _get_hour_label(ts_str: str) -> str:
+        ts = datetime.fromisoformat(ts_str)
+        return ts.replace(minute=0, second=0, microsecond=0).strftime("%H:%M")
+
     try:
         cfg = ZONE_SOURCES["ELL"]
         current_shift_start, _ = get_shift_window(ts)
@@ -1733,11 +1779,19 @@ def _update_snapshot_ell_new(
         )
 
         # ———————————————————————————————————————————————————————————————
-        # 0. Ensure our helper sets exist on the `data` dict:
-        data.setdefault("latest_esito", {})                # latest esito for each module
-        data.setdefault("s1_ng_set", set())                # for gauge 2 denominator fix
-        data.setdefault("reworked_set", set())             # modules good @RMI
-        data.setdefault("good_after_rework_set", set())    # modules good @ELL after RMI
+        # Safely wrap sets/dicts expected to be updated
+        data["latest_esito"] = data.get("latest_esito", {})
+        data["latest_ts"] = data.get("latest_ts", {})
+        data["s1_ng_set"] = set(data.get("s1_ng_set", []))
+        data["reworked_set"] = set(data.get("reworked_set", []))
+        data["good_after_rework_set"] = set(data.get("good_after_rework_set", []))
+        data["s2_entry_set"] = set(data.get("s2_entry_set", []))
+        data["multi_entry_set"] = set(data.get("multi_entry_set", []))
+        data["s1_success_set"] = set(data.get("s1_success_set", []))
+
+        # Critical one: must be defaultdict(int) to avoid crash
+        data["s1_entry_count"] = defaultdict(int, data.get("s1_entry_count", {}))
+
         # ———————————————————————————————————————————————————————————————
 
         # 1. Update Counters
@@ -1771,18 +1825,26 @@ def _update_snapshot_ell_new(
                     data["ng_tot"] -= 1
 
         # 1a. Track “distinct modules that hit NG at station 1”:
-        if station_name in cfg["station_1_in"] and esito == 6:
-            data["s1_ng_set"].add(object_id)
-
-        # 1b. Track “modules that passed rework”:
-        if station_name in cfg["station_2_in"] and esito != 6:
+        if station_name in cfg["station_2_in"] and esito == 5:
             data["reworked_set"].add(object_id)
 
         # 1c. Track “of those, who then passed at ELL”:
         if station_name in cfg["station_1_in"] and esito != 6:
-            # only count if they were reworked
             if object_id in data["reworked_set"]:
                 data["good_after_rework_set"].add(object_id)
+
+        # When passing station_1_in
+        if station_name in cfg["station_1_in"] and object_id:
+            data["s1_entry_count"][object_id] += 1
+            if data["s1_entry_count"][object_id] > 1:
+                data["multi_entry_set"].add(object_id)
+
+        if object_id in data["multi_entry_set"] and esito == 1:
+            data["s1_success_set"].add(object_id)
+
+        if station_name in cfg["station_2_in"]:
+            if object_id:
+                data["s2_entry_set"].add(object_id)
 
         # 2 Yield
         # FPY = good on first pass / total first-pass
@@ -1794,39 +1856,27 @@ def _update_snapshot_ell_new(
         # Always track latest esito for RWK calculation
         if station_name in cfg["station_1_in"] + cfg["station_1_out_ng"]:
             data["latest_esito"][object_id] = esito
-        
-        latest_esito = data["latest_esito"]
+            data["latest_ts"][object_id] = ts.isoformat()
 
-        total_started = data["station_1_r0_in"]  # First-pass only
-        final_good = sum(1 for e in latest_esito.values() if e != 6)
-        final_ng = total_started - final_good
+        final_statuses = [
+            es for oid, es in data["latest_esito"].items()
+            if oid in data["latest_ts"] and _get_shift_label_and_start(data["latest_ts"][oid]) == (current_shift_label, current_shift_start)
+        ]
+
+        final_good = sum(1 for es in final_statuses if es != 6)
+        final_ng   = sum(1 for es in final_statuses if es == 6)
 
         data["RWK_yield"] = compute_yield(final_good, final_ng)
 
         # ———————————————————————————————————————————————————————————————
-        # 3. Gauge 1: s2_g_r0 / s2_in_r0  (first‐pass yield @ RMI)
-        s2_in_r0 = data["station_2_r0_in"]
-        s2_g_r0  = s2_in_r0 - data["station_2_r0_ng"]
-        data["value_gauge_1"] = (
-            round((s2_g_r0 / s2_in_r0) * 100, 2)
-            if s2_in_r0 else
-            0.0
-        )
+        # Gauge 1: re-entries / station_2_in
+        denom = len(data["s2_entry_set"])
+        num_multi = len(data["multi_entry_set"])
+        data["value_gauge_1"] = round((num_multi / denom) * 100, 2) if denom else 0.0
 
-        # 4. Gauge 2: good_after_rework / good_through_rework
-        #    ↳ SQL’s count_objects_with_esito_ng   ⇐ not needed any more
-        #    ↳ SQL’s count_good_after_rework
-        #       WITH reworked AS (… station_id=3 good …)
-        #       … good @ station_id=9 …
-        #
-        # In‐RAM equivalent:
-        total_reworked_good = len(data["reworked_set"])             # s2_g
-        total_good_after  = len(data["good_after_rework_set"])     # good_after_rework
-        data["value_gauge_2"] = (
-            round((total_good_after / total_reworked_good) * 100, 2)
-            if total_reworked_good else
-            0.0
-        )
+        # Gauge 2: multi-entry modules that ended in esito=1 / multi-entry
+        num_success = len(data["s1_success_set"])
+        data["value_gauge_2"] = round((num_success / num_multi) * 100, 2) if num_multi else 0.0
         # ———————————————————————————————————————————————————————————————
 
         # 5 Update Throughput
@@ -1871,9 +1921,17 @@ def _update_snapshot_ell_new(
             for shift in rwk_shift_data:
                 start_ts = shift["start"]
                 if shift["label"] == current_shift_label and start_ts == current_shift_start.isoformat():
-                    total_started = data["station_1_r0_in"]
-                    final_good = sum(1 for e in latest_esito.values() if e != 6)
-                    final_ng = total_started - final_good
+                    latest_ts = data["latest_ts"]
+                    latest_esito = data["latest_esito"]
+
+                    relevant = [
+                        oid for oid in latest_ts
+                        if _get_shift_label_and_start(latest_ts[oid]) == (current_shift_label, current_shift_start)
+                    ]
+
+                    final_good = sum(1 for oid in relevant if latest_esito.get(oid) != 6)
+                    final_ng   = len(relevant) - final_good
+
                     shift["good"] = final_good
                     shift["ng"] = final_ng
                     shift["yield"] = compute_yield(final_good, final_ng)
@@ -1924,9 +1982,18 @@ def _update_snapshot_ell_new(
                 return
             # always update RWK using latest_esito
             lst = data["RWK_yield_last_8h"]
-            final_good = sum(1 for e in data["latest_esito"].values() if e != 6)
-            total_started = data["station_1_r0_in"]
-            final_ng = total_started - final_good
+
+            latest_ts = data["latest_ts"]
+            latest_esito = data["latest_esito"]
+
+            relevant = [
+                oid for oid in latest_ts
+                if _get_hour_label(latest_ts[oid]) == hour_label
+            ]
+
+            final_good = sum(1 for oid in relevant if latest_esito.get(oid) != 6)
+            final_ng   = len(relevant) - final_good
+
             yield_val = compute_yield(final_good, final_ng)
 
             for entry in lst:
@@ -2028,7 +2095,7 @@ def _update_snapshot_ell_new(
                             }
                             for row in cursor.fetchall()
                         ]
-        else:
+        elif station_name == "ELL01":
             data["bufferDefectSummary"] = []
 
     except Exception:

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../pages/object_details/mbjDetails_page.dart';
 import '../services/api_service.dart';
 import 'AI.dart';
 
@@ -170,6 +171,26 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
                           color: Colors.black87,
                         ),
                       ),
+                      if (widget.reWork) const SizedBox(width: 16),
+                      if (widget.reWork)
+                        buildControllaMBJButton(
+                          onPressed: () {
+                            showGeneralDialog(
+                              context: context,
+                              barrierDismissible: true,
+                              barrierLabel: "MBJ Details",
+                              transitionDuration:
+                                  const Duration(milliseconds: 300),
+                              pageBuilder: (_, __, ___) =>
+                                  RoundedMBJDialog(idModulo: widget.objectId),
+                              transitionBuilder: (_, anim, __, child) =>
+                                  FadeTransition(
+                                opacity: anim,
+                                child: child,
+                              ),
+                            );
+                          },
+                        )
                     ],
                   ),
                 ],
@@ -200,39 +221,6 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
               ),
             ],
           ),
-          if (maybeMBJ) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade600.withOpacity(0.2),
-                  border: Border.all(color: Colors.red, width: 1.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize
-                      .min, // <-- THIS prevents Row from expanding horizontally
-                  children: const [
-                    Icon(Icons.warning_amber_rounded,
-                        color: Colors.red, size: 16),
-                    SizedBox(width: 4),
-                    Text(
-                      "Il modulo potrebbe essere NG dall'MBJ",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.red,
-                      ),
-                      softWrap: true,
-                      overflow: TextOverflow.fade,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
 
           const SizedBox(height: 16),
 
@@ -274,6 +262,29 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
     );
   }
 
+  Widget buildControllaMBJButton({
+    required VoidCallback onPressed,
+  }) {
+    return MouseRegion(
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.search_rounded, color: Colors.white),
+        label: const Text(
+          "Controlla MBJ",
+          style: TextStyle(color: Colors.white, fontSize: 16),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blue.shade600,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          elevation: 8,
+        ),
+      ),
+    );
+  }
+
   Widget _buildFlatButton({
     required String label,
     required IconData icon,
@@ -296,6 +307,26 @@ class _ObjectCardState extends State<ObjectCard> with TickerProviderStateMixin {
           elevation: isHovering ? 4 : 0,
         ),
         child: Text(label, style: TextStyle(color: Colors.white, fontSize: 18)),
+      ),
+    );
+  }
+}
+
+class RoundedMBJDialog extends StatelessWidget {
+  final String idModulo;
+
+  const RoundedMBJDialog({super.key, required this.idModulo});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        width: MediaQuery.of(context).size.width * 0.9,
+        height: MediaQuery.of(context).size.height * 0.85,
+        child: MBJDetailPage(data: {'id_modulo': idModulo}, layout: "mobile"),
       ),
     );
   }

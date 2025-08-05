@@ -2,39 +2,41 @@
     "trigger": {
         "db": 19606,
         "bit": 3,
-        "byte": 451,
         "plc": {
             "ip": "192.168.32.2",
-            "slot": 0
-        }
+            "slot": 1
+        },
+        "byte": 451
     },
-    "id_modulo": {
+    "id_modulo_start": {
         "db": 19606,
         "byte": 452,
-        "length": 20,
-        "plc": {
-            "ip": "192.168.32.2",
-            "slot": 0
-        }
+        "length": 20
     },
-    "id_utente": {
+    "id_modulo_end": {
+        "db": 19606,
+        "byte": 102,
+        "length": 20
+    },
+    "id_utente_start": {
         "db": 19606,
         "byte": 474,
-        "length": 20,
-        "plc": {
-            "ip": "192.168.32.2",
-            "slot": 0
-        }
+        "length": 20
+    },
+    "id_utente_end": {
+        "db": 19606,
+        "byte": 124,
+        "length": 20
     },
     "fine_buona": {
         "db": 19606,
         "bit": 4,
-        "byte": 101,
         "plc": {
-          "ip": "192.168.32.3",
-          "slot": 0
-        }
-      },
+            "ip": "192.168.32.3",
+            "slot": 1
+        },
+        "byte": 101
+    },
     "fine_fermo": {
         "db": 19102,
         "bit": 0,
@@ -43,11 +45,11 @@
     "fine_scarto": {
         "db": 19606,
         "bit": 5,
-        "byte": 351,
         "plc": {
             "ip": "192.168.32.3",
-            "slot": 0
-        }
+            "slot": 1
+        },
+        "byte": 101
     },
     "evento_fermo": {
         "db": 19102,
@@ -58,6 +60,16 @@
         "db": 19102,
         "bit": 0,
         "byte": 22
+    },
+    "stringatrice_start": {
+        "db": 19606,
+        "byte": 496,
+        "length": 5
+    },
+    "stringatrice_end": {
+        "db": 19606,
+        "byte": 146,
+        "length": 5
     },
     "stazione_fermo": {
         "db": 19102,
@@ -76,12 +88,8 @@
     },
     "pezzo_archiviato": {
         "db": 19606,
-        "bit": 5,
-        "byte": 1001,
-        "plc": {
-            "ip": "192.168.32.3",
-            "slot": 0
-        }
+        "bit": 2,
+        "byte": 1003
     },
     "dati_pronti_fermi": {
         "db": 19100,
@@ -96,10 +104,6 @@
     "pezzo_salvato_su_DB_con_inizio_ciclo": {
         "db": 19606,
         "bit": 5,
-        "byte": 1001,
-        "plc": {
-            "ip": "192.168.32.2",
-            "slot": 0
-        }
+        "byte": 1001
     }
 }

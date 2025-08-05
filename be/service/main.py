@@ -277,14 +277,40 @@ async def start_background_tasks():
                 continue
 
             ip, slot = plc_info.get("ip"), plc_info.get("slot", 0)
-            plc = shared_conns.get((ip, slot))
-            if not plc:
-                logger.warning(f"No PLC connection for station {key}")
+
+            default_plc = config.get("plc")
+            if not default_plc:
+                logger.warning(f"No PLC config for {key}")
                 continue
 
-            plc_connections[key] = plc
-            asyncio.create_task(background_task(plc, key))
-            logger.debug(f"Background task started for station {key}")
+            # Get field-level PLC overrides
+            trigger_plc = config.get("trigger", {}).get("plc") or default_plc
+            fine_buona_plc = config.get("fine_buona", {}).get("plc") or default_plc
+
+            # Extract both keys
+            trigger_key = (trigger_plc["ip"], trigger_plc.get("slot", 0))
+            end_key = (fine_buona_plc["ip"], fine_buona_plc.get("slot", 0))
+
+            # Lookup connections
+            conn_trigger = shared_conns.get(trigger_key)
+            conn_end = shared_conns.get(end_key)
+
+            if not conn_trigger:
+                logger.warning(f"No PLC connection for trigger {trigger_key} at station {key}")
+                continue
+            if not conn_end:
+                logger.warning(f"No PLC connection for end {end_key} at station {key}")
+                continue
+
+            # Pass single or dual connection depending on match
+            if trigger_key == end_key:
+                plc_connections[key] = conn_trigger
+                asyncio.create_task(background_task([conn_trigger], key))
+            else:
+                plc_connections[key] = conn_trigger  # ← default: store trigger one
+                asyncio.create_task(background_task([conn_trigger, conn_end], key))
+
+            logger.debug(f"Background task started for station {key} (Trigger: {trigger_key}, End: {end_key})")
 
     # STEP 4 — Refresh VPF median every 59 minutes
     async def loop_refresh_median():

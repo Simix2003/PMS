@@ -1482,7 +1482,6 @@ def update_visual_data_on_new_module(
         elif zone == "AIN":
             _update_snapshot_ain(data, station_name, esito, ts)
         elif zone == "ELL":
-            data.setdefault("latest_esito", {})
             if not ELL_VISUAL:
                 return
             _update_snapshot_ell_new(data, station_name, esito, ts, cycle_time, bufferIds, object_id)
@@ -1735,6 +1734,7 @@ def _update_snapshot_ell_new(
 
         # ———————————————————————————————————————————————————————————————
         # 0. Ensure our helper sets exist on the `data` dict:
+        data.setdefault("latest_esito", {})                # latest esito for each module
         data.setdefault("s1_ng_set", set())                # for gauge 2 denominator fix
         data.setdefault("reworked_set", set())             # modules good @RMI
         data.setdefault("good_after_rework_set", set())    # modules good @ELL after RMI
@@ -2034,28 +2034,6 @@ def _update_snapshot_ell_new(
     except Exception:
         logger.exception("Error in _update_snapshot_ell_new()")
         raise
-
-def count_good_after_rework_buffer(cursor, start, end):
-    """
-    GOOD @S9 after GOOD @S3 (buffer version)
-    """
-    sql = """
-        WITH reworked AS (
-            SELECT DISTINCT object_id
-            FROM ell_productions_buffer
-            WHERE station_id = 3              -- Re-work station
-              AND esito <> 6                  -- GOOD
-              AND start_time BETWEEN %s AND %s
-        )
-        SELECT COUNT(DISTINCT p.object_id) AS cnt
-        FROM ell_productions_buffer p
-        JOIN reworked r USING (object_id)
-        WHERE p.station_id = 9               -- ELL final test
-          AND p.esito <> 6                   -- GOOD
-          AND p.start_time BETWEEN %s AND %s
-    """
-    cursor.execute(sql, (start, end, start, end))
-    return cursor.fetchone()["cnt"] or 0
 
 def _update_snapshot_str(
     data: dict,

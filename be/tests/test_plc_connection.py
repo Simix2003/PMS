@@ -1,6 +1,7 @@
 import os
 import sys
 from unittest.mock import Mock
+from threading import RLock
 
 import pytest
 
@@ -34,6 +35,7 @@ class DummyClient:
 
 def make_plc(client):
     plc = PLCConnection.__new__(PLCConnection)
+    plc.lock = RLock()
     plc.client = client
     plc.ip_address = "1.2.3.4"
     return plc

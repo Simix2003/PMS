@@ -330,9 +330,9 @@ async def start_background_tasks():
     logger.debug("Scheduled VPF median refresh every 59 minutes")
 
     # Avvia il monitor della porta 102 ogni 10 secondi
-    if not debug: 
-        asyncio.create_task(monitor_plc_ports(list(unique_plcs), interval=10))
-    logger.debug("PLC port 102 monitor task avviato")
+    #if not debug: 
+    #    asyncio.create_task(monitor_plc_ports(list(unique_plcs), interval=10))
+    #logger.debug("PLC port 102 monitor task avviato")
 
     logger.debug("All PLC and background tasks launched")
 

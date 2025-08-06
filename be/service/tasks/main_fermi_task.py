@@ -15,7 +15,7 @@ from service.helpers.helpers import get_channel_config
 from service.config.config import CHANNELS, PLC_DB_RANGES, debug
 from service.helpers.buffer_plc_extract import extract_bool, extract_string, extract_int, extract_DT
 from service.helpers.visual_helper import refresh_fermi_data
-from service.state.global_state import db_write_queue, plc_executor
+from service.state.global_state import db_write_queue, plc_read_executor, plc_write_executor
 from service.helpers.executor import run_in_thread
 
 
@@ -67,7 +67,7 @@ async def fermi_task(plc_connection: PLCConnection, ip: str, slot: int):
 
             # Read trigger buffer once
             buffer = await asyncio.get_event_loop().run_in_executor(
-                plc_executor,
+                plc_read_executor,
                 plc_connection.db_read,
                 db,
                 start_byte,
@@ -127,7 +127,7 @@ async def fermi_trigger_change(
         dati_letti_conf = paths.get("dati_letti_fermi")
         if dati_letti_conf and not debug:
             await asyncio.get_event_loop().run_in_executor(
-                plc_executor,
+                plc_write_executor,
                 plc_connection.write_bool,
                 dati_letti_conf["db"],
                 dati_letti_conf["byte"],
@@ -141,7 +141,7 @@ async def fermi_trigger_change(
         dati_letti_conf = paths.get("dati_letti_fermi")
         if dati_letti_conf and not debug:
             await asyncio.get_event_loop().run_in_executor(
-                plc_executor,
+                plc_write_executor,
                 plc_connection.write_bool,
                 dati_letti_conf["db"],
                 dati_letti_conf["byte"],
@@ -180,7 +180,7 @@ async def read_fermi_data(plc_connection: PLCConnection, line_name: str, channel
             start_byte = db_range["min"]
             size = db_range["max"] - db_range["min"] + 1
             buffer = await asyncio.get_event_loop().run_in_executor(
-                plc_executor,
+                plc_read_executor,
                 plc_connection.db_read,
                 db,
                 start_byte,

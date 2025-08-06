@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.connections.temp_data import load_temp_data, save_temp_data
 from service.connections.mysql import get_mysql_connection, insert_defects, update_esito, check_stringatrice_warnings
 from service.helpers.helpers import get_channel_config
-from service.state.global_state import plc_connections, incomplete_productions
+from service.state.global_state import plc_connections, incomplete_productions, plc_write_executor
 from service.config.settings import load_settings
 from service.config.config import ISSUE_TREE, debug
 from service.helpers.executor import run_in_thread
@@ -87,7 +87,9 @@ async def set_issues(request: Request):
 
     # ✅ Write confirmation back to PLC
     target = paths["esito_scarto_compilato"]
-    await asyncio.to_thread(plc_connection.write_bool, target["db"], target["byte"], target["bit"], True)
+    await asyncio.get_event_loop().run_in_executor(
+        plc_write_executor, plc_connection.write_bool, target["db"], target["byte"], target["bit"], True
+    )
 
     return {"status": "ok"}
 
@@ -243,7 +245,9 @@ async def get_issues_for_object(
             if debug:
                 logger.debug(f"Writing to PLC for {full_id}")
             else:
-                await asyncio.to_thread(plc_connection.write_bool, target["db"], target["byte"], target["bit"], True)
+                await asyncio.get_event_loop().run_in_executor(
+                    plc_write_executor, plc_connection.write_bool, target["db"], target["byte"], target["bit"], True
+                )
 
         return {"issue_paths": issue_paths, "pictures": pictures}
 

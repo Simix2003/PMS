@@ -22,7 +22,8 @@ from service.state.global_state import (
     fine_false_passato_flags,
     trigger_timestamps,
     incomplete_productions,
-    plc_executor,
+    plc_read_executor,
+    plc_write_executor,
     db_write_queue,
     db_range_cache,
 
@@ -378,7 +379,7 @@ async def background_task(
             trig_size = trig_end - trig_start + 1
 
             buffer_trigger = await asyncio.get_event_loop().run_in_executor(
-                plc_executor, trigger_conn.db_read, trigger_db, trig_start, trig_size
+                plc_read_executor, trigger_conn.db_read, trigger_db, trig_start, trig_size
             )
 
             if debug:
@@ -439,7 +440,7 @@ async def background_task(
             end_size = end_end - end_start + 1
 
             buffer_end = await asyncio.get_event_loop().run_in_executor(
-                plc_executor, end_conn.db_read, end_db, end_start, end_size
+                plc_read_executor, end_conn.db_read, end_db, end_start, end_size
             )
 
             if debug:
@@ -524,9 +525,9 @@ async def handle_end_cycle(
         )
     
     t11 = time.perf_counter()
-    queue_size_arch = get_executor_status(plc_executor)["queue_size"]
+    queue_size_arch = get_executor_status(plc_write_executor)["queue_size"]
     t_write_start = time.perf_counter()
-    future_arch = plc_executor.submit(
+    future_arch = plc_write_executor.submit(
         plc_connection.write_bool,
         pezzo_archivia_conf["db"],
         pezzo_archivia_conf["byte"],
@@ -548,9 +549,9 @@ async def handle_end_cycle(
         )
 
     if esito_conf:
-        queue_size_esito = get_executor_status(plc_executor)["queue_size"]
+        queue_size_esito = get_executor_status(plc_write_executor)["queue_size"]
         t_esito_start = time.perf_counter()
-        future_esito = plc_executor.submit(
+        future_esito = plc_write_executor.submit(
             plc_connection.write_bool,
             esito_conf["db"],
             esito_conf["byte"],
@@ -571,7 +572,7 @@ async def handle_end_cycle(
                 f"[{full_station_id}] esito FALSE took {duration_esito:.3f}s (queue_size={queue_size_esito})"
             )
         #await asyncio.get_event_loop().run_in_executor(
-        #    plc_executor,
+        #    plc_write_executor,
         #    plc_connection.write_bool,
         #    esito_conf["db"],
         #    esito_conf["byte"],
@@ -753,8 +754,8 @@ async def on_trigger_change(
     # ─── Write TRUE back to PLC ───
     if not debug:
         t0 = time.perf_counter()
-        queue_size = get_executor_status(plc_executor)["queue_size"]
-        fut = plc_executor.submit(
+        queue_size = get_executor_status(plc_write_executor)["queue_size"]
+        fut = plc_write_executor.submit(
             plc_connection.write_bool,
             pezzo_conf["db"],
             pezzo_conf["byte"],
@@ -941,7 +942,9 @@ async def read_data(
             db, base = rwk_conf["db"], rwk_conf["byte"]
             count = rwk_conf["length"]
             slen = rwk_conf.get("string_length", 20) + 2
-            raw = await asyncio.to_thread(plc_connection.db_read, db, base, count * slen)
+            raw = await asyncio.get_event_loop().run_in_executor(
+                plc_read_executor, plc_connection.db_read, db, base, count * slen
+            )
             rwk_vals = [extract_s7_string(raw, i * slen) for i in range(count)]
             #print('RWK_VALS:', rwk_vals)
         elif debug:

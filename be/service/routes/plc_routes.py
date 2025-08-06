@@ -9,7 +9,7 @@ from typing import Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from service.state.global_state import plc_connections
+from service.state.global_state import plc_connections, plc_read_executor
 import service.state.global_state as global_state
 from service.helpers.buffer_plc_extract import extract_s7_string
 from service.connections.mysql import get_mysql_connection
@@ -92,7 +92,8 @@ async def get_rwk_buffer_defects(
     slen = (rwk_conf.string_length or 20) + 2
 
     if not debug and plc_connection:
-        raw = await asyncio.to_thread(
+        raw = await asyncio.get_event_loop().run_in_executor(
+            plc_read_executor,
             plc_connection.db_read,
             rwk_conf.db,
             rwk_conf.byte,

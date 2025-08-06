@@ -9,7 +9,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.helpers.helpers import get_channel_config
-from service.state.global_state import plc_connections
+from service.state.global_state import plc_connections, plc_read_executor
 from service.routes.broadcast import broadcast
 from service.config.config import debug
 from service.connections.mysql import get_mysql_connection
@@ -74,8 +74,12 @@ async def set_outcome(request: Request):
 
     read_conf = config["id_modulo"]
     try:
-        current_object_id = await asyncio.to_thread(
-            plc_connection.read_string, read_conf["db"], read_conf["byte"], read_conf["length"]
+        current_object_id = await asyncio.get_event_loop().run_in_executor(
+            plc_read_executor,
+            plc_connection.read_string,
+            read_conf["db"],
+            read_conf["byte"],
+            read_conf["length"],
         )
     except Exception as e:
         logger.error(f"Error reading PLC data: {e}")

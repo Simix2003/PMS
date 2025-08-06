@@ -63,7 +63,11 @@ def get_zones_from_station(station: str) -> List[str]:
 
 # Thread-safe DB executor
 executor = ThreadPoolExecutor(max_workers=20)
-plc_executor = ThreadPoolExecutor(max_workers=30)
+
+# Dedicated executors for PLC operations
+# Allocate fewer read workers to prevent write starvation
+plc_read_executor = ThreadPoolExecutor(max_workers=20)
+plc_write_executor = ThreadPoolExecutor(max_workers=10)
 
 # Asynchronous queue for deferred DB writes
 db_write_queue = DBWriteQueue()

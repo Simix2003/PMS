@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from service.config.config import debug
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
-from service.state.global_state import subscriptions
+from service.state.global_state import subscriptions, plc_read_executor
 import service.state.global_state as global_state
 
 logger = logging.getLogger(__name__)
@@ -24,9 +24,10 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
 
     # ✅ Use `paths` for all access now (already scoped)
     trigger_conf = paths["trigger"]
-    trigger_value = await asyncio.to_thread(
+    trigger_value = await asyncio.get_event_loop().run_in_executor(
+        plc_read_executor,
         plc_connection.read_bool,
-        trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"]
+        trigger_conf["db"], trigger_conf["byte"], trigger_conf["bit"],
     )
 
     object_id = ""
@@ -42,15 +43,22 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
         if debug:
             object_id = global_state.debug_moduli.get(full_id)
         else:
-            object_id = await asyncio.to_thread(
+            object_id = await asyncio.get_event_loop().run_in_executor(
+                plc_read_executor,
                 plc_connection.read_string,
-                id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"]
+                id_mod_conf["db"], id_mod_conf["byte"], id_mod_conf["length"],
             )
         ###############################################################################################################################
 
         str_conf = paths["stringatrice"]
         values = [
-            await asyncio.to_thread(plc_connection.read_bool, str_conf["db"], str_conf["byte"], i)
+            await asyncio.get_event_loop().run_in_executor(
+                plc_read_executor,
+                plc_connection.read_bool,
+                str_conf["db"],
+                str_conf["byte"],
+                i,
+            )
             for i in range(str_conf["length"])
         ]
 
@@ -61,15 +69,17 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
         stringatrice = str(stringatrice_index)
 
         fine_buona_conf = paths["fine_buona"]
-        fine_buona = await asyncio.to_thread(
+        fine_buona = await asyncio.get_event_loop().run_in_executor(
+            plc_read_executor,
             plc_connection.read_bool,
-            fine_buona_conf["db"], fine_buona_conf["byte"], fine_buona_conf["bit"]
+            fine_buona_conf["db"], fine_buona_conf["byte"], fine_buona_conf["bit"],
         )
 
         fine_scarto_conf = paths["fine_scarto"]
-        fine_scarto = await asyncio.to_thread(
+        fine_scarto = await asyncio.get_event_loop().run_in_executor(
+            plc_read_executor,
             plc_connection.read_bool,
-            fine_scarto_conf["db"], fine_scarto_conf["byte"], fine_scarto_conf["bit"]
+            fine_scarto_conf["db"], fine_scarto_conf["byte"], fine_scarto_conf["bit"],
         )
 
         if fine_buona:
@@ -78,9 +88,10 @@ async def send_initial_state(websocket: WebSocket, channel_id: str, plc_connecti
             outcome = "scarto"
 
         esito_conf = paths["esito_scarto_compilato"]
-        issues_value = await asyncio.to_thread(
+        issues_value = await asyncio.get_event_loop().run_in_executor(
+            plc_read_executor,
             plc_connection.read_bool,
-            esito_conf["db"], esito_conf["byte"], esito_conf["bit"]
+            esito_conf["db"], esito_conf["byte"], esito_conf["bit"],
         )
         issues_submitted = issues_value is True
 

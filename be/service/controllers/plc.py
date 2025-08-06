@@ -281,10 +281,34 @@ class PLCConnection:
                 self._recover_on_error(f"read_bool DB{db_number}", e)
                 return False
 
-    def write_bool(self, db_number, byte_index, bit_index, value, max_retries=3):
+    def write_bool(self, db_number, byte_index, bit_index, value, max_retries=3, current_byte=None):
+        """Write a boolean value into the PLC DB.
+
+        Parameters
+        ----------
+        db_number : int
+            Target DB number.
+        byte_index : int
+            Byte index inside the DB.
+        bit_index : int
+            Bit index inside the byte.
+        value : bool
+            Desired boolean value to write.
+        max_retries : int, optional
+            Number of retry attempts on failure, by default 3.
+        current_byte : int | None, optional
+            If provided, represents the current value of the byte already
+            read from the PLC. Supplying this avoids an additional
+            ``db_read`` call to fetch the byte again.
+        """
         if not WRITE_TO_PLC:
-            logger.debug("SKIPPED write_bool DB%04d b%d:%d = %s",
-                        db_number, byte_index, bit_index, value)
+            logger.debug(
+                "SKIPPED write_bool DB%04d b%d:%d = %s",
+                db_number,
+                byte_index,
+                bit_index,
+                value,
+            )
             return
 
         backoff = 0.01
@@ -304,15 +328,24 @@ class PLCConnection:
                     return
 
                 try:
-                    # Step 1: Read current byte
-                    t_read_start = time.perf_counter()
-                    orig = self.client.db_read(db_number, byte_index, 1)
-                    t_read_end = time.perf_counter()
-                    logger.debug(f"📥 db_read took {t_read_end - t_read_start:.3f}s")
+                    # Step 1: Read current byte (unless provided)
+                    if current_byte is None:
+                        t_read_start = time.perf_counter()
+                        orig = self.client.db_read(db_number, byte_index, 1)
+                        t_read_end = time.perf_counter()
+                        logger.debug(
+                            f"📥 db_read took {t_read_end - t_read_start:.3f}s"
+                        )
+                        orig_val = orig[0]
+                    else:
+                        t_read_start = t_read_end = time.perf_counter()
+                        logger.debug(
+                            f"📥 using provided current_byte={current_byte}, skipping db_read"
+                        )
+                        orig_val = current_byte
 
                     # Step 2: Check if value already correct
                     t_logic_start = time.perf_counter()
-                    orig_val = orig[0]
                     new_val = (orig_val | (1 << bit_index)) if value else (orig_val & ~(1 << bit_index))
                     t_logic_end = time.perf_counter()
                     logger.debug(f"🧠 bit logic computation took {t_logic_end - t_logic_start:.6f}s")

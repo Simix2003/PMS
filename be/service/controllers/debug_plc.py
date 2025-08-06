@@ -31,9 +31,11 @@ class FakePLCConnection(PLCConnection):
         with self.lock:
             return global_state.debug_triggers.get(self.station_id, False)
 
-    def write_bool(self, db, byte, bit, value):
+    def write_bool(self, db, byte, bit, value, max_retries=3, current_byte=None):
         with self.lock:
-            logger.debug(f"✍️ (Fake) Write bool to DB{db}.{byte}.{bit} = {value}")
+            logger.debug(
+                f"✍️ (Fake) Write bool to DB{db}.{byte}.{bit} = {value}"
+            )
 
     def read_string(self, db, byte, length):
         with self.lock:

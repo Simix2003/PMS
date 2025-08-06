@@ -269,27 +269,37 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
           children: [
             Flexible(
               flex: 4,
-              child: // Shift target (moduli)
-                  GestureDetector(
-                onTap: () {
-                  showTargetEditDialog(
-                    title: 'Target Produzione Shift',
-                    currentValue: shift_target,
-                    onValueSaved: (newVal) async {
-                      setState(() {
-                        shift_target = newVal;
-                        hourly_shift_target = (newVal ~/ 8).toDouble();
-                      });
-                      await ApiService.saveVisualTargets(
-                          shift_target, yield_target);
-                    },
-                  );
-                },
-                child: HeaderBox(
-                  title: 'Produzione Shift',
-                  target: '$shift_target moduli',
-                  icon: Icons.solar_power,
-                ),
+              child: Row(
+                children: [
+                  HeaderBox(
+                    title: 'Stringatrici - Linea B',
+                    target: '',
+                    Title: true,
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        showTargetEditDialog(
+                          title: 'Target Produzione Shift',
+                          currentValue: shift_target,
+                          onValueSaved: (newVal) async {
+                            setState(() {
+                              shift_target = newVal;
+                              hourly_shift_target = (newVal ~/ 8).toDouble();
+                            });
+                            await ApiService.saveVisualTargets(
+                                shift_target, yield_target);
+                          },
+                        );
+                      },
+                      child: HeaderBox(
+                        title: 'Produzione Shift',
+                        target: '$shift_target moduli',
+                        icon: Icons.solar_power,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             Flexible(

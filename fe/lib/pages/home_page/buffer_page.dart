@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../shared/services/api_service.dart';
 
-class BufferPage extends StatefulWidget {
+class BufferPage extends StatelessWidget {
   final String plcIp;
   final int db;
   final int byte;
@@ -17,10 +17,41 @@ class BufferPage extends StatefulWidget {
   });
 
   @override
-  State<BufferPage> createState() => _BufferPageState();
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F2F7),
+      body: BufferPageContent(
+        plcIp: plcIp,
+        db: db,
+        byte: byte,
+        length: length,
+      ),
+    );
+  }
 }
 
-class _BufferPageState extends State<BufferPage> with TickerProviderStateMixin {
+class BufferPageContent extends StatefulWidget {
+  final String plcIp;
+  final int db;
+  final int byte;
+  final int length;
+  final bool visuals;
+
+  const BufferPageContent({
+    required this.plcIp,
+    required this.db,
+    required this.byte,
+    required this.length,
+    this.visuals = false,
+    super.key,
+  });
+
+  @override
+  State<BufferPageContent> createState() => _BufferPageState();
+}
+
+class _BufferPageState extends State<BufferPageContent>
+    with TickerProviderStateMixin {
   bool isLoading = true;
   List<Map<String, dynamic>> bufferDefects = [];
   final Map<String, String> etaByObjectId = {};
@@ -184,8 +215,11 @@ class _BufferPageState extends State<BufferPage> with TickerProviderStateMixin {
         physics: const BouncingScrollPhysics(),
         slivers: [
           SliverAppBar(
+            automaticallyImplyLeading: !widget.visuals,
+            leading:
+                widget.visuals ? null : const BackButton(color: Colors.black),
             expandedHeight: 120,
-            floating: false,
+            floating: true,
             pinned: true,
             backgroundColor: const Color(0xFFF2F2F7),
             surfaceTintColor: Colors.transparent,

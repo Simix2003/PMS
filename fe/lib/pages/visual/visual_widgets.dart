@@ -5,20 +5,23 @@ import 'dart:async';
 import 'package:intl/intl.dart';
 import 'dart:math';
 import '../../shared/services/api_service.dart';
+import '../home_page/buffer_page.dart';
 
 class HeaderBox extends StatefulWidget {
   final String title, target;
-  final IconData icon;
+  final IconData? icon;
   final String qg2_defects_value;
   final String zone;
+  final bool Title;
 
   const HeaderBox({
     super.key,
     required this.title,
     required this.target,
-    required this.icon,
+    this.icon,
     this.qg2_defects_value = '',
     this.zone = '',
+    this.Title = false,
   });
 
   @override
@@ -61,7 +64,7 @@ class _HeaderBoxState extends State<HeaderBox> {
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       margin: const EdgeInsets.only(right: 6),
       decoration: BoxDecoration(
-        color: const Color.fromRGBO(33, 95, 154, 1),
+        color: widget.Title ? warningColor : Color.fromRGBO(33, 95, 154, 1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -69,6 +72,26 @@ class _HeaderBoxState extends State<HeaderBox> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // LEFT: Date/Time only for Produzione Shift
+          if (widget.title == 'UPTIME/DOWNTIME Shift')
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Image.asset(
+                'assets/logo.png',
+                height: 36,
+                fit: BoxFit.contain,
+              ),
+            ),
           if (widget.title == 'UPTIME/DOWNTIME Shift')
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,10 +114,25 @@ class _HeaderBoxState extends State<HeaderBox> {
             ),
           if (widget.title == 'UPTIME/DOWNTIME Shift')
             const SizedBox(width: 32),
-          if (widget.title == 'UPTIME/DOWNTIME Shift')
-            Text(
-              'Linea B',
-              style: TextStyle(color: Colors.white, fontSize: 24),
+          if (widget.title == 'Dettaglio ReWork')
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Image.asset(
+                'assets/logo.png',
+                height: 36,
+                fit: BoxFit.contain,
+              ),
             ),
           if (widget.title == 'Dettaglio ReWork')
             Row(
@@ -120,32 +158,7 @@ class _HeaderBoxState extends State<HeaderBox> {
                     ),
                   ],
                 ),
-                const SizedBox(width: 32),
-                Text(
-                  'Linea B',
-                  style: const TextStyle(color: Colors.white, fontSize: 24),
-                ),
               ],
-            )
-          else if (widget.title == 'Produzione Shift')
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Image.asset(
-                'assets/logo.png',
-                height: 36,
-                fit: BoxFit.contain,
-              ),
             )
           else if (widget.title == 'Pareto Shift')
             Row(
@@ -275,7 +288,15 @@ class _HeaderBoxState extends State<HeaderBox> {
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.title != 'UPTIME/DOWNTIME Shift' &&
+              if (widget.Title)
+                Text(
+                  widget.title,
+                  style: const TextStyle(
+                    fontSize: 38,
+                    color: Color.fromRGBO(33, 95, 154, 1),
+                  ),
+                )
+              else if (widget.title != 'UPTIME/DOWNTIME Shift' &&
                   widget.title != "Dettaglio ReWork")
                 Text(
                   widget.title,
@@ -291,22 +312,20 @@ class _HeaderBoxState extends State<HeaderBox> {
                   TextSpan(
                     style: const TextStyle(fontSize: 32),
                     children: [
-                      const TextSpan(
+                      TextSpan(
                         text: 'UP',
                         style: TextStyle(
-                            color: Color.fromRGBO(229, 217, 57, 1),
-                            fontWeight: FontWeight.bold),
+                            color: warningColor, fontWeight: FontWeight.bold),
                       ),
                       const TextSpan(
                         text: 'TIME/',
                         style: TextStyle(
                             color: Colors.white, fontWeight: FontWeight.bold),
                       ),
-                      const TextSpan(
+                      TextSpan(
                         text: 'DOWN',
                         style: TextStyle(
-                            color: Color.fromRGBO(229, 217, 57, 1),
-                            fontWeight: FontWeight.bold),
+                            color: warningColor, fontWeight: FontWeight.bold),
                       ),
                       const TextSpan(
                         text: 'TIME Shift',
@@ -327,17 +346,16 @@ class _HeaderBoxState extends State<HeaderBox> {
                         style: TextStyle(
                             color: Colors.white, fontWeight: FontWeight.bold),
                       ),
-                      const TextSpan(
+                      TextSpan(
                         text: 'ReWork',
                         style: TextStyle(
-                            color: Color.fromRGBO(229, 217, 57, 1),
-                            fontWeight: FontWeight.bold),
+                            color: warningColor, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
                 ),
               ],
-              const SizedBox(width: 8),
+              //const SizedBox(width: 8),
               if (widget.target.isNotEmpty)
                 RichText(
                   text: TextSpan(
@@ -349,8 +367,8 @@ class _HeaderBoxState extends State<HeaderBox> {
                       ),
                       TextSpan(
                         text: widget.target,
-                        style: const TextStyle(
-                          color: Color.fromRGBO(229, 217, 57, 1),
+                        style: TextStyle(
+                          color: warningColor,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -364,12 +382,13 @@ class _HeaderBoxState extends State<HeaderBox> {
             ],
           ),
 
-          // RIGHT: Icon
-          Icon(
-            widget.icon,
-            color: Colors.white,
-            size: 50,
-          ),
+          if (widget.icon != null)
+            // RIGHT: Icon
+            Icon(
+              widget.icon,
+              color: Colors.white,
+              size: 50,
+            ),
         ],
       ),
     );
@@ -4265,11 +4284,12 @@ class _BufferChartState extends State<BufferChart> {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.9,
-            height: MediaQuery.of(context).size.height * 0.8,
+            height: MediaQuery.of(context).size.height * 0.85,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: Column(
                 children: [
+                  // Header
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     height: 56,
@@ -4289,37 +4309,15 @@ class _BufferChartState extends State<BufferChart> {
                       ],
                     ),
                   ),
-                  Expanded(
-                    child: defects.isEmpty
-                        ? const Center(
-                            child: Text("✅ Nessun modulo in buffer difetti"))
-                        : ListView.builder(
-                            itemCount: defects.length,
-                            padding: const EdgeInsets.all(16),
-                            itemBuilder: (context, index) {
-                              final defect = defects.reversed.toList()[index];
-                              final bgColor = index.isEven
-                                  ? Colors.grey.shade100
-                                  : Colors.grey.shade200;
 
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: bgColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(6),
-                                child: _DefectCard(
-                                  number: defect["id"],
-                                  name: defect["name"],
-                                  eta: defect["eta"],
-                                  etaColor: _etaColor(defect["eta"]),
-                                  rework: defect["rework"],
-                                  defectTypes: defect["defectTypes"],
-                                ),
-                              );
-                            },
-                          ),
+                  // Page content
+                  Expanded(
+                    child: BufferPageContent(
+                        plcIp: '192.168.32.2',
+                        db: 19603,
+                        byte: 0,
+                        length: 21,
+                        visuals: true),
                   ),
                 ],
               ),
@@ -4993,7 +4991,12 @@ class DefectMatrixCard extends StatelessWidget {
                 final counts = entry.value;
 
                 if (defect == 'NG1.1' || defect == 'NG3') {
-                  final rowStations = ['AIN01', 'AIN02']; // + LMN if needed
+                  final rowStations = [
+                    'AIN01',
+                    'AIN02',
+                    'LMN01',
+                    'LMN02'
+                  ]; // + LMN if needed
                   final allValuesAreZero = counts.values.every((v) => v == 0);
 
                   if (allValuesAreZero) {

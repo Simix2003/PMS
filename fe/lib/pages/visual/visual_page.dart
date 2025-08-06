@@ -921,61 +921,84 @@ class _VisualPageState extends State<VisualPage> {
         if (!mounted) return;
 
         setState(() {
-          // ─── Main station metrics ─────────────────────
-          bussingIn_1 = data['station_1_in'] ?? 0;
-          bussingIn_2 = data['station_2_in'] ?? 0;
-          ng_bussingOut_1 = data['station_1_out_ng'] ?? 0;
-          ng_bussingOut_2 = data['station_2_out_ng'] ?? 0;
-          currentYield_1 = data['station_1_yield'] ?? 100;
-          currentYield_2 = data['station_2_yield'] ?? 100;
+          // ─── Main station metrics ─────────────────────────────
+          final stations = [1, 2, 3, 4, 5];
+          zoneInputs.clear();
+          zoneNG.clear();
+          zoneYield.clear();
+          zoneScrap.clear();
+          zoneAvailability.clear();
 
-          // ─── Yield + Throughput 8h & shift ────────────
-          yieldLast8h_1 = List<Map<String, dynamic>>.from(
-              data['station_1_yield_last_8h'] ?? []);
-          yieldLast8h_2 = List<Map<String, dynamic>>.from(
-              data['station_2_yield_last_8h'] ?? []);
-          shiftThroughput =
-              List<Map<String, dynamic>>.from(data['shift_throughput'] ?? []);
-          hourlyThroughput =
-              List<Map<String, dynamic>>.from(data['last_8h_throughput'] ?? []);
-          station1Shifts = List<Map<String, dynamic>>.from(
-              data['station_1_yield_shifts'] ?? []);
-          station2Shifts = List<Map<String, dynamic>>.from(
-              data['station_2_yield_shifts'] ?? []);
+          for (var s in stations) {
+            zoneInputs[s] = data['station_${s}_in'] ?? 0;
+            zoneNG[s] = data['station_${s}_out_ng'] ?? 0;
+            zoneYield[s] = data['station_${s}_yield'] ?? 100;
+            zoneScrap[s] = data['station_${s}_scrap'] ?? 0;
+          }
 
-          mergedShiftData = List.generate(station1Shifts.length, (index) {
+          // ─── Yield (Last 8h) ──────────────────────────────────
+          yieldLast8h =
+              List<Map<String, dynamic>>.from(data['str_yield_last_8h'] ?? []);
+          overallYieldLast8h = List<Map<String, dynamic>>.from(
+              data['overall_yield_last_8h'] ?? []);
+
+          // ─── Yield per Shift ──────────────────────────────────
+          strShifts =
+              List<Map<String, dynamic>>.from(data['str_yield_shifts'] ?? []);
+          overallShifts = List<Map<String, dynamic>>.from(
+              data['overall_yield_shifts'] ?? []);
+
+          mergedShiftData = List.generate(strShifts.length, (i) {
+            final strYield = strShifts[i]['yield'] ?? 100;
+            final overallYield = (i < overallShifts.length)
+                ? overallShifts[i]['yield'] ?? 100
+                : 100;
             return {
-              'shift': station1Shifts[index]['label'],
-              'bussing1': station1Shifts[index]['yield'],
-              'bussing2': station2Shifts[index]['yield'],
+              'shift': strShifts[i]['label'],
+              'STR_Yield': strYield,
+              'Overall_Yield': overallYield,
+              'good': strShifts[i]['good'] ?? 0,
+              'ng': strShifts[i]['ng'] ?? 0,
             };
           });
 
+          // ─── Throughput (Shift & 8h) ─────────────────────────
+          shiftThroughput =
+              List<Map<String, dynamic>>.from(data['shift_throughput'] ?? []);
           throughputData = shiftThroughput.map<Map<String, int>>((e) {
             final total = (e['total'] ?? 0) as int;
             final ng = (e['ng'] ?? 0) as int;
             return {'ok': total - ng, 'ng': ng};
           }).toList();
-
           shiftLabels =
               shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
 
+          final hourlyThroughput =
+              List<Map<String, dynamic>>.from(data['last_8h_throughput'] ?? []);
           hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
             final total = (e['total'] ?? 0) as int;
             final ng = (e['ng'] ?? 0) as int;
             return {'ok': total - ng, 'ng': ng};
           }).toList();
-
           hourLabels =
               hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
 
+          // ─── Fermi Data (availability + stops) ────────────────
           final fermiRaw =
               List<Map<String, dynamic>>.from(data['fermi_data'] ?? []);
           dataFermi = [];
-          zoneAvailability.clear();
           availableTime = 0;
 
           for (final entry in fermiRaw) {
+            if (entry.containsKey("causale") && entry.containsKey("station")) {
+              dataFermi.add([
+                entry['causale']?.toString() ?? '',
+                entry['station']?.toString() ?? '',
+                entry['count']?.toString() ?? '0',
+                entry['time']?.toString() ?? '0',
+              ]);
+            }
+
             if (entry.containsKey('station') &&
                 entry.containsKey('available_time')) {
               final stationName = entry['station'].toString();
@@ -983,59 +1006,51 @@ class _VisualPageState extends State<VisualPage> {
               final avail =
                   int.tryParse(entry['available_time'].toString()) ?? 0;
               zoneAvailability[stationId] = avail;
+            }
 
-              dataFermi.add([
-                stationName,
-                entry['count']?.toString() ?? '0',
-                entry['time']?.toString() ?? '0'
-              ]);
-            } else if (entry.keys.any((k) => k.startsWith('Available_Time_'))) {
+            if (entry.keys.any((k) => k.startsWith("Available_Time_"))) {
               final key = entry.keys.first;
-              final stationName = key.replaceFirst('Available_Time_', '');
+              final stationName = key.replaceFirst("Available_Time_", "");
               final stationId = _stationIdFromName(stationName);
               final avail = int.tryParse(entry[key].toString()) ?? 0;
               zoneAvailability[stationId] = avail;
-            } else if (entry.containsKey('Available_Time_Total')) {
+            }
+
+            if (entry.containsKey("Available_Time_Total")) {
               availableTime =
-                  int.tryParse(entry['Available_Time_Total'].toString()) ?? 0;
-            } else {
-              dataFermi.add([
-                entry['causale']?.toString() ?? '',
-                entry['station']?.toString() ?? '',
-                entry['count']?.toString() ?? '0',
-                entry['time']?.toString() ?? '0'
-              ]);
+                  int.tryParse(entry["Available_Time_Total"].toString()) ?? 0;
             }
           }
-          // ─── QG2 Defects (combine totals) ──────────────────────────────
+
+          // ─── QG2 Defects ─────────────────────────────────────
           final topDefectsQG2 =
               List<Map<String, dynamic>>.from(data['top_defects_qg2'] ?? []);
           defectLabels = [];
           Counts = [];
 
-          for (final defect in topDefectsQG2) {
-            defectLabels.add(defect['label']?.toString() ?? '');
-            // Combine ain1 + ain2 → just one bar
-            final ain1 = int.tryParse(defect['ain1'].toString()) ?? 0;
-            final ain2 = int.tryParse(defect['ain2'].toString()) ?? 0;
+          for (final d in topDefectsQG2) {
+            defectLabels.add(d['label']?.toString() ?? '');
+            final ain1 = int.tryParse(d['ain1'].toString()) ?? 0;
+            final ain2 = int.tryParse(d['ain2'].toString()) ?? 0;
             Counts.add(ain1 + ain2);
           }
 
           qg2_defects_value = data['total_defects_qg2'] ?? 0;
 
-          // ─── VPF Defects (combine totals) ──────────────────────────────
+          // ─── VPF Defects ─────────────────────────────────────
           final topDefectsVPF =
               List<Map<String, dynamic>>.from(data['top_defects_vpf'] ?? []);
           defectVPFLabels = [];
           VpfDefectsCounts = [];
 
-          for (final defect in topDefectsVPF) {
-            defectVPFLabels.add(defect['label']?.toString() ?? '');
-            // Combine ain1 + ain2 → just one bar
-            final ain1 = int.tryParse(defect['ain1'].toString()) ?? 0;
-            final ain2 = int.tryParse(defect['ain2'].toString()) ?? 0;
+          for (final d in topDefectsVPF) {
+            defectVPFLabels.add(d['label']?.toString() ?? '');
+            final ain1 = int.tryParse(d['ain1'].toString()) ?? 0;
+            final ain2 = int.tryParse(d['ain2'].toString()) ?? 0;
             VpfDefectsCounts.add(ain1 + ain2);
           }
+
+          isLoading = false;
         });
       },
       onDone: () => print("🛑 Visual WebSocket closed"),

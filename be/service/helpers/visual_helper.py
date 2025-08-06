@@ -1276,10 +1276,23 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
             })
 
         # 3. Last 8 hourly bins (calculate STR yield and Overall yield identically for now)
+        hourly_bins_by_station = {idx: [] for idx in range(1, 6)}  # station_1 to station_5
         str_y8h, overall_y8h = [], []
         for label, hs, he in get_last_8h_bins(now):
             good_bin = sum(_sum_for_window(cur, "string_G", sid, hs, he) for sid in STATION_IDS)
             ng_bin = sum(_sum_for_window(cur, "string_NG", sid, hs, he) for sid in STATION_IDS)
+
+            # Per-station hourly throughput
+            for idx, sid in enumerate(STATION_IDS, start=1):
+                good = _sum_for_window(cur, "string_G", sid, hs, he)
+                ng = _sum_for_window(cur, "string_NG", sid, hs, he)
+                hourly_bins_by_station[idx].append({
+                    "hour": label,
+                    "start": hs.isoformat(),
+                    "end": he.isoformat(),
+                    "ok": good,
+                    "ng": ng
+                })
 
             # STR Yield (zone view)
             str_y8h.append({
@@ -1476,6 +1489,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
         "overall_yield_shifts": overall_yield_shifts,
         "str_yield_last_8h": str_y8h,
         "overall_yield_last_8h": overall_y8h,
+        "hourly_throughput_per_station": hourly_bins_by_station,
         "shift_throughput": shift_throughput,
         "__shift_start": shift_start.isoformat(),
         "__last_hour": hour_start.isoformat(),
@@ -2228,6 +2242,33 @@ def _update_snapshot_str(
     if is_in or is_ng:
         touch("str_yield_last_8h", string_g, string_ng)
         touch("overall_yield_last_8h", string_g, string_ng)
+        # Update per-station hourly throughput
+    
+    per_station_key = "hourly_throughput_per_station"
+    station_idx = list(station_map).index(station_name) + 1  # STR01 → 1, STR05 → 5
+
+    if per_station_key not in data:
+        data[per_station_key] = {i: [] for i in range(1, 6)}  # 1–5
+
+    station_bins = data[per_station_key][station_idx]
+
+    for entry in station_bins:
+        if entry["hour"] == hour_label:
+            entry["ok"] += string_g
+            entry["ng"] += string_ng
+            break
+    else:
+        station_bins.append({
+            "hour": hour_label,
+            "start": hour_start.isoformat(),
+            "end": (hour_start + timedelta(hours=1)).isoformat(),
+            "ok": string_g,
+            "ng": string_ng,
+        })
+
+    # Keep only last 8
+    data[per_station_key][station_idx] = station_bins[-8:]
+
 
 def refresh_fermi_data(zone: str, ts: datetime) -> None:
     """

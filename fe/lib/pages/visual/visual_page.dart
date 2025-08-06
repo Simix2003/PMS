@@ -31,6 +31,7 @@ class _VisualPageState extends State<VisualPage> {
   Color okColor = Colors.green.shade400;
   Color textColor = Colors.black;
   double circleSize = 32;
+  double circleSizeSTR = 24;
   bool isLoading = true;
 
   int station_1_status = 1;
@@ -70,6 +71,7 @@ class _VisualPageState extends State<VisualPage> {
   List<String> shiftLabels = [];
   List<Map<String, int>> hourlyData = [];
   List<String> hourLabels = [];
+  Map<int, List<Map<String, int>>> hourlyThroughputPerStation = {};
 
   //final List<String> defectLabels = ['NG Macchie ECA', 'NG Saldatura', 'NG Bad Soldering', 'NG Mancanza l_Ribbon', 'NG Celle Rotte'];
   List<String> defectLabels = [];
@@ -448,7 +450,7 @@ class _VisualPageState extends State<VisualPage> {
         for (var s in stations) {
           zoneInputs[s] = response['station_${s}_in'] ?? 0;
           zoneNG[s] = response['station_${s}_out_ng'] ?? 0;
-          zoneScrap[s] = response['station_${s}_scrap'] ?? 0;
+          zoneScrap[s] = ((response['station_${s}_scrap'] ?? 0) / 10).round();
           zoneYield[s] = response['station_${s}_yield'] ?? 100;
         }
 
@@ -491,13 +493,33 @@ class _VisualPageState extends State<VisualPage> {
             shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
 
         // Hourly data from 8h yield bins (good vs NG)
-        hourlyData = yieldLast8h.map<Map<String, int>>((e) {
-          final good = (e['good'] ?? 0) as int;
-          final ng = (e['ng'] ?? 0) as int;
-          return {'ok': good, 'ng': ng};
-        }).toList();
-        hourLabels =
-            yieldLast8h.map((e) => e['hour']?.toString() ?? '').toList();
+        // Per-Station Hourly Throughput ─────────────────────────────────────
+        final perStationHourly = Map<String, dynamic>.from(
+          response['hourly_throughput_per_station'] ?? {},
+        );
+
+        hourlyThroughputPerStation.clear();
+        for (int station = 1; station <= 5; station++) {
+          final rawList = List<Map<String, dynamic>>.from(
+            perStationHourly['$station'] ?? [],
+          );
+
+          hourlyThroughputPerStation[station] =
+              rawList.map<Map<String, int>>((e) {
+            return {
+              'ok': (e['ok'] ?? 0) as int,
+              'ng': (e['ng'] ?? 0) as int,
+            };
+          }).toList();
+        }
+
+        // Fallback: update hourLabels from station 1 if not already set
+        if (hourLabels.isEmpty &&
+            hourlyThroughputPerStation[1]?.isNotEmpty == true) {
+          hourLabels = List<String>.from(
+            perStationHourly['1']!.map((e) => e['hour']?.toString() ?? ''),
+          );
+        }
 
         //  Top Defects QG2  ───────────────────────────────────────────────
         final topDefectsRaw =
@@ -933,7 +955,7 @@ class _VisualPageState extends State<VisualPage> {
             zoneInputs[s] = data['station_${s}_in'] ?? 0;
             zoneNG[s] = data['station_${s}_out_ng'] ?? 0;
             zoneYield[s] = data['station_${s}_yield'] ?? 100;
-            zoneScrap[s] = data['station_${s}_scrap'] ?? 0;
+            zoneScrap[s] = ((data['station_${s}_scrap'] ?? 0) / 10).round();
           }
 
           // ─── Yield (Last 8h) ──────────────────────────────────
@@ -973,15 +995,33 @@ class _VisualPageState extends State<VisualPage> {
           shiftLabels =
               shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
 
-          final hourlyThroughput =
-              List<Map<String, dynamic>>.from(data['last_8h_throughput'] ?? []);
-          hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
-            final total = (e['total'] ?? 0) as int;
-            final ng = (e['ng'] ?? 0) as int;
-            return {'ok': total - ng, 'ng': ng};
-          }).toList();
-          hourLabels =
-              hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+          // ─── Hourly Throughput per Station ────────────────────────────────
+          final rawPerStationHourly = Map<String, dynamic>.from(
+            data['hourly_throughput_per_station'] ?? {},
+          );
+
+          hourlyThroughputPerStation.clear();
+          for (int station = 1; station <= 5; station++) {
+            final rawList = List<Map<String, dynamic>>.from(
+              rawPerStationHourly['$station'] ?? [],
+            );
+
+            hourlyThroughputPerStation[station] =
+                rawList.map<Map<String, int>>((e) {
+              return {
+                'ok': (e['ok'] ?? 0) as int,
+                'ng': (e['ng'] ?? 0) as int,
+              };
+            }).toList();
+          }
+
+          // Fallback: update hourLabels from STR01
+          if (hourLabels.isEmpty &&
+              hourlyThroughputPerStation[1]?.isNotEmpty == true) {
+            hourLabels = List<String>.from(
+              rawPerStationHourly['1']!.map((e) => e['hour']?.toString() ?? ''),
+            );
+          }
 
           // ─── Fermi Data (availability + stops) ────────────────
           final fermiRaw =
@@ -1246,7 +1286,7 @@ class _VisualPageState extends State<VisualPage> {
                                             hourlyShiftTarget:
                                                 hourly_shift_target,
                                             yieldTarget: yield_target,
-                                            circleSize: circleSize,
+                                            circleSize: circleSizeSTR,
 
                                             // Status map for all stations
                                             stationStatus: {
@@ -1276,7 +1316,8 @@ class _VisualPageState extends State<VisualPage> {
                                             // Throughput and shifts
                                             throughputData: throughputData,
                                             shiftLabels: shiftLabels,
-                                            hourlyData: hourlyData,
+                                            hourlyThroughputPerStation:
+                                                hourlyThroughputPerStation,
                                             hourLabels: hourLabels,
 
                                             // Yield history (full backend-provided lists)

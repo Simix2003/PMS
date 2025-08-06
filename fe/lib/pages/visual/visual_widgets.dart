@@ -60,8 +60,8 @@ class _HeaderBoxState extends State<HeaderBox> {
     String formattedTime = DateFormat('HH:mm').format(_currentTime);
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 50),
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      constraints: const BoxConstraints(minHeight: 75),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
       margin: const EdgeInsets.only(right: 6),
       decoration: BoxDecoration(
         color: widget.Title ? warningColor : Color.fromRGBO(33, 95, 154, 1),
@@ -292,7 +292,8 @@ class _HeaderBoxState extends State<HeaderBox> {
                 Text(
                   widget.title,
                   style: const TextStyle(
-                    fontSize: 38,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                     color: Color.fromRGBO(33, 95, 154, 1),
                   ),
                 )
@@ -1863,6 +1864,220 @@ class HourlyELLBarChart extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class HourlySTRBarChart extends StatelessWidget {
+  final List<Map<String, int>> data;
+  final List<String> hourLabels;
+  final double target;
+
+  const HourlySTRBarChart({
+    super.key,
+    required this.data,
+    required this.hourLabels,
+    required this.target,
+  });
+
+  double _calculateMaxY() {
+    final totals = data.map((e) => e['ok']! + e['ng']!).toList();
+    final maxData =
+        totals.isNotEmpty ? totals.reduce((a, b) => a > b ? a : b) : 0;
+    return maxData.toDouble() + 10; // Reduced padding
+  }
+
+  List<BarChartGroupData> _buildBarGroups(double maxY) {
+    return List.generate(data.length, (index) {
+      final ok = data[index]['ok']!;
+      final ng = data[index]['ng']!;
+      final total = ok + ng;
+
+      return BarChartGroupData(
+        x: index,
+        showingTooltipIndicators: [0, 1],
+        barRods: [
+          BarChartRodData(
+            color: Colors.transparent,
+            fromY: 0,
+            toY: total.toDouble(),
+            width: 16, // Smaller bar width
+            rodStackItems: [
+              if (ok > 0) BarChartRodStackItem(0, ok.toDouble(), Colors.green),
+              if (ng > 0)
+                BarChartRodStackItem(
+                    ok.toDouble(), total.toDouble(), Colors.red),
+            ],
+            borderRadius: const BorderRadius.all(Radius.circular(3)),
+          ),
+        ],
+      );
+    });
+  }
+
+  List<Map<String, dynamic>> computeShiftBandsFromLabels(
+      List<String> hourLabels) {
+    List<Map<String, dynamic>> bands = [];
+    int? startIdx;
+    String? currentShift;
+
+    String getShift(String hourStr) {
+      final hour = int.parse(hourStr.split(':')[0]);
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    for (int i = 0; i < hourLabels.length; i++) {
+      String shift = getShift(hourLabels[i]);
+      if (shift != currentShift) {
+        if (startIdx != null) {
+          bands.add({'start': startIdx, 'end': i - 1, 'shift': currentShift});
+        }
+        startIdx = i;
+        currentShift = shift;
+      }
+    }
+
+    if (startIdx != null && currentShift != null) {
+      bands.add({
+        'start': startIdx,
+        'end': hourLabels.length - 1,
+        'shift': currentShift
+      });
+    }
+
+    return bands;
+  }
+
+  String getCurrentShiftLabel() {
+    final now = TimeOfDay.now();
+    final hour = now.hour;
+    if (hour >= 6 && hour < 14) return 'S1';
+    if (hour >= 14 && hour < 22) return 'S2';
+    return 'S3';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bands = computeShiftBandsFromLabels(hourLabels);
+    final currentShift = getCurrentShiftLabel();
+    final maxY = _calculateMaxY();
+
+    return Card(
+      color: Colors.white,
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: SizedBox(
+          height: 140, // 🔧 Adjust to fit your layout
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final barSpacing = constraints.maxWidth / hourLabels.length;
+
+              return Stack(
+                children: [
+                  for (var band in bands)
+                    Positioned(
+                      left: band['start'] * barSpacing,
+                      width: (band['end'] - band['start'] + 1) * barSpacing,
+                      top: 0,
+                      bottom: 0,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: band['shift'] == currentShift
+                              ? Colors.white.withOpacity(0.0)
+                              : Colors.grey.withOpacity(0.15),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(4),
+                            bottom: Radius.circular(4),
+                          ),
+                        ),
+                        alignment: Alignment.topLeft,
+                        padding: const EdgeInsets.only(top: 2, left: 4),
+                        child: Text(
+                          switch (band['shift']) {
+                            'S1' => 'S1',
+                            'S2' => 'S2',
+                            'S3' => 'S3',
+                            _ => '',
+                          },
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black45,
+                          ),
+                        ),
+                      ),
+                    ),
+                  BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: maxY,
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          getTooltipColor: (_) => Colors.transparent,
+                          tooltipPadding: EdgeInsets.zero,
+                          tooltipMargin: 0,
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            final value = rod.toY.toString();
+                            return BarTooltipItem(
+                              value,
+                              const TextStyle(
+                                color: Colors.black,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              final i = value.toInt();
+                              if (i >= 0 && i < hourLabels.length) {
+                                return Text(
+                                  hourLabels[i],
+                                  style: const TextStyle(fontSize: 10),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                        ),
+                      ),
+                      gridData: FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      barGroups: _buildBarGroups(maxY),
+                      extraLinesData: ExtraLinesData(horizontalLines: [
+                        HorizontalLine(
+                          y: target,
+                          color: Colors.orangeAccent,
+                          strokeWidth: 1.5,
+                          dashArray: [6, 3],
+                        ),
+                      ]),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

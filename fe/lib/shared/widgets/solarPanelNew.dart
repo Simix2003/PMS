@@ -20,6 +20,7 @@ class DistancesSolarPanelWidget extends StatelessWidget {
   final bool showGlassRibbon;
   final bool showWarnings;
   final List<Map<String, dynamic>>? cellDefects;
+  final bool isMobile;
 
   DistancesSolarPanelWidget({
     super.key,
@@ -38,6 +39,7 @@ class DistancesSolarPanelWidget extends StatelessWidget {
     this.showGlassRibbon = false,
     this.showWarnings = false,
     required this.cellDefects,
+    this.isMobile = false,
   });
 
   Map<String, (double, double)> groupTolerances = {
@@ -66,12 +68,46 @@ class DistancesSolarPanelWidget extends StatelessWidget {
     final height = (maxW / aspect < maxH) ? maxW / aspect : maxH;
     final width = height * aspect;
 
-    String formatDefectId(int id) {
+    String formatDefectId(int id, bool isMobile) {
+      if (isMobile) {
+        switch (id) {
+          case 7:
+            return "C"; // Crack
+          case 81:
+            return "BS"; // Bad Soldering
+          case 5:
+            return "DC"; // Dark Cell
+          case 6:
+            return "BC"; // Bright Cell
+          default:
+            return "$id";
+        }
+      } else {
+        switch (id) {
+          case 7:
+            return "Crack";
+          case 81:
+            return "Bad\nSoldering";
+          case 5:
+            return "Dark\nCell";
+          case 6:
+            return "Bright\nCell";
+          default:
+            return "$id";
+        }
+      }
+    }
+
+    String formatDefectIdFull(int id) {
       switch (id) {
         case 7:
           return "Crack";
         case 81:
-          return "Bad\nSoldering";
+          return "Bad Soldering";
+        case 5:
+          return "Dark Cell";
+        case 6:
+          return "Bright Cell";
         default:
           return "$id";
       }
@@ -159,9 +195,10 @@ class DistancesSolarPanelWidget extends StatelessWidget {
                             showDialog(
                               context: context,
                               builder: (_) => AlertDialog(
-                                title: const Text("Defecti nella cella"),
+                                title: const Text("Difetti nella cella"),
                                 content: Text(
-                                    "Posizione ($x,$y)\nDefect IDs: ${defectIds.join(", ")}"),
+                                  "Posizione ($x,$y)\n${defectIds.toSet().map((id) => "- ${formatDefectIdFull(id)} (ID $id)").join("\n")}",
+                                ),
                                 actions: [
                                   TextButton(
                                     child: const Text("Chiudi"),
@@ -181,9 +218,9 @@ class DistancesSolarPanelWidget extends StatelessWidget {
                             // Inside your Positioned widget
                             child: Text(
                               defectIds
-                                  .toSet() // Remove duplicates
-                                  .map((id) => formatDefectId(id))
-                                  .toSet() // In case the mapped text duplicates (e.g., multiple 7s)
+                                  .toSet()
+                                  .map((id) => formatDefectId(id, isMobile))
+                                  .toSet()
                                   .join("\n"),
                               textAlign: TextAlign.center,
                               style: const TextStyle(
@@ -191,7 +228,7 @@ class DistancesSolarPanelWidget extends StatelessWidget {
                                 fontWeight: FontWeight.bold,
                                 color: Colors.red,
                                 shadows: [
-                                  Shadow(blurRadius: 1, color: Colors.black),
+                                  Shadow(blurRadius: 1, color: Colors.black)
                                 ],
                               ),
                             ),

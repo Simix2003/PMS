@@ -266,6 +266,7 @@ class _MBJDetailPageState extends State<MBJDetailPage> {
                                     showGlassRibbon: showGlassRibbon,
                                     showWarnings: showWarnings,
                                     cellDefects: parsedDefects,
+                                    isMobile: widget.layout == "mobile",
                                   ),
                                 ),
                               ),

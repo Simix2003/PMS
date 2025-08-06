@@ -44,7 +44,7 @@ def log_duration(msg: str, duration: float, plc_connection: PLCConnection, full_
     log_fn(f"{msg} in {duration:.3f}s")
 
     if duration > threshold:
-        plc_connection.force_global_reconnect(
+        plc_connection.force_reconnect(
             reason=f"write_bool took {duration:.2f}s on {full_station_id}"
         )
 

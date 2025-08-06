@@ -148,6 +148,12 @@ print('ELL visual flag is', ELL_VISUAL)
 RECONNECT_AFTER_MINS = config_ini.getint("connection", "RECONNECT_AFTER_MINS", fallback=60)
 print('Reconnect after minutes is', RECONNECT_AFTER_MINS)
 
+# PLC liveness probe configuration
+PROBE_DB = config_ini.getint("plc", "PROBE_DB", fallback=1)
+print('PLC probe DB is', PROBE_DB)
+PROBE_OFFSET = config_ini.getint("plc", "PROBE_OFFSET", fallback=0)
+print('PLC probe offset is', PROBE_OFFSET)
+
 print('Debug value is', debug)
 
 ML_MODELS_DIR = BASE_DIR / "models"

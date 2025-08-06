@@ -13,7 +13,12 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from service.config.config import RECONNECT_AFTER_MINS, WRITE_TO_PLC
+from service.config.config import (
+    RECONNECT_AFTER_MINS,
+    WRITE_TO_PLC,
+    PROBE_DB,
+    PROBE_OFFSET,
+)
 
 DEFAULT_CHUNK   = 480           # safe chunk size for DB reads
 MAX_BACKOFF_SEC = 5.0           # exponential back-off ceiling
@@ -233,7 +238,21 @@ class PLCConnection:
 
     def is_connected(self):
         try:
-            return self.client.get_connected()
+            if not self.client.get_connected():
+                return False
+
+            try:
+                if hasattr(self.client, "get_cpu_state"):
+                    self.client.get_cpu_state()
+                else:
+                    self.client.db_read(PROBE_DB, PROBE_OFFSET, 1)
+            except Exception as probe_err:
+                logger.error(
+                    f"❌ PLC {self.ip_address} liveness probe failed: {probe_err}"
+                )
+                return False
+
+            return True
         except Exception as e:
             logger.error(f"❌ Error checking connection: {e}")
             return False

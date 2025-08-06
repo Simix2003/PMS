@@ -293,7 +293,7 @@ class _HeaderBoxState extends State<HeaderBox> {
                   widget.title,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                    fontSize: 24,
                     color: Color.fromRGBO(33, 95, 154, 1),
                   ),
                 )
@@ -2064,14 +2064,14 @@ class HourlySTRBarChart extends StatelessWidget {
                       gridData: FlGridData(show: false),
                       borderData: FlBorderData(show: false),
                       barGroups: _buildBarGroups(maxY),
-                      extraLinesData: ExtraLinesData(horizontalLines: [
+                      /*extraLinesData: ExtraLinesData(horizontalLines: [
                         HorizontalLine(
                           y: target,
                           color: Colors.orangeAccent,
                           strokeWidth: 1.5,
                           dashArray: [6, 3],
                         ),
-                      ]),
+                      ]),*/
                     ),
                   ),
                 ],

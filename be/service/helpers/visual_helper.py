@@ -1231,11 +1231,14 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
             g = _sum_for_window(cur, "string_G", st_id, shift_start, shift_end)
             n = _sum_for_window(cur, "string_NG", st_id, shift_start, shift_end)
             c = _sum_for_window(cur, "cell_NG", st_id, shift_start, shift_end)
+            cell_scraps = c / 10
+
+            ng_scraps = int(n + cell_scraps)
 
             station_in[f"station_{idx}_in"] = g + n
             station_ng[f"station_{idx}_out_ng"] = n
             station_scrap[f"station_{idx}_scrap"] = c
-            station_yield[f"station_{idx}_yield"] = compute_yield(g, n)
+            station_yield[f"station_{idx}_yield"] = compute_yield(g, ng_scraps)
 
         # 2. Last 3 shifts (calculate STR yield and Overall yield identically for now)
         str_yield_shifts, overall_yield_shifts, shift_throughput = [], [], []
@@ -1243,15 +1246,18 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
             good_shift = sum(_sum_for_window(cur, "string_G", sid, st, et) for sid in STATION_IDS)
             ng_shift = sum(_sum_for_window(cur, "string_NG", sid, st, et) for sid in STATION_IDS)
             scrap_shift = sum(_sum_for_window(cur, "cell_NG", sid, st, et) for sid in STATION_IDS)
+            scrap_shifts = scrap_shift / 10
+
+            ngsss = int(ng_shift + scrap_shifts)
 
             # STR Yield (zone view)
             str_yield_shifts.append({
                 "label": label,
                 "start": st.isoformat(),
                 "end": et.isoformat(),
-                "yield": compute_yield(good_shift, ng_shift),
+                "yield": compute_yield(good_shift, ngsss),
                 "good": good_shift,
-                "ng": ng_shift,
+                "ng": ngsss,
                 "scrap": scrap_shift
             })
 
@@ -1260,9 +1266,9 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "label": label,
                 "start": st.isoformat(),
                 "end": et.isoformat(),
-                "yield": compute_yield(good_shift, ng_shift),
+                "yield": compute_yield(good_shift, ngsss),
                 "good": good_shift,
-                "ng": ng_shift
+                "ng": ngsss
             })
 
             # Throughput (also for all stations combined)
@@ -1270,8 +1276,8 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "label": label,
                 "start": st.isoformat(),
                 "end": et.isoformat(),
-                "total": good_shift + ng_shift,
-                "ng": ng_shift,
+                "total": good_shift + ngsss,
+                "ng": ngsss,
                 "scrap": scrap_shift
             })
 
@@ -1281,6 +1287,11 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
         for label, hs, he in get_last_8h_bins(now):
             good_bin = sum(_sum_for_window(cur, "string_G", sid, hs, he) for sid in STATION_IDS)
             ng_bin = sum(_sum_for_window(cur, "string_NG", sid, hs, he) for sid in STATION_IDS)
+            cell_scraps_bin = sum(_sum_for_window(cur, "cell_NG", sid, hs, he) for sid in STATION_IDS)
+
+            cell_scraps_bins = cell_scraps_bin / 10
+
+            ngss_bin = int(ng_bin + cell_scraps_bins)
 
             # Per-station hourly throughput
             for idx, sid in enumerate(STATION_IDS, start=1):
@@ -1300,8 +1311,8 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "start": hs.isoformat(),
                 "end": he.isoformat(),
                 "good": good_bin,
-                "ng": ng_bin,
-                "yield": compute_yield(good_bin, ng_bin),
+                "ng": ngss_bin,
+                "yield": compute_yield(good_bin, ngss_bin),
             })
 
             # Overall Yield (same calculation for now)
@@ -1310,8 +1321,8 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "start": hs.isoformat(),
                 "end": he.isoformat(),
                 "good": good_bin,
-                "ng": ng_bin,
-                "yield": compute_yield(good_bin, ng_bin),
+                "ng": ngss_bin,
+                "yield": compute_yield(good_bin, ngss_bin),
             })
 
 

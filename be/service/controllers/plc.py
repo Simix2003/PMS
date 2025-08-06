@@ -17,6 +17,7 @@ from service.config.config import RECONNECT_AFTER_MINS, WRITE_TO_PLC
 
 DEFAULT_CHUNK   = 480           # safe chunk size for DB reads
 MAX_BACKOFF_SEC = 5.0           # exponential back-off ceiling
+PLC_REGISTRY = []
 
 # Dedicated logger for DB read errors
 db_read_logger = logging.getLogger("db_read_errors")
@@ -52,6 +53,7 @@ class PLCConnection:
         self._reconnect_count = 0
         Thread(target=self._background_reconnector, daemon=True).start()
         Thread(target=self._reconnect_on_timer, daemon=True).start()
+        PLC_REGISTRY.append(self)
 
     def _check_tcp_port(self, port=102, timeout=1.0):
         try:
@@ -80,15 +82,15 @@ class PLCConnection:
         self._reconnect_count += 1
         if self._reconnect_count % 10 == 0:
             logger.warning(f"⚠️ Reconnect count for {self.ip_address}: {self._reconnect_count}")
+
         with self.lock:
             try:
-                if self.client.get_connected():
+                try:
                     self.client.disconnect()
-            except Exception:
-                pass
+                except Exception:
+                    pass
 
-            try:
-                # Don't recreate the client — reuse existing one
+                self.client = c.Client()  # ✅ Fully reset the client
                 self.client.set_connection_type(3)
                 self.client.set_param(t.Parameter.PingTimeout, 5000)
                 self.client.set_param(t.Parameter.SendTimeout, 5000)
@@ -142,6 +144,14 @@ class PLCConnection:
                 f"✅ [Timed Reconnect] DONE for PLC {self.ip_address} — Duration: {elapsed:.2f}s"
             )
 
+    @staticmethod
+    def force_global_reconnect(reason: str = "Manual Global Refresh"):
+        logger.warning(f"[Global Reconnect] Triggered: {reason}")
+        for plc in PLC_REGISTRY:
+            try:
+                plc.force_reconnect(reason)
+            except Exception as e:
+                logger.exception(f"❌ Reconnect failed for PLC {plc.ip_address}: {e}")
 
     def force_reconnect(self, reason: str = "Manual trigger"):
         now = time.time()

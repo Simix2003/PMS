@@ -166,7 +166,7 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
               child: Row(
                 children: [
                   HeaderBox(
-                    title: 'VPF - Linea B',
+                    title: 'VPF\nLinea B',
                     target: '',
                     Title: true,
                   ),

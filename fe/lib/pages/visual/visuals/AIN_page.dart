@@ -266,7 +266,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
               child: Row(
                 children: [
                   HeaderBox(
-                    title: 'Bussing - Linea B',
+                    title: 'Bussing\nLinea B',
                     target: '',
                     Title: true,
                   ),

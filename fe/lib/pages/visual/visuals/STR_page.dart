@@ -1,4 +1,4 @@
-// ignore_for_file: must_be_immutable, non_constant_identifier_names
+// ignore_for_file: must_be_immutable, non_constant_identifier_names, file_names
 
 import 'package:flutter/material.dart';
 import 'package:gauge_indicator/gauge_indicator.dart';
@@ -301,7 +301,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                   child: Row(
                     children: [
                       HeaderBox(
-                        title: 'Stringatrici - Linea B',
+                        title: 'Stringatrici\nLinea B',
                         target: '',
                         Title: true,
                       ),
@@ -393,54 +393,6 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       child: Column(
                                         children: [
                                           // Row titles (aligned with the two card columns)
-                                          /*Row(
-                                        crossAxisAlignment: CrossAxisAlignment
-                                            .start, // Align texts to top
-                                        children: [
-                                          const SizedBox(width: 110),
-                                          Flexible(
-                                            child: Align(
-                                              alignment: Alignment.topCenter,
-                                              child: Text(
-                                                'STR G',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 16,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 18),
-                                          Flexible(
-                                            child: Align(
-                                              alignment: Alignment.topCenter,
-                                              child: Text(
-                                                'STR NG',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 16,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 18),
-                                          Flexible(
-                                            child: Align(
-                                              alignment: Alignment.topCenter,
-                                              child: Text(
-                                                'Stringhe SCRAP',
-                                                textAlign: TextAlign
-                                                    .center, // Center align the two lines
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 16,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),*/
-
                                           // First row of cards
                                           Flexible(
                                             child: Row(
@@ -2713,7 +2665,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                 ),
               ),
               SizedBox(width: 240),
-              SizedBox(
+              /*SizedBox(
                 width: 125, // wider for longer label
                 child: Text(
                   'Target Orario: ${widget.hourlyShiftTarget.toString()}',
@@ -2723,7 +2675,8 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                     fontSize: 14,
                   ),
                 ),
-              ),
+              ),*/
+              SizedBox(width: 125),
               SizedBox(width: 15),
               SizedBox(
                 width: 200, // wider for longer label

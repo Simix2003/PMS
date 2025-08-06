@@ -205,7 +205,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
               child: Row(
                 children: [
                   HeaderBox(
-                    title: 'ReWork/ELL - Linea B',
+                    title: 'ReWork/ELL\nLinea B',
                     target: '',
                     Title: true,
                   ),

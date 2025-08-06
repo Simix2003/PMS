@@ -237,25 +237,26 @@ class PLCConnection:
         )
 
     def is_connected(self):
-        try:
-            if not self.client.get_connected():
-                return False
-
+        with self.lock:
             try:
-                if hasattr(self.client, "get_cpu_state"):
-                    self.client.get_cpu_state()
-                else:
-                    self.client.db_read(PROBE_DB, PROBE_OFFSET, 1)
-            except Exception as probe_err:
-                logger.error(
-                    f"❌ PLC {self.ip_address} liveness probe failed: {probe_err}"
-                )
-                return False
+                if not self.client.get_connected():
+                    return False
 
-            return True
-        except Exception as e:
-            logger.error(f"❌ Error checking connection: {e}")
-            return False
+                try:
+                    if hasattr(self.client, "get_cpu_state"):
+                        self.client.get_cpu_state()
+                    else:
+                        self.client.db_read(PROBE_DB, PROBE_OFFSET, 1)
+                except Exception as probe_err:
+                    logger.error(
+                        f"❌ PLC {self.ip_address} liveness probe failed: {probe_err}"
+                    )
+                    return False
+
+                return True
+            except Exception as e:
+                logger.error(f"❌ Error checking connection: {e}")
+                return False
 
     def _ensure_connection(self):
         now = time.time()

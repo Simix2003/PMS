@@ -82,34 +82,49 @@ class PLCConnection:
         self._reconnect_count += 1
         if self._reconnect_count % 10 == 0:
             logger.warning(f"⚠️ Reconnect count for {self.ip_address}: {self._reconnect_count}")
+        # Create and connect a fresh client outside the lock
+        new_client = c.Client()
+        new_client.set_connection_type(3)
+        new_client.set_param(t.Parameter.PingTimeout, 5000)
+        new_client.set_param(t.Parameter.SendTimeout, 5000)
+        new_client.set_param(t.Parameter.RecvTimeout, 5000)
 
+        connect_exc = None
+        try:
+            new_client.connect(self.ip_address, self.rack, self.slot)
+            new_connected = new_client.get_connected()
+        except Exception as e:
+            new_connected = False
+            connect_exc = e
+
+        if not new_connected:
+            try:
+                new_client.disconnect()
+            except Exception:
+                pass
+
+        # Swap in the new client and update connection state under the lock
         with self.lock:
             try:
-                try:
-                    self.client.disconnect()
-                except Exception:
-                    pass
+                self.client.disconnect()
+            except Exception:
+                pass
 
-                self.client = c.Client()  # ✅ Fully reset the client
-                self.client.set_connection_type(3)
-                self.client.set_param(t.Parameter.PingTimeout, 5000)
-                self.client.set_param(t.Parameter.SendTimeout, 5000)
-                self.client.set_param(t.Parameter.RecvTimeout, 5000)
-
-                self.client.connect(self.ip_address, self.rack, self.slot)
-
-                if self.client.get_connected():
-                    self.connected = True
-                    self._safe_callback("CONNECTED")
-                    logger.info(f"✅ PLC {self.ip_address} reconnected")
-                else:
-                    self.connected = False
-                    self._safe_callback("DISCONNECTED")
-                    logger.warning(f"❌ PLC {self.ip_address} still unreachable")
-            except Exception as e:
+            if new_connected:
+                self.client = new_client
+                self.connected = True
+                self._safe_callback("CONNECTED")
+            else:
                 self.connected = False
                 self._safe_callback("DISCONNECTED")
-                logger.error(f"❌ Failed PLC reconnect {self.ip_address}: {e}")
+
+        if new_connected:
+            logger.info(f"✅ PLC {self.ip_address} reconnected")
+        else:
+            if connect_exc:
+                logger.error(f"❌ Failed PLC reconnect {self.ip_address}: {connect_exc}")
+            else:
+                logger.warning(f"❌ PLC {self.ip_address} still unreachable")
 
     def _reconnect_on_timer(self):
         while True:
@@ -129,14 +144,15 @@ class PLCConnection:
             start_time = datetime.now()
             logger.info(f"🔁 [Timed Reconnect] START at {start_time.isoformat()} for PLC {self.ip_address}")
 
-            with self.lock:
-                try:
+            try:
+                with self.lock:
                     self.client.disconnect()
                     self.connected = False
-                    time.sleep(1.0)  # move inside the lock
-                    self._try_connect()
-                except Exception as e:
-                    logger.exception(f"❌ Exception during timed reconnect: {e}")
+            except Exception as e:
+                logger.exception(f"❌ Exception during timed reconnect: {e}")
+
+            time.sleep(1.0)
+            self._try_connect()
 
             end_time = datetime.now()
             elapsed = (end_time - start_time).total_seconds()

@@ -526,6 +526,12 @@ async def handle_end_cycle(
     
     t11 = time.perf_counter()
     queue_size_arch = get_executor_status(plc_write_executor)["queue_size"]
+
+    arch_byte = None
+    idx_arch = pezzo_archivia_conf["byte"] - start_byte
+    if 0 <= idx_arch < len(buffer):
+        arch_byte = buffer[idx_arch]
+
     t_write_start = time.perf_counter()
     future_arch = plc_write_executor.submit(
         plc_connection.write_bool,
@@ -533,6 +539,7 @@ async def handle_end_cycle(
         pezzo_archivia_conf["byte"],
         pezzo_archivia_conf["bit"],
         True,
+        current_byte=arch_byte,
     )
     await asyncio.wrap_future(future_arch)
     t_write_done = time.perf_counter()
@@ -550,6 +557,12 @@ async def handle_end_cycle(
 
     if esito_conf:
         queue_size_esito = get_executor_status(plc_write_executor)["queue_size"]
+
+        esito_byte = None
+        idx_esito = esito_conf["byte"] - start_byte
+        if 0 <= idx_esito < len(buffer):
+            esito_byte = buffer[idx_esito]
+
         t_esito_start = time.perf_counter()
         future_esito = plc_write_executor.submit(
             plc_connection.write_bool,
@@ -557,6 +570,7 @@ async def handle_end_cycle(
             esito_conf["byte"],
             esito_conf["bit"],
             False,
+            current_byte=esito_byte,
         )
         await asyncio.wrap_future(future_esito)
         t_esito_end = time.perf_counter()
@@ -755,12 +769,20 @@ async def on_trigger_change(
     if not debug:
         t0 = time.perf_counter()
         queue_size = get_executor_status(plc_write_executor)["queue_size"]
+
+        pezzo_byte = None
+        if buffer is not None and start_byte is not None:
+            idx = pezzo_conf["byte"] - start_byte
+            if 0 <= idx < len(buffer):
+                pezzo_byte = buffer[idx]
+
         fut = plc_write_executor.submit(
             plc_connection.write_bool,
             pezzo_conf["db"],
             pezzo_conf["byte"],
             pezzo_conf["bit"],
-            True
+            True,
+            current_byte=pezzo_byte,
         )
         await asyncio.wrap_future(fut)
         t1 = time.perf_counter()

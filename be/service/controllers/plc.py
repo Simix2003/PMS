@@ -298,8 +298,11 @@ class PLCConnection:
                     return
                 try:
                     # read-or-use provided
+                    t_read = 0.0
                     if current_byte is None:
+                        ts = time.perf_counter()
                         orig = self.client.db_read(db, byte, 1)[0]
+                        t_read = time.perf_counter() - ts
                     else:
                         orig = current_byte
 
@@ -309,15 +312,20 @@ class PLCConnection:
 
                     payload = bytearray([new])
                     # write with watchdog
+                    ts = time.perf_counter()
                     self._watchdog_call(1.0, self.client.write_area,
                                         t.Area.DB, db, byte, payload)
+                    t_write = time.perf_counter() - ts
 
                     duration = time.perf_counter() - t0
 
                     if duration > 1.0:
-                        logger.warning(f"{self.ip_address} ⏱ write_bool DB{db} b{byte}:{bit} took {duration:.3f}s")
+                        logger.warning(
+                            f"{self.ip_address} ⏱ write_bool DB{db} b{byte}:{bit} took {duration:.3f}s "
+                            f"(read {t_read:.3f}s, write {t_write:.3f}s)")
                     else:
-                        logger.debug(f"{self.ip_address} ⏱ write_bool DB{db} b{byte}:{bit} took {duration:.3f}s")
+                        logger.debug(
+                            f"{self.ip_address} ⏱ write_bool DB{db} b{byte}:{bit} took {duration:.3f}s")
 
                     # if too slow, force reconnect
                     if duration > 1.0:
@@ -355,10 +363,27 @@ class PLCConnection:
             self._ensure_connection()
             if not self.connected:
                 return
+            t0 = time.perf_counter()
+            t_read = t_write = 0.0
             try:
+                ts = time.perf_counter()
                 ba = self.client.db_read(db, byte, 2)
+                t_read = time.perf_counter() - ts
+
                 u.set_int(ba, 0, value)
+
+                ts = time.perf_counter()
                 self.client.write_area(t.Area.DB, db, byte, ba)
+                t_write = time.perf_counter() - ts
+
+                duration = time.perf_counter() - t0
+                if duration > 1.0:
+                    logger.warning(
+                        f"{self.ip_address} ⏱ write_integer DB{db} byte {byte} took {duration:.3f}s "
+                        f"(read {t_read:.3f}s, write {t_write:.3f}s)")
+                else:
+                    logger.debug(
+                        f"{self.ip_address} ⏱ write_integer DB{db} byte {byte} took {duration:.3f}s")
             except Exception as e:
                 self._recover_on_error(f"write_integer DB{db}", e)
 
@@ -388,8 +413,19 @@ class PLCConnection:
             text = value[:max_size]
             ba[1] = len(text)
             ba[2:2+len(text)] = text.encode('ascii', errors='ignore')
+            t0 = time.perf_counter()
             try:
+                ts = time.perf_counter()
                 self.client.write_area(t.Area.DB, db, byte, ba)
+                t_write = time.perf_counter() - ts
+                duration = time.perf_counter() - t0
+                if duration > 1.0:
+                    logger.warning(
+                        f"{self.ip_address} ⏱ write_string DB{db} byte {byte} took {duration:.3f}s "
+                        f"(write {t_write:.3f}s)")
+                else:
+                    logger.debug(
+                        f"{self.ip_address} ⏱ write_string DB{db} byte {byte} took {duration:.3f}s")
             except Exception as e:
                 self._recover_on_error(f"write_string DB{db}", e)
 

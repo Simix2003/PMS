@@ -1,28 +1,27 @@
 import asyncio
-import snap7.client as c
-import snap7.util as u
-import snap7.type as t
+import concurrent.futures
 import logging
-import time
-from threading import RLock, Thread
 import os
-import sys
 import socket
+import snap7.client as c
+import snap7.type as t
+import snap7.util as u
+import time
 from datetime import datetime
+from threading import RLock, Thread
 
-logger = logging.getLogger(__name__)
-
+# Configuration imports
+import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from service.config.config import (
-    RECONNECT_AFTER_MINS,
-    WRITE_TO_PLC,
-    PROBE_DB,
-    PROBE_OFFSET,
-)
+from service.config.config import RECONNECT_AFTER_MINS, WRITE_TO_PLC, PROBE_DB, PROBE_OFFSET
 
+# Constants
 DEFAULT_CHUNK   = 480           # safe chunk size for DB reads
 MAX_BACKOFF_SEC = 5.0           # exponential back-off ceiling
-PLC_REGISTRY = []
+PLC_REGISTRY    = []
+
+# Logger setup
+logger = logging.getLogger(__name__)
 
 # Dedicated logger for DB read errors
 db_read_logger = logging.getLogger("db_read_errors")
@@ -30,236 +29,212 @@ db_read_logger.setLevel(logging.ERROR)
 if not db_read_logger.handlers:
     log_dir = os.path.join(os.path.dirname(__file__), "logs")
     os.makedirs(log_dir, exist_ok=True)
-    file_handler = logging.FileHandler(os.path.join(log_dir, "plc_db_read_errors.log"))
-    formatter = logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(message)s\n"
-        "--------------------------------------------------------------\n"
-    )
-    file_handler.setFormatter(formatter)
-    db_read_logger.addHandler(file_handler)
+    fh = logging.FileHandler(os.path.join(log_dir, "plc_db_read_errors.log"))
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s\n" +
+                            "--------------------------------------------------------------\n")
+    fh.setFormatter(fmt)
+    db_read_logger.addHandler(fh)
+
 
 class PLCConnection:
     def __init__(self, ip_address, slot, *, max_chunk: int = DEFAULT_CHUNK,
                  status_callback=None):
+        self.ip_address = ip_address
+        self.rack = 0
+        self.slot = slot
+        self.max_chunk = max_chunk
+        self.status_callback = status_callback
+
         self.lock = RLock()
         self.client = c.Client()
+        self._init_client_params()
+
+        self.connected = False
+        self._last_manual_reconnect_ts = 0.0
+        self._reconnect_count = 0
+        self._reconnect_in_progress = False
+
+        self._connect()
+        PLC_REGISTRY.append(self)
+
+        # Background reconnection threads
+        Thread(target=self._background_reconnector, daemon=True).start()
+        Thread(target=self._reconnect_on_timer, daemon=True).start()
+
+    def _init_client_params(self):
         self.client.set_connection_type(3)
         self.client.set_param(t.Parameter.PingTimeout, 5000)
         self.client.set_param(t.Parameter.SendTimeout, 5000)
         self.client.set_param(t.Parameter.RecvTimeout, 5000)
-        self.ip_address = ip_address
-        self.rack = 0
-        self.slot = slot
-        self.connected = False
-        self.status_callback = status_callback
-        self.max_chunk = max_chunk
-        self._connect()
-        self._last_manual_reconnect_ts = 0.0
-        self._reconnect_count = 0
-        Thread(target=self._background_reconnector, daemon=True).start()
-        Thread(target=self._reconnect_on_timer, daemon=True).start()
-        PLC_REGISTRY.append(self)
-        self._reconnect_in_progress = False
 
     def _check_tcp_port(self, port=102, timeout=1.0):
         try:
             with socket.create_connection((self.ip_address, port), timeout=timeout):
                 return True
-        except (socket.timeout, ConnectionRefusedError, OSError) as e:
+        except Exception as e:
             logger.warning(f"🔍 Port {port} check failed for {self.ip_address}: {e}")
             return False
 
     def _background_reconnector(self):
-        last_attempt = 0
+        last = 0
         while True:
             now = time.time()
             if not self.connected or not self.is_connected():
-                if now - last_attempt > 5:
-                    last_attempt = now
+                if now - last > 5:
+                    last = now
                     if self._check_tcp_port():
-                        logger.debug(f"🔎 Port 102 open, trying Snap7 reconnect…")
+                        logger.debug(f"🔎 Port open, reconnecting {self.ip_address}")
                         self._try_connect()
                     else:
                         logger.warning(f"🚫 Cannot reach PLC {self.ip_address} on port 102")
             time.sleep(1)
 
-
     def _try_connect(self):
         self._reconnect_count += 1
         if self._reconnect_count % 10 == 0:
-            logger.warning(f"⚠️ Reconnect count for {self.ip_address}: {self._reconnect_count}")
-        # Create and connect a fresh client outside the lock
-        new_client = c.Client()
-        new_client.set_connection_type(3)
-        new_client.set_param(t.Parameter.PingTimeout, 5000)
-        new_client.set_param(t.Parameter.SendTimeout, 5000)
-        new_client.set_param(t.Parameter.RecvTimeout, 5000)
+            logger.warning(f"⚠️ Reconnect count {self._reconnect_count} for {self.ip_address}")
 
+        new_client = c.Client()
+        self._init_client_params()
         connect_exc = None
         try:
             new_client.connect(self.ip_address, self.rack, self.slot)
-            new_connected = new_client.get_connected()
+            ok = new_client.get_connected()
         except Exception as e:
-            new_connected = False
+            ok = False
             connect_exc = e
 
-        if not new_connected:
-            try:
-                new_client.disconnect()
-            except Exception:
-                pass
+        if not ok:
+            try: new_client.disconnect()
+            except: pass
 
-        # Swap in the new client and update connection state under the lock
         with self.lock:
-            try:
-                self.client.disconnect()
-            except Exception:
-                pass
+            try: self.client.disconnect()
+            except: pass
 
-            if new_connected:
+            if ok:
                 self.client = new_client
                 self.connected = True
                 self._safe_callback("CONNECTED")
+                logger.info(f"✅ PLC {self.ip_address} reconnected")
             else:
                 self.connected = False
                 self._safe_callback("DISCONNECTED")
-
-        if new_connected:
-            logger.info(f"✅ PLC {self.ip_address} reconnected")
-        else:
-            if connect_exc:
-                logger.error(f"❌ Failed PLC reconnect {self.ip_address}: {connect_exc}")
-            else:
-                logger.warning(f"❌ PLC {self.ip_address} still unreachable")
+                if connect_exc:
+                    logger.error(f"❌ Reconnect failed for {self.ip_address}: {connect_exc}")
+                else:
+                    logger.warning(f"❌ PLC {self.ip_address} unreachable")
 
     def _reconnect_on_timer(self, skip_timer: bool = False):
         while True:
             if not skip_timer:
-                logger.info(f"⏳ Next reconnect for PLC {self.ip_address} in {RECONNECT_AFTER_MINS} minutes")
+                logger.info(f"⏳ Next timed reconnect in {RECONNECT_AFTER_MINS} min for {self.ip_address}")
                 time.sleep(RECONNECT_AFTER_MINS * 60)
 
-            now = time.time()
-            elapsed_since_manual = now - self._last_manual_reconnect_ts
-            cooldown_secs = 10 * 60  # 10 minutes
-
-            if elapsed_since_manual < cooldown_secs:
-                logger.info(
-                    f"⏭️ [Timed Reconnect] Skipped for {self.ip_address} — manual reconnect was {elapsed_since_manual:.0f}s ago"
-                )
-                if skip_timer:
-                    break  # only run once in skip mode
+            elapsed = time.time() - self._last_manual_reconnect_ts
+            if elapsed < 10 * 60:
+                logger.info(f"⏭️ Skipped timed reconnect for {self.ip_address} (manual cooldown)")
+                if skip_timer: break
                 continue
 
-            start_time = datetime.now()
-            logger.info(f"🔁 [Timed Reconnect] START at {start_time.isoformat()} for PLC {self.ip_address}")
-
-            try:
-                with self.lock:
-                    self.client.disconnect()
-                    self.connected = False
-            except Exception as e:
-                logger.exception(f"❌ Exception during timed reconnect: {e}")
-
-            time.sleep(1.0)
+            start = datetime.now()
+            logger.info(f"🔁 [Timed Reconnect] START {start.isoformat()} for {self.ip_address}")
+            with self.lock:
+                try: self.client.disconnect()
+                except: pass
+                self.connected = False
+            time.sleep(1)
             self._try_connect()
-
-            end_time = datetime.now()
-            elapsed = (end_time - start_time).total_seconds()
-            logger.info(
-                f"✅ [Timed Reconnect] DONE for PLC {self.ip_address} — Duration: {elapsed:.2f}s"
-            )
-
-            if skip_timer:
-                break  # only run once if skip_timer is True
+            elapsed = (datetime.now() - start).total_seconds()
+            logger.info(f"✅ [Timed Reconnect] DONE for {self.ip_address} — {elapsed:.2f}s")
+            if skip_timer: break
 
     def reconnect_once_now(self, reason: str = ""):
-        logger.warning(f"⚠️ Forcing single reconnect for PLC {self.ip_address} — Reason: {reason}")
-        thread = Thread(target=self._reconnect_on_timer, kwargs={'skip_timer': True}, daemon=True)
-        thread.start()
-
+        logger.warning(f"⚠️ Forcing reconnect for {self.ip_address}: {reason}")
+        Thread(target=self._reconnect_on_timer, kwargs={'skip_timer': True}, daemon=True).start()
 
     def force_reconnect(self, reason: str = "Manual trigger"):
         now = time.time()
         if now - self._last_manual_reconnect_ts < 10:
-            logger.warning(f"⏳ [Force Reconnect] Skipped (cooldown active)")
+            logger.warning(f"⏳ Force reconnect skipped (cooldown) for {self.ip_address}")
             return
         self._last_manual_reconnect_ts = now
 
-        logger.warning(f"🛠️ [Force Reconnect] Triggered due to: {reason}")
-        
-        # --- Disconnect inside lock ---
+        logger.warning(f"🛠️ [Force Reconnect] {reason} for {self.ip_address}")
         with self.lock:
             try:
                 self.client.disconnect()
                 self.connected = False
-                logger.info(f"🔌 Disconnected client for {self.ip_address}")
             except Exception as e:
-                logger.exception(f"❌ Exception during disconnect: {e}")
-
-        time.sleep(1.0)  # Outside the lock
-
-        # --- Reconnect inside lock again ---
+                logger.exception(f"❌ Disconnect during force_reconnect: {e}")
+        time.sleep(1)
         with self.lock:
-            try:
-                self._try_connect()
-                logger.info(f"✅ Reconnected to PLC at {self.ip_address}")
-            except Exception as e:
-                logger.exception(f"❌ Exception during reconnect: {e}")
-
+            self._try_connect()
 
     def _connect(self):
         with self.lock:
             try:
                 if self.client.get_connected():
                     self.client.disconnect()
-            except Exception:
-                pass
+            except: pass
             try:
-                self.client.set_connection_type(3)
-                self.client.set_param(t.Parameter.PingTimeout, 5000)
-                self.client.set_param(t.Parameter.SendTimeout, 5000)
-                self.client.set_param(t.Parameter.RecvTimeout, 5000)
                 self.client.connect(self.ip_address, self.rack, self.slot)
                 if self.client.get_connected():
                     self.connected = True
-                    logger.debug(f"🟢 Connected to PLC at {self.ip_address}")
+                    logger.debug(f"🟢 Connected to PLC {self.ip_address}")
                 else:
                     self.connected = False
                     logger.error(f"❌ Connection refused by PLC {self.ip_address}")
             except Exception as e:
                 self.connected = False
-                logger.error(f"❌ Initial connect to PLC {self.ip_address} failed: {e}")
+                logger.error(f"❌ Initial connect failed for {self.ip_address}: {e}")
 
     def _recover_on_error(self, context: str, exc: Exception):
+        """Handle exceptions during read/write and trigger reconnect on resets."""
         self.connected = False
-        try:
-            self.client.disconnect()
-        except Exception:
-            pass
-        logger.error(
-            f"⚠️ PLC {self.ip_address} comms error in {context}: {exc}. Connection marked down."
-        )
+        try: self.client.disconnect()
+        except: pass
+
+        msg = str(exc).lower()
+        if isinstance(exc, ConnectionResetError) or "reset by peer" in msg or "10054" in msg or "104" in msg:
+            logger.error(f"🔁 [Server Reset] {self.ip_address} in {context}: {exc}")
+            # Immediately recreate and reconnect
+            self.client = c.Client()
+            self._init_client_params()
+            time.sleep(1)
+            self._try_connect()
+        else:
+            logger.error(f"⚠️ PLC {self.ip_address} comms error in {context}: {exc}. Marked down.")
+
+    def _watchdog_call(self, timeout, fn, *args, **kwargs):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(fn, *args, **kwargs)
+            try:
+                return fut.result(timeout=timeout)
+            except concurrent.futures.TimeoutError:
+                raise TimeoutError(f"⚠️ PLC call to {fn.__name__} timed out after {timeout}s")
 
     def is_connected(self):
         with self.lock:
             try:
                 if not self.client.get_connected():
                     return False
-
+                # use watchdog to detect hangs / resets
                 try:
-                    if hasattr(self.client, "get_cpu_state"):
-                        self.client.get_cpu_state()
-                    else:
-                        self.client.db_read(PROBE_DB, PROBE_OFFSET, 1)
-                except Exception as probe_err:
-                    logger.error(
-                        f"❌ PLC {self.ip_address} liveness probe failed: {probe_err}"
-                    )
+                    self._watchdog_call(1.0, self.client.db_read, PROBE_DB, PROBE_OFFSET, 1)
+                except TimeoutError:
+                    logger.error(f"❌ Liveness probe timeout for {self.ip_address}")
                     return False
-
+                except Exception as e:
+                    msg = str(e).lower()
+                    if "reset by peer" in msg or "10054" in msg or "104" in msg:
+                        logger.warning(f"🔁 [Server Reset] Detected on {self.ip_address}: {e}")
+                    else:
+                        logger.error(f"❌ Liveness probe failed for {self.ip_address}: {e}")
+                    return False
                 return True
             except Exception as e:
-                logger.error(f"❌ Error checking connection: {e}")
+                logger.error(f"❌ Error checking connection for {self.ip_address}: {e}")
                 return False
 
     def _ensure_connection(self):
@@ -268,18 +243,19 @@ class PLCConnection:
             return
         self._last_check = now
         if not self.connected or not self.is_connected():
-            logger.info(f"🚫 PLC {self.ip_address} ENSURE CONNECTION FAILED")
+            logger.info(f"🚫 PLC {self.ip_address} ENSURE_CONNECTION failed")
 
     def _safe_callback(self, status):
-        if self.status_callback:
+        if not self.status_callback:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_soon_threadsafe(asyncio.create_task, self.status_callback(status))
+        except RuntimeError:
             try:
-                loop = asyncio.get_running_loop()
-                loop.call_soon_threadsafe(asyncio.create_task, self.status_callback(status))
-            except RuntimeError:
-                try:
-                    asyncio.run(self.status_callback(status))
-                except Exception as e:
-                    logger.error(f"❌ Status callback failed: {e}")
+                asyncio.run(self.status_callback(status))
+            except Exception as e:
+                logger.error(f"❌ Status callback failed: {e}")
 
     def disconnect(self):
         with self.lock:
@@ -287,248 +263,189 @@ class PLCConnection:
                 try:
                     self.client.disconnect()
                     self.connected = False
-                    logger.debug(f"🔴 Disconnected from PLC at {self.ip_address}")
+                    logger.debug(f"🔴 Disconnected from PLC {self.ip_address}")
                 except Exception as e:
                     logger.error(f"Error during disconnect: {e}")
             else:
-                logger.debug(f"PLC at {self.ip_address} was already disconnected")
+                logger.debug(f"PLC {self.ip_address} was already disconnected")
 
-    def read_bool(self, db_number, byte_index, bit_index):
+    # ─── Read / Write Primitives ──────────────────────────────────────────
+
+    def read_bool(self, db, byte, bit):
         with self.lock:
             self._ensure_connection()
             if not self.connected:
                 return False
             try:
-                byte_array = self.client.db_read(db_number, byte_index, 1)
-                return u.get_bool(byte_array, 0, bit_index)
+                data = self.client.db_read(db, byte, 1)
+                return u.get_bool(data, 0, bit)
             except Exception as e:
-                self._recover_on_error(f"read_bool DB{db_number}", e)
+                self._recover_on_error(f"read_bool DB{db}", e)
                 return False
 
-    def write_bool(self, db_number, byte_index, bit_index, value, max_retries=3, current_byte=None):
-        """Write a boolean value into the PLC DB.
-
-        Parameters
-        ----------
-        db_number : int
-            Target DB number.
-        byte_index : int
-            Byte index inside the DB.
-        bit_index : int
-            Bit index inside the byte.
-        value : bool
-            Desired boolean value to write.
-        max_retries : int, optional
-            Number of retry attempts on failure, by default 3.
-        current_byte : int | None, optional
-            If provided, represents the current value of the byte already
-            read from the PLC. Supplying this avoids an additional
-            ``db_read`` call to fetch the byte again.
-        """
+    def write_bool(self, db, byte, bit, value, max_retries=3, current_byte=None):
         if not WRITE_TO_PLC:
-            logger.debug(
-                "SKIPPED write_bool DB%04d b%d:%d = %s",
-                db_number,
-                byte_index,
-                bit_index,
-                value,
-            )
+            logger.debug(f"SKIPPED write_bool DB{db} b{byte}:{bit} = {value}")
             return
 
         backoff = 0.01
-        for attempt in range(max_retries):
-            t_attempt_start = time.perf_counter()
-
+        for attempt in range(1, max_retries + 1):
+            t0 = time.perf_counter()
             with self.lock:
-                t_lock_acquired = time.perf_counter()
-
-                t_ensure_start = time.perf_counter()
                 self._ensure_connection()
-                t_ensure_end = time.perf_counter()
-                logger.debug(f"🔌 _ensure_connection took {t_ensure_end - t_ensure_start:.3f}s")
-
                 if not self.connected:
-                    logger.warning("⛔ Skipped write: PLC not connected")
+                    logger.warning(f"⛔ Skipped write_bool DB{db}: not connected")
                     return
-
                 try:
-                    # Step 1: Read current byte (unless provided)
+                    # read-or-use provided
                     if current_byte is None:
-                        t_read_start = time.perf_counter()
-                        orig = self.client.db_read(db_number, byte_index, 1)
-                        t_read_end = time.perf_counter()
-                        logger.debug(
-                            f"📥 db_read took {t_read_end - t_read_start:.3f}s"
-                        )
-                        orig_val = orig[0]
+                        orig = self.client.db_read(db, byte, 1)[0]
                     else:
-                        t_read_start = t_read_end = time.perf_counter()
-                        logger.debug(
-                            f"📥 using provided current_byte={current_byte}, skipping db_read"
-                        )
-                        orig_val = current_byte
+                        orig = current_byte
 
-                    # Step 2: Check if value already correct
-                    t_logic_start = time.perf_counter()
-                    new_val = (orig_val | (1 << bit_index)) if value else (orig_val & ~(1 << bit_index))
-                    t_logic_end = time.perf_counter()
-                    logger.debug(f"🧠 bit logic computation took {t_logic_end - t_logic_start:.6f}s")
-
-                    if orig_val == new_val:
-                        logger.debug("No-op write_bool(DB%d, byte %d, bit %d): already %s",
-                                    db_number, byte_index, bit_index, value)
+                    new = (orig | (1 << bit)) if value else (orig & ~(~(1 << bit)))
+                    if orig == new:
                         return
 
-                    # Step 3: Perform write
-                    payload = bytearray([new_val])
-                    t_write_start = time.perf_counter()
-                    self.client.write_area(t.Area.DB, db_number, byte_index, payload)
-                    t_write_end = time.perf_counter()
+                    payload = bytearray([new])
+                    # write with watchdog
+                    self._watchdog_call(1.0, self.client.write_area,
+                                        t.Area.DB, db, byte, payload)
 
-                    write_duration = t_write_end - t_write_start
-                    log = logger.warning if write_duration > 0.05 else logger.debug
-                    log("%s ⏱ write_area(DB%d, byte %d, bit %d) took %.3fs",
-                        self.ip_address, db_number, byte_index, bit_index, write_duration)
+                    duration = time.perf_counter() - t0
 
-                    # Full timing for this attempt
-                    t_attempt_end = time.perf_counter()
-                    logger.debug(f"✅ Total write_bool attempt {attempt + 1} duration: {(t_attempt_end - t_attempt_start):.3f}s "
-                                f"(lock={t_lock_acquired - t_attempt_start:.3f}s, ensure={t_ensure_end - t_ensure_start:.3f}s, "
-                                f"read={t_read_end - t_read_start:.3f}s, write={write_duration:.3f}s)")
+                    if duration > 1.0:
+                        logger.warning(f"{self.ip_address} ⏱ write_bool DB{db} b{byte}:{bit} took {duration:.3f}s")
+                    else:
+                        logger.debug(f"{self.ip_address} ⏱ write_bool DB{db} b{byte}:{bit} took {duration:.3f}s")
+
+                    # if too slow, force reconnect
+                    if duration > 1.0:
+                        logger.warning(f"🧨 Slow write_bool ({duration:.2f}s) — forcing reconnect")
+                        self.force_reconnect(reason=f"slow write {duration:.2f}s")
+
                     return
-
+                except TimeoutError as te:
+                    logger.error(f"⚠️ write_bool timeout on DB{db}: {te}")
+                    self._recover_on_error(f"write_bool DB{db}", te)
                 except Exception as e:
-                    t_attempt_error = time.perf_counter()
-                    logger.warning("⚠️ write attempt %d/%d failed after %.3fs: %s",
-                                attempt + 1, max_retries, t_attempt_error - t_attempt_start, e)
-                    self._recover_on_error(f"write_bool DB{db_number}", e)
+                    logger.warning(f"⚠️ Attempt {attempt}/{max_retries} write_bool DB{db} failed: {e}")
+                    self._recover_on_error(f"write_bool DB{db}", e)
 
             time.sleep(backoff)
             backoff = min(backoff * 2, MAX_BACKOFF_SEC)
 
-    def read_integer(self, db_number, byte_index):
+    def read_integer(self, db, byte):
         with self.lock:
             self._ensure_connection()
             if not self.connected:
                 return 0
             try:
-                data = self.client.db_read(db_number, byte_index, 2)
+                data = self.client.db_read(db, byte, 2)
                 return u.get_int(data, 0)
             except Exception as e:
-                self._recover_on_error(f"read_integer DB{db_number}", e)
+                self._recover_on_error(f"read_integer DB{db}", e)
                 return 0
 
-    def write_integer(self, db_number, byte_index, value):
+    def write_integer(self, db, byte, value):
         if not WRITE_TO_PLC:
-            logger.debug(f"[SKIPPED] write_integer(DB{db_number}, byte {byte_index}) = {value}")
+            logger.debug(f"SKIPPED write_integer DB{db} byte {byte} = {value}")
             return
-        t0 = time.perf_counter()
         with self.lock:
             self._ensure_connection()
             if not self.connected:
                 return
             try:
-                data = self.client.db_read(db_number, byte_index, 2)
-                u.set_int(data, 0, value)
-                self.client.write_area(t.Area.DB, db_number, byte_index, data)
+                ba = self.client.db_read(db, byte, 2)
+                u.set_int(ba, 0, value)
+                self.client.write_area(t.Area.DB, db, byte, ba)
             except Exception as e:
-                self._recover_on_error(f"write_integer DB{db_number}", e)
-        duration = time.perf_counter() - t0
-        log = logger.warning if duration > 0.25 else logger.debug
-        log(f"{self.ip_address} ⏱ write_integer(DB{db_number}, byte {byte_index}) {duration:.3f}s")
+                self._recover_on_error(f"write_integer DB{db}", e)
 
-    def read_string(self, db_number, byte_index, max_size):
+    def read_string(self, db, byte, max_size):
         with self.lock:
             self._ensure_connection()
             if not self.connected:
                 return None
             try:
-                raw = self.client.db_read(db_number, byte_index, max_size + 2)
+                raw = self.client.db_read(db, byte, max_size+2)
                 length = raw[1]
                 return raw[2:2+length].decode('ascii', errors='ignore')
             except Exception as e:
-                self._recover_on_error(f"read_string DB{db_number}", e)
+                self._recover_on_error(f"read_string DB{db}", e)
                 return None
 
-    def write_string(self, db_number, byte_index, value, max_size):
+    def write_string(self, db, byte, value, max_size):
         if not WRITE_TO_PLC:
-            logger.debug(f"[SKIPPED] write_string(DB{db_number}, byte {byte_index}) = '{value}'")
+            logger.debug(f"SKIPPED write_string DB{db} byte {byte} = '{value}'")
             return
-        t0 = time.perf_counter()
         with self.lock:
             self._ensure_connection()
             if not self.connected:
                 return
-            ba = bytearray(max_size + 2)
+            ba = bytearray(max_size+2)
             ba[0] = max_size
-            ba[1] = len(value := value[:max_size])
-            ba[2:2+len(value)] = value.encode('ascii', errors='ignore')
+            text = value[:max_size]
+            ba[1] = len(text)
+            ba[2:2+len(text)] = text.encode('ascii', errors='ignore')
             try:
-                self.client.write_area(t.Area.DB, db_number, byte_index, ba)
+                self.client.write_area(t.Area.DB, db, byte, ba)
             except Exception as e:
-                self._recover_on_error(f"write_string DB{db_number}", e)
-        duration = time.perf_counter() - t0
-        log = logger.warning if duration > 0.25 else logger.debug
-        log(f"{self.ip_address} ⏱ write_string(DB{db_number}, byte {byte_index}) {duration:.3f}s")
+                self._recover_on_error(f"write_string DB{db}", e)
 
-    def read_byte(self, db_number, byte_index):
+    def read_byte(self, db, byte):
         with self.lock:
             self._ensure_connection()
             if not self.connected:
                 return None
             try:
-                ba = self.client.db_read(db_number, byte_index, 1)
-                return ba[0]
+                return self.client.db_read(db, byte, 1)[0]
             except Exception as e:
-                self._recover_on_error(f"read_byte DB{db_number}", e)
+                self._recover_on_error(f"read_byte DB{db}", e)
                 return None
 
-    def read_date_time(self, db_number, byte_index):
+    def read_date_time(self, db, byte):
         with self.lock:
             self._ensure_connection()
             if not self.connected:
                 return None
             try:
-                ba = self.client.db_read(db_number, byte_index, 8)
-                return u.get_dt(ba, 0)
+                raw = self.client.db_read(db, byte, 8)
+                return u.get_dt(raw, 0)
             except Exception as e:
-                self._recover_on_error(f"read_date_time DB{db_number}", e)
+                self._recover_on_error(f"read_date_time DB{db}", e)
                 return None
 
-    def read_real(self, db_number, byte_index):
+    def read_real(self, db, byte):
         with self.lock:
             self._ensure_connection()
             if not self.connected:
                 return None
             try:
-                ba = self.client.db_read(db_number, byte_index, 4)
-                return u.get_real(ba, 0)
+                raw = self.client.db_read(db, byte, 4)
+                return u.get_real(raw, 0)
             except Exception as e:
-                self._recover_on_error(f"read_real DB{db_number}", e)
+                self._recover_on_error(f"read_real DB{db}", e)
                 return None
 
-    def db_read(self, db_number: int, start_byte: int, size: int) -> bytearray:
-        chunk_size = min(self.max_chunk, size)
-        buffer = bytearray()
+    def db_read(self, db, start, size):
+        chunk = min(self.max_chunk, size)
+        buf = bytearray()
         offset = 0
         backoff = 0.05
         while offset < size:
-            chunk = min(chunk_size, size - offset)
+            length = min(chunk, size - offset)
             with self.lock:
                 self._ensure_connection()
                 if not self.connected:
                     return bytearray(size)
                 try:
-                    t0 = time.perf_counter()
-                    part = self.client.db_read(db_number, start_byte + offset, chunk)
-                    logger.debug("DB%04d[%d:%d] OK in %.3fs",
-                                 db_number, start_byte + offset, chunk,
-                                 time.perf_counter() - t0)
-                    buffer.extend(part)
+                    part = self.client.db_read(db, start+offset, length)
+                    buf.extend(part)
+                    offset += length
                     backoff = 0.05
-                    offset += chunk
                 except Exception as e:
-                    self._recover_on_error(f"db_read DB{db_number}", e)
+                    self._recover_on_error(f"db_read DB{db}", e)
                     time.sleep(backoff)
-                    backoff = min(backoff * 2, MAX_BACKOFF_SEC)
-        return buffer
+                    backoff = min(backoff*2, MAX_BACKOFF_SEC)
+        return buf

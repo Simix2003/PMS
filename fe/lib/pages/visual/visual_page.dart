@@ -87,6 +87,10 @@ class _VisualPageState extends State<VisualPage> {
 
   Timer? _hourlyRefreshTimer;
 
+  List<Map<String, dynamic>> bufferDefects = [];
+  final Map<String, String> etaByObjectId = {};
+  final Set<String> loadingETAs = {};
+
   // VPF
   int In_1 = 0;
   int ngOut_1 = 0;
@@ -412,16 +416,7 @@ class _VisualPageState extends State<VisualPage> {
         value_gauge_2 =
             double.tryParse(visualResponse['value_gauge_2'].toString()) ?? 0.0;
 
-        bufferDefectSummary = List<Map<String, dynamic>>.from(
-          (bufferResponse['bufferDefects'] ?? []).map((e) => {
-                'object_id': e['object_id'] ?? '',
-                'production_id': e['production_id'] ?? 0,
-                'rework_count': e['rework_count'] ?? 0,
-                'defects': List<Map<String, dynamic>>.from(e['defects'] ?? []),
-              }),
-        );
-
-        print('bufferDefectSummary: $bufferDefectSummary');
+        _loadBufferData(); // ⬅️ Call your API-based loader on every update
 
         isLoading = false;
       });
@@ -916,11 +911,7 @@ class _VisualPageState extends State<VisualPage> {
             ellCounts.add(toIntSafe(defect['ell']));
           }
 
-          if (data['bufferDefectSummary'] != null) {
-            bufferDefectSummary =
-                List<Map<String, dynamic>>.from(data['bufferDefectSummary']);
-            print('bufferDefectSummary WebSocket: $bufferDefectSummary');
-          }
+          _loadBufferData(); // ⬅️ Call your API-based loader on every update
 
           value_gauge_1 = toDoubleSafe(data['value_gauge_1']);
           value_gauge_2 = toDoubleSafe(data['value_gauge_2']);
@@ -1108,6 +1099,92 @@ class _VisualPageState extends State<VisualPage> {
     _initializeWebSocket();
     _initializeEscalationWebSocket();
     _startHourlyRefreshScheduler();
+  }
+
+  Future<void> _loadBufferData() async {
+    try {
+      final result = await ApiService.fetchBufferDefectSummary(
+        plcIp: '192.168.32.2',
+        db: 19603,
+        byte: 0,
+        length: 21,
+      );
+
+      final bufferIds = List<String>.from(result['bufferIds'] ?? []);
+      final rawDefects =
+          List<Map<String, dynamic>>.from(result['bufferDefects'] ?? []);
+
+      // Build full list of 21 slots (0 = plane, 1–20 = buffer)
+      final fullDefects = List.generate(21, (i) {
+        final id = i < bufferIds.length ? bufferIds[i].trim() : '';
+        if (id.isEmpty) {
+          return {
+            'object_id': '',
+            'production_id': 0,
+            'rework_count': 0,
+            'defects': [],
+          };
+        }
+
+        // Match defect object by object_id
+        final existing = rawDefects.firstWhere(
+          (d) => d['object_id'] == id,
+          orElse: () => {
+            'object_id': id,
+            'production_id': 0,
+            'rework_count': 0,
+            'defects': [],
+          },
+        );
+
+        return {
+          'object_id': id,
+          'production_id': existing['production_id'] ?? 0,
+          'rework_count': existing['rework_count'] ?? 0,
+          'defects': existing['defects'] ?? [],
+        };
+      });
+
+      final displayList = [
+        fullDefects[0], // plane (slot 1) ⬅️ now at the top
+        ...fullDefects.sublist(1), // buffer 2 → 21 (already in correct order)
+      ];
+
+      setState(() {
+        bufferDefectSummary = displayList;
+        isLoading = false;
+      });
+
+      for (final item in displayList) {
+        final objectId = item['object_id']?.toString();
+        if (objectId != null &&
+            objectId.isNotEmpty &&
+            !etaByObjectId.containsKey(objectId)) {
+          _fetchETA(objectId);
+        }
+      }
+    } catch (e) {
+      print("❌ Error loading buffer data: $e");
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _fetchETA(String objectId) async {
+    loadingETAs.add(objectId);
+    final result = await ApiService.predictReworkETAByObject(objectId);
+
+    if (!mounted) return;
+
+    final etaMin = result['etaInfo']?['eta_min'];
+    final noDefects = result['noDefectsFound'] ?? false;
+
+    final etaString = etaMin != null
+        ? "${etaMin.round()} min"
+        : (noDefects ? "Complete" : "N/A");
+
+    setState(() {
+      etaByObjectId[objectId] = etaString;
+    });
   }
 
   void _startHourlyRefreshScheduler() {

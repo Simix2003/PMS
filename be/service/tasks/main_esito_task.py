@@ -866,17 +866,6 @@ async def read_data(
             logger.warning(f"[{full_id}], Missing config for {key_mod}")
             data["Id_Modulo"] = ""
 
-        # 🔍 Additional debug ONLY for LMN01 / LMN02
-        if channel_id in ("LMN01", "LMN02"):
-            logger.warning(
-                f"[{full_id}] Debug Id_Modulo read: "
-                f"byte={id_mod_conf.get('byte') if id_mod_conf else '❌'} | "
-                f"length={id_mod_conf.get('length') if id_mod_conf else '❌'} | "
-                f"start_byte={start_byte} | "
-                f"raw_buffer={buffer[id_mod_conf['byte'] - start_byte:id_mod_conf['byte'] - start_byte + id_mod_conf['length']] if id_mod_conf else 'N/A'} | "
-                f"result='{data['Id_Modulo']}'"
-            )
-
         if not data["Id_Modulo"]:
             logger.warning(f"[{full_id}], Id_Modulo is empty or unreadable")
 

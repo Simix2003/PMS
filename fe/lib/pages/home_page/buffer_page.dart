@@ -115,7 +115,6 @@ class _BufferPageState extends State<BufferPageContent>
       final rawDefects =
           List<Map<String, dynamic>>.from(result['bufferDefects'] ?? []);
 
-      // Build fixed list of 21 items (plane + 20 buffer slots)
       final fullDefects = List.generate(21, (i) {
         final id = i < bufferIds.length ? bufferIds[i].trim() : '';
         if (id.isEmpty) {
@@ -136,13 +135,19 @@ class _BufferPageState extends State<BufferPageContent>
             'defects': [],
           },
         );
-        return existing;
+
+        return {
+          'object_id': id,
+          'production_id': existing['production_id'] ?? 0,
+          'rework_count': existing['rework_count'] ?? 0,
+          'defects': existing['defects'] ?? [],
+        };
       });
 
-      // Order: plane at bottom, buffer reversed
+// ✅ Fix order: buffer (21→2), plane (1)
       final displayList = [
-        fullDefects[0], // plane
-        ...fullDefects.sublist(1).reversed, // buffer 21–2
+        ...fullDefects.sublist(1).reversed,
+        fullDefects[0],
       ];
 
       setState(() {
@@ -215,7 +220,7 @@ class _BufferPageState extends State<BufferPageContent>
         physics: const BouncingScrollPhysics(),
         slivers: [
           SliverAppBar(
-            automaticallyImplyLeading: !widget.visuals,
+            automaticallyImplyLeading: false,
             leading:
                 widget.visuals ? null : const BackButton(color: Colors.black),
             expandedHeight: 120,
@@ -315,7 +320,7 @@ class _BufferPageState extends State<BufferPageContent>
                           : '-';
 
                       // Calculate slot number: Position 21 (top) to 1 (bottom)
-                      final slotNumber = bufferDefects.length - index;
+                      final slotNumber = 21 - index;
 
                       final isEmpty = (objectId == null || objectId.isEmpty);
                       final isNG = (item['defects'] as List).any((d) {

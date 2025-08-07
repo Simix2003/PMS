@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime
 import logging
+from threading import Thread
 import time
 import os
 import sys
@@ -45,9 +46,20 @@ def log_duration(msg: str, duration: float, plc_connection: PLCConnection, full_
     log_fn(f"{msg} in {duration:.3f}s")
 
     if duration > threshold:
-        plc_connection.force_reconnect(
-            reason=f"write_bool took {duration:.2f}s on {full_station_id}"
-        )
+        # prevent reconnect storm
+        if not getattr(plc_connection, '_reconnect_in_progress', False):
+            plc_connection._reconnect_in_progress = True
+            plc_connection.reconnect_once_now(
+                reason=f"{msg} took {duration:.2f}s on {full_station_id}"
+            )
+
+            # clear the flag after some time to allow future reconnects
+            Thread(target=_reset_reconnect_flag_later, args=(plc_connection,), daemon=True).start()
+
+def _reset_reconnect_flag_later(plc_connection: PLCConnection, delay: float = 30.0):
+    """Avoid reconnect storms by resetting the in-progress flag after delay."""
+    time.sleep(delay)
+    plc_connection._reconnect_in_progress = False
 
 async def process_final_update(
     full_station_id: str,

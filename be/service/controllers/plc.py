@@ -59,6 +59,7 @@ class PLCConnection:
         Thread(target=self._background_reconnector, daemon=True).start()
         Thread(target=self._reconnect_on_timer, daemon=True).start()
         PLC_REGISTRY.append(self)
+        self._reconnect_in_progress = False
 
     def _check_tcp_port(self, port=102, timeout=1.0):
         try:
@@ -131,10 +132,11 @@ class PLCConnection:
             else:
                 logger.warning(f"❌ PLC {self.ip_address} still unreachable")
 
-    def _reconnect_on_timer(self):
+    def _reconnect_on_timer(self, skip_timer: bool = False):
         while True:
-            logger.info(f"⏳ Next reconnect for PLC {self.ip_address} in {RECONNECT_AFTER_MINS} minutes")
-            time.sleep(RECONNECT_AFTER_MINS * 60)
+            if not skip_timer:
+                logger.info(f"⏳ Next reconnect for PLC {self.ip_address} in {RECONNECT_AFTER_MINS} minutes")
+                time.sleep(RECONNECT_AFTER_MINS * 60)
 
             now = time.time()
             elapsed_since_manual = now - self._last_manual_reconnect_ts
@@ -144,6 +146,8 @@ class PLCConnection:
                 logger.info(
                     f"⏭️ [Timed Reconnect] Skipped for {self.ip_address} — manual reconnect was {elapsed_since_manual:.0f}s ago"
                 )
+                if skip_timer:
+                    break  # only run once in skip mode
                 continue
 
             start_time = datetime.now()
@@ -165,14 +169,14 @@ class PLCConnection:
                 f"✅ [Timed Reconnect] DONE for PLC {self.ip_address} — Duration: {elapsed:.2f}s"
             )
 
-    @staticmethod
-    def force_global_reconnect(reason: str = "Manual Global Refresh"):
-        logger.warning(f"[Global Reconnect] Triggered: {reason}")
-        for plc in PLC_REGISTRY:
-            try:
-                plc.force_reconnect(reason)
-            except Exception as e:
-                logger.exception(f"❌ Reconnect failed for PLC {plc.ip_address}: {e}")
+            if skip_timer:
+                break  # only run once if skip_timer is True
+
+    def reconnect_once_now(self, reason: str = ""):
+        logger.warning(f"⚠️ Forcing single reconnect for PLC {self.ip_address} — Reason: {reason}")
+        thread = Thread(target=self._reconnect_on_timer, kwargs={'skip_timer': True}, daemon=True)
+        thread.start()
+
 
     def force_reconnect(self, reason: str = "Manual trigger"):
         now = time.time()

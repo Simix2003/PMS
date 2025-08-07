@@ -1,0 +1,224 @@
+{"instruction":"Una cella ha una crepa lunga 45 mm. Il modulo è accettabile?","output":"Sì, la crepa è inferiore al limite di 50 mm, quindi può rientrare in Classe B. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Ho trovato 3 celle con crepe leggere, tutte sotto i 5 %. Il modulo è ok?","output":"No, il modulo non può essere in Classe B. Se ci sono più di 2 celle con crepe, anche piccole, va declassato. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Una crepa lunga 110 mm attraversa una singola cella. Cosa faccio?","output":"Il modulo va scartato. Una crepa sopra i 100 mm esclude la Classe C. (Rif. Difetto 1, pag. 5 e 7)"}
+{"instruction":"Il modulo presenta un pezzo mancante di 25 mm su una cella. È accettabile?","output":"No, il modulo non può essere in Classe B. Un missing part superiore a 20 mm va declassato. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Ci sono 3 celle con parti mancanti da 15 mm, nessuna attraversa il ribbon. Che classe è?","output":"Classe C. Più di 2 celle con missing part, anche se piccoli, fanno superare i limiti di Classe B. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Come misuro la lunghezza di un crack?","output":"Devi creare un rettangolo attorno al crack e misurare la diagonale. Quella è la lunghezza del crack. (Rif. Difetto 1, pag. 6)"}
+{"instruction":"Una crepa connette due celle vicine. Che succede?","output":"Il modulo è da scartare. Un crack che mette in contatto parti attive come due celle o busbar non è ammesso. (Rif. Difetto 1, nota pag. 5)"}
+{"instruction":"Una cella ha un frammento mancante da 60 mm. Cosa dice la normativa?","output":"Il modulo deve essere scartato. Un missing part sopra i 50 mm esclude anche la Classe C. (Rif. Difetto 1, pag. 5 e tabella pag. 7)"}
+{"instruction":"5 celle presentano crepe piccole, tutte sotto i 50 mm. È ok?","output":"No, il modulo va scartato. Oltre 4 celle con crack esclude anche la Classe C. (Rif. Difetto 1, pag. 5 e 7)"}
+{"instruction":"La cella ha due crepe da 30 mm. È Classe A?","output":"No, la sola presenza di crack in una cella esclude la Classe A. (Rif. Difetto 1, pag. 4)"}
+{"instruction":"Se ho una crepa da 49 mm su una cella, posso stare tranquillo?","output":"Dipende dal numero di celle coinvolte. Una sola crepa da 49 mm permette la Classe B. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Se trovo una crepa lunga 80 mm in una cella, posso classificarla in Classe C?","output":"Sì, ma solo se non supera i 100 mm e il numero di celle coinvolte rientra nei limiti di Classe C. (Rif. Difetto 1, pag. 7)"}
+{"instruction":"Ho una cella con una crepa che non attraversa il ribbon, lunga 55 mm. È accettabile?","output":"No, supera il limite di 50 mm per Classe B. Può solo essere Classe C, se non si superano altri limiti. (Rif. Difetto 1, pag. 5 e 7)"}
+{"instruction":"Due crepe corte da 10 mm nella stessa cella. Va segnalato?","output":"Sì, basta la presenza di crack per escludere la Classe A, anche se sono corte. (Rif. Difetto 1, pag. 4)"}
+{"instruction":"Ho visto un modulo con una crepa enorme che taglia la cella in due. Devo scartarlo?","output":"Sì, crepe che dividono la cella, specialmente se superano i 100 mm o attraversano busbar, sono da scartare. (Rif. Difetto 1, pag. 5 e 7)"}
+{"instruction":"Se un pezzo manca completamente da una cella, ma è sotto i 20 mm, Classe?","output":"Può essere Classe B se le celle coinvolte non sono più di due. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Una crepa di 51 mm. Devo scartare il modulo?","output":"No, ma non può essere in Classe B. Solo Classe C se non si superano altri limiti. (Rif. Difetto 1, pag. 7)"}
+{"instruction":"Una cella ha una crepa di 100 mm precisa. Classe C ok?","output":"Sì, 100 mm è il limite massimo per la Classe C. Oltre va scartato. (Rif. Difetto 1, tabella pag. 7)"}
+{"instruction":"Ho tre crepe da 15 mm ciascuna su tre celle diverse. Che classe è?","output":"Classe C. Più di due celle con crack escludono la Classe B. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Un operatore trova una crepa e non sa quanto misura. Cosa dovrebbe fare?","output":"Dovrebbe misurare la lunghezza come da procedura (rettangolo e diagonale) e valutare in base ai limiti. (Rif. Difetto 1, pag. 6)"}
+{"instruction":"Una crepa attraversa il busbar. È ok?","output":"No, qualsiasi crack che mette in contatto busbar o parti attive comporta scarto. (Rif. Difetto 1, nota pag. 5)"}
+{"instruction":"Ho una cella senza alcuna crepa. Posso classificarla come Classe A?","output":"Sì, nessun crack permette la Classe A. (Rif. Difetto 1, pag. 4)"}
+{"instruction":"Un modulo presenta due crack da 48 mm su due celle diverse. È Classe B?","output":"Sì, massimo due celle con crack sotto i 50 mm possono essere Classe B. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Ci sono due pezzi mancanti da 10 mm su due celle. Classe B?","output":"Sì, entro i limiti: massimo due celle coinvolte e missing part sotto i 20 mm. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Mi sembra di vedere delle microcrepe. Vanno segnalate?","output":"Se sono evidenti, vanno valutate secondo le procedure. Anche crepe piccole possono escludere la Classe A. (Rif. Difetto 1, pag. 4)"}
+{"instruction":"Il modulo ha una cella con una crepa che va da angolo a angolo, misura 80 mm. Classe C?","output":"Sì, ma se supera i 100 mm va scartato. (Rif. Difetto 1, pag. 7)"}
+{"instruction":"È vero che se il crack è più corto di 50 mm si può stare in Classe B?","output":"Sì, a patto che non ci siano più di due celle coinvolte. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Se ho 4 celle con crepe di 10 mm, il modulo è recuperabile?","output":"No, più di 2 celle con crack esclude la Classe B, più di 4 esclude anche la Classe C. (Rif. Difetto 1, pag. 7)"}
+{"instruction":"Se il pezzo mancante è 55 mm posso sistemarlo?","output":"No, sopra i 50 mm è sempre da scartare, anche per Classe C. (Rif. Difetto 1, tabella pag. 7)"}
+{"instruction":"Come faccio a distinguere un crack da un graffio?","output":"Il crack è una frattura visibile e profonda nella cella, va valutata con attenzione e misurata. (Rif. Difetto 1, pag. 6)"}
+{"instruction":"Mi è caduto un pezzo della cella mentre montavo. Classe?","output":"Se il missing part supera i limiti (20 mm per B, 50 mm per C) va scartato. (Rif. Difetto 1, pag. 5, 7)"}
+{"instruction":"Più crepe corte (es. 2 mm) su diverse celle: rischio?","output":"Sì, anche tante crepe corte escludono la Classe A e se superano i limiti di numero, anche B e C. (Rif. Difetto 1, pag. 4, 5, 7)"}
+{"instruction":"Che succede se il missing part attraversa il ribbon?","output":"Il modulo è da scartare se il missing part attraversa ribbon o mette in contatto parti attive. (Rif. Difetto 1, pag. 5, nota)"}
+{"instruction":"Una cella ha una crepa di 25 mm e una di 40 mm. Sono sulla stessa cella. Che classe posso dare?","output":"Non Classe A, ma puoi valutare Classe B se entrambe sono sotto i 50 mm e massimo 2 celle coinvolte. (Rif. Difetto 1, pag. 5)"}
+{"instruction":"Tre celle con crepe di 51 mm. Classe possibile?","output":"No, più di due celle con crack e lunghezza superiore a 50 mm esclude anche Classe C. (Rif. Difetto 1, pag. 7)"}
+{"instruction":"Una crepa minuscola di 1 mm. Serve premere NG?","output":"Sì, se visibile va valutata: la presenza di crack esclude Classe A. (Rif. Difetto 1, pag. 4)"}
+{"instruction":"Per la Classe A la cella deve essere perfetta?","output":"Sì, la presenza anche di una sola crepa esclude la Classe A. (Rif. Difetto 1, pag. 4)"}
+{"instruction":"Che succede se una crepa non attraversa la cella ma è lunga 60 mm?","output":"Oltre 50 mm esclude Classe B, può essere solo Classe C se entro 100 mm. (Rif. Difetto 1, pag. 7)"}
+{"instruction":"Il modulo ha 2 missing part da 21 mm ciascuno. Classe?","output":"No, il limite per Classe B è 20 mm, quindi solo Classe C (se entro 50 mm e max 2 celle). (Rif. Difetto 1, pag. 5, 7)"}
+{"instruction":"Mi pare di vedere una crepa, ma non riesco a misurare bene. Cosa faccio?","output":"Segui la procedura: rettangolo e diagonale, così puoi determinare la lunghezza precisa. (Rif. Difetto 1, pag. 6)"}
+{"instruction":"Per essere in Classe C le crepe devono essere tutte sotto i 100 mm?","output":"Sì, anche una sola crepa sopra i 100 mm porta allo scarto. (Rif. Difetto 1, pag. 7)"}
+{"instruction":"Cosa fare se vedo polvere dentro una crepa?","output":"Non è rilevante per la classe, ma la crepa va comunque valutata secondo i limiti di lunghezza e numero. (Rif. Difetto 1, pag. 5, 7)"}
+{"instruction":"Un modulo con una cella rotta a metà. Posso classificarlo?","output":"No, la rottura completa o crack che divide la cella è motivo di scarto. (Rif. Difetto 1, pag. 5, 7)"}
+{"instruction":"Mi puoi riassumere i limiti di lunghezza delle crepe per classe?","output":"Classe A: nessuna crepa; Classe B: ≤50 mm e max 2 celle; Classe C: ≤100 mm e max 4 celle. (Rif. Difetto 1, pag. 4, 5, 7)"}
+{"instruction":"Più di 2 celle con crack anche piccoli: che succede?","output":"Non puoi essere in Classe B. Puoi essere in Classe C solo se non superi 4 celle con crack. (Rif. Difetto 1, pag. 5, 7)"}
+{"instruction":"Una crepa si trova in prossimità della JBX. Che devo fare?","output":"Il modulo non può essere in Classe A se ci sono celle rotte in prossimità delle JBX. (Rif. Difetto 1, pag. 4)"}
+{"instruction":"Tutte le celle sono integre, nessuna crepa. Posso andare tranquillo?","output":"Sì, il modulo può essere in Classe A. (Rif. Difetto 1, pag. 4)"}
+{"instruction": "Ho trovato un chip a 'C' da 18 mm in una cella. È accettabile?", "output": "No, il modulo non può essere in Classe A. Anche un solo chip su una cella esclude la Classe A. (Rif. Difetto 2, pag. 8)"}
+{"instruction": "Un chip a 'C' misura 22 mm. Cosa succede?", "output": "Il chip supera il limite di 20 mm. Il modulo non può essere in Classe B. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Ci sono 3 chip a 'C', tutti sotto i 20 mm. Nessuno attraversa il ribbon. È Classe B?", "output": "No, più di 2 chip sotto i 20 mm escludono la Classe B. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Ho una scheggiatura a 'V' su una cella. Il modulo può essere Classe B?", "output": "No, qualsiasi scheggiatura a forma di 'V' non è ammessa in Classe B. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Ci sono 5 chip a 'C' di 25 mm ciascuno. Posso classificare il modulo come Classe C?", "output": "No, più di 4 chip sotto i 30 mm escludono anche la Classe C. (Rif. Difetto 2, pag. 9–10)"}
+{"instruction": "Un chip a 'V' di 32 mm è presente su una cella. Va scartato?", "output": "Sì, un chip a 'V' superiore a 30 mm supera i limiti anche della Classe C. Il modulo va scartato. (Rif. Difetto 2, tabella pag. 10)"}
+{"instruction": "Un chip a 'V' attraversa il ribbon. È accettabile?", "output": "Sì, un chip che attraversa il ribbon è accettato in Classe C. (Rif. Difetto 2, nota pag. 9)"}
+{"instruction": "Ci sono 4 chip a 'V' da 28 mm. Che classe è?", "output": "Classe C. Il numero massimo di chip ammessi in Classe C è 4 se sono sotto i 30 mm. (Rif. Difetto 2, pag. 9–10)"}
+{"instruction": "Una cella ha due chip a 'C' da 19 mm. È Classe A?", "output": "No, la sola presenza di chip esclude la Classe A. (Rif. Difetto 2, pag. 8)"}
+{"instruction": "Un chip da 31 mm è stato trovato. Nessun altro difetto. Il modulo è recuperabile?", "output": "No, un chip > 30 mm è da scartare indipendentemente dal numero o dalla forma. (Rif. Difetto 2, tabella pag. 10)"}
+{"instruction": "Una cella presenta un piccolo chip a 'C' di 15 mm. Cosa succede?", "output": "Non può essere Classe A, perché la presenza di chip esclude la Classe A. Può essere Classe B se rispetta i limiti di quantità. (Rif. Difetto 2, pag. 8–9)"}
+{"instruction": "Due chip a 'V' da 10 mm ciascuno in una sola cella. Va segnalato?", "output": "Sì, anche la sola presenza di chip, di qualsiasi forma, esclude la Classe A. (Rif. Difetto 2, pag. 8)"}
+{"instruction": "Se trovo un chip a 'C' da 19 mm che attraversa il ribbon, è grave?", "output": "No, in Classe C il chip che attraversa il ribbon è accettato, se rispetta le altre soglie. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "3 chip a 'C' da 19 mm ciascuno, uno per cella. Che classe?", "output": "Non Classe B (max 2 chip sotto i 20 mm), ma può essere Classe C se non si superano 4 per modulo. (Rif. Difetto 2, pag. 9–10)"}
+{"instruction": "Una cella ha un chip a 'V' da 5 mm e uno a 'C' da 12 mm. Classe B?", "output": "No, in Classe B nessuna scheggiatura a V è ammessa. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Un chip a 'V' da 29 mm. È ok?", "output": "Sì, può essere Classe C se non si superano 4 per modulo. (Rif. Difetto 2, pag. 9–10)"}
+{"instruction": "Ho trovato due chip a 'C' da 17 mm sulla stessa cella. Classe B?", "output": "Sì, massimo due chip sotto i 20 mm consentono Classe B, se non superano il totale consentito per modulo. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Tre chip da 12 mm in una cella. Classe A?", "output": "No, già la presenza di chip esclude la Classe A. (Rif. Difetto 2, pag. 8)"}
+{"instruction": "Quattro chip a 'V' da 25 mm totali sul modulo. Che classe?", "output": "Classe C. È il massimo consentito per questa classe. (Rif. Difetto 2, pag. 9–10)"}
+{"instruction": "Un chip a 'C' da 21 mm in una cella. Cosa faccio?", "output": "Non puoi classificare il modulo in Classe B, perché supera il limite di 20 mm. Puoi solo valutare Classe C. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Ci sono 2 chip a 'C' di 19 mm, uno per cella. È ok?", "output": "Sì, può essere Classe B, il limite è massimo due chip sotto i 20 mm. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "È vero che in Classe C posso avere chip che attraversano il ribbon?", "output": "Sì, i chip che attraversano il ribbon sono accettati solo in Classe C. (Rif. Difetto 2, nota pag. 9)"}
+{"instruction": "Se trovo una cella con tre chip da 8 mm è Classe A?", "output": "No, anche un solo chip esclude la Classe A. (Rif. Difetto 2, pag. 8)"}
+{"instruction": "Se il chip è >30 mm, che succede?", "output": "Il modulo va scartato, perché il limite massimo per Classe C è 30 mm. (Rif. Difetto 2, tabella pag. 10)"}
+{"instruction": "Ci sono 3 chip a 'C' da 19 mm sul modulo, uno attraversa il ribbon. Classe B?", "output": "No, più di 2 chip sotto i 20 mm esclude Classe B, ma il chip che attraversa il ribbon è accettabile in Classe C. (Rif. Difetto 2, pag. 9–10)"}
+{"instruction": "Un chip a 'V' da 30 mm in una cella. Classe C?", "output": "Sì, 30 mm è il limite massimo per la Classe C. (Rif. Difetto 2, tabella pag. 10)"}
+{"instruction": "Quattro chip da 25 mm su quattro celle diverse. Che classe posso dare?", "output": "Classe C, massimo 4 chip sotto i 30 mm per modulo. (Rif. Difetto 2, pag. 9–10)"}
+{"instruction": "Cinque chip da 10 mm. Che classe?", "output": "Nessuna, più di 4 chip (anche piccoli) esclude tutte le classi. (Rif. Difetto 2, pag. 9–10)"}
+{"instruction": "Ho una scheggiatura piccola sul bordo della cella. Che faccio?","output":"Se è di tipo 'V', già solo per la forma esclude la Classe B. Se supera i limiti di Classe C va scartato. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Se il chip a 'C' è di 21 mm ma ce n’è solo uno, Classe B?","output":"No, la lunghezza massima per Classe B è 20 mm. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Una cella ha due chip a 'C' da 10 mm. Va segnalato?","output":"Sì, la presenza di chip esclude la Classe A. (Rif. Difetto 2, pag. 8)"}
+{"instruction": "Per Classe B quanti chip posso avere?","output":"Massimo due chip a 'C' sotto i 20 mm e nessuna scheggiatura a 'V'. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Che succede se un chip supera i 30 mm?","output":"Il modulo va scartato per qualsiasi classe. (Rif. Difetto 2, tabella pag. 10)"}
+{"instruction": "Un chip a 'V' da 30 mm preciso. Classe C?","output":"Sì, 30 mm è il limite superiore per la Classe C. (Rif. Difetto 2, tabella pag. 10)"}
+{"instruction": "Una cella con chip a 'C' da 19 mm e una da 21 mm. È ok?","output":"No, il chip da 21 mm supera i limiti per Classe B. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Se trovo chip multipli su una cella ma tutti sotto i 20 mm?","output":"Attento: più di 2 chip sotto i 20 mm esclude la Classe B. (Rif. Difetto 2, pag. 9)"}
+{"instruction": "Un chip a 'C' di 18 mm attraversa il ribbon. Che classe posso dare?","output":"Classe C. Il chip che attraversa il ribbon è accettato solo in questa classe. (Rif. Difetto 2, nota pag. 9)"}
+{"instruction": "Mi pare di vedere un piccolo chip, ma non so la misura. Classe?","output":"Senza misurazione non è possibile classificare. Serve valutare lunghezza e quantità. (Rif. Difetto 2, pag. 8–10)"}
+{"instruction": "Due chip da 21 mm in una cella. Classe C?","output":"Sì, Classe C accetta chip sotto i 30 mm, massimo 4 per modulo. (Rif. Difetto 2, pag. 9–10)"}
+{"instruction": "Quattro chip a 'V' da 29 mm. Il modulo è accettabile?","output":"Sì, Classe C accetta fino a 4 chip a 'V' sotto i 30 mm. (Rif. Difetto 2, pag. 9–10)"}
+{"instruction": "Se il chip a 'C' è da 32 mm ma è l’unico difetto?","output":"Il modulo va scartato comunque, oltre i 30 mm non sono ammessi nemmeno in Classe C. (Rif. Difetto 2, tabella pag. 10)"}
+{"instruction": "Un chip da 12 mm su una cella e nessun altro difetto. Classe?","output":"Non Classe A (chip presente), ma Classe B se rientra nei limiti di quantità. (Rif. Difetto 2, pag. 8–9)"}
+{"instruction": "Un finger interrotto sul lato frontale è lungo 2 mm. È un problema?", "output": "No, i finger interrotti frontali inferiori o uguali a 3 mm possono essere ignorati. (Rif. Difetto 3, pag. 11)"}
+{"instruction": "Sul retro ci sono 4 finger interrotti da 4 mm. Che classe è?", "output": "I finger interrotti sul retro sotto i 5 mm si ignorano, quindi il modulo può essere in Classe A. (Rif. Difetto 3, pag. 11)"}
+{"instruction": "Ho 6 finger interrotti frontali da 4 mm su una cella. È Classe B?", "output": "No, supera il limite di 5 finger da 3–5 mm/cella. Non è in Classe B. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Un finger interrotto frontale è lungo 6 mm. Va bene?", "output": "No, qualsiasi finger > 5 mm sul front esclude la Classe A e anche la B. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Ci sono 35 finger interrotti sul back da 8 mm, distribuiti sul modulo. Classe C?", "output": "Sì, è accettabile in Classe C: il limite è 60/modulo con interruzioni 5–10 mm. (Rif. Difetto 3, pag. 13)"}
+{"instruction": "Sul back ho un finger da 12 mm. È accettabile?", "output": "No, un finger > 10 mm sul retro esclude anche la Classe B. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Ho 42 finger interrotti da 3.5 mm sul front. Che classe è?", "output": "Non è accettabile. Il limite massimo per Classe C sul front è 40 finger. (Rif. Difetto 3, pag. 13)"}
+{"instruction": "Sul back ho 16 finger da 6 mm su una cella. Sono consecutivi. È accettabile?", "output": "No, Classe C accetta al massimo 15 finger back/cella, anche se consecutivi ≤ 2. (Rif. Difetto 3, pag. 13)"}
+{"instruction": "Ci sono 3 finger da 4 mm sul front, non consecutivi, in una cella. Classe A?", "output": "Sì, rientra nei limiti: massimo 3 finger 3–5 mm per cella. (Rif. Difetto 3, pag. 11)"}
+{"instruction": "Un modulo ha 5 finger da 4 mm sul front, distribuiti su tutto il modulo. È Classe B?", "output": "Sì, se il totale per modulo è ≤ 20 e per cella è ≤ 5, rientra in Classe B. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Sul front trovo un finger di 2 mm. Devo segnalarlo?", "output": "No, sotto i 3 mm i finger interrotti non sono rilevanti sul front. (Rif. Difetto 3, pag. 11)"}
+{"instruction": "Ho un finger interrotto di 7 mm sul front. Che classe posso dare?", "output": "Nessuna, sopra i 5 mm sul front esclude sia Classe A che B. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Dieci finger interrotti da 4 mm ciascuno sul retro. Classe?", "output": "Sul retro, finché non si superano 15 per cella e 60 per modulo (5–10 mm), è accettabile in Classe C. (Rif. Difetto 3, pag. 13)"}
+{"instruction": "Finger interrotto sul back da 11 mm. Cosa succede?", "output": "Sul back oltre i 10 mm non è accettato nemmeno in Classe B. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Un solo finger di 6 mm sul front. È scarto?", "output": "Sì, qualsiasi finger >5 mm sul front comporta scarto. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Ho 3 finger di 3.5 mm sulla stessa cella (front). Che faccio?", "output": "Rientra in Classe A: massimo 3 finger tra 3 e 5 mm per cella. (Rif. Difetto 3, pag. 11)"}
+{"instruction": "Sul back, 8 finger da 5 mm su una cella. È ok?", "output": "Classe B: il limite è 8 finger da 5–10 mm per cella sul retro. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Finger interrotto da 2 mm sul retro. Problemi?", "output": "No, i finger interrotti sotto i 5 mm sul back si ignorano. (Rif. Difetto 3, pag. 11)"}
+{"instruction": "Ventidue finger di 9 mm sul retro del modulo. Classe?", "output": "Classe C: il massimo consentito sul modulo è 60 con finger da 5–10 mm. (Rif. Difetto 3, pag. 13)"}
+{"instruction": "Ho 4 finger interrotti da 4 mm sul front (2 per cella). Classe?", "output": "Classe A: ogni cella non supera il massimo di 3 finger da 3–5 mm. (Rif. Difetto 3, pag. 11)"}
+{"instruction": "Tre finger interrotti da 2 mm sul front, uno per cella. Tutto ok?", "output": "Sì, sotto i 3 mm si ignorano. (Rif. Difetto 3, pag. 11)"}
+{"instruction": "Otto finger interrotti da 6 mm per cella sul back. Classe?", "output": "Classe B: massimo 8 finger tra 5 e 10 mm per cella sul retro. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Una cella con 6 finger interrotti frontali da 3.5 mm. Classe?", "output": "No, supera il limite di 5 finger da 3–5 mm per cella per Classe B. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Sul back 60 finger da 7 mm totali per modulo. È ok?", "output": "Sì, Classe C accetta fino a 60 finger da 5–10 mm sul back per modulo. (Rif. Difetto 3, pag. 13)"}
+{"instruction": "Una cella ha 5 finger interrotti frontali da 3 mm. Classe B?", "output": "Sì, il limite è 5 finger da 3–5 mm per cella per Classe B. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Ho 12 finger interrotti da 4 mm totali sul modulo (front). Classe?", "output": "Classe C: il massimo per il front è 40 finger/modulo. (Rif. Difetto 3, pag. 13)"}
+{"instruction": "Sul retro 61 finger da 6 mm. È accettabile?", "output": "No, il massimo per Classe C è 60 per modulo. (Rif. Difetto 3, pag. 13)"}
+{"instruction": "Un finger di 10 mm sul back. Classe B?", "output": "Sì, 10 mm è il limite massimo per Classe B sul back. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Un finger da 2 mm e uno da 6 mm sul front. Classe?", "output": "No, il finger da 6 mm sul front esclude Classe A e B. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Sul back ci sono 30 finger da 8 mm distribuiti. È ok?", "output": "Sì, rientra nei limiti di Classe C (max 60 per modulo tra 5 e 10 mm). (Rif. Difetto 3, pag. 13)"}
+{"instruction": "Ho 3 finger da 3 mm sul front, tutti in una cella. Classe?", "output": "Sì, Classe A: massimo 3 finger da 3–5 mm per cella. (Rif. Difetto 3, pag. 11)"}
+{"instruction": "Ho 6 finger da 4 mm sul retro di una cella. Classe?", "output": "Classe B, perché il massimo è 8 per cella sul back per Classe B. (Rif. Difetto 3, pag. 12)"}
+{"instruction": "Un graffio sul front è lungo 8 mm. È accettabile?", "output": "Sì, i graffi sotto i 10 mm si ignorano sempre. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Ho trovato un graffio di 5 mm sul front. Lo segno come difetto?", "output": "No, tutti i graffi inferiori a 10 mm sul front si possono ignorare. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Sul retro c'è un graffio da 38 mm, uno per cella. È Classe A?", "output": "Sì, rientra nei limiti: < 40 mm e massimo 1 per cella. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Due graffi da 20 mm ciascuno sul front, nella stessa cella. Che classe è?", "output": "Non è Classe A. Si superano 1 graffio per cella. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Ho 4 graffi da 12 mm sul back, tutti su celle diverse. Classe A?", "output": "Sì, massimo 1 graffio per cella sul back sotto i 40 mm è Classe A. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Sul front ho un graffio da 28 mm. È Classe B?", "output": "Sì, se è solo uno e non si superano 3 per cella o 20 per modulo. (Rif. Difetto 4, pag. 15)"}
+{"instruction": "Un graffio da 32 mm sul front. È accettabile?", "output": "No, un graffio > 30 mm sul front esclude la Classe B. (Rif. Difetto 4, pag. 15)"}
+{"instruction": "Ho 3 graffi da 10 mm sul front, tutti sulla stessa cella. Classe?", "output": "Non è Classe A, si supera il limite di uno per cella. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Sul back ho 22 graffi da 12 mm, sparsi su tutto il modulo. È Classe B?", "output": "No, si supera il limite di 20 graffi per modulo sul retro. Non è Classe B. (Rif. Difetto 4, pag. 15)"}
+{"instruction": "Un'impronta digitale è visibile su una cella. Cosa faccio?", "output": "Il modulo non può essere in Classe A. Le impronte digitali non sono consentite. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Una cella ha 4 graffi da 18 mm sul front. È Classe C?", "output": "Sì, non può essere A o B per numero, ma rientra in Classe C. (Rif. Difetto 4, pag. 16)"}
+{"instruction": "Ho due impronte digitali su celle diverse. Classe B?", "output": "No, le impronte digitali escludono anche la Classe B. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "3 graffi da 15 mm sul front, 1 per cella. È Classe A?", "output": "Sì, se ognuno è su una cella diversa e non si superano i limiti per cella/modulo. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Sul front ci sono 2 graffi da 25 mm su due celle diverse. Classe?", "output": "Sì, in Classe A massimo 1 per cella, quindi va bene. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Ho 4 graffi da 28 mm sul front, uno per cella. Classe?", "output": "Classe B, massimo 3 per cella in Classe B, ma se su celle diverse può essere Classe A. (Rif. Difetto 4, pag. 14-15)"}
+{"instruction": "Un graffio da 55 mm sul back. È accettabile?", "output": "No, il graffio sul retro supera i 50 mm. Il modulo non può essere in Classe B. (Rif. Difetto 4, pag. 15)"}
+{"instruction": "Una cella ha 3 graffi da 9 mm sul front. Che classe?", "output": "I graffi sotto i 10 mm sul front si ignorano. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Due graffi da 12 mm su una cella front. Classe?", "output": "Non Classe A, massimo 1 graffio per cella in Classe A. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Un graffio da 29 mm sul front. È Classe B?", "output": "Sì, sotto i 30 mm sul front è accettabile in Classe B, se non si superano i limiti per cella/modulo. (Rif. Difetto 4, pag. 15)"}
+{"instruction": "Sul retro 5 graffi da 39 mm, uno per cella. Classe?", "output": "Classe A: massimo 1 graffio per cella sul retro sotto i 40 mm. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Un graffio da 10 mm sul front, unico. Classe A?", "output": "Sì, massimo 1 per cella e sopra i 10 mm è ancora nei limiti. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Se trovo una cella con una sola impronta digitale, il modulo può essere A?", "output": "No, la sola presenza di impronta digitale esclude la Classe A. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Sul front ho 10 graffi da 11 mm, uno per cella. Classe?", "output": "Classe A, se massimo 1 per cella e sotto i 25 mm. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Sul retro c'è un graffio da 52 mm. È Classe B?", "output": "No, sopra i 50 mm sul back esclude la Classe B. (Rif. Difetto 4, pag. 15)"}
+{"instruction": "Un graffio da 26 mm sul front, unico. Classe?", "output": "Sì, rientra nei limiti per Classe A e B se non si superano i numeri massimi per cella/modulo. (Rif. Difetto 4, pag. 14–15)"}
+{"instruction": "Sul retro ci sono 21 graffi da 12 mm. Classe?", "output": "No, supera il limite di 20 graffi per modulo in Classe B. (Rif. Difetto 4, pag. 15)"}
+{"instruction": "Ho una cella con due graffi da 8 mm. Che succede?", "output": "Si ignorano, sotto i 10 mm sul front non sono difetti rilevanti. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Impronta digitale visibile su più celle. Classe C?", "output": "Le impronte digitali escludono Classe A e B. In Classe C può essere ammesso, ma è sconsigliato. (Rif. Difetto 4, pag. 14–16)"}
+{"instruction": "Sul front, tre graffi da 24 mm in tre celle. Classe?", "output": "Classe A, massimo uno per cella sotto i 25 mm. (Rif. Difetto 4, pag. 14)"}
+{"instruction": "Una macchia ECA di 1.5 mm è presente sul front. È un problema?", "output": "No, le macchie ≤ 2 mm si ignorano. (Rif. Difetto 5, pag. 17)"}
+{"instruction": "Ho trovato una macchia ECA tonda di 2 mm sul back. Che faccio?", "output": "Si ignora, macchie di diametro ≤ 2 mm non si considerano difetti. (Rif. Difetto 5, pag. 17)"}
+{"instruction": "Sul front ho due macchie ECA da 4 mm. Classe A?", "output": "Sì, se il numero totale di macchie per cella non supera 3 e per modulo non supera 9. (Rif. Difetto 5, pag. 20)"}
+{"instruction": "Una striscia sul back ha larghezza 1.8 mm e lunghezza 80 mm. È accettabile?", "output": "Sì, sul back le strisce con larghezza ≤ 2 mm sono sempre ignorate. (Rif. Difetto 5, pag. 18–19)"}
+{"instruction": "Ho 4 macchie ECA da 6 mm di diametro su una cella. Classe?", "output": "No, supera il limite di 3 macchie per cella per Classe A. (Rif. Difetto 5, pag. 20)"}
+{"instruction": "Una macchia sul front ha diametro 6 mm. È Classe A?", "output": "No, il diametro è ≥ 5 mm, quindi l'area supera 20 mm². Il modulo non è in Classe A. (Rif. Difetto 5, pag. 17)"}
+{"instruction": "Sul back ci sono 20 macchie da 5 mm di diametro. Posso usare la Classe A?", "output": "No, supera le 18 macchie totali. Il modulo non è in Classe A. (Rif. Difetto 5, pag. 17)"}
+{"instruction": "Una striscia ECA sul front è lunga 6 mm e larga 2.5 mm. Classe A?", "output": "No, larghezza > 2 mm e lunghezza ≥ 5 mm escludono la Classe A. (Rif. Difetto 5, pag. 17)"}
+{"instruction": "Una striscia sul front è lunga 4 mm e larga 2 mm. Classe?", "output": "Sì, larghezza ≤ 2 mm e lunghezza < 5 mm rientra in Classe A se non supera i limiti di quantità. (Rif. Difetto 5, pag. 17)"}
+{"instruction": "Una macchia circolare di 10 mm sul front. Che classe è?", "output": "Supera gli 80 mm² di area (diametro ≥ 10 mm), quindi va scartato. (Rif. Difetto 5, pag. 19)"}
+{"instruction": "Sul back una striscia ECA è lunga 70 mm e larga 2.2 mm. Classe?", "output": "No, larghezza > 2 mm e lunghezza > 60 mm esclude anche Classe B. (Rif. Difetto 5, pag. 18)"}
+{"instruction": "Una cella ha 7 strisce da 3 mm di lunghezza e 1.5 mm di larghezza. Classe A?", "output": "No, anche se piccole, superano il limite di 3 macchie/cella. (Rif. Difetto 5, pag. 17)"}
+{"instruction": "Ho 10 macchie ECA da 6 mm ciascuna sul back. Classe?", "output": "Sì, massimo 10 macchie per cella e 30 per modulo è Classe B sul back se il diametro è < 10 mm. (Rif. Difetto 5, pag. 19)"}
+{"instruction": "Una striscia sul front è lunga 105 mm e larga 1.8 mm. Classe C?", "output": "No, lunghezza > 100 mm con larghezza ≤ 2 mm esclude anche la Classe C. (Rif. Difetto 5, pag. 19)"}
+{"instruction": "Una striscia sul back ha larghezza 2.1 mm e lunghezza 102 mm. Classe C?", "output": "No, supera la lunghezza massima ammessa per Classe C sul back. (Rif. Difetto 5, pag. 19)"}
+{"instruction": "Tre macchie rotonde da 6 mm sul front. È accettabile?", "output": "Sì, se non si supera 3/cella e 9/modulo, rientra in Classe A. (Rif. Difetto 5, pag. 20)"}
+{"instruction": "Sul front, 12 macchie ECA da 2 mm. Classe?", "output": "No, il massimo per Classe A è 9 macchie/modulo. (Rif. Difetto 5, pag. 20)"}
+{"instruction": "Una macchia ECA di 3 mm è sul front. Devo segnalarla?", "output": "Sì, tutte le macchie sopra i 2 mm devono essere valutate secondo la tabella. (Rif. Difetto 5, pag. 17)"}
+{"instruction": "Sul back, 8 macchie da 11 mm. Classe?", "output": "No, sopra 10 mm di diametro esclude anche la Classe B. (Rif. Difetto 5, pag. 19)"}
+{"instruction": "Ho 2 macchie ECA da 7 mm di diametro sul front. Classe?", "output": "No, il diametro > 5 mm esclude la Classe A. (Rif. Difetto 5, pag. 17)"}
+{"instruction": "Sul back ho 4 macchie da 5 mm e 2 da 8 mm. Classe?", "output": "Classe B, se il totale non supera 10 per cella o 30 per modulo e il diametro è < 10 mm. (Rif. Difetto 5, pag. 19)"}
+{"instruction": "Sul front ho un pezzo metallico lungo 3 mm. Lo devo segnalare?", "output": "No, se è lungo ≤ 2 mm si ignora. Ma 3 mm supera il limite, quindi va valutato. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "Ho trovato una fibra lunga 1.9 mm sul front. Che faccio?", "output": "Si ignora, materiale estraneo ≤ 2 mm di lunghezza/spessore non si considera difetto. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "Sul back ho una stringa tape lunga 25 mm. È accettabile?", "output": "No, il back consente string tape solo fino a 20 mm. Sopra, esclude la Classe A. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "Ho 4 particelle metalliche da 2.5 mm sul back. Classe A?", "output": "No, massimo 3 particelle per modulo per Classe A. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "Ci sono 2 peli visibili sulla superficie del front. Classe A?", "output": "No, la presenza di materiale organico esclude la Classe A. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "Ho trovato un insetto morto sulla cella. Classe?", "output": "No, qualsiasi materiale organico (es. insetti) esclude tutte le classi. (Rif. Difetto 6, pag. 22–23)"}
+{"instruction": "C'è un insetto sulla cella. Posso mettere il modulo in Classe C?", "output": "No, anche la Classe C non accetta materiali organici. (Rif. Difetto 6, pag. 23)"}
+{"instruction": "Sul front ho 6 particelle da 4 mm. Classe A?", "output": "No, più di 3/modulo con lunghezza > 2 mm esclude Classe A. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "Una cella ha 2 particelle da 6 mm sul front. Classe B?", "output": "No, più di 1/cella e lunghezza ≥ 5 mm esclude Classe B. (Rif. Difetto 6, pag. 23)"}
+{"instruction": "Sul back ci sono 12 particelle da 10 mm. È accettabile?", "output": "No, supera il limite di 10 particelle/modulo per la Classe C. (Rif. Difetto 6, pag. 23)"}
+{"instruction": "Una particella sul back è lunga 28 mm. È scarto?", "output": "No, ma non può rientrare in Classe C. La Classe C accetta fino a 30 mm. (Rif. Difetto 6, pag. 23)"}
+{"instruction": "Sul back, 5 pezzi di stringa tape lunghi 15 mm. Classe?", "output": "No, massimo 3 tape per modulo per Classe A, sopra è Classe B o C a seconda della lunghezza. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "Un oggetto metallico mette in contatto due celle. Classe possibile?", "output": "No, qualsiasi contatto tra celle esclude tutte le classi. (Rif. Difetto 6, pag. 22–23)"}
+{"instruction": "3 pezzi di stringa tape da 15 mm sul back. Classe A?", "output": "Sì, ≤ 3 tape da ≤ 20 mm sul back è accettato. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "Sul back ho 10 particelle da 9 mm. Classe?", "output": "Classe C, se il totale per modulo non supera 10 e la lunghezza < 30 mm. (Rif. Difetto 6, pag. 23)"}
+{"instruction": "Sul front, una fibra metallica di 5 mm e una particella organica. Classe?", "output": "No, la presenza di materiale organico esclude tutte le classi. (Rif. Difetto 6, pag. 22–23)"}
+{"instruction": "Ho 8 particelle da 3 mm sul back. Classe B?", "output": "Sì, massimo 5 particelle/modulo per Classe B, sopra è Classe C. (Rif. Difetto 6, pag. 23)"}
+{"instruction": "Sul front, 1 particella da 4 mm. Classe?", "output": "Classe A, se massimo 1 per cella e massimo 3 per modulo. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "Trovata fibra da 1.5 mm sul front. Devo scartare?", "output": "No, qualsiasi materiale estraneo ≤ 2 mm si ignora. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "5 particelle metalliche da 4 mm sul front. Classe?", "output": "No, più di 3/modulo e lunghezza > 2 mm esclude Classe A. (Rif. Difetto 6, pag. 22)"}
+{"instruction": "Ho 11 particelle da 10 mm sul back. Classe?", "output": "No, il massimo per Classe C è 10 particelle/modulo. (Rif. Difetto 6, pag. 23)"}
+{"instruction": "C'è un disallineamento di 3 mm tra due celle. Classe A?", "output": "No, Classe A accetta disallineamento solo fino a 2 mm. (Rif. Difetto 7, pag. 26)"}
+{"instruction": "Due celle della stessa stringa sono a contatto. È Classe C?", "output": "No, contatto tra celle della stessa stringa esclude anche la Classe C, a meno che non rispetti IEC 61730-1. (Rif. Difetto 7, pag. 27)"}
+{"instruction": "Il busbar è a 10.8 mm dal bordo. Classe A?", "output": "No, sotto i 10.9 mm è scarto. Classe A richiede almeno 11 mm. (Rif. Difetto 7, pag. 26)"}
+{"instruction": "Le celle sono vicine ma a 0.3 mm. È accettabile?", "output": "Sì, il gap minimo accettabile è ≥ 0.2 mm. (Rif. Difetto 7, pag. 26)"}
+{"instruction": "Il ribbon è a 2 mm dal bordo. Posso accettarlo?", "output": "No, non rispetta la distanza minima IEC 61730-1 (min. 2.5 mm). (Rif. Difetto 7, pag. 26)"}
+{"instruction": "Le celle sono tutte allineate ma una è a 10.5 mm dal bordo. Classe?", "output": "È da scartare. La distanza minima è 10.9 mm. (Rif. Difetto 7, pag. 26)"}
+{"instruction": "La matrice è disallineata rispetto al vetro di 3 mm. Classe A?", "output": "No, Classe A accetta solo disallineamento ≤ 2 mm. (Rif. Difetto 7, pag. 26)"}
+{"instruction": "C'è disallineamento ma non c'è contatto tra celle. È accettabile?", "output": "Sì, se non c'è contatto tra parti attive e le distanze minime sono rispettate. (Rif. Difetto 7, pag. 27)"}
+{"instruction": "Il ribbon è deviato di 0.6 mm per 25 mm sul front. Ce ne sono 3 per cella. Classe A?", "output": "No. Classe A accetta al massimo 2 per cella e lunghezza < 20 mm. (Rif. Difetto 8, pag. 28)"}
+{"instruction": "Sul back, ci sono 2 deviazioni da 25 mm con scostamento 0.6 mm su una cella. Classe A?", "output": "No, il limite per Classe A sul back è 1 per cella. (Rif. Difetto 8, pag. 28)"}
+{"instruction": "Il ribbon è deviato di 0.6 mm per 35 mm, 4 volte su una cella front. Classe B?", "output": "No, supera sia la lunghezza (>30mm) sia la quantità (>2 per cella). (Rif. Difetto 8, pag. 29)"}
+{"instruction": "Una cella ha 3 deviazioni da 38 mm con scostamento 0.6 mm sul front. Classe B?", "output": "No. Classe B front accetta massimo 2 per cella. (Rif. Difetto 8, pag. 29)"}
+{"instruction": "Ci sono 6 deviazioni da 42 mm sul front. Classe C?", "output": "No. Classe C front accetta massimo 3 per cella o 20 per modulo. (Rif. Difetto 8, pag. 30)"}
+{"instruction": "Sul back ci sono 4 deviazioni da 35 mm con scostamento 0.6 mm. Classe B?", "output": "No. Classe B back accetta massimo 3 per cella e 18 per modulo. (Rif. Difetto 8, pag. 29)"}
+{"instruction": "Deviazione da 0.5 mm per 18 mm su front. È accettabile?", "output": "Sì. È sotto i limiti di Classe A (deviazione ≤ 20 mm). (Rif. Difetto 8, pag. 28)"}
+{"instruction": "Due ribbon deviati sono in contatto. Classe?", "output": "Scarto. Contatto tra ribbon deviatati non è ammesso. (Rif. Difetto 8, pag. 30)"}
+{"instruction": "Il ribbon è deviato di 6 mm ma in contatto, e ci sono 3 casi su un modulo. Classe A?", "output": "No. Classe A esclude deviazioni > 5 mm anche se in contatto. (Rif. Difetto 9, pag. 31)"}
+{"instruction": "Abbiamo 12 deviazioni da 4 mm su un modulo. Classe A?", "output": "No. Anche se ≤ 5 mm, sono > 10 per modulo. (Rif. Difetto 9, pag. 31)"}
+{"instruction": "Il ribbon non è in contatto con l’interconnection ribbon, ma ha superato il test EL. Classe B?", "output": "Sì. Se EL è superato, il difetto può essere ignorato per Classe B. (Rif. Difetto 9, pag. 32)"}
+{"instruction": "Il ribbon è disallineato e dista 0.1 mm dalla cella. Classe B?", "output": "No. Disallineamento < 0.2 mm esclude Classe B. (Rif. Difetto 9, pag. 32)"}
+{"instruction": "Ci sono 6 saldature non in contatto con interconnection ribbon su un modulo. Classe C?", "output": "No. Classe C esclude più di 5 non in contatto per modulo. (Rif. Difetto 9, pag. 33)"}
+{"instruction": "Abbiamo 1 saldatura non in contatto per stringa. Classe C?", "output": "Sì. Classe C accetta fino a 1 per stringa o 5 per modulo. (Rif. Difetto 9, pag. 33)"}
+{"instruction": "Deviazioni visibili ≤ 5 mm, 8 totali su modulo. Classe A?", "output": "Sì. Classe A accetta fino a 10 deviazioni ≤ 5 mm. (Rif. Difetto 9, pag. 31)"}
+{"instruction": "Ci sono bruciature di 12 mm² su interconnection ribbon. Classe A?", "output": "No. Supera il limite di 10 mm². (Rif. Difetto 9, pag. 31)"}
+{"instruction": "Ci sono 3 particelle da 3 mm di lunghezza ciascuna fuori dalla matrice. Classe A?", "output": "No. Anche se ≤ 3 mm, sono > 2 per modulo. (Rif. Difetto 10, pag. 34)"}
+{"instruction": "Una particella lunga 4 mm si trova a 12 mm dal bordo del vetro. Classe A?", "output": "No. Lunghezza > 3 mm esclude Classe A. (Rif. Difetto 10, pag. 34)"}
+{"instruction": "2 particelle da 2 mm, ma una è a 1.5 mm dalla frame. Classe A?", "output": "No. Distanza < 2.5 mm dalla frame esclude Classe A. (Rif. Difetto 10, pag. 34)"}
+{"instruction": "5 particelle da 4 mm di lunghezza fuori dalla matrice. Classe B?", "output": "No. > 4 per modulo con lunghezza ≤ 5 mm esclude Classe B. (Rif. Difetto 10, pag. 35)"}
+{"instruction": "7 particelle da 4 mm. Classe C?", "output": "Sì. Classe C consente fino a 7 particelle ≤ 5 mm. (Rif. Difetto 10, pag. 36)"}
+{"instruction": "9 particelle da 3 mm fuori matrice. Classe C?", "output": "No. Classe C accetta al massimo 7 particelle ≤ 5 mm. (Rif. Difetto 10, pag. 36)"}
+{"instruction": "Una particella da 2 mm a 3 mm dal bordo vetro. Classe A?", "output": "Sì. Tutto è nei limiti. (Rif. Difetto 10, pag. 34)"}
+{"instruction": "Una particella da 6 mm fuori matrice. Classe C?", "output": "No. Lunghezza > 5 mm esclude anche Classe C. (Rif. Difetto 10, pag. 36)"}

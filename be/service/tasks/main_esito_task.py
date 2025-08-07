@@ -361,16 +361,16 @@ async def background_task(
         try:
             # Ensure both connections are alive
             if not trigger_conn.connected or not trigger_conn.is_connected():
-                await asyncio.sleep(0.45)
+                await asyncio.sleep(0.75)
                 continue
             if end_conn is not trigger_conn and (not end_conn.connected or not end_conn.is_connected()):
-                await asyncio.sleep(0.45)
+                await asyncio.sleep(0.75)
                 continue
 
             paths = get_channel_config(line_name, channel_id)
             if not paths:
                 logger.error(f"Invalid line/channel: {line_name}.{channel_id}")
-                await asyncio.sleep(0.45)
+                await asyncio.sleep(0.75)
                 continue
 
             # ───────────────── Trigger Read ─────────────────
@@ -383,7 +383,7 @@ async def background_task(
                 raw = PLC_DB_RANGES.get(plc_key, {}).get(trigger_db)
                 if not raw:
                     logger.error(f"No DB range defined for {plc_key} DB{trigger_db}")
-                    await asyncio.sleep(0.45)
+                    await asyncio.sleep(0.75)
                     continue
                 db_range_cache[trigger_key] = (raw["min"], raw["max"])
 
@@ -444,7 +444,7 @@ async def background_task(
                 raw = PLC_DB_RANGES.get(plc_key_end, {}).get(end_db)
                 if not raw:
                     logger.error(f"No DB range defined for {plc_key_end} DB{end_db}")
-                    await asyncio.sleep(0.45)
+                    await asyncio.sleep(0.75)
                     continue
                 db_range_cache[end_key] = (raw["min"], raw["max"])
 
@@ -487,7 +487,7 @@ async def background_task(
                     trigger_timestamps.get(full_station_id)
                 ))
 
-            await asyncio.sleep(0.45)
+            await asyncio.sleep(0.75)
 
         except Exception as e:
             logger.error(f"[{full_station_id}], Error in background task: {str(e)}")
@@ -847,18 +847,35 @@ async def read_data(
         # ─── Step 4: Read Id_Modulo (start vs end) ───
         key_mod = "id_modulo_end" if is_EndCycle else "id_modulo_start"
         id_mod_conf = config.get(key_mod) or config.get("id_modulo")
-        if debug:
-            data["Id_Modulo"] = global_state.debug_moduli.get(full_id) or ""
+        debug_id = global_state.debug_moduli.get(full_id) if debug else None
+
+        if debug_id:
+            data["Id_Modulo"] = debug_id
         elif id_mod_conf:
-            data["Id_Modulo"] = extract_string(
-                buffer,
-                id_mod_conf["byte"],
-                id_mod_conf["length"],
-                start_byte
-            ) or ""
+            try:
+                data["Id_Modulo"] = extract_string(
+                    buffer,
+                    id_mod_conf["byte"],
+                    id_mod_conf["length"],
+                    start_byte
+                ) or ""
+            except Exception as e:
+                logger.error(f"[{full_id}], Exception reading Id_Modulo: {e}")
+                data["Id_Modulo"] = ""
         else:
             logger.warning(f"[{full_id}], Missing config for {key_mod}")
             data["Id_Modulo"] = ""
+
+        # 🔍 Additional debug ONLY for LMN01 / LMN02
+        if channel_id in ("LMN01", "LMN02"):
+            logger.warning(
+                f"[{full_id}] Debug Id_Modulo read: "
+                f"byte={id_mod_conf.get('byte') if id_mod_conf else '❌'} | "
+                f"length={id_mod_conf.get('length') if id_mod_conf else '❌'} | "
+                f"start_byte={start_byte} | "
+                f"raw_buffer={buffer[id_mod_conf['byte'] - start_byte:id_mod_conf['byte'] - start_byte + id_mod_conf['length']] if id_mod_conf else 'N/A'} | "
+                f"result='{data['Id_Modulo']}'"
+            )
 
         if not data["Id_Modulo"]:
             logger.warning(f"[{full_id}], Id_Modulo is empty or unreadable")

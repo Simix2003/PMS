@@ -135,6 +135,7 @@ Versions:
 "2.4.8" Added Buffer page and Buffer Logic
 "2.4.9" Changed UI/UX/BE for Stops and Escalations
 "2.4.10" Added Per-Station Hourly Throughput for STR
+"2.4.11" Fixed ELL visual NoGood
 
 ## OWASP dependency verification
 

@@ -732,14 +732,15 @@ def _compute_snapshot_ell(now: datetime) -> dict:
     def fpy_counts(cursor, station_name: str, start, end):
         sql = f"""
             WITH first_pass AS (
-                SELECT p.object_id,
+                SELECT o.id_modulo AS object_id,
                     p.esito,
                     ROW_NUMBER() OVER (
-                        PARTITION BY p.object_id
+                        PARTITION BY o.id_modulo
                         ORDER BY p.start_time ASC
                     ) AS rn
                 FROM productions p
                 JOIN stations s ON p.station_id = s.id
+                JOIN objects o ON o.id = p.object_id
                 WHERE s.name = %s
                 AND p.start_time BETWEEN %s AND %s
             )
@@ -756,14 +757,15 @@ def _compute_snapshot_ell(now: datetime) -> dict:
     def rwk_counts(cursor, station_name: str, start, end):
         sql = f"""
             WITH last_pass AS (
-                SELECT p.object_id,
+                SELECT o.id_modulo AS object_id,
                     p.esito,
                     ROW_NUMBER() OVER (
-                        PARTITION BY p.object_id
+                        PARTITION BY o.id_modulo
                         ORDER BY p.start_time DESC
                     ) AS rn
                 FROM productions p
                 JOIN stations s ON p.station_id = s.id
+                JOIN objects o ON o.id = p.object_id
                 WHERE s.name = %s
                 AND p.start_time BETWEEN %s AND %s
             )
@@ -810,12 +812,13 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 cursor.execute("""
                     SELECT COUNT(*) AS multi_entry
                     FROM (
-                        SELECT object_id
+                        SELECT o.id_modulo AS object_id
                         FROM productions p
                         JOIN stations s ON s.id = p.station_id
+                        JOIN objects o ON o.id = p.object_id
                         WHERE s.name = %s
                         AND p.start_time BETWEEN %s AND %s
-                        GROUP BY object_id
+                        GROUP BY o.id_modulo
                         HAVING COUNT(*) > 1
                     ) AS sub
                 """, (cfg["station_1_in"], shift_start, shift_end))
@@ -830,12 +833,13 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 # ---- Gauge 2 ---------------------------------------------------------------
                 # Step 1 — Get all object_ids that passed station_1_in >1 times
                 cursor.execute("""
-                    SELECT object_id
+                    SELECT o.id_modulo AS object_id
                     FROM productions p
                     JOIN stations s ON s.id = p.station_id
+                    JOIN objects o ON o.id = p.object_id
                     WHERE s.name = %s
                     AND p.start_time BETWEEN %s AND %s
-                    GROUP BY object_id
+                    GROUP BY o.id_modulo
                     HAVING COUNT(*) > 1
                 """, (cfg["station_1_in"], shift_start, shift_end))
 
@@ -848,15 +852,16 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                     format_ids = ','.join(['%s'] * len(multi_entry_ids))
                     cursor.execute(f"""
                         WITH last_pass AS (
-                            SELECT p.object_id, p.esito,
+                            SELECT o.id_modulo AS object_id, p.esito,
                                 ROW_NUMBER() OVER (
-                                    PARTITION BY p.object_id
+                                    PARTITION BY o.id_modulo
                                     ORDER BY p.start_time DESC
                                 ) AS rn
                             FROM productions p
                             JOIN stations s ON s.id = p.station_id
+                            JOIN objects o ON o.id = p.object_id
                             WHERE s.name = %s
-                            AND p.object_id IN ({format_ids})
+                            AND o.id_modulo IN ({format_ids})
                         )
                         SELECT COUNT(*) AS good_final
                         FROM last_pass
@@ -880,9 +885,10 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
                 # Optional deeper inspection — show object IDs
                 cursor.execute(f"""
-                    SELECT DISTINCT p.object_id, s.name AS station, p.start_time
+                    SELECT DISTINCT o.id_modulo AS object_id, s.name AS station, p.start_time
                     FROM productions p
                     JOIN stations s ON p.station_id = s.id
+                    JOIN objects o ON o.id = p.object_id
                     WHERE s.name IN ({','.join(['%s']*len(stations_ng))})
                     AND p.esito = 6
                     AND p.start_time BETWEEN %s AND %s
@@ -1075,11 +1081,12 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 sql_reentered_ell = """
                     SELECT COUNT(*) AS re_entered
                     FROM (
-                        SELECT object_id
-                        FROM productions
+                        SELECT o.id_modulo AS object_id
+                        FROM productions p
+                        JOIN objects o ON o.id = p.object_id
                         WHERE station_id IN (9, 3)
                         AND start_time BETWEEN %s AND %s
-                        GROUP BY object_id
+                        GROUP BY o.id_modulo
                         HAVING COUNT(DISTINCT station_id) > 1
                     ) sub
                 """
@@ -1090,11 +1097,12 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 # ========== For real-time gauge tracking after restart ==========
                 # Multi-entry object_ids
                 cursor.execute("""
-                    SELECT object_id, COUNT(*) AS cnt
+                    SELECT o.id_modulo AS object_id, COUNT(*) AS cnt
                     FROM productions p
                     JOIN stations s ON s.id = p.station_id
+                    JOIN objects o ON o.id = p.object_id
                     WHERE s.name = %s AND p.start_time BETWEEN %s AND %s
-                    GROUP BY object_id
+                    GROUP BY o.id_modulo
                 """, (cfg["station_1_in"], shift_start, now))
 
                 s1_entry_count = {}
@@ -1108,9 +1116,10 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
                 # s2_entry_set
                 cursor.execute("""
-                    SELECT DISTINCT object_id
+                    SELECT DISTINCT o.id_modulo AS object_id
                     FROM productions p
                     JOIN stations s ON s.id = p.station_id
+                    JOIN objects o ON o.id = p.object_id
                     WHERE s.name = %s AND p.start_time BETWEEN %s AND %s
                 """, (cfg["station_2_in"], shift_start, now))
                 s2_entry_set = {row["object_id"] for row in cursor.fetchall()}
@@ -1121,15 +1130,16 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                     format_ids = ','.join(['%s'] * len(multi_entry_set))
                     cursor.execute(f"""
                         WITH last_pass AS (
-                            SELECT p.object_id, p.esito,
+                            SELECT o.id_modulo AS object_id, p.esito,
                                 ROW_NUMBER() OVER (
-                                    PARTITION BY p.object_id
+                                    PARTITION BY o.id_modulo
                                     ORDER BY p.start_time DESC
                                 ) AS rn
                             FROM productions p
                             JOIN stations s ON s.id = p.station_id
+                            JOIN objects o ON o.id = p.object_id
                             WHERE s.name = %s
-                            AND p.object_id IN ({format_ids})
+                            AND o.id_modulo IN ({format_ids})
                         )
                         SELECT object_id
                         FROM last_pass
@@ -1139,9 +1149,10 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
                 # latest_esito + latest_ts
                 cursor.execute("""
-                    SELECT object_id, esito, start_time
+                    SELECT o.id_modulo AS object_id, p.esito, p.start_time
                     FROM productions p
                     JOIN stations s ON s.id = p.station_id
+                    JOIN objects o ON o.id = p.object_id
                     WHERE s.name IN (%s, %s) AND p.start_time BETWEEN %s AND %s
                 """, (*cfg["station_1_in"], *cfg["station_1_out_ng"], shift_start, now))
 
@@ -1188,7 +1199,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
             "s1_success_set": s1_success_set,
             "latest_esito": latest_esito,
             "latest_ts": {k: v.isoformat() for k, v in latest_ts.items()}
-            }
+        }
 
 def _compute_snapshot_str(now: datetime | None) -> dict:
     """

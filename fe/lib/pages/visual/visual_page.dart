@@ -341,7 +341,7 @@ class _VisualPageState extends State<VisualPage> {
       setState(() {
         In_1 = visualResponse['station_1_in'] ?? 0;
         In_2 = visualResponse['station_2_in'] ?? 0;
-        ngOut_1 = visualResponse['station_1_out_ng'] ?? 0;
+        ngOut_1 = visualResponse['station_1_r0_ng'] ?? 0;
         ngScrap = visualResponse['station_2_out_ng'] ?? 0;
         qg2_ng = visualResponse['station_1_ng_qg2'] ?? 0;
 
@@ -849,7 +849,7 @@ class _VisualPageState extends State<VisualPage> {
           // ─── Station Metrics ───────────────────────────
           In_1 = toIntSafe(data['station_1_in']);
           In_2 = toIntSafe(data['station_2_in']);
-          ngOut_1 = toIntSafe(data['station_1_out_ng']);
+          ngOut_1 = toIntSafe(data['station_1_r0_ng']);
           ngScrap = toIntSafe(data['station_2_out_ng']);
 
           ng_tot = toIntSafe(data['ng_tot']);

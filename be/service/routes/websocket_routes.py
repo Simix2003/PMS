@@ -1,5 +1,6 @@
 # service/routes/websocket_routes.py
 
+import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
 import logging
 import os
@@ -117,12 +118,16 @@ async def websocket_endpoint(websocket: WebSocket, line_name: str, channel_id: s
 
     if not plc_connection.connected or not plc_connection.is_connected():
         logger.debug(f"⚠️ PLC for {full_id} is disconnected. Attempting reconnect for WebSocket...")
-        if not plc_connection.reconnect(retries=3, delay=5):
-            logger.warning(f"Failed to reconnect PLC for {full_id}. Closing socket.")
+        plc_connection.reconnect_once_now(reason="WebSocket initial handshake")
+        await asyncio.sleep(2)  # Give it time to reconnect
+
+        if not plc_connection.connected or not plc_connection.is_connected():
+            logger.warning(f"❌ Failed to reconnect PLC for {full_id}. Closing socket.")
             await websocket.close()
             return
         else:
-            logger.debug(f"PLC reconnected for {full_id}!")
+            logger.debug(f"✅ PLC reconnected for {full_id}!")
+
 
     await send_initial_state(websocket, channel_id, plc_connection, line_name)
 

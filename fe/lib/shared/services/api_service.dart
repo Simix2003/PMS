@@ -686,34 +686,32 @@ class ApiService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(response.body);
-
         final List<dynamic> linesData = data['lines'];
-        final List<dynamic> stationsData = data['stations'];
+        final List<String> stationsData =
+            List<String>.from(data['stations'] as List<dynamic>);
 
+        // Clear existing data
         availableLines.clear();
         lineDisplayNames.clear();
         lineOptions.clear();
         availableStations.clear();
 
+        // Populate lines
         for (final item in linesData) {
           final name = item['name'];
           final displayName = item['display_name'];
-
           availableLines.add(name);
           lineDisplayNames[name] = displayName;
           lineOptions.add(displayName);
         }
+
         // Validate selectedLine
         if (!availableLines.contains(selectedLine)) {
           selectedLine = availableLines.isNotEmpty ? availableLines[0] : null;
         }
 
-        for (final station in stationsData) {
-          availableStations.add(station);
-        }
-
-        // ⚠️ This line is redundant (overwrites the validated selection)
-        // selectedLine = availableLines.isNotEmpty ? availableLines[0] : null;
+        stationsData.sort();
+        availableStations.addAll(stationsData);
       } else {
         throw Exception('❌ Failed to load lines from server');
       }
@@ -978,6 +976,41 @@ class ApiService {
       };
     } else {
       throw Exception('Failed to load STR zone data');
+    }
+  }
+
+  static Future<Map<String, dynamic>> fetchVisualDataForLmn(
+      {bool forceRefresh = false}) async {
+    final cacheFlag = forceRefresh ? 'false' : 'true';
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/visual_data?zone=LMN&useCache=$cacheFlag'),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      print('Fetched LMN data: $data');
+
+      return {
+        ...data,
+        'station_1_in': data['station_1_in'] ?? 0,
+        'station_2_in': data['station_2_in'] ?? 0,
+        'station_1_out_ng': data['station_1_out_ng'] ?? 0,
+        'station_2_out_ng': data['station_2_out_ng'] ?? 0,
+        'station_1_yield': data['station_1_yield'] ?? 100,
+        'station_2_yield': data['station_2_yield'] ?? 100,
+        'station_1_yield_shifts': data['station_1_yield_shifts'] ?? [],
+        'station_2_yield_shifts': data['station_2_yield_shifts'] ?? [],
+        'station_1_yield_last_8h': data['station_1_yield_last_8h'] ?? [],
+        'station_2_yield_last_8h': data['station_2_yield_last_8h'] ?? [],
+        'shift_throughput': data['shift_throughput'] ?? [],
+        'last_8h_throughput': data['last_8h_throughput'] ?? [],
+        'fermi_data': data['fermi_data'] ?? [],
+        'top_defects_qg2': data['top_defects_qg2'] ?? [],
+        'total_defects_qg2': data['total_defects_qg2'] ?? 0,
+        'top_defects_vpf': data['top_defects_vpf'] ?? [],
+      };
+    } else {
+      throw Exception('Failed to load zone data');
     }
   }
 

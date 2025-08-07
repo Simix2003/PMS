@@ -10,6 +10,7 @@ import '../../shared/services/socket_service.dart';
 import 'shimmer_placeHolder.dart';
 import 'visuals/AIN_page.dart';
 import 'visuals/ELL_page.dart';
+import 'visuals/LMN_page.dart';
 import 'visuals/VPF_page.dart';
 
 class VisualPage extends StatefulWidget {
@@ -85,6 +86,15 @@ class _VisualPageState extends State<VisualPage> {
   List<int> ain2Counts = [];
   List<int> ain2VPFCounts = [];
 
+  int station_1_in = 0;
+  int station_2_in = 0;
+  int station_1_out_ng = 0;
+  int station_2_out_ng = 0;
+  List<int> lmn1Counts = [];
+  List<int> lmn2Counts = [];
+  List<int> lmn1VPFCounts = [];
+  List<int> lmn2VPFCounts = [];
+
   Timer? _hourlyRefreshTimer;
 
   List<Map<String, dynamic>> bufferDefects = [];
@@ -137,6 +147,8 @@ class _VisualPageState extends State<VisualPage> {
     "STR03": 6,
     "STR04": 7,
     "STR05": 8,
+    "LMN01": 93,
+    "LMN02": 47
   };
 
   Map<String, int> calculateEscalationCounts(
@@ -163,6 +175,8 @@ class _VisualPageState extends State<VisualPage> {
       await fetchEllZoneData();
     } else if (widget.zone == "STR") {
       await fetchStrZoneData();
+    } else if (widget.zone == "LMN") {
+      await fetchLmnZoneData();
     } else {
       print('Cannote fetch zone data Unknown zone: $widget.zone');
     }
@@ -570,6 +584,121 @@ class _VisualPageState extends State<VisualPage> {
           if (entry.containsKey("Available_Time_Total")) {
             availableTime =
                 int.tryParse(entry["Available_Time_Total"].toString()) ?? 0;
+          }
+        }
+
+        isLoading = false;
+      });
+    } catch (e) {
+      print("❌ Error fetching zone data: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> fetchLmnZoneData() async {
+    try {
+      final response =
+          await ApiService.fetchVisualDataForLmn(forceRefresh: true);
+
+      setState(() {
+        station_1_in = response['station_1_in'] ?? 0;
+        station_2_in = response['station_2_in'] ?? 0;
+        station_1_out_ng = response['station_1_out_ng'] ?? 0;
+        station_2_out_ng = response['station_2_out_ng'] ?? 0;
+        currentYield_1 = response['station_1_yield'] ?? 100;
+        currentYield_2 = response['station_2_yield'] ?? 100;
+
+        yieldLast8h_1 = List<Map<String, dynamic>>.from(
+            response['station_1_yield_last_8h'] ?? []);
+        yieldLast8h_2 = List<Map<String, dynamic>>.from(
+            response['station_2_yield_last_8h'] ?? []);
+        shiftThroughput =
+            List<Map<String, dynamic>>.from(response['shift_throughput'] ?? []);
+        hourlyThroughput = List<Map<String, dynamic>>.from(
+            response['last_8h_throughput'] ?? []);
+        station1Shifts = List<Map<String, dynamic>>.from(
+            response['station_1_yield_shifts'] ?? []);
+        station2Shifts = List<Map<String, dynamic>>.from(
+            response['station_2_yield_shifts'] ?? []);
+
+        mergedShiftData = List.generate(station1Shifts.length, (index) {
+          return {
+            'shift': station1Shifts[index]['label'],
+            'station1': station1Shifts[index]['yield'],
+            'station2': station2Shifts[index]['yield'],
+          };
+        });
+
+        throughputData = shiftThroughput.map<Map<String, int>>((e) {
+          final total = (e['total'] ?? 0) as int;
+          final ng = (e['ng'] ?? 0) as int;
+          return {'ok': total - ng, 'ng': ng};
+        }).toList();
+
+        shiftLabels =
+            shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
+
+        hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+          final total = (e['total'] ?? 0) as int;
+          final ng = (e['ng'] ?? 0) as int;
+          return {'ok': total - ng, 'ng': ng};
+        }).toList();
+
+        hourLabels =
+            hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
+        // Parse Top Defects QG2
+        final topDefectsRaw =
+            List<Map<String, dynamic>>.from(response['top_defects_qg2'] ?? []);
+
+        defectLabels = [];
+        lmn1Counts = [];
+        lmn2Counts = [];
+
+        for (final defect in topDefectsRaw) {
+          defectLabels.add(defect['label']?.toString() ?? '');
+          lmn1Counts.add(int.tryParse(defect['lmn1'].toString()) ?? 0);
+          lmn2Counts.add(int.tryParse(defect['lmn2'].toString()) ?? 0);
+        }
+
+        qg2_defects_value = response['total_defects_qg2'];
+
+        // Parse Top Defects VPF
+        final topDefectsVPF =
+            List<Map<String, dynamic>>.from(response['top_defects_vpf'] ?? []);
+
+        defectVPFLabels = [];
+        lmn1VPFCounts = [];
+        lmn2VPFCounts = [];
+
+        for (final defect in topDefectsVPF) {
+          defectVPFLabels.add(defect['label']?.toString() ?? '');
+          lmn1VPFCounts.add(int.tryParse(defect['lmn1'].toString()) ?? 0);
+          lmn2VPFCounts.add(int.tryParse(defect['lmn2'].toString()) ?? 0);
+        }
+
+        // Parse fermi data
+        final fermiRaw =
+            List<Map<String, dynamic>>.from(response['fermi_data'] ?? []);
+
+        dataFermi = []; // clear previous data
+
+        for (final entry in fermiRaw) {
+          if (entry.containsKey("Available_Time_1")) {
+            availableTime_1 =
+                int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
+          } else if (entry.containsKey("Available_Time_2")) {
+            availableTime_2 =
+                int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
+          } else {
+            dataFermi.add([
+              entry['causale']?.toString() ?? '',
+              entry['station']?.toString() ?? '',
+              entry['count']?.toString() ?? '0',
+              entry['time']?.toString() ?? '0'
+            ]);
           }
         }
 
@@ -1428,14 +1557,70 @@ class _VisualPageState extends State<VisualPage> {
                                               _fetchEscalations(); // 2️⃣ pull fresh STOP & ESCALATION list
                                             },
                                           )
-                                        : const Center(
-                                            child: Text(
-                                              'ZONA non trovata',
-                                              style: TextStyle(
-                                                  fontSize: 24,
-                                                  fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
+                                        : widget.zone == "LMN"
+                                            ? LmnVisualsPage(
+                                                shift_target: shift_target,
+                                                hourly_shift_target:
+                                                    hourly_shift_target,
+                                                yield_target: yield_target,
+                                                circleSize: circleSize,
+                                                station_1_status:
+                                                    station_1_status,
+                                                station_2_status:
+                                                    station_2_status,
+                                                errorColor: errorColor,
+                                                okColor: okColor,
+                                                textColor: textColor,
+                                                warningColor: warningColor,
+                                                redColor: redColor,
+                                                station_1_out_ng:
+                                                    station_1_out_ng,
+                                                station_2_out_ng:
+                                                    station_2_out_ng,
+                                                station_1_in: station_1_in,
+                                                station_2_in: station_2_in,
+                                                currentYield_1: currentYield_1,
+                                                currentYield_2: currentYield_2,
+                                                throughputData: throughputData,
+                                                shiftLabels: shiftLabels,
+                                                hourlyData: hourlyData,
+                                                hourLabels: hourLabels,
+                                                dataFermi: dataFermi,
+                                                station1Shifts: station1Shifts,
+                                                station2Shifts: station2Shifts,
+                                                mergedShiftData:
+                                                    mergedShiftData,
+                                                yieldLast8h_1: yieldLast8h_1,
+                                                yieldLast8h_2: yieldLast8h_2,
+                                                counts: counts,
+                                                availableTime_1:
+                                                    availableTime_1,
+                                                availableTime_2:
+                                                    availableTime_2,
+                                                defectLabels: defectLabels,
+                                                defectVPFLabels:
+                                                    defectVPFLabels,
+                                                lmn1Counts: lmn1Counts,
+                                                lmn1VPFCounts: lmn1VPFCounts,
+                                                lmn2Counts: lmn2Counts,
+                                                lmn2VPFCounts: lmn2VPFCounts,
+                                                last_n_shifts: last_n_shifts,
+                                                qg2_defects_value:
+                                                    qg2_defects_value,
+                                                onStopsUpdated: () {
+                                                  fetchZoneData(); // Refresh the entire zone (fermi + metrics)
+                                                  _fetchEscalations(); // 2️⃣ pull fresh STOP & ESCALATION list
+                                                },
+                                              )
+                                            : const Center(
+                                                child: Text(
+                                                  'ZONA non trovata',
+                                                  style: TextStyle(
+                                                      fontSize: 24,
+                                                      fontWeight:
+                                                          FontWeight.bold),
+                                                ),
+                                              ),
                   ),
           ),
         );

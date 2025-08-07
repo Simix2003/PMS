@@ -104,6 +104,11 @@ class _StopDialogState extends State<_StopDialog> {
         'STR04': 7,
         'STR05': 8,
       };
+    } else if (widget.zone == 'LMN') {
+      _stationNameToId = const {
+        'LMN01': 93,
+        'LMN02': 47,
+      };
     } else {
       _stationNameToId = const {}; // fallback, or throw an error
     }

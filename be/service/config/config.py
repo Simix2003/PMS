@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
-debug = False
+debug = True
 
 CHANNELS: dict = {}
 
@@ -38,7 +38,13 @@ ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
         "station_3_out_ng": ["STR03"],
         "station_4_out_ng": ["STR04"],
         "station_5_out_ng": ["STR05"],
-    }
+    },
+    "LMN": {
+        "station_1_in":     ["LMN01"],
+        "station_2_in":     ["LMN02"],
+        "station_1_out_ng": ["LMN01"], 
+        "station_2_out_ng": ["LMN02"]
+    },
 }
 # Default fallback values
 DEFAULT_TARGETS = {

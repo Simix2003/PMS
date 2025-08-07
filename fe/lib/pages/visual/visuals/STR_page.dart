@@ -2652,11 +2652,10 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                   ),
                 ),
               ),
-              SizedBox(width: 6),
               SizedBox(
-                width: 150, // wider for longer label
+                width: 200, // wider for longer label
                 child: Text(
-                  'Stringhe SCRAP',
+                  'Celle NG (Stringhe EQ)',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
@@ -2664,7 +2663,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                   ),
                 ),
               ),
-              SizedBox(width: 240),
+              SizedBox(width: 190),
               /*SizedBox(
                 width: 125, // wider for longer label
                 child: Text(

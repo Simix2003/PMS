@@ -643,11 +643,7 @@ async def handle_end_cycle(
             )
 
     duration_total = time.perf_counter() - t0
-    #if channel_id == "RMI01":
-    #    logger.info(
-    #        f"[{full_station_id}] handle_end_cycle completed in {duration_total:.3f}s"
-    #    )
-    #log_duration(f"[{full_station_id}] Total Fine Ciclo processing", duration_total)
+    #print(f"[{full_station_id}] handle_end_cycle completed in {duration_total:.3f}s")
 
 def get_executor_status(executor):
     active_threads = sum(1 for t in executor._threads if t.is_alive())

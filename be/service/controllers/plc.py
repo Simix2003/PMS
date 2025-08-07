@@ -90,12 +90,19 @@ class PLCConnection:
             time.sleep(1)
 
     def _try_connect(self):
+        # count and warn on repeated attempts
         self._reconnect_count += 1
         if self._reconnect_count % 10 == 0:
             logger.warning(f"⚠️ Reconnect count {self._reconnect_count} for {self.ip_address}")
 
+        # 1) Build and configure a fresh client
         new_client = c.Client()
-        self._init_client_params()
+        new_client.set_connection_type(3)
+        new_client.set_param(t.Parameter.PingTimeout, 5000)
+        new_client.set_param(t.Parameter.SendTimeout, 5000)
+        new_client.set_param(t.Parameter.RecvTimeout, 5000)
+
+        # 2) Try connecting
         connect_exc = None
         try:
             new_client.connect(self.ip_address, self.rack, self.slot)
@@ -104,14 +111,26 @@ class PLCConnection:
             ok = False
             connect_exc = e
 
+        # 3) If new_client failed, disconnect it immediately
         if not ok:
-            try: new_client.disconnect()
-            except: pass
+            try:
+                new_client.disconnect()
+            except Exception:
+                pass
 
+        # 4) Swap under lock, tearing down the old client completely
         with self.lock:
-            try: self.client.disconnect()
-            except: pass
+            # a) Clean up old client
+            try:
+                self.client.disconnect()
+            except Exception:
+                pass
+            try:
+                self.client.destroy()
+            except Exception:
+                pass
 
+            # b) Install new client if it’s good
             if ok:
                 self.client = new_client
                 self.connected = True
@@ -134,20 +153,31 @@ class PLCConnection:
             elapsed = time.time() - self._last_manual_reconnect_ts
             if elapsed < 10 * 60:
                 logger.info(f"⏭️ Skipped timed reconnect for {self.ip_address} (manual cooldown)")
-                if skip_timer: break
+                if skip_timer:
+                    break
                 continue
 
             start = datetime.now()
             logger.info(f"🔁 [Timed Reconnect] START {start.isoformat()} for {self.ip_address}")
+
             with self.lock:
-                try: self.client.disconnect()
-                except: pass
+                try:
+                    self.client.disconnect()
+                except Exception:
+                    pass
+                try:
+                    self.client.destroy()
+                except Exception:
+                    pass
                 self.connected = False
+
             time.sleep(1)
             self._try_connect()
+
             elapsed = (datetime.now() - start).total_seconds()
             logger.info(f"✅ [Timed Reconnect] DONE for {self.ip_address} — {elapsed:.2f}s")
-            if skip_timer: break
+            if skip_timer:
+                break
 
     def reconnect_once_now(self, reason: str = ""):
         logger.warning(f"⚠️ Forcing reconnect for {self.ip_address}: {reason}")
@@ -164,43 +194,35 @@ class PLCConnection:
         with self.lock:
             try:
                 self.client.disconnect()
-                self.connected = False
-            except Exception as e:
-                logger.exception(f"❌ Disconnect during force_reconnect: {e}")
-        time.sleep(1)
-        with self.lock:
-            self._try_connect()
+            except Exception:
+                pass
+            try:
+                self.client.destroy()
+            except Exception:
+                pass
+            self.connected = False
+
+        # Immediately reconnect, no delay
+        self._try_connect()
 
     def _connect(self):
-        with self.lock:
-            try:
-                if self.client.get_connected():
-                    self.client.disconnect()
-            except: pass
-            try:
-                self.client.connect(self.ip_address, self.rack, self.slot)
-                if self.client.get_connected():
-                    self.connected = True
-                    logger.debug(f"🟢 Connected to PLC {self.ip_address}")
-                else:
-                    self.connected = False
-                    logger.error(f"❌ Connection refused by PLC {self.ip_address}")
-            except Exception as e:
-                self.connected = False
-                logger.error(f"❌ Initial connect failed for {self.ip_address}: {e}")
+        self._try_connect()
 
     def _recover_on_error(self, context: str, exc: Exception):
         """Handle exceptions during read/write and trigger reconnect on resets."""
         self.connected = False
-        try: self.client.disconnect()
-        except: pass
+        try:
+            self.client.disconnect()
+        except Exception:
+            pass
+        try:
+            self.client.destroy()
+        except Exception:
+            pass
 
         msg = str(exc).lower()
         if isinstance(exc, ConnectionResetError) or "reset by peer" in msg or "10054" in msg or "104" in msg:
             logger.error(f"🔁 [Server Reset] {self.ip_address} in {context}: {exc}")
-            # Immediately recreate and reconnect
-            self.client = c.Client()
-            self._init_client_params()
             time.sleep(1)
             self._try_connect()
         else:
@@ -293,41 +315,47 @@ class PLCConnection:
             t0 = time.perf_counter()
             with self.lock:
                 self._ensure_connection()
+
+                # 🛑 If not connected, wait up to 1s before giving up
+                waited = 0.0
+                while not self.connected and waited < 1.0:
+                    time.sleep(0.01)
+                    waited += 0.01
+
                 if not self.connected:
-                    logger.warning(f"⛔ Skipped write_bool DB{db}: not connected")
+                    logger.error(f"❌ write_bool DB{db}: still not connected after 1s — skipping")
                     return
+
                 try:
-                    # read-or-use provided
+                    # read-or-use provided byte
                     if current_byte is None:
                         orig = self.client.db_read(db, byte, 1)[0]
                     else:
                         orig = current_byte
 
-                    new = (orig | (1 << bit)) if value else (orig & ~(~(1 << bit)))
+                    new = (orig | (1 << bit)) if value else (orig & ~(1 << bit))
                     if orig == new:
-                        return
+                        return  # already set
 
                     payload = bytearray([new])
-                    # write with watchdog
                     self._watchdog_call(1.0, self.client.write_area,
                                         t.Area.DB, db, byte, payload)
 
                     duration = time.perf_counter() - t0
 
-                    if duration > 1.0:
+                    if duration > 2.0:
                         logger.warning(f"{self.ip_address} ⏱ write_bool DB{db} b{byte}:{bit} took {duration:.3f}s")
+                        logger.warning(f"🧨 Slow write_bool ({duration:.2f}s) — forcing reconnect")
+                        self.force_reconnect(reason=f"slow write {duration:.2f}s")
                     else:
                         logger.debug(f"{self.ip_address} ⏱ write_bool DB{db} b{byte}:{bit} took {duration:.3f}s")
 
-                    # if too slow, force reconnect
-                    if duration > 1.0:
-                        logger.warning(f"🧨 Slow write_bool ({duration:.2f}s) — forcing reconnect")
-                        self.force_reconnect(reason=f"slow write {duration:.2f}s")
-
                     return
+
                 except TimeoutError as te:
                     logger.error(f"⚠️ write_bool timeout on DB{db}: {te}")
                     self._recover_on_error(f"write_bool DB{db}", te)
+
                 except Exception as e:
                     logger.warning(f"⚠️ Attempt {attempt}/{max_retries} write_bool DB{db} failed: {e}")
                     self._recover_on_error(f"write_bool DB{db}", e)

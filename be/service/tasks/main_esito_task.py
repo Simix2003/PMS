@@ -38,7 +38,7 @@ from service.helpers.ell_buffer import mirror_defects, mirror_ell_production
 
 logger = logging.getLogger(__name__)
 
-TIMING_THRESHOLD = 1.0
+TIMING_THRESHOLD = 3.0
 
 def log_duration(msg: str, duration: float, plc_connection: PLCConnection, full_station_id: str, threshold: float = TIMING_THRESHOLD) -> None:
     """Log duration at WARNING level if above threshold else DEBUG."""

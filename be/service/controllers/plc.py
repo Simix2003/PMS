@@ -53,6 +53,8 @@ class PLCConnection:
         self._last_manual_reconnect_ts = 0.0
         self._reconnect_count = 0
         self._reconnect_in_progress = False
+        self._watchdog_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self._last_probe = 0
 
         self._connect()
         PLC_REGISTRY.append(self)
@@ -91,22 +93,20 @@ class PLCConnection:
 
     def _try_connect(self):
         logger.info(f"➡️ Executing _try_connect() for {self.ip_address}")
-        # Count and warn on repeated attempts
         self._reconnect_count += 1
         if self._reconnect_count % 10 == 0:
             logger.warning(f"⚠️ Reconnect count {self._reconnect_count} for {self.ip_address}")
 
-        # ── 1) Build and configure a fresh client ──
         new_client = c.Client()
         new_client.set_connection_type(3)
         new_client.set_param(t.Parameter.PingTimeout, 5000)
         new_client.set_param(t.Parameter.SendTimeout, 5000)
         new_client.set_param(t.Parameter.RecvTimeout, 5000)
 
-        # ── 2) Try connecting ──
         connect_exc = None
         try:
             new_client.connect(self.ip_address, self.rack, self.slot)
+            time.sleep(0.5)  # Let PLC settle
             ok = new_client.get_connected()
         except Exception as e:
             ok = False
@@ -121,9 +121,7 @@ class PLCConnection:
                 pass
             new_client = None
 
-        # ── 3) Swap under lock ──
         with self.lock:
-            # a) Destroy current client no matter what
             try:
                 self.client.disconnect()
             except Exception:
@@ -133,13 +131,13 @@ class PLCConnection:
             except Exception:
                 pass
 
-            # b) If new client is valid, use it; otherwise create a clean fallback
             if ok and new_client:
                 self.client = new_client
                 self.connected = True
                 self._safe_callback("CONNECTED")
                 logger.info(f"✅ PLC {self.ip_address} reconnected")
             else:
+                # Only destroy if reusing; already destroyed above if replaced
                 self.client = c.Client()
                 self._init_client_params()
                 self.connected = False
@@ -194,15 +192,12 @@ class PLCConnection:
 
     def force_reconnect(self, reason: str = "Manual trigger"):
         now = time.time()
-
         if self._reconnect_in_progress:
             logger.warning(f"🛑 Reconnect already in progress for {self.ip_address}")
             return
-
         if now - self._last_manual_reconnect_ts < 10:
             logger.warning(f"⏳ Force reconnect skipped (cooldown) for {self.ip_address}")
             return
-
         self._last_manual_reconnect_ts = now
         self._reconnect_in_progress = True
 
@@ -218,13 +213,10 @@ class PLCConnection:
                     self.client.destroy()
                 except Exception:
                     pass
-                self.client = c.Client()  # 🔁 create fresh client immediately
+                self.client = c.Client()
                 self._init_client_params()
                 self.connected = False
-
-            # Immediately reconnect, no delay
             self._try_connect()
-
         finally:
             self._reconnect_in_progress = False
 
@@ -232,10 +224,8 @@ class PLCConnection:
         self._try_connect()
 
     def _recover_on_error(self, context: str, exc: Exception):
-        """Handle exceptions during read/write and trigger reconnect on resets."""
         self.connected = False
 
-        # Always attempt cleanup of existing client
         try:
             self.client.disconnect()
         except Exception:
@@ -247,57 +237,62 @@ class PLCConnection:
 
         msg = str(exc).lower()
 
-        # Case: Snap7 client is in invalid state
+        # Snap7 client is in invalid state
         if "invalid object" in msg:
             logger.warning(f"🧨 Invalid client object during {context} on {self.ip_address}, recreating")
             self.client = c.Client()
             self._init_client_params()
             return
 
-        # Case: Known connection reset
+        # Known connection reset
         if isinstance(exc, ConnectionResetError) or "reset by peer" in msg or "10054" in msg or "104" in msg:
             logger.error(f"🔁 [Server Reset] {self.ip_address} in {context}: {exc}")
             time.sleep(1)
             self._try_connect()
             return
 
-        # Case: Timeout or TCP recv error → give time to PLC
+        # Timeout or TCP recv error → allow PLC to recover
         if "timeout" in msg or "recv tcp" in msg:
             logger.warning(f"🌩️ Timeout error on {self.ip_address}, backing off before reconnect")
-            time.sleep(3)  # ⏱️ allow PLC to recover
+            time.sleep(3)
             self._try_connect()
             return
 
-        # Case: Other critical errors
         logger.error(f"⚠️ PLC {self.ip_address} comms error in {context}: {exc}. Marked down.")
         self.client = c.Client()
         self._init_client_params()
 
-
     def _watchdog_call(self, timeout, fn, *args, **kwargs):
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            fut = ex.submit(fn, *args, **kwargs)
-            try:
-                return fut.result(timeout=timeout)
-            except concurrent.futures.TimeoutError:
-                raise TimeoutError(f"⚠️ PLC call to {fn.__name__} timed out after {timeout}s")
+        fut = self._watchdog_executor.submit(fn, *args, **kwargs)
+        try:
+            return fut.result(timeout)
+        except concurrent.futures.TimeoutError:
+            raise TimeoutError(f"{fn.__name__} timed out ({timeout}s)")
 
     def is_connected(self):
         with self.lock:
+            now = time.time()
+            # Throttle probe to once every 5s per PLC (changeable)
+            if now - getattr(self, "_last_probe", 0) < 5.0:
+                if hasattr(self, "_last_probe_result"):
+                    return self._last_probe_result
+            self._last_probe = now
+
             try:
-                # 🛡️ Guard against uninitialized or invalid client
                 if not self.client:
                     logger.warning(f"⚠️ No client object for {self.ip_address}")
+                    self._last_probe_result = False
                     return False
 
                 if not self.client.get_connected():
+                    self._last_probe_result = False
                     return False
 
-                # 🧪 Watchdog to detect hangs / timeouts / resets
                 try:
                     self._watchdog_call(2.5, self.client.db_read, PROBE_DB, PROBE_OFFSET, 1)
                 except TimeoutError:
                     logger.error(f"❌ Liveness probe timeout for {self.ip_address}")
+                    self._last_probe_result = False
                     return False
                 except Exception as e:
                     msg = str(e).lower()
@@ -311,18 +306,22 @@ class PLCConnection:
                         self.client = c.Client()
                         self._init_client_params()
                         self.connected = False
+                        self._last_probe_result = False
                         return False
 
                     elif "reset by peer" in msg or "10054" in msg or "104" in msg:
                         logger.warning(f"🔁 [Server Reset] Detected on {self.ip_address}: {e}")
                     else:
                         logger.error(f"❌ Liveness probe failed for {self.ip_address}: {e}")
+                    self._last_probe_result = False
                     return False
 
+                self._last_probe_result = True
                 return True
 
             except Exception as e:
                 logger.error(f"❌ Error checking connection for {self.ip_address}: {e}")
+                self._last_probe_result = False
                 return False
 
     def _ensure_connection(self):
@@ -331,13 +330,11 @@ class PLCConnection:
             return
         self._last_check = now
 
-        # Fast exit if client is clearly broken
         if not self.client or not isinstance(self.client, c.Client):
             logger.warning(f"🧨 Invalid client object for {self.ip_address} in _ensure_connection")
             self.connected = False
             return
 
-        # Run connection check
         if not self.connected or not self.is_connected():
             self.connected = False
             logger.info(f"🚫 PLC {self.ip_address} ENSURE_CONNECTION failed")
@@ -380,7 +377,7 @@ class PLCConnection:
                 self._recover_on_error(f"read_bool DB{db}", e)
                 return False
 
-    def write_bool(self, db, byte, bit, value, max_retries=3, current_byte=None):
+    def write_bool_LEGACY(self, db, byte, bit, value, max_retries=3, current_byte=None):
         if not WRITE_TO_PLC:
             logger.debug(f"SKIPPED write_bool DB{db} b{byte}:{bit} = {value}")
             return
@@ -390,19 +387,14 @@ class PLCConnection:
             t0 = time.perf_counter()
             with self.lock:
                 self._ensure_connection()
-
-                # 🛑 If not connected, wait up to 1s before giving up
                 waited = 0.0
                 while not self.connected and waited < 1.0:
                     time.sleep(0.01)
                     waited += 0.01
-
                 if not self.connected:
                     logger.error(f"❌ write_bool DB{db}: still not connected after 1s — skipping")
                     return
-
                 try:
-                    # read-or-use provided byte
                     if current_byte is None:
                         orig = self.client.db_read(db, byte, 1)[0]
                     else:
@@ -410,11 +402,10 @@ class PLCConnection:
 
                     new = (orig | (1 << bit)) if value else (orig & ~(1 << bit))
                     if orig == new:
-                        return  # already set
+                        return
 
                     payload = bytearray([new])
-                    self._watchdog_call(1.0, self.client.write_area,
-                                        t.Area.DB, db, byte, payload)
+                    self._watchdog_call(1.0, self.client.db_write, db, byte, payload)
 
                     duration = time.perf_counter() - t0
 
@@ -437,6 +428,31 @@ class PLCConnection:
 
             time.sleep(backoff)
             backoff = min(backoff * 2, MAX_BACKOFF_SEC)
+
+    def write_bool(self, db, byte, bit, value, *, current_byte):
+        """
+        Minimal write_bool:
+        - non fa ensure_connection/is_connected
+        - non usa retry né watchdog
+        - non legge il byte da PLC (usa current_byte)
+        """
+        if not WRITE_TO_PLC:
+            return
+
+        orig = current_byte
+        new  = (orig | (1 << bit)) if value else (orig & ~(1 << bit))
+        if new == orig:
+            return
+
+        payload = bytes([new])
+        with self.lock:
+            try:
+                # scrive direttamente in DB
+                self.client.write_area(t.Area.DB, db, byte, payload)
+            except Exception as e:
+                logger.error(f"Minimal write_bool failed DB{db}:{byte} bit{bit} → {e}")
+                # opzionale: in caso di errore di connessione, si può richiamare il write_bool completo
+                # super().write_bool(db, byte, bit, value, current_byte=orig)
 
     def read_integer(self, db, byte):
         with self.lock:

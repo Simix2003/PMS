@@ -361,16 +361,16 @@ async def background_task(
         try:
             # Ensure both connections are alive
             if not trigger_conn.connected or not trigger_conn.is_connected():
-                await asyncio.sleep(0.75)
+                await asyncio.sleep(0.5)
                 continue
             if end_conn is not trigger_conn and (not end_conn.connected or not end_conn.is_connected()):
-                await asyncio.sleep(0.75)
+                await asyncio.sleep(0.5)
                 continue
 
             paths = get_channel_config(line_name, channel_id)
             if not paths:
                 logger.error(f"Invalid line/channel: {line_name}.{channel_id}")
-                await asyncio.sleep(0.75)
+                await asyncio.sleep(0.5)
                 continue
 
             # ───────────────── Trigger Read ─────────────────
@@ -383,7 +383,7 @@ async def background_task(
                 raw = PLC_DB_RANGES.get(plc_key, {}).get(trigger_db)
                 if not raw:
                     logger.error(f"No DB range defined for {plc_key} DB{trigger_db}")
-                    await asyncio.sleep(0.75)
+                    await asyncio.sleep(0.5)
                     continue
                 db_range_cache[trigger_key] = (raw["min"], raw["max"])
 
@@ -444,7 +444,7 @@ async def background_task(
                 raw = PLC_DB_RANGES.get(plc_key_end, {}).get(end_db)
                 if not raw:
                     logger.error(f"No DB range defined for {plc_key_end} DB{end_db}")
-                    await asyncio.sleep(0.75)
+                    await asyncio.sleep(0.5)
                     continue
                 db_range_cache[end_key] = (raw["min"], raw["max"])
 
@@ -454,6 +454,7 @@ async def background_task(
             buffer_end = await asyncio.get_event_loop().run_in_executor(
                 plc_read_executor, end_conn.db_read, end_db, end_start, end_size
             )
+            plc_connections[0].is_connected()
 
             if debug:
                 force_ng = global_state.debug_trigger_NG.get(full_station_id, False)
@@ -487,7 +488,7 @@ async def background_task(
                     trigger_timestamps.get(full_station_id)
                 ))
 
-            await asyncio.sleep(0.75)
+            await asyncio.sleep(0.5)
 
         except Exception as e:
             logger.error(f"[{full_station_id}], Error in background task: {str(e)}")
@@ -539,12 +540,16 @@ async def handle_end_cycle(
     t11 = time.perf_counter()
     queue_size_arch = get_executor_status(plc_write_executor)["queue_size"]
 
-    arch_byte = None
+    # estrai arch_byte sicuro
     idx_arch = pezzo_archivia_conf["byte"] - start_byte
     if 0 <= idx_arch < len(buffer):
         arch_byte = buffer[idx_arch]
+    else:
+        logger.warning(f"[{full_station_id}] arch_byte fuori range, default a 0")
+        arch_byte = 0
 
-    t_write_start = time.perf_counter()
+    t_write_start = time.perf_counter()  # timer iniziale
+    # scrivi archivio TRUE
     future_arch = plc_write_executor.submit(
         plc_connection.write_bool,
         pezzo_archivia_conf["db"],
@@ -568,14 +573,15 @@ async def handle_end_cycle(
     #    )
 
     if esito_conf:
-        queue_size_esito = get_executor_status(plc_write_executor)["queue_size"]
-
-        esito_byte = None
+        # estrai esito_byte sicuro
         idx_esito = esito_conf["byte"] - start_byte
         if 0 <= idx_esito < len(buffer):
             esito_byte = buffer[idx_esito]
+        else:
+            logger.warning(f"[{full_station_id}] esito_byte fuori range, default a 0")
+            esito_byte = 0
 
-        t_esito_start = time.perf_counter()
+        # scrivi esito FALSE
         future_esito = plc_write_executor.submit(
             plc_connection.write_bool,
             esito_conf["db"],
@@ -585,26 +591,6 @@ async def handle_end_cycle(
             current_byte=esito_byte,
         )
         await asyncio.wrap_future(future_esito)
-        t_esito_end = time.perf_counter()
-        duration_esito = t_esito_end - t_esito_start
-        log_duration(
-            f"[{full_station_id}] esito FALSE (queue_size={queue_size_esito})",
-            duration_esito,
-            plc_connection,
-            full_station_id,
-        )
-        #if channel_id == "RMI01":
-        #    logger.info(
-        #        f"[{full_station_id}] esito FALSE took {duration_esito:.3f}s (queue_size={queue_size_esito})"
-        #    )
-        #await asyncio.get_event_loop().run_in_executor(
-        #    plc_write_executor,
-        #    plc_connection.write_bool,
-        #    esito_conf["db"],
-        #    esito_conf["byte"],
-        #    esito_conf["bit"],
-        #    False,
-        #)
     t_write_end = time.perf_counter()
     total_plc_write = t_write_end - t_plc_detect
     log_duration(
@@ -639,7 +625,7 @@ async def handle_end_cycle(
             )
         else:
             logger.warning(
-                f"[{full_station_id}] Module was not found in incomplete productions. Wrote archivio bit anyway."
+                f"[{full_station_id}] {result['Id_Modulo']} Module was not found in incomplete productions. Wrote archivio bit anyway."
             )
 
     duration_total = time.perf_counter() - t0

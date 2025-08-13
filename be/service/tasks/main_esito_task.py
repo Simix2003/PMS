@@ -360,10 +360,10 @@ async def background_task(
     while True:
         try:
             # Ensure both connections are alive
-            if not trigger_conn.connected or not trigger_conn.is_connected():
+            if not trigger_conn.connected or not trigger_conn.is_connected(force=True):
                 await asyncio.sleep(0.5)
                 continue
-            if end_conn is not trigger_conn and (not end_conn.connected or not end_conn.is_connected()):
+            if end_conn is not trigger_conn and (not end_conn.connected or not end_conn.is_connected(force=True)):
                 await asyncio.sleep(0.5)
                 continue
 

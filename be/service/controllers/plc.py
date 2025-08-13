@@ -81,71 +81,82 @@ class PLCConnection:
         last = 0
         while True:
             now = time.time()
+            if self._reconnect_in_progress:
+                time.sleep(1)
+                continue
+
             if not self.connected or not self.is_connected():
                 if now - last > 5:
                     last = now
                     if self._check_tcp_port():
                         logger.debug(f"🔎 Port open, reconnecting {self.ip_address}")
-                        self._try_connect()
+                        self._reconnect_in_progress = True
+                        try:
+                            self._try_connect()
+                        finally:
+                            self._reconnect_in_progress = False
                     else:
                         logger.warning(f"🚫 Cannot reach PLC {self.ip_address} on port 102")
             time.sleep(1)
 
     def _try_connect(self):
-        logger.info(f"➡️ Executing _try_connect() for {self.ip_address}")
-        self._reconnect_count += 1
-        if self._reconnect_count % 10 == 0:
-            logger.warning(f"⚠️ Reconnect count {self._reconnect_count} for {self.ip_address}")
+        reset_flag = False
+        if not self._reconnect_in_progress:
+            self._reconnect_in_progress = True
+            reset_flag = True
 
-        new_client = c.Client()
-        new_client.set_connection_type(3)
-        new_client.set_param(t.Parameter.PingTimeout, 5000)
-        new_client.set_param(t.Parameter.SendTimeout, 5000)
-        new_client.set_param(t.Parameter.RecvTimeout, 5000)
-
-        connect_exc = None
         try:
-            new_client.connect(self.ip_address, self.rack, self.slot)
-            time.sleep(0.5)  # Let PLC settle
-            ok = new_client.get_connected()
-        except Exception as e:
-            ok = False
-            connect_exc = e
-            try:
-                new_client.disconnect()
-            except Exception:
-                pass
-            try:
-                new_client.destroy()
-            except Exception:
-                pass
-            new_client = None
+            logger.info(f"➡️ Executing _try_connect() for {self.ip_address}")
+            self._reconnect_count += 1
+            if self._reconnect_count % 10 == 0:
+                logger.warning(f"⚠️ Reconnect count {self._reconnect_count} for {self.ip_address}")
 
-        with self.lock:
-            try:
-                self.client.disconnect()
-            except Exception:
-                pass
-            try:
-                self.client.destroy()
-            except Exception:
-                pass
+            new_client = c.Client()
+            new_client.set_connection_type(3)
+            new_client.set_param(t.Parameter.PingTimeout, 5000)
+            new_client.set_param(t.Parameter.SendTimeout, 5000)
+            new_client.set_param(t.Parameter.RecvTimeout, 5000)
 
-            if ok and new_client:
-                self.client = new_client
-                self.connected = True
-                self._safe_callback("CONNECTED")
-                logger.info(f"✅ PLC {self.ip_address} reconnected")
-            else:
-                # Only destroy if reusing; already destroyed above if replaced
-                self.client = c.Client()
-                self._init_client_params()
-                self.connected = False
-                self._safe_callback("DISCONNECTED")
-                if connect_exc:
-                    logger.error(f"❌ Reconnect failed for {self.ip_address}: {connect_exc}")
+            connect_exc = None
+            try:
+                new_client.connect(self.ip_address, self.rack, self.slot)
+                time.sleep(0.5)
+                ok = new_client.get_connected()
+            except Exception as e:
+                ok = False
+                connect_exc = e
+                try: new_client.disconnect()
+                except Exception: pass
+                try: new_client.destroy()
+                except Exception: pass
+                new_client = None
+
+            with self.lock:
+                try: self.client.disconnect()
+                except Exception: pass
+                try: self.client.destroy()
+                except Exception: pass
+
+                if ok and new_client:
+                    self.client = new_client
+                    self.connected = True
+                    self._last_probe = 0
+                    self._last_probe_result = True
+                    self._last_check = 0
+                    self._safe_callback("CONNECTED")
+                    logger.info(f"✅ PLC {self.ip_address} reconnected")
                 else:
-                    logger.warning(f"❌ PLC {self.ip_address} unreachable")
+                    self.client = c.Client()
+                    self._init_client_params()
+                    self.connected = False
+                    self._safe_callback("DISCONNECTED")
+                    if connect_exc:
+                        logger.error(f"❌ Reconnect failed for {self.ip_address}: {connect_exc}")
+                    else:
+                        logger.warning(f"❌ PLC {self.ip_address} unreachable")
+        finally:
+            if reset_flag:
+                self._reconnect_in_progress = False
 
     def _reconnect_on_timer(self, skip_timer: bool = False):
         while True:
@@ -153,33 +164,40 @@ class PLCConnection:
                 logger.info(f"⏳ Next timed reconnect in {RECONNECT_AFTER_MINS} min for {self.ip_address}")
                 time.sleep(RECONNECT_AFTER_MINS * 60)
 
+            if self._reconnect_in_progress:
+                logger.info(f"⏭️ Skipping timed reconnect; already in progress for {self.ip_address}")
+                if skip_timer:
+                    break
+                continue
+
             elapsed = time.time() - self._last_manual_reconnect_ts
             if elapsed < 10 * 60 and not skip_timer:
                 logger.info(f"⏭️ Skipped timed reconnect for {self.ip_address} (manual cooldown)")
+                if skip_timer:
+                    break
                 continue
 
-            start = datetime.now()
-            logger.info(f"🔁 [Timed Reconnect] START {start.isoformat()} for {self.ip_address}")
+            self._reconnect_in_progress = True
+            try:
+                start = datetime.now()
+                logger.info(f"🔁 [Timed Reconnect] START {start.isoformat()} for {self.ip_address}")
 
-            with self.lock:
-                try:
-                    self.client.disconnect()
-                except Exception:
-                    pass
-                try:
-                    self.client.destroy()
-                except Exception:
-                    pass
-                self.connected = False
+                with self.lock:
+                    try: self.client.disconnect()
+                    except Exception: pass
+                    try: self.client.destroy()
+                    except Exception: pass
+                    self.connected = False
 
-            time.sleep(1)
-            self._try_connect()
+                time.sleep(1)
+                self._try_connect()
 
-            elapsed = (datetime.now() - start).total_seconds()
-            logger.info(f"✅ [Timed Reconnect] DONE for {self.ip_address} — {elapsed:.2f}s")
-            self._reconnect_in_progress = False
-            if skip_timer:
-                break
+                elapsed = (datetime.now() - start).total_seconds()
+                logger.info(f"✅ [Timed Reconnect] DONE for {self.ip_address} — {elapsed:.2f}s")
+            finally:
+                self._reconnect_in_progress = False
+                if skip_timer:
+                    break
 
     def reconnect_once_now(self, reason: str = ""):
         if self._reconnect_in_progress:
@@ -269,11 +287,10 @@ class PLCConnection:
         except concurrent.futures.TimeoutError:
             raise TimeoutError(f"{fn.__name__} timed out ({timeout}s)")
 
-    def is_connected(self):
+    def is_connected(self, *, force: bool = False):
         with self.lock:
             now = time.time()
-            # Throttle probe to once every 5s per PLC (changeable)
-            if now - getattr(self, "_last_probe", 0) < 5.0:
+            if not force and now - getattr(self, "_last_probe", 0) < 5.0:
                 if hasattr(self, "_last_probe_result"):
                     return self._last_probe_result
             self._last_probe = now

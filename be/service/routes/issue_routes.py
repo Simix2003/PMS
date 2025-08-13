@@ -85,10 +85,10 @@ async def set_issues(request: Request):
     else:
         logger.warning(f"production_id was not found in global_state.incomplete_productions for {full_id}")
 
-    # ✅ Write confirmation back to PLC
+    # ✅ Write confirmation back to PLCg
     target = paths["esito_scarto_compilato"]
     await asyncio.get_event_loop().run_in_executor(
-        plc_write_executor, plc_connection.write_bool, target["db"], target["byte"], target["bit"], True
+        plc_write_executor, plc_connection.write_bool_LEGACY, target["db"], target["byte"], target["bit"], True
     )
 
     return {"status": "ok"}
@@ -246,7 +246,7 @@ async def get_issues_for_object(
                 logger.debug(f"Writing to PLC for {full_id}")
             else:
                 await asyncio.get_event_loop().run_in_executor(
-                    plc_write_executor, plc_connection.write_bool, target["db"], target["byte"], target["bit"], True
+                    plc_write_executor, plc_connection.write_bool_LEGACY, target["db"], target["byte"], target["bit"], True
                 )
 
         return {"issue_paths": issue_paths, "pictures": pictures}

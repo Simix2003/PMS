@@ -48,6 +48,8 @@ class LmnVisualsPage extends StatefulWidget {
   final int qg2_defects_value;
   final int last_n_shifts;
   final VoidCallback? onStopsUpdated;
+  final LMNStation lmn01;
+  final LMNStation lmn02;
 
   const LmnVisualsPage({
     super.key,
@@ -90,6 +92,8 @@ class LmnVisualsPage extends StatefulWidget {
     required this.qg2_defects_value,
     required this.last_n_shifts,
     this.onStopsUpdated,
+    required this.lmn01,
+    required this.lmn02,
   });
 
   @override
@@ -782,7 +786,7 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                           const SizedBox(width: 8),
                           Flexible(
                             flex: 3,
-                            child: YieldComparisonBarChart(
+                            child: YieldComparisonBarChartLMN(
                               data: widget.mergedShiftData,
                               target: yield_target.toDouble(),
                             ),
@@ -892,12 +896,29 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Flexible(
+                    flex: 3,
                     child: HeaderBox(
                       title: 'Pareto Shift',
                       target: '',
                       icon: Icons.bar_chart_rounded,
                       qg2_defects_value: widget.qg2_defects_value.toString(),
                       zone: 'LMN',
+                    ),
+                  ),
+                  Flexible(
+                    flex: 2,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Flexible(
+                          child: HeaderBox(
+                            title: 'Livelli',
+                            target: '',
+                            icon: Icons.stacked_bar_chart_rounded,
+                            zone: 'LMN',
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -1288,10 +1309,10 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                     children: [
                       Flexible(
                         flex: 3,
-                        child: TopDefectsHorizontalBarChart(
-                          defectLabels: widget.defectLabels,
-                          ain1Counts: widget.lmn1Counts,
-                          ain2Counts: widget.lmn2Counts,
+                        child: VPFDefectsHorizontalBarChartLMN(
+                          defectLabels: widget.defectVPFLabels,
+                          lmn1Counts: widget.lmn1VPFCounts,
+                          lmn2Counts: widget.lmn2VPFCounts,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -1300,16 +1321,15 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Expanded(
-                              child: VPFDefectsHorizontalBarChart(
-                                defectLabels: widget.defectVPFLabels,
-                                ain1Counts: widget.lmn1VPFCounts,
-                                ain2Counts: widget.lmn2VPFCounts,
-                              ),
-                            ),
+                            // Horizontal on wide screens; switch to vertical on mobile if you prefer.
+                            LMNLevels(
+                                lmn01: widget.lmn01,
+                                lmn02: widget.lmn02,
+                                layoutAxis: Axis.vertical),
+
                             Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 4.0),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 4.0, vertical: 4.0),
                               child: Text(
                                 'Sviluppato da 3SUN Process Eng, \nCapgemini, empowered by Bottero',
                                 textAlign: TextAlign.center,

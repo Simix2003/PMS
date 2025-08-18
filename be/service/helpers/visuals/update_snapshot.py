@@ -792,3 +792,128 @@ def _update_snapshot_str(
 
     # Keep only last 8
     data[per_station_key][station_idx] = station_bins[-8:]
+
+def _update_snapshot_lmn(
+    data: dict,
+    station_name: str,
+    esito: int,
+    ts: datetime
+) -> None:
+    """
+    Incrementally update the LMN zone snapshot in-memory, based on a single new
+    production event at `station_name` with outcome `esito` and timestamp `ts`.
+
+    It updates:
+      - per-station totals (in / out_ng) and yields
+      - current shift throughput (total, ng)
+      - last 8h throughput bars
+      - last 8h yields per station
+
+    NOTE: 'fermi_data' and 'top_defects_*' are recomputed in full in _compute_snapshot_lmn().
+    """
+    cfg = ZONE_SOURCES["LMN"]
+
+    # --- Current shift label + boundaries (for matching the correct shift bucket)
+    current_shift_start, _ = get_shift_window(ts)
+    current_shift_label = (
+        "S1" if 6 <= current_shift_start.hour < 14 else
+        "S2" if 14 <= current_shift_start.hour < 22 else
+        "S3"
+    )
+
+    # --- 1) Update counters (station_1_in / station_2_in, station_1_out_ng / station_2_out_ng)
+    if station_name in cfg["station_1_in"]:
+        data["station_1_in"] += 1
+    elif station_name in cfg["station_2_in"]:
+        data["station_2_in"] += 1
+
+    if esito == 6:
+        if station_name in cfg["station_1_out_ng"]:
+            data["station_1_out_ng"] += 1
+        elif station_name in cfg["station_2_out_ng"]:
+            data["station_2_out_ng"] += 1
+
+    # --- 2) Recompute yields
+    s1_good = data["station_1_in"] - data["station_1_out_ng"]
+    s2_good = data["station_2_in"] - data["station_2_out_ng"]
+    data["station_1_yield"] = compute_yield(s1_good, data["station_1_out_ng"])
+    data["station_2_yield"] = compute_yield(s2_good, data["station_2_out_ng"])
+
+    # --- 3) Update shift throughput (sum of both IN stations; NG from QC stations only)
+    is_in_station = station_name in cfg["station_1_in"] or station_name in cfg["station_2_in"]
+    is_qc_station = station_name in cfg["station_1_out_ng"] or station_name in cfg["station_2_out_ng"]
+
+    for shift in data["shift_throughput"]:
+        if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+            if is_in_station:
+                shift["total"] += 1
+            if esito == 6 and is_qc_station:
+                shift["ng"] += 1
+            break
+
+    # --- 4) Update yield per shift (each station's QC contributes to its own series)
+    def _update_shift_yield(station_yield_shifts: list[dict], relevant: bool) -> None:
+        if not relevant:
+            return
+        for shift in station_yield_shifts:
+            if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                if esito == 6:
+                    shift["ng"] += 1
+                else:
+                    shift["good"] += 1
+                shift["yield"] = compute_yield(shift["good"], shift["ng"])
+                break
+
+    _update_shift_yield(data["station_1_yield_shifts"], station_name in cfg["station_1_out_ng"])
+    _update_shift_yield(data["station_2_yield_shifts"], station_name in cfg["station_2_out_ng"])
+
+    # --- 5) Update hourly bins (last_8h_throughput + per-station last_8h yields)
+    hour_start = ts.replace(minute=0, second=0, microsecond=0)
+    hour_label = hour_start.strftime("%H:%M")
+
+    def _touch_hourly(list_key: str) -> None:
+        lst = data[list_key]
+        for entry in lst:
+            if entry["hour"] == hour_label:
+                if list_key == "last_8h_throughput":
+                    entry["total"] += 1 if is_in_station else entry["total"]
+                    if esito == 6 and is_qc_station:
+                        entry["ng"] += 1
+                else:
+                    if esito == 6:
+                        entry["ng"] += 1
+                    else:
+                        entry["good"] += 1
+                    entry["yield"] = compute_yield(entry["good"], entry["ng"])
+                break
+        else:
+            # Create a new hour entry
+            new_entry: Dict[str, Any] = {
+                "hour": hour_label,
+                "start": hour_start.isoformat(),
+                "end": (hour_start + timedelta(hours=1)).isoformat(),
+            }
+            if list_key == "last_8h_throughput":
+                new_entry.update({
+                    "total": 1 if is_in_station else 0,
+                    "ng": 1 if (esito == 6 and is_qc_station) else 0
+                })
+            else:
+                new_entry.update({
+                    "good": 0 if esito == 6 else 1,
+                    "ng":   1 if esito == 6 else 0,
+                })
+                new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"])
+            lst.append(new_entry)
+            # Keep only the last 8 bins
+            lst[:] = lst[-8:]
+
+    # Throughput only changes if we got an IN event or an NG at a QC station
+    if is_in_station or (esito == 6 and is_qc_station):
+        _touch_hourly("last_8h_throughput")
+
+    # Per-station hourly yields are driven by their QC stations
+    if station_name in cfg["station_1_out_ng"]:
+        _touch_hourly("station_1_yield_last_8h")
+    elif station_name in cfg["station_2_out_ng"]:
+        _touch_hourly("station_2_yield_last_8h")

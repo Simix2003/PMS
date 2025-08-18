@@ -2183,8 +2183,11 @@ class YieldComparisonBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('Data received: $data');
     final currentShift = _getCurrentShift();
     final orderedData = reorderShifts(data, currentShift);
+
+    print('orderedData: $orderedData');
 
     return Card(
       color: Colors.white,
@@ -2701,6 +2704,191 @@ class YieldComparisonSTRBarChart extends StatelessWidget {
                 LegendItem(color: Colors.blue.shade900, label: 'Yield STR'),
                 LegendItem(
                     color: Colors.lightBlue.shade200, label: 'Yield Overall'),
+                LegendItem(
+                    color: Colors.orange, label: 'Target', isDashed: true),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class YieldComparisonBarChartLMN extends StatelessWidget {
+  final List<Map<String, dynamic>> data;
+  final double target;
+
+  const YieldComparisonBarChartLMN({
+    super.key,
+    required this.data,
+    this.target = 90,
+  });
+
+  String _getCurrentShift() {
+    final hour = DateTime.now().hour;
+    if (hour >= 6 && hour < 14) return 'S1';
+    if (hour >= 14 && hour < 22) return 'S2';
+    return 'S3';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    print('Data received: $data');
+    final currentShift = _getCurrentShift();
+    final orderedData = reorderShifts(data, currentShift);
+
+    print('orderedData: $orderedData');
+
+    return Card(
+      color: Colors.white,
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const SizedBox(width: 8),
+                const Text(
+                  'Yield per Shift',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                Text(
+                  'Target: $target%',
+                  style: TextStyle(
+                    color: Colors.orangeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100,
+              child: Stack(
+                children: [
+                  // 🔹 Chart
+                  BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: 100,
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          getTooltipColor: (_) => Colors.grey
+                              .withOpacity(0.8), // 🔹 semi-transparent grey
+                          tooltipPadding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
+                          tooltipMargin: 6,
+                          fitInsideHorizontally: true,
+                          fitInsideVertically: true,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            final value = rod.toY.toStringAsFixed(0);
+
+                            return BarTooltipItem(
+                              '$value%',
+                              const TextStyle(
+                                color: Colors.white, // 🔸 white text
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              int i = value.toInt();
+                              return Text(orderedData[i]['shift']);
+                            },
+                          ),
+                        ),
+                        topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                      ),
+                      gridData: FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      barGroups: List.generate(orderedData.length, (index) {
+                        final item = orderedData[index];
+                        if (item['station1'] == null ||
+                            item['station2'] == null) {
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: 0,
+                                width: 40,
+                                color: Colors.blue.shade900,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: 0,
+                                width: 40,
+                                color: Colors.lightBlue.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 6,
+                          );
+                        } else {
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: item['station1'],
+                                width: 40,
+                                color: Colors.blue.shade900,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                fromY: 0,
+                                toY: item['station2'],
+                                width: 40,
+                                color: Colors.lightBlue.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 6,
+                          );
+                        }
+                      }),
+                      extraLinesData: ExtraLinesData(horizontalLines: [
+                        HorizontalLine(
+                          y: target,
+                          color: Colors.orange,
+                          strokeWidth: 2,
+                          dashArray: [8, 4],
+                        ),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 20,
+              children: [
+                LegendItem(color: Colors.blue.shade900, label: 'LMN01'),
+                LegendItem(color: Colors.lightBlue.shade200, label: 'LMN02'),
                 LegendItem(
                     color: Colors.orange, label: 'Target', isDashed: true),
               ],
@@ -4280,6 +4468,156 @@ class VPFDefectsHorizontalBarChart extends StatelessWidget {
   }
 }
 
+class VPFDefectsHorizontalBarChartLMN extends StatelessWidget {
+  final List<String> defectLabels;
+  final List<int> lmn1Counts;
+  final List<int> lmn2Counts;
+
+  const VPFDefectsHorizontalBarChartLMN({
+    super.key,
+    required this.defectLabels,
+    required this.lmn1Counts,
+    required this.lmn2Counts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 10,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ✅ Title
+            const Text(
+              "Difetti VPF riconducibili a LMN",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ✅ Legends
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                LegendItem(color: Colors.blue.shade900, label: 'LMN01'),
+                const SizedBox(width: 20),
+                LegendItem(color: Colors.lightBlue, label: 'LMN02'),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // ✅ Chart
+            Expanded(
+              child: Stack(
+                children: [
+                  RotatedBox(
+                    quarterTurns: 1,
+                    child: BarChart(
+                      BarChartData(
+                        barTouchData: BarTouchData(
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) =>
+                                Colors.transparent, // transparent bg
+                            rotateAngle: -90, // rotate tooltip content
+                            tooltipPadding: EdgeInsets.zero, // no extra padding
+                            tooltipMargin: 8, // close to bar
+                            tooltipRoundedRadius: 0, // square box
+                            tooltipBorder: BorderSide.none, // no border
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              return BarTooltipItem(
+                                '${rod.toY.toInt()}',
+                                TextStyle(
+                                  color: rod.color, // same as bar color
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        maxY: 20,
+                        alignment: BarChartAlignment.spaceBetween,
+                        barGroups: List.generate(defectLabels.length, (index) {
+                          final lmn1 = lmn1Counts[index].toDouble();
+                          final lmn2 = lmn2Counts[index].toDouble();
+                          return BarChartGroupData(
+                            showingTooltipIndicators: [0, 1],
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                toY: lmn1,
+                                width: 16,
+                                color: Colors.blue.shade900,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              BarChartRodData(
+                                toY: lmn2,
+                                width: 16,
+                                color: Colors.lightBlue.shade200,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ],
+                            barsSpace: 1,
+                          );
+                        }),
+                        titlesData: FlTitlesData(
+                          leftTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 100,
+                              getTitlesWidget: (value, meta) {
+                                final i = value.toInt();
+                                if (i < defectLabels.length) {
+                                  return RotatedBox(
+                                    quarterTurns: -1,
+                                    child: Text(
+                                      defectLabels[i],
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ),
+                        ),
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          getDrawingHorizontalLine: (value) => FlLine(
+                            color: Colors.grey.withOpacity(0.2),
+                            strokeWidth: 1,
+                          ),
+                        ),
+                        borderData: FlBorderData(show: false),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class VPFDefectsHorizontalBarChartSTR extends StatelessWidget {
   final List<String> defectLabels;
   final List<int> Counts;
@@ -5606,6 +5944,428 @@ class _ReWorkSpeedBarState extends State<ReWorkSpeedBar> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// --- Domain model ---
+enum LevelState { active, deactivated, down }
+
+class LMNLevel {
+  final String name; // e.g., "L1".."L7"
+  final LevelState state;
+  const LMNLevel({required this.name, required this.state});
+}
+
+class LMNStation {
+  final String stationName; // e.g., "LMN01"
+  final List<LMNLevel> levels; // must be 7
+  const LMNStation({required this.stationName, required this.levels});
+}
+
+/// --- Reusable card for ONE station (7 levels) ---
+/// --- Reusable card for ONE station (7 levels) ---
+class StationLevelsCard extends StatelessWidget {
+  final LMNStation station;
+  final bool compact; // 👈 NEW
+
+  const StationLevelsCard({
+    super.key,
+    required this.station,
+    this.compact = false, // default full
+  });
+
+  Color get _green => Colors.green.shade700;
+  Color get _grey => Colors.grey.shade800;
+  Color get _red => Colors.red.shade600;
+
+  int _extractLevelNumber(String name) {
+    // Supports "L1", "Level 1", "L-01", etc. Fallback = big number keeps it last.
+    final match = RegExp(r'(\d+)').firstMatch(name);
+    return match != null ? int.parse(match.group(1)!) : 1 << 30;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = station.levels.where((l) => l.state == LevelState.active).length;
+    final d =
+        station.levels.where((l) => l.state == LevelState.deactivated).length;
+    final x = station.levels.where((l) => l.state == LevelState.down).length;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _showDialog(context),
+      child: Card(
+        elevation: 10,
+        color: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            // Title
+            Text(
+              'Stato Livelli – ${station.stationName}',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+
+            // Legends (hidden when compact)
+            if (!compact) ...[
+              Row(children: [
+                _Legend(color: _green, label: 'Attivi'),
+                const SizedBox(width: 20),
+                _Legend(color: _grey, label: 'Disattivati'),
+                const SizedBox(width: 20),
+                _Legend(color: _red, label: 'Down'),
+              ]),
+              const SizedBox(height: 6),
+            ],
+
+            // Counters (always visible)
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              _Counter(label: 'Attivi', value: a, color: _green),
+              _Counter(label: 'Disattivati', value: d, color: _grey),
+              _Counter(label: 'Down', value: x, color: _red),
+            ]),
+            const SizedBox(height: 6),
+
+            // Level strip (hidden when compact)
+            if (!compact)
+              _LevelStrip(
+                  levels: station.levels,
+                  green: _green,
+                  grey: _grey,
+                  red: _red),
+
+            // Footer hint
+            const SizedBox(height: 4),
+            Row(children: const [
+              Icon(Icons.touch_app, size: 16, color: Colors.black54),
+              SizedBox(width: 6),
+              Text('Tocca per dettagli',
+                  style: TextStyle(fontSize: 12, color: Colors.black54)),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  void _showDialog(BuildContext context) {
+    // ✅ Ascending by numeric part: L1 -> L7
+    final sorted = [...station.levels]..sort((a, b) =>
+        _extractLevelNumber(a.name).compareTo(_extractLevelNumber(b.name)));
+
+    Color colorOf(LevelState s) => switch (s) {
+          LevelState.active => _green,
+          LevelState.deactivated => _grey,
+          LevelState.down => _red,
+        };
+    String labelOf(LevelState s) => switch (s) {
+          LevelState.active => 'Attivo',
+          LevelState.deactivated => 'Disattivato',
+          LevelState.down => 'Down',
+        };
+    IconData iconOf(LevelState s) => switch (s) {
+          LevelState.down => Icons.error_outline,
+          _ => Icons.circle,
+        };
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720, maxHeight: 720),
+          child: Column(
+            children: [
+              // Header (bigger)
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.view_module, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Dettaglio livelli – ${station.stationName}',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Chiudi',
+                      icon: const Icon(Icons.close, size: 22),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 🔁 Vertical list, smallest -> biggest (L1..L7)
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                  itemCount: sorted.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) {
+                    final lv = sorted[i];
+                    final clr = colorOf(lv.state);
+                    final status = labelOf(lv.state);
+                    final ico = iconOf(lv.state);
+
+                    return Material(
+                      color: Colors.white,
+                      elevation: 2,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        height: 68, // 👈 bigger row height
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: clr.withOpacity(0.35)),
+                        ),
+                        child: Row(
+                          children: [
+                            // Colored stripe
+                            Container(
+                              width: 8,
+                              height: double.infinity,
+                              decoration: BoxDecoration(
+                                color: clr,
+                                borderRadius: const BorderRadius.horizontal(
+                                    left: Radius.circular(14)),
+                              ),
+                            ),
+
+                            // Content
+                            Expanded(
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 14),
+                                child: Row(
+                                  children: [
+                                    // Optional big numeric badge (1..7)
+                                    Container(
+                                      width: 32,
+                                      height: 32,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                            color: clr.withOpacity(0.35)),
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                        color: clr.withOpacity(0.08),
+                                      ),
+                                      child: Text(
+                                        _extractLevelNumber(lv.name).toString(),
+                                        style: TextStyle(
+                                          color: clr,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    Icon(ico, color: clr, size: 22),
+                                    const SizedBox(width: 10),
+
+                                    // Level name (bigger & bold)
+                                    Expanded(
+                                      child: Text(
+                                        lv.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700),
+                                      ),
+                                    ),
+
+                                    // Status pill (bigger)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: clr.withOpacity(0.10),
+                                        borderRadius:
+                                            BorderRadius.circular(999),
+                                        border: Border.all(
+                                            color: clr.withOpacity(0.35)),
+                                      ),
+                                      child: Text(
+                                        status,
+                                        style: TextStyle(
+                                            color: clr,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// --- Convenience wrapper to render the TWO station cards ---
+class LMNLevels extends StatelessWidget {
+  final LMNStation lmn01;
+  final LMNStation lmn02;
+  final Axis layoutAxis; // Row on wide, Column on narrow
+  final double spacing;
+
+  const LMNLevels({
+    super.key,
+    required this.lmn01,
+    required this.lmn02,
+    this.layoutAxis = Axis.horizontal,
+    this.spacing = 8,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (layoutAxis == Axis.horizontal) {
+      // Wide layout: two full cards side by side
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: StationLevelsCard(station: lmn01, compact: false)),
+          SizedBox(width: spacing),
+          Expanded(child: StationLevelsCard(station: lmn02, compact: false)),
+        ],
+      );
+    } else {
+      // Vertical layout: two COMPACT cards stacked (no Expanded to avoid height issues)
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          StationLevelsCard(station: lmn01, compact: true),
+          SizedBox(height: spacing),
+          StationLevelsCard(station: lmn02, compact: true),
+        ],
+      );
+    }
+  }
+}
+
+/// --- UI atoms ---
+class _Legend extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _Legend({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+              color: color, borderRadius: BorderRadius.circular(3))),
+      const SizedBox(width: 6),
+      Text(label, style: const TextStyle(fontSize: 12)),
+    ]);
+  }
+}
+
+class _Counter extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+  const _Counter(
+      {required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(children: [
+        Container(
+            width: 10,
+            height: 8,
+            decoration: BoxDecoration(
+                color: color, borderRadius: BorderRadius.circular(3))),
+        const SizedBox(width: 6),
+        Text(label,
+            style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+        const SizedBox(width: 8),
+        Text('$value',
+            style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+      ]),
+    );
+  }
+}
+
+class _LevelStrip extends StatelessWidget {
+  final List<LMNLevel> levels;
+  final Color green, grey, red;
+  const _LevelStrip(
+      {required this.levels,
+      required this.green,
+      required this.grey,
+      required this.red});
+
+  Color _color(LevelState s) => switch (s) {
+        LevelState.active => green,
+        LevelState.deactivated => grey,
+        LevelState.down => red,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    // 7 small pills: L1..L7 colored by state
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: levels.map((lv) {
+        final c = _color(lv.state);
+        return Tooltip(
+          message:
+              '${lv.name}: ${lv.state == LevelState.active ? "Attivo" : lv.state == LevelState.deactivated ? "Disattivato" : "Down"}',
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: c.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: c.withOpacity(0.35)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+              const SizedBox(width: 6),
+              Text(lv.name,
+                  style: TextStyle(color: c, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        );
+      }).toList(growable: false),
     );
   }
 }

@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:ix_monitor/pages/visual/visual_widgets.dart';
 import 'package:ix_monitor/pages/visual/visuals/STR_page.dart';
 import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
@@ -126,6 +127,32 @@ class _VisualPageState extends State<VisualPage> {
   int currentRWKYield = 100;
   double value_gauge_1 = 0;
   double value_gauge_2 = 0;
+
+  final lmn01 = LMNStation(
+    stationName: 'LMN01',
+    levels: const [
+      LMNLevel(name: 'L1', state: LevelState.active),
+      LMNLevel(name: 'L2', state: LevelState.active),
+      LMNLevel(name: 'L3', state: LevelState.deactivated),
+      LMNLevel(name: 'L4', state: LevelState.active),
+      LMNLevel(name: 'L5', state: LevelState.down),
+      LMNLevel(name: 'L6', state: LevelState.active),
+      LMNLevel(name: 'L7', state: LevelState.deactivated),
+    ],
+  );
+
+  final lmn02 = LMNStation(
+    stationName: 'LMN02',
+    levels: const [
+      LMNLevel(name: 'L1', state: LevelState.active),
+      LMNLevel(name: 'L2', state: LevelState.down),
+      LMNLevel(name: 'L3', state: LevelState.down),
+      LMNLevel(name: 'L4', state: LevelState.deactivated),
+      LMNLevel(name: 'L5', state: LevelState.active),
+      LMNLevel(name: 'L6', state: LevelState.active),
+      LMNLevel(name: 'L7', state: LevelState.active),
+    ],
+  );
 
   //STR
   Map<int, int> zoneInputs = {},
@@ -631,6 +658,8 @@ class _VisualPageState extends State<VisualPage> {
           };
         });
 
+        print('Merged shift data: $mergedShiftData');
+
         throughputData = shiftThroughput.map<Map<String, int>>((e) {
           final total = (e['total'] ?? 0) as int;
           final ng = (e['ng'] ?? 0) as int;
@@ -779,6 +808,8 @@ class _VisualPageState extends State<VisualPage> {
       _initializeEllWebSocket();
     } else if (widget.zone == "STR") {
       _initializeStrWebSocket();
+    } else if (widget.zone == "LMN") {
+      _initializeLmnWebSocket();
     } else {
       print('Cannot initialize websocket Unknown zone: $widget.zone');
     }
@@ -1220,6 +1251,126 @@ class _VisualPageState extends State<VisualPage> {
     _isWebSocketConnected = true;
   }
 
+  void _initializeLmnWebSocket() {
+    if (_isWebSocketConnected) return;
+
+    _webSocketService.connectToVisual(
+      line: 'Linea2',
+      zone: widget.zone,
+      onMessage: (data) {
+        if (!mounted) return;
+
+        setState(() {
+          // ─── Main station metrics ─────────────────────
+          station_1_in = data['station_1_in'] ?? 0;
+          station_2_in = data['station_2_in'] ?? 0;
+          station_1_out_ng = data['station_1_out_ng'] ?? 0;
+          station_2_out_ng = data['station_2_out_ng'] ?? 0;
+          currentYield_1 = (data['station_1_yield'] ?? 100).toDouble();
+          currentYield_2 = (data['station_2_yield'] ?? 100).toDouble();
+
+          // ─── Yield + Throughput 8h & shift ────────────
+          yieldLast8h_1 = List<Map<String, dynamic>>.from(
+              data['station_1_yield_last_8h'] ?? []);
+          yieldLast8h_2 = List<Map<String, dynamic>>.from(
+              data['station_2_yield_last_8h'] ?? []);
+          shiftThroughput =
+              List<Map<String, dynamic>>.from(data['shift_throughput'] ?? []);
+          hourlyThroughput =
+              List<Map<String, dynamic>>.from(data['last_8h_throughput'] ?? []);
+          station1Shifts = List<Map<String, dynamic>>.from(
+              data['station_1_yield_shifts'] ?? []);
+          station2Shifts = List<Map<String, dynamic>>.from(
+              data['station_2_yield_shifts'] ?? []);
+
+          // Merge shift data for combined chart (assumes same length/order)
+          mergedShiftData = List.generate(
+              station1Shifts.length,
+              (index) => {
+                    'shift': station1Shifts[index]['label'],
+                    'lmn1': station1Shifts[index]['yield'],
+                    'lmn2': station2Shifts.length > index
+                        ? station2Shifts[index]['yield']
+                        : null,
+                  });
+
+          // throughput chart data: ok / ng per shift
+          throughputData = shiftThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            return {'ok': total - ng, 'ng': ng};
+          }).toList();
+
+          shiftLabels =
+              shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
+
+          // hourly throughput
+          hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            return {'ok': total - ng, 'ng': ng};
+          }).toList();
+
+          hourLabels =
+              hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
+          // ─── Fermi Data ───────────────────────────────
+          final fermiRaw =
+              List<Map<String, dynamic>>.from(data['fermi_data'] ?? []);
+          dataFermi = [];
+          for (final entry in fermiRaw) {
+            if (entry.containsKey("Available_Time_1")) {
+              availableTime_1 =
+                  int.tryParse(entry["Available_Time_1"].toString()) ?? 0;
+            } else if (entry.containsKey("Available_Time_2")) {
+              availableTime_2 =
+                  int.tryParse(entry["Available_Time_2"].toString()) ?? 0;
+            } else {
+              dataFermi.add([
+                entry['causale']?.toString() ?? '',
+                entry['station']?.toString() ?? '',
+                entry['count']?.toString() ?? '0',
+                entry['time']?.toString() ?? '0'
+              ]);
+            }
+          }
+
+          // ─── QG2 Defects (LMN keys: lmn1 / lmn2) ──────
+          final topDefectsQG2 =
+              List<Map<String, dynamic>>.from(data['top_defects_qg2'] ?? []);
+          defectLabels = [];
+          lmn1Counts = [];
+          lmn2Counts = [];
+
+          for (final defect in topDefectsQG2) {
+            defectLabels.add(defect['label']?.toString() ?? '');
+            lmn1Counts.add(int.tryParse(defect['lmn1'].toString()) ?? 0);
+            lmn2Counts.add(int.tryParse(defect['lmn2'].toString()) ?? 0);
+          }
+
+          qg2_defects_value = data['total_defects_qg2'] ?? 0;
+
+          // ─── VPF Defects (LMN keys: lmn1 / lmn2) ─────
+          final topDefectsVPF =
+              List<Map<String, dynamic>>.from(data['top_defects_vpf'] ?? []);
+          defectVPFLabels = [];
+          lmn1VPFCounts = [];
+          lmn2VPFCounts = [];
+
+          for (final defect in topDefectsVPF) {
+            defectVPFLabels.add(defect['label']?.toString() ?? '');
+            lmn1VPFCounts.add(int.tryParse(defect['lmn1'].toString()) ?? 0);
+            lmn2VPFCounts.add(int.tryParse(defect['lmn2'].toString()) ?? 0);
+          }
+        });
+      },
+      onDone: () => print("🛑 Visual WebSocket closed"),
+      onError: (err) => print("❌ WebSocket error: $err"),
+    );
+
+    _isWebSocketConnected = true;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1611,6 +1762,8 @@ class _VisualPageState extends State<VisualPage> {
                                                   fetchZoneData(); // Refresh the entire zone (fermi + metrics)
                                                   _fetchEscalations(); // 2️⃣ pull fresh STOP & ESCALATION list
                                                 },
+                                                lmn01: lmn01,
+                                                lmn02: lmn02,
                                               )
                                             : const Center(
                                                 child: Text(

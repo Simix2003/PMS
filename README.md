@@ -136,6 +136,7 @@ Versions:
 "2.4.9" Changed UI/UX/BE for Stops and Escalations
 "2.4.10" Added Per-Station Hourly Throughput for STR
 "2.4.11" Fixed ELL visual NoGood
+"2.4.12" Working on LMN Visual Page
 
 ## OWASP dependency verification
 

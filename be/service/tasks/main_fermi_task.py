@@ -13,8 +13,8 @@ from service.connections.mysql import create_stop, get_mysql_connection
 from service.controllers.plc import PLCConnection
 from service.helpers.helpers import get_channel_config
 from service.config.config import CHANNELS, PLC_DB_RANGES, debug
-from service.helpers.buffer_plc_extract import extract_bool, extract_string, extract_int, extract_DT
-from service.helpers.visual_helper import refresh_fermi_data
+from service.helpers.buffer_plc_extract import extract_string, extract_int, extract_DT
+from service.helpers.visuals.visual_helper import refresh_fermi_data
 from service.state.global_state import db_write_queue, plc_read_executor, plc_write_executor
 from service.helpers.executor import run_in_thread
 

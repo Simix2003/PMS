@@ -6,7 +6,8 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.state import global_state
-from service.helpers.visual_helper import compute_zone_snapshot, load_targets, save_targets
+from service.helpers.visuals.visual_helper import load_targets, save_targets
+from service.helpers.visuals.compute import compute_zone_snapshot
 from service.config.config import ZONE_SOURCES
 
 router = APIRouter()

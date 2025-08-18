@@ -116,7 +116,7 @@ from service.config.config import CHANNELS, IMAGES_DIR, LOG_FILE, PLC_DB_RANGES,
 from service.connections.mysql import get_mysql_connection, load_channels_from_db
 from service.tasks.main_esito_task import background_task
 from service.tasks.main_fermi_task import fermi_task
-from service.helpers.visual_helper import refresh_median_cycle_time_ELL, refresh_median_cycle_time_vpf
+from service.helpers.visuals.visual_helper import refresh_median_cycle_time_ELL, refresh_median_cycle_time_vpf
 from service.state.global_state import (
     plc_connections,
     stop_threads,

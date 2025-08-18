@@ -30,8 +30,9 @@ from service.state.global_state import (
 
 )
 import service.state.global_state as global_state
-from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string, extract_swapped_int, extract_int
-from service.helpers.visual_helper import refresh_top_defects_ell, refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data, update_visual_data_on_new_module
+from service.helpers.buffer_plc_extract import extract_bool, extract_s7_string, extract_string, extract_int
+from service.helpers.visuals.visual_helper import refresh_top_defects_ell, refresh_top_defects_qg2, refresh_top_defects_vpf, refresh_vpf_defects_data
+from service.helpers.visuals.update_snapshot import update_visual_data_on_new_module
 from service.routes.mbj_routes import parse_mbj_details
 from service.helpers.executor import run_in_thread
 from service.helpers.ell_buffer import mirror_defects, mirror_ell_production

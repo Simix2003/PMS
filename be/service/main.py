@@ -348,6 +348,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         CHANNELS.clear()
         PLC_DB_RANGES.clear()
         channels, plc_ranges = await async_load_channels()
+        print('Channels:', channels)
         CHANNELS.update(channels)
         PLC_DB_RANGES.update(plc_ranges)
         init_global_flags()

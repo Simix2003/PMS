@@ -55,6 +55,8 @@ def update_visual_data_on_new_module(
             _update_snapshot_ell_new(data, station_name, esito, ts, cycle_time, bufferIds, object_id)
         elif zone == "STR":
             _update_snapshot_str(data, station_name, esito, ts)
+        elif zone == "LMN":
+            _update_snapshot_lmn(data, station_name, esito, ts)
         else:
             logger.info(f"Unknown zone: {zone}")
             return

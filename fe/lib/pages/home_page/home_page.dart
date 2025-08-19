@@ -296,7 +296,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "C'è stato un problema durante l'invio dei difetti. fai una foto a questa pagina ti prego e falla vedere al ragazzo che di solito aggiorna i tablet così riesco a capire cosa è successo, ti prego, ti prego, ti prego, '-' ",
+                "C'è stato un problema durante l'invio dei difetti.",
                 style:
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),

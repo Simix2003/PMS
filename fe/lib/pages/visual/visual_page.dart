@@ -133,11 +133,11 @@ class _VisualPageState extends State<VisualPage> {
     levels: const [
       LMNLevel(name: 'L1', state: LevelState.active),
       LMNLevel(name: 'L2', state: LevelState.active),
-      LMNLevel(name: 'L3', state: LevelState.deactivated),
+      LMNLevel(name: 'L3', state: LevelState.active),
       LMNLevel(name: 'L4', state: LevelState.active),
-      LMNLevel(name: 'L5', state: LevelState.down),
+      LMNLevel(name: 'L5', state: LevelState.active),
       LMNLevel(name: 'L6', state: LevelState.active),
-      LMNLevel(name: 'L7', state: LevelState.deactivated),
+      LMNLevel(name: 'L7', state: LevelState.active),
     ],
   );
 
@@ -145,9 +145,9 @@ class _VisualPageState extends State<VisualPage> {
     stationName: 'LMN02',
     levels: const [
       LMNLevel(name: 'L1', state: LevelState.active),
-      LMNLevel(name: 'L2', state: LevelState.down),
-      LMNLevel(name: 'L3', state: LevelState.down),
-      LMNLevel(name: 'L4', state: LevelState.deactivated),
+      LMNLevel(name: 'L2', state: LevelState.active),
+      LMNLevel(name: 'L3', state: LevelState.active),
+      LMNLevel(name: 'L4', state: LevelState.active),
       LMNLevel(name: 'L5', state: LevelState.active),
       LMNLevel(name: 'L6', state: LevelState.active),
       LMNLevel(name: 'L7', state: LevelState.active),
@@ -1284,15 +1284,18 @@ class _VisualPageState extends State<VisualPage> {
               data['station_2_yield_shifts'] ?? []);
 
           // Merge shift data for combined chart (assumes same length/order)
-          mergedShiftData = List.generate(
-              station1Shifts.length,
-              (index) => {
-                    'shift': station1Shifts[index]['label'],
-                    'lmn1': station1Shifts[index]['yield'],
-                    'lmn2': station2Shifts.length > index
-                        ? station2Shifts[index]['yield']
-                        : null,
-                  });
+          mergedShiftData = List.generate(station1Shifts.length, (index) {
+            final s1 =
+                (station1Shifts[index]['yield'] as num?)?.toDouble() ?? 0.0;
+            final s2 = station2Shifts.length > index
+                ? (station2Shifts[index]['yield'] as num?)?.toDouble() ?? 0.0
+                : 0.0;
+            return {
+              'shift': station1Shifts[index]['label'],
+              'station1': s1,
+              'station2': s2,
+            };
+          });
 
           // throughput chart data: ok / ng per shift
           throughputData = shiftThroughput.map<Map<String, int>>((e) {

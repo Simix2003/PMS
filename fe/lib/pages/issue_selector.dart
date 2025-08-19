@@ -1058,7 +1058,8 @@ class IssueSelectorWidgetState extends State<IssueSelectorWidget>
                       ),
                       child: backgroundImageUrl.isNotEmpty
                           ? _buildOverlayView()
-                          : const SizedBox.shrink(),
+                          : Text(
+                              'Il modulo non è stato trovato in nessuna stazione QG2'),
                     ),
                 ],
               ),

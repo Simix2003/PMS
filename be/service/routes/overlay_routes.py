@@ -46,7 +46,7 @@ async def get_overlay_config(
         if config_path.lower() == path.lower():
             image_url = f"/images/{line_name}/{target_station}/{image_name}"
             if not debug:
-                image_url = f"https://172.16.250.33:8050{image_url}"
+                image_url = f"https://10.10.33.134:8050{image_url}"
             else:
                 image_url = f"http://localhost:8001{image_url}"
 

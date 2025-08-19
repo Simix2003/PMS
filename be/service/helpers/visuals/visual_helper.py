@@ -6,13 +6,13 @@ import os
 import sys
 import copy
 from collections import defaultdict
-from typing import Dict, DefaultDict, Any, List, Optional
+from typing import Dict, DefaultDict, Optional
 import json
 from statistics import median
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection
-from service.config.config import ELL_VISUAL, ZONE_SOURCES, TARGETS_FILE, DEFAULT_TARGETS
+from service.config.config import TARGETS_FILE, DEFAULT_TARGETS
 from service.state import global_state
 from service.routes.broadcast import broadcast_zone_update
 

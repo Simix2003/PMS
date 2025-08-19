@@ -45,13 +45,18 @@ ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
         "station_1_out_ng": ["LMN01"], 
         "station_2_out_ng": ["LMN02"]
     },
+     "DELTAMAX": {
+        "station_1_in":     ["DELTAMAX"],
+        "station_2_in":     ["RWS01"],
+        "station_1_out_ng": ["DELTAMAX"],
+        "station_2_out_ng": ["RWS01"]
+    },
 }
 # Default fallback values
 DEFAULT_TARGETS = {
     "yield_target": 90,
     "shift_target": 366
 }
-
 
 PLC_DB_RANGES: dict = {}  # {(ip, slot): {db_number: {"min": x, "max": y}}}
 

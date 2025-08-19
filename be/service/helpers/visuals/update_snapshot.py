@@ -57,6 +57,8 @@ def update_visual_data_on_new_module(
             _update_snapshot_str(data, station_name, esito, ts)
         elif zone == "LMN":
             _update_snapshot_lmn(data, station_name, esito, ts)
+        elif zone == "DELTAMAX":
+            _update_snapshot_deltamax(data, station_name, esito, ts)
         else:
             logger.info(f"Unknown zone: {zone}")
             return
@@ -919,3 +921,358 @@ def _update_snapshot_lmn(
         _touch_hourly("station_1_yield_last_8h")
     elif station_name in cfg["station_2_out_ng"]:
         _touch_hourly("station_2_yield_last_8h")
+
+def _update_snapshot_deltamax(
+    data: dict,
+    station_name: str,
+    esito: int,
+    ts: datetime,
+    bufferIds: List[str] = [],
+    object_id: Optional[str] = None,
+    reentered: bool = False
+    ) -> None:
+
+    def _get_shift_label_and_start(ts_str: str):
+        ts = datetime.fromisoformat(ts_str)
+        shift_start, _ = get_shift_window(ts)
+        label = (
+            "S1" if 6 <= shift_start.hour < 14 else
+            "S2" if 14 <= shift_start.hour < 22 else
+            "S3"
+        )
+        return label, shift_start
+
+    def _get_hour_label(ts_str: str) -> str:
+        ts = datetime.fromisoformat(ts_str)
+        return ts.replace(minute=0, second=0, microsecond=0).strftime("%H:%M")
+
+    try:
+        cfg = ZONE_SOURCES["DELTAMAX"]
+        current_shift_start, _ = get_shift_window(ts)
+        current_shift_label = (
+            "S1" if 6 <= current_shift_start.hour < 14 else
+            "S2" if 14 <= current_shift_start.hour < 22 else
+            "S3"
+        )
+
+        # ———————————————————————————————————————————————————————————————
+        # Safely wrap sets/dicts expected to be updated
+        data["latest_esito"] = data.get("latest_esito", {})
+        data["latest_ts"] = data.get("latest_ts", {})
+        data["s1_ng_set"] = set(data.get("s1_ng_set", []))
+        data["reworked_set"] = set(data.get("reworked_set", []))
+        data["good_after_rework_set"] = set(data.get("good_after_rework_set", []))
+        data["s2_entry_set"] = set(data.get("s2_entry_set", []))
+        data["multi_entry_set"] = set(data.get("multi_entry_set", []))
+        data["s1_success_set"] = set(data.get("s1_success_set", []))
+
+        # Critical one: must be defaultdict(int) to avoid crash
+        data["s1_entry_count"] = defaultdict(int, data.get("s1_entry_count", {}))
+
+        # ———————————————————————————————————————————————————————————————
+
+        # 1. Update Counters
+        if not reentered:
+            if station_name in cfg["station_1_in"]:
+                data["station_1_in"] += 1
+                data["station_1_r0_in"] += 1
+            elif station_name in cfg["station_2_in"]:
+                data["station_2_in"] += 1
+                data["station_2_r0_in"] += 1
+        
+            if esito == 6:
+                if station_name in cfg['station_qg_1']:
+                    data["station_1_ng_qg2"] += 1
+                    data["ng_tot"] += 1
+                elif station_name in cfg['station_qg_2']:
+                    data["station_1_ng_qg2"] += 1
+                    data["ng_tot"] += 1
+                elif station_name in cfg["station_1_out_ng"]:
+                    data["station_1_r0_ng"] += 1
+                    data["station_1_out_ng"] += 1
+                    data["ng_tot"] += 1
+                elif station_name in cfg["station_2_out_ng"]:
+                    data["station_2_r0_ng"] += 1
+                    data["station_2_out_ng"] += 1
+        
+        if reentered:
+            if esito == 1:
+                if station_name in cfg["station_1_out_ng"]:
+                    data["station_1_out_ng"] -= 1
+                    data["ng_tot"] -= 1
+
+        # 1a. Track “distinct modules that hit NG at station 1”:
+        if station_name in cfg["station_2_in"] and esito == 5:
+            data["reworked_set"].add(object_id)
+
+        # 1c. Track “of those, who then passed at ELL”:
+        if station_name in cfg["station_1_in"] and esito != 6:
+            if object_id in data["reworked_set"]:
+                data["good_after_rework_set"].add(object_id)
+
+        # When passing station_1_in
+        if station_name in cfg["station_1_in"] and object_id:
+            data["s1_entry_count"][object_id] += 1
+            if data["s1_entry_count"][object_id] > 1:
+                data["multi_entry_set"].add(object_id)
+
+        if object_id in data["multi_entry_set"] and esito == 1:
+            data["s1_success_set"].add(object_id)
+
+        if station_name in cfg["station_2_in"]:
+            if object_id:
+                data["s2_entry_set"].add(object_id)
+
+        # 2 Yield
+        # FPY = good on first pass / total first-pass
+        s1_good_r0 = data["station_1_r0_in"] - data["station_1_r0_ng"]
+        data["FPY_yield"] = compute_yield(s1_good_r0, data["station_1_r0_ng"])
+
+        #RWK = Good after being Reworked / total in
+
+        # Always track latest esito for RWK calculation
+        if station_name in cfg["station_1_in"] + cfg["station_1_out_ng"]:
+            data["latest_esito"][object_id] = esito
+            data["latest_ts"][object_id] = ts.isoformat()
+
+        final_statuses = [
+            es for oid, es in data["latest_esito"].items()
+            if oid in data["latest_ts"] and _get_shift_label_and_start(data["latest_ts"][oid]) == (current_shift_label, current_shift_start)
+        ]
+
+        final_good = sum(1 for es in final_statuses if es != 6)
+        final_ng   = sum(1 for es in final_statuses if es == 6)
+
+        data["RWK_yield"] = compute_yield(final_good, final_ng)
+
+        # ———————————————————————————————————————————————————————————————
+        # Gauge 1: re-entries / station_2_in
+        denom = len(data["s2_entry_set"])
+        num_multi = len(data["multi_entry_set"])
+        data["value_gauge_1"] = round((num_multi / denom) * 100, 2) if denom else 0.0
+
+        # Gauge 2: multi-entry modules that ended in esito=1 / multi-entry
+        num_success = len(data["s1_success_set"])
+        data["value_gauge_2"] = round((num_success / num_multi) * 100, 2) if num_multi else 0.0
+        # ———————————————————————————————————————————————————————————————
+
+        # 5 Update Throughput
+        def update_shift_throughput(thr_data):
+            is_in_station = station_name in cfg["station_1_in"] or station_name in cfg["station_2_in"]
+            is_ell_station = station_name in cfg["station_1_out_ng"]
+            is_scrap_station = station_name in cfg["station_2_out_ng"]
+
+            for shift in thr_data:
+                if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                    if is_in_station:
+                        shift["total"] += 1
+                    if esito == 6 and is_ell_station:
+                        shift["ng"] += 1
+                    if esito == 6 and is_scrap_station:
+                        shift["scrap"] += 1
+                    break
+
+        update_shift_throughput(data["shift_throughput"])
+
+        # 6 Update shift yields
+        def update_shift_yield_fpy(fpy_shift_data, is_r0_at_s1: bool):
+            if not is_r0_at_s1:
+                return
+            for shift in fpy_shift_data:
+                if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+                    if esito == 6:
+                        shift["ng"] += 1
+                    else:
+                        shift["good"] += 1
+                    shift["yield"] = compute_yield(shift["good"], shift["ng"])
+                    break
+
+        def update_shift_yield_rwk(rwk_shift_data, station_name: str, object_id: Optional[str], esito: int):
+            if object_id is None:
+                return
+            # Track latest esito by object_id globally
+            latest_esito = data["latest_esito"]
+            latest_esito[object_id] = esito
+
+            # Recompute good/ng per shift
+            for shift in rwk_shift_data:
+                start_ts = shift["start"]
+                if shift["label"] == current_shift_label and start_ts == current_shift_start.isoformat():
+                    latest_ts = data["latest_ts"]
+                    latest_esito = data["latest_esito"]
+
+                    relevant = [
+                        oid for oid in latest_ts
+                        if _get_shift_label_and_start(latest_ts[oid]) == (current_shift_label, current_shift_start)
+                    ]
+
+                    final_good = sum(1 for oid in relevant if latest_esito.get(oid) != 6)
+                    final_ng   = len(relevant) - final_good
+
+                    shift["good"] = final_good
+                    shift["ng"] = final_ng
+                    shift["yield"] = compute_yield(final_good, final_ng)
+                    break
+
+        # Update per-shift FPY
+        update_shift_yield_fpy(
+            data["FPY_yield_shifts"],
+            not reentered and station_name in cfg["station_1_out_ng"]
+        )
+
+        # Update per-shift RWK
+        update_shift_yield_rwk(
+            data["RWK_yield_shifts"],
+            station_name,
+            object_id,
+            esito
+        )
+
+        # 7 Update hourly bins
+        hour_start = ts.replace(minute=0, second=0, microsecond=0)
+        hour_label = hour_start.strftime("%H:%M")
+
+        def _touch_hourly_fpy():
+            if not reentered and station_name in cfg["station_1_out_ng"]:
+                lst = data["FPY_yield_last_8h"]
+                for entry in lst:
+                    if entry["hour"] == hour_label:
+                        if esito == 6:
+                            entry["ng"] += 1
+                        else:
+                            entry["good"] += 1
+                        entry["yield"] = compute_yield(entry["good"], entry["ng"])
+                        break
+                else:
+                    data["FPY_yield_last_8h"].append({
+                        "hour": hour_label,
+                        "start": hour_start.isoformat(),
+                        "end": (hour_start + timedelta(hours=1)).isoformat(),
+                        "good": 0 if esito == 6 else 1,
+                        "ng": 1 if esito == 6 else 0,
+                        "yield": compute_yield(0 if esito == 6 else 1, 1 if esito == 6 else 0)
+                    })
+                    data["FPY_yield_last_8h"][:] = data["FPY_yield_last_8h"][-8:]
+
+        def _touch_hourly_rwk():
+            if object_id is None:
+                return
+            # always update RWK using latest_esito
+            lst = data["RWK_yield_last_8h"]
+
+            latest_ts = data["latest_ts"]
+            latest_esito = data["latest_esito"]
+
+            relevant = [
+                oid for oid in latest_ts
+                if _get_hour_label(latest_ts[oid]) == hour_label
+            ]
+
+            final_good = sum(1 for oid in relevant if latest_esito.get(oid) != 6)
+            final_ng   = len(relevant) - final_good
+
+            yield_val = compute_yield(final_good, final_ng)
+
+            for entry in lst:
+                if entry["hour"] == hour_label:
+                    entry["good"] = final_good
+                    entry["ng"] = final_ng
+                    entry["yield"] = yield_val
+                    break
+            else:
+                data["RWK_yield_last_8h"].append({
+                    "hour": hour_label,
+                    "start": hour_start.isoformat(),
+                    "end": (hour_start + timedelta(hours=1)).isoformat(),
+                    "good": final_good,
+                    "ng": final_ng,
+                    "yield": yield_val
+                })
+                data["RWK_yield_last_8h"][:] = data["RWK_yield_last_8h"][-8:]
+
+        def _touch_hourly_throughput():
+            is_in_station = station_name in cfg["station_1_in"] or station_name in cfg["station_2_in"]
+            is_ell_station = station_name in cfg["station_1_out_ng"]
+            is_scrap_station = station_name in cfg["station_2_out_ng"]
+
+            if not (is_in_station or (esito == 6 and (is_ell_station or is_scrap_station))):
+                return
+
+            lst = data["last_8h_throughput"]
+            for entry in lst:
+                if entry["hour"] == hour_label:
+                    if is_in_station:
+                        entry["total"] += 1
+                    if esito == 6 and is_ell_station:
+                        entry["ng"] += 1
+                    if esito == 6 and is_scrap_station:
+                        entry["scrap"] += 1
+                    break
+            else:
+                lst.append({
+                    "hour": hour_label,
+                    "start": hour_start.isoformat(),
+                    "end": (hour_start + timedelta(hours=1)).isoformat(),
+                    "total": 1 if is_in_station else 0,
+                    "ng": 1 if esito == 6 and is_ell_station else 0,
+                    "scrap": 1 if esito == 6 and is_scrap_station else 0
+                })
+                lst[:] = lst[-8:]
+
+        _touch_hourly_fpy()
+        _touch_hourly_rwk()
+        _touch_hourly_throughput()
+
+        # ===================== 4. Buffer‑ID defect trace  =====================
+        if bufferIds:
+            with get_mysql_connection() as conn:
+                with conn.cursor() as cursor:
+                    bufferIds = [b.strip() for b in bufferIds if b and b.strip()]
+                    if bufferIds:
+                        placeholders = ",".join(["%s"] * len(bufferIds))
+                        cursor.execute(
+                            f"""
+                            SELECT 
+                            o.id_modulo,
+                            COALESCE(p.id, 0) AS production_id,
+                            SUM(p.station_id = 40) AS rwk_count,
+                            COALESCE(
+                                JSON_ARRAYAGG(
+                                    JSON_OBJECT(
+                                        'defect_id', od.defect_id,
+                                        'defect_type',
+                                            CASE 
+                                                WHEN od.defect_id = 1 THEN od.defect_type
+                                                ELSE COALESCE(d.category, 'Sconosciuto')
+                                            END,
+                                        'extra_data', IFNULL(od.extra_data,'')
+                                    )
+                                ),
+                                JSON_ARRAY()
+                            ) AS defects
+                        FROM objects o
+                        LEFT JOIN productions p
+                            ON p.object_id = o.id
+                        AND p.esito = 6
+                        LEFT JOIN object_defects od 
+                            ON od.production_id = p.id
+                        LEFT JOIN defects d 
+                            ON d.id = od.defect_id
+                        WHERE o.id_modulo IN ({placeholders})
+                        GROUP BY o.id_modulo, p.id;
+                            """,
+                            bufferIds,
+                        )
+                        data["bufferDefectSummary"] = [
+                            {
+                                "object_id": row["id_modulo"],
+                                "production_id": row["production_id"],
+                                "rework_count": int(row["rwk_count"] or 0),
+                                "defects": json.loads(row["defects"]) if row["defects"] else [],
+                            }
+                            for row in cursor.fetchall()
+                        ]
+
+    except Exception:
+        logger.exception("Error in _update_snapshot_DELTAMAX()")
+        raise

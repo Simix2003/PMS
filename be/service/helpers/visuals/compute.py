@@ -1091,7 +1091,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
 
             ng_scraps = int(n + cell_scraps)
 
-            station_in[f"station_{idx}_in"] = g + n
+            station_in[f"station_{idx}_in"] = g
             station_ng[f"station_{idx}_out_ng"] = n
             station_scrap[f"station_{idx}_scrap"] = cell_scraps
             station_yield[f"station_{idx}_yield"] = compute_yield(g, ng_scraps)

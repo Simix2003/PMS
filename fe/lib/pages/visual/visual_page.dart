@@ -175,7 +175,10 @@ class _VisualPageState extends State<VisualPage> {
     "STR04": 7,
     "STR05": 8,
     "LMN01": 93,
-    "LMN02": 47
+    "LMN02": 47,
+    "DELTAMAX": 92,
+    "RWS01": 40,
+    "RMI01": 3,
   };
 
   Map<String, int> calculateEscalationCounts(
@@ -204,6 +207,8 @@ class _VisualPageState extends State<VisualPage> {
       await fetchStrZoneData();
     } else if (widget.zone == "LMN") {
       await fetchLmnZoneData();
+    } else if (widget.zone == "DELTAMAX") {
+      await fetchDeltamaxZoneData();
     } else {
       print('Cannote fetch zone data Unknown zone: $widget.zone');
     }
@@ -741,6 +746,93 @@ class _VisualPageState extends State<VisualPage> {
     }
   }
 
+  Future<void> fetchDeltamaxZoneData() async {
+    try {
+      final visualResponse = await ApiService.fetchVisualDataForDeltamax();
+
+      setState(() {
+        In_1 = visualResponse['station_1_in'] ?? 0;
+        In_2 = visualResponse['station_2_in'] ?? 0;
+        ngOut_1 = visualResponse['station_1_r0_ng'] ?? 0;
+        ngScrap = visualResponse['station_2_out_ng'] ?? 0;
+
+        currentFPYYield = visualResponse['FPY_yield'] ?? 100;
+        currentRWKYield = visualResponse['RWK_yield'] ?? 100;
+
+        FPYLast8h = List<Map<String, dynamic>>.from(
+            visualResponse['FPY_yield_last_8h'] ?? []);
+        RWKLast8h = List<Map<String, dynamic>>.from(
+            visualResponse['RWK_yield_last_8h'] ?? []);
+        shiftThroughput = List<Map<String, dynamic>>.from(
+            visualResponse['shift_throughput'] ?? []);
+        hourlyThroughput = List<Map<String, dynamic>>.from(
+            visualResponse['last_8h_throughput'] ?? []);
+        FPY_yield_shifts = List<Map<String, dynamic>>.from(
+            visualResponse['FPY_yield_shifts'] ?? []);
+        RWK_yield_shifs = List<Map<String, dynamic>>.from(
+            visualResponse['RWK_yield_shifts'] ?? []);
+
+        final shiftCount = math.min(3, FPY_yield_shifts.length);
+        mergedShiftData = List.generate(shiftCount, (index) {
+          return {
+            'shift': FPY_yield_shifts[index]['label'],
+            'FPY': FPY_yield_shifts[index]['yield'],
+            'RWK': RWK_yield_shifs[index]['yield'],
+          };
+        });
+
+        throughputDataEll = shiftThroughput.map<Map<String, int>>((e) {
+          final total = (e['total'] ?? 0) as int;
+          final ng = (e['ng'] ?? 0) as int;
+          final scrap = (e['scrap'] ?? 0) as int;
+          return {'ok': total - ng - scrap, 'ng': ng, 'scrap': scrap};
+        }).toList();
+
+        shiftLabels =
+            shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
+
+        hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+          final total = (e['total'] ?? 0) as int;
+          final ng = (e['ng'] ?? 0) as int;
+          final scrap = (e['scrap'] ?? 0) as int;
+          return {'ok': total - ng, 'ng': ng, 'scrap': scrap};
+        }).toList();
+
+        hourLabels =
+            hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
+        final topDefectsRaw = List<Map<String, dynamic>>.from(
+            visualResponse['top_defects'] ?? []);
+
+        defectLabels = [];
+        min1Counts = [];
+        min2Counts = [];
+        ellCounts = [];
+
+        for (final defect in topDefectsRaw) {
+          defectLabels.add(defect['label']?.toString() ?? '');
+          min1Counts.add(int.tryParse(defect['min1'].toString()) ?? 0);
+          min2Counts.add(int.tryParse(defect['min2'].toString()) ?? 0);
+          ellCounts.add(int.tryParse(defect['ell'].toString()) ?? 0);
+        }
+
+        value_gauge_1 =
+            double.tryParse(visualResponse['value_gauge_1'].toString()) ?? 0.0;
+        value_gauge_2 =
+            double.tryParse(visualResponse['value_gauge_2'].toString()) ?? 0.0;
+
+        _loadBufferData(); // ⬅️ Call your API-based loader on every update
+
+        isLoading = false;
+      });
+    } catch (e) {
+      print("❌ Error fetching zone data: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
 // Helper: map station name ("STR01" etc.) to 1–5 index
   int _stationIdFromName(String name) {
     final num = int.tryParse(RegExp(r'\d+$').firstMatch(name)?.group(0) ?? '');
@@ -810,6 +902,8 @@ class _VisualPageState extends State<VisualPage> {
       _initializeStrWebSocket();
     } else if (widget.zone == "LMN") {
       _initializeLmnWebSocket();
+    } else if (widget.zone == "DELTAMAX") {
+      _initializeDeltamaxWebSocket();
     } else {
       print('Cannot initialize websocket Unknown zone: $widget.zone');
     }
@@ -1246,6 +1340,111 @@ class _VisualPageState extends State<VisualPage> {
       },
       onDone: () => print("🛑 Visual WebSocket closed"),
       onError: (err) => print("❌ WebSocket error: $err"),
+    );
+
+    _isWebSocketConnected = true;
+  }
+
+  void _initializeDeltamaxWebSocket() {
+    if (_isWebSocketConnected) return;
+
+    int toIntSafe(dynamic value) => value is int
+        ? value
+        : value is double
+            ? value.toInt()
+            : int.tryParse(value.toString()) ?? 0;
+
+    double toDoubleSafe(dynamic value) => value is double
+        ? value
+        : value is int
+            ? value.toDouble()
+            : double.tryParse(value.toString()) ?? 0.0;
+
+    _webSocketService.connectToVisual(
+      line: 'Linea2',
+      zone: widget.zone,
+      onMessage: (data) {
+        if (!mounted) return;
+
+        print('📡 WebSocket message received: $data');
+
+        setState(() {
+          // ─── Station Metrics ───────────────────────────
+          In_1 = toIntSafe(data['station_1_in']);
+          In_2 = toIntSafe(data['station_2_in']);
+          ngOut_1 = toIntSafe(data['station_1_r0_ng']);
+          ngScrap = toIntSafe(data['station_2_out_ng']);
+
+          currentFPYYield = toDoubleSafe(data['FPY_yield']).round();
+          currentRWKYield = toDoubleSafe(data['RWK_yield']).round();
+
+          // ─── Yield + Throughput ────────────────────────
+          FPYLast8h =
+              List<Map<String, dynamic>>.from(data['FPY_yield_last_8h'] ?? []);
+          RWKLast8h =
+              List<Map<String, dynamic>>.from(data['RWK_yield_last_8h'] ?? []);
+          shiftThroughput =
+              List<Map<String, dynamic>>.from(data['shift_throughput'] ?? []);
+          hourlyThroughput =
+              List<Map<String, dynamic>>.from(data['last_8h_throughput'] ?? []);
+          FPY_yield_shifts =
+              List<Map<String, dynamic>>.from(data['FPY_yield_shifts'] ?? []);
+          RWK_yield_shifs =
+              List<Map<String, dynamic>>.from(data['RWK_yield_shifts'] ?? []);
+
+          final shiftCount = math.min(3, FPY_yield_shifts.length);
+          mergedShiftData = List.generate(shiftCount, (index) {
+            return {
+              'shift': FPY_yield_shifts[index]['label'],
+              'FPY': toDoubleSafe(FPY_yield_shifts[index]['yield']),
+              'RWK': toDoubleSafe(RWK_yield_shifs[index]['yield']),
+            };
+          });
+
+          throughputDataEll = shiftThroughput.map<Map<String, int>>((e) {
+            final total = toIntSafe(e['total']);
+            final ng = toIntSafe(e['ng']);
+            final scrap = toIntSafe(e['scrap']);
+            return {'ok': total - ng - scrap, 'ng': ng, 'scrap': scrap};
+          }).toList();
+
+          shiftLabels =
+              shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
+
+          hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+            final total = toIntSafe(e['total']);
+            final ng = toIntSafe(e['ng']);
+            final scrap = toIntSafe(e['scrap']);
+            return {'ok': total - ng, 'ng': ng, 'scrap': scrap};
+          }).toList();
+
+          hourLabels =
+              hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
+          // ─── Defects Chart ─────────────────────────────
+          final topDefectsRaw =
+              List<Map<String, dynamic>>.from(data['top_defects'] ?? []);
+
+          defectLabels = [];
+          min1Counts = [];
+          min2Counts = [];
+          ellCounts = [];
+
+          for (final defect in topDefectsRaw) {
+            defectLabels.add(defect['label']?.toString() ?? '');
+            min1Counts.add(toIntSafe(defect['min1']));
+            min2Counts.add(toIntSafe(defect['min2']));
+            ellCounts.add(toIntSafe(defect['ell']));
+          }
+
+          _loadBufferData(); // ⬅️ Call your API-based loader on every update
+
+          value_gauge_1 = toDoubleSafe(data['value_gauge_1']);
+          value_gauge_2 = toDoubleSafe(data['value_gauge_2']);
+        });
+      },
+      onDone: () => print("Visual WebSocket closed"),
+      onError: (err) => print("WebSocket error: $err"),
     );
 
     _isWebSocketConnected = true;

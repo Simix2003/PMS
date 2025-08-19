@@ -1013,6 +1013,39 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> fetchVisualDataForDeltamax() async {
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/visual_data?zone=DELTAMAX'));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      return {
+        ...data,
+        'station_1_in': data['station_1_in'] ?? 0,
+        'station_2_in': data['station_2_in'] ?? 0,
+        'station_1_ng_qg2': data['station_1_ng_qg2'] ?? 0,
+        'station_1_out_ng': data['station_1_out_ng'] ?? 0,
+        'station_2_out_ng': data['station_2_out_ng'] ?? 0,
+        'FPY_yield': data['FPY_yield'] ?? 100,
+        'RWK_yield': data['RWK_yield'] ?? 100,
+        'FPY_yield_shifts': data['FPY_yield_shifts'] ?? [],
+        'RWK_yield_shifts': data['RWK_yield_shifts'] ?? [],
+        'FPY_yield_last_8h': data['FPY_yield_last_8h'] ?? [],
+        'RWK_yield_last_8h': data['RWK_yield_last_8h'] ?? [],
+        'shift_throughput': data['shift_throughput'] ?? [],
+        'last_8h_throughput': data['last_8h_throughput'] ?? [],
+        'fermi_data': data['fermi_data'] ?? [],
+        'top_defects': data['top_defects'] ?? [],
+        'buffer_ids': data['buffer_ids'] ?? [],
+        'value_gauge_1': data['value_gauge_1'] ?? 0,
+        'value_gauge_2': data['value_gauge_2'] ?? 0,
+      };
+    } else {
+      throw Exception('Failed to load ELL visual data');
+    }
+  }
+
   Future<Map<String, dynamic>?> createStop({
     required int stationId,
     required String startTime,

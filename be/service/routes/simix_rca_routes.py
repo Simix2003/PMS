@@ -15,7 +15,8 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-MODEL_PATH = r"D:\AI\Models\gemma-3n-E4B-it-Q4_K_M.gguf"
+#MODEL_PATH = r"D:\AI\Models\gemma-3n-E4B-it-Q4_K_M.gguf"
+MODEL_PATH = r"D:\AI\Models\gemma-3-270m-it-F16.gguf"
 N_THREADS = 4
 MODEL_AVAILABLE = True
 

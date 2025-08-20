@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../shared/services/api_service.dart';
+import '../../shared/widgets/password.dart';
 
 class StopButton extends StatelessWidget {
   final int lastNShifts;
@@ -88,6 +89,10 @@ class _StopDialogState extends State<_StopDialog> {
 
   late TabController _tabController;
 
+  bool alreadyClosed = false;
+  int minutes = 0;
+  final TextEditingController _minutesCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -137,6 +142,7 @@ class _StopDialogState extends State<_StopDialog> {
   void dispose() {
     _reasonCtrl.dispose();
     _editReasonCtrl.dispose();
+    _minutesCtrl.dispose();
     super.dispose();
   }
 
@@ -160,8 +166,10 @@ class _StopDialogState extends State<_StopDialog> {
     }
 
     newList.sort((a, b) {
-      if (a['status'] == 'OPEN' && b['status'] != 'OPEN') return -1;
-      if (a['status'] != 'OPEN' && b['status'] == 'OPEN') return 1;
+      final aOpen = a['end_time'] == null;
+      final bOpen = b['end_time'] == null;
+      if (aOpen && !bOpen) return -1;
+      if (!aOpen && bOpen) return 1;
       return b['id'].compareTo(a['id']);
     });
 
@@ -205,68 +213,158 @@ class _StopDialogState extends State<_StopDialog> {
 
   Map<String, dynamic> _normalizeStop(Map<String, dynamic> s,
       {String? station}) {
+    final start = s['start_time'] is DateTime
+        ? s['start_time'] as DateTime
+        : DateTime.tryParse(s['start_time'].toString());
+    final end = s['end_time'] == null
+        ? null
+        : (s['end_time'] is DateTime
+            ? s['end_time'] as DateTime
+            : DateTime.tryParse(s['end_time'].toString()));
+
+    final statusRaw = (s['status'] ?? '').toString().toUpperCase().trim();
+    // If end exists, treat as CLOSED regardless of server status string.
+    final status =
+        end != null ? 'CLOSED' : (statusRaw.isEmpty ? 'OPEN' : statusRaw);
+
     return {
       'id': s['id'],
       'title': s['reason'] ?? s['title'] ?? 'Fermo',
-      'status': s['status'],
+      'status': status,
       'station': station ?? s['station'],
-      'start_time': s['start_time'] is DateTime
-          ? s['start_time']
-          : DateTime.tryParse(s['start_time'].toString()),
-      'end_time': s['end_time'] == null
-          ? null
-          : (s['end_time'] is DateTime
-              ? s['end_time']
-              : DateTime.tryParse(s['end_time'].toString())),
+      'start_time': start,
+      'end_time': end,
     };
   }
 
-  Future<void> _startStop() async {
-    if (_selectedStation == null || _reasonCtrl.text.isEmpty) return;
-    setState(() => _busy = true); // show spinner
-    final now = DateTime.now();
-
-    final res = await _api.createStop(
-      stationId: _stationNameToId[_selectedStation!]!,
-      startTime: now.toIso8601String().split('.').first,
-      operatorId: 'TOTEM',
-      stopType: 'STOP',
-      reason: _reasonCtrl.text,
-      status: 'OPEN',
-      linkedProductionId: widget.linkedProductionId,
+  Future<bool> _requirePassword() async {
+    return await showPasswordGate(
+      context,
+      title: 'Operazione protetta',
+      subtitle: 'Inserisci la password per procedere',
+      verify: (pwd) async {
+        // TODO: replace with your API call, e.g. await Api.verifyPassword(pwd)
+        return pwd == 'PMS2025'; // placeholder
+      },
     );
+  }
 
-    if (res != null && res['status'] == 'ok') {
-      widget.onStopStarted?.call({
-        'id': res['stop_id'],
-        'station': _selectedStation,
-        'reason': _reasonCtrl.text,
-        'start': now,
-      });
+  Future<void> _startStop() async {
+    if (_busy) return;
 
-      await _fetchStops(keepSelectedId: res['stop_id']);
+    // Validations
+    final station = _selectedStation;
+    final reason = _reasonCtrl.text.trim();
+    if (station == null || reason.isEmpty) return;
+    if (alreadyClosed && minutes <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inserisci i minuti di fermo (> 0)')),
+      );
+      return;
     }
 
-    setState(() => _busy = false); // hide spinner
+    // 🔒 Ask every time
+    final ok = await _requirePassword();
+    if (!ok) return;
 
-    // Automatically close the dialog after starting
-    if (mounted) {
-      Navigator.of(context).pop();
+    setState(() => _busy = true);
+    try {
+      final now = DateTime.now();
+      final start =
+          alreadyClosed ? now.subtract(Duration(minutes: minutes)) : now;
+      final startIso = start.toIso8601String().split('.').first;
+      final endIso =
+          alreadyClosed ? now.toIso8601String().split('.').first : null;
+
+      final createRes = await _api.createStop(
+        stationId: _stationNameToId[station]!,
+        startTime: startIso,
+        endTime: endIso, // ⬅️ pass when alreadyClosed
+        operatorId: 'TOTEM',
+        stopType: 'STOP',
+        reason: reason,
+        status: alreadyClosed ? 'CLOSED' : 'OPEN', // ⬅️ CLOSED if backfilled
+        linkedProductionId: widget.linkedProductionId,
+      );
+
+      if (createRes == null || createRes['status'] != 'ok') {
+        throw 'createStop failed';
+      }
+
+      final createdId = createRes['stop_id'];
+
+      // 2) If alreadyClosed, close it *now* (so duration = minutes)
+      if (alreadyClosed) {
+        final endIso = now.toIso8601String().split('.').first;
+        final closeRes = await _api.updateStopStatus(
+          stopId: createdId,
+          newStatus: 'CLOSED',
+          changedAt: endIso, // backend should set end_time = changedAt
+          operatorId: 'TOTEM',
+        );
+        if (closeRes == null || closeRes['status'] != 'ok') {
+          // If backend returns a different shape, show hint
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Attenzione: chiusura non confermata')),
+          );
+        }
+        // tiny delay to let DB commit before reloading
+        await Future.delayed(const Duration(milliseconds: 120));
+      }
+
+      // Callback for UI (use the intended start time)
+      widget.onStopStarted?.call({
+        'id': createdId,
+        'station': station,
+        'reason': reason,
+        'start': start,
+      });
+
+      // 3) Force a clean refresh (avoid stale OPEN row)
+      _selectedIndex = null; // don’t stick to possibly stale selection
+      await _fetchStops(keepSelectedId: createdId);
+
+      if (mounted) Navigator.of(context).pop(); // close dialog
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore inserimento fermo: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _stopStop() async {
+    if (_busy) return;
     if (_selectedIndex == null) return;
-    final id = _stopsLive[_selectedIndex!]['id'];
 
-    await _api.updateStopStatus(
-      stopId: id,
-      newStatus: 'CLOSED',
-      changedAt: DateTime.now().toIso8601String().split('.').first,
-      operatorId: 'NO OPERATOR',
-    );
-    await _fetchStops();
-    widget.onStopsUpdated?.call();
+    // 🔒 Ask every time
+    final ok = await _requirePassword();
+    if (!ok) return;
+
+    setState(() => _busy = true);
+    try {
+      final id = _stopsLive[_selectedIndex!]['id'];
+      await _api.updateStopStatus(
+        stopId: id,
+        newStatus: 'CLOSED',
+        changedAt: DateTime.now().toIso8601String().split('.').first,
+        operatorId: 'NO OPERATOR',
+      );
+      await _fetchStops();
+      widget.onStopsUpdated?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore chiusura fermo: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _updateReason(int id) async {
@@ -934,6 +1032,42 @@ class _StopDialogState extends State<_StopDialog> {
             'Crea un nuovo fermo macchina',
             style: TextStyle(fontSize: 16, color: Color(0xFF8E8E93)),
           ),
+          const SizedBox(height: 24),
+          CheckboxListTile(
+            value: alreadyClosed,
+            onChanged: (v) {
+              setState(() {
+                alreadyClosed = v ?? false;
+                if (!alreadyClosed) {
+                  minutes = 0;
+                  _minutesCtrl.clear();
+                }
+              });
+            },
+            title: const Text('Il fermo è già stato chiuso'),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+          ),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: alreadyClosed
+                ? Padding(
+                    key: const ValueKey('minutesField'),
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: TextField(
+                      controller: _minutesCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Minuti di fermo',
+                        border: OutlineInputBorder(),
+                        helperText: 'Inserisci la durata totale (in minuti)',
+                      ),
+                      onChanged: (v) => minutes = int.tryParse(v) ?? 0,
+                      inputFormatters: const [], // add FilteringTextInputFormatter.digitsOnly if you import services.dart
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
           const SizedBox(height: 40),
           const Text('Stazione', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
@@ -967,9 +1101,13 @@ class _StopDialogState extends State<_StopDialog> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Avvia Fermo',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w600)),
+              child: alreadyClosed
+                  ? const Text('Inserisci Fermo',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w600))
+                  : const Text('Avvia Fermo',
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -980,6 +1118,7 @@ class _StopDialogState extends State<_StopDialog> {
   Widget _buildDetail(Map<String, dynamic> stop) {
     final DateTime start = stop['start_time'] ?? DateTime.now();
     final Duration duration = DateTime.now().difference(start);
+    final DateTime? end = stop['end_time']; // ← may be null
 
     return Container(
       padding: const EdgeInsets.all(32),
@@ -1067,10 +1206,14 @@ class _StopDialogState extends State<_StopDialog> {
                   ),
                 ]),
                 const SizedBox(height: 20),
+
+                // ✅ Duration uses end when present
                 Text('Durata: ${_formatDuration(duration)}',
                     style: const TextStyle(fontSize: 16)),
                 const SizedBox(height: 20),
-                if (stop['status'] == 'OPEN')
+
+                // ✅ Only show STOP button if still open (end_time == null)
+                if (end == null)
                   ElevatedButton(
                     onPressed: _stopStop,
                     style: ElevatedButton.styleFrom(

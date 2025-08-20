@@ -1048,18 +1048,20 @@ class ApiService {
 
   Future<Map<String, dynamic>?> createStop({
     required int stationId,
-    required String startTime,
+    required String startTime, // ISO "yyyy-MM-ddTHH:mm:ss"
+    String? endTime, // ⬅️ NEW (ISO). Null = still OPEN
     required String operatorId,
     required String stopType,
     required String reason,
-    required String status,
+    required String status, // 'OPEN' | 'CLOSED'
     int? linkedProductionId,
   }) async {
     final url = Uri.parse('$baseUrl/api/escalation/create_stop');
 
-    final payload = {
+    final payload = <String, dynamic>{
       "station_id": stationId,
       "start_time": startTime,
+      if (endTime != null) "end_time": endTime, // ⬅️ include only if provided
       "operator_id": operatorId,
       "stop_type": stopType,
       "reason": reason,

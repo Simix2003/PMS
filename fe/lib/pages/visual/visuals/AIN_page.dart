@@ -1,8 +1,9 @@
-// ignore_for_file: must_be_immutable, non_constant_identifier_names
+// ignore_for_file: must_be_immutable, non_constant_identifier_names, use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:gauge_indicator/gauge_indicator.dart';
 import 'package:ix_monitor/pages/visual/visual_widgets.dart';
+import 'package:ix_monitor/shared/widgets/password.dart';
 import '../../../shared/services/api_service.dart';
 import '../escalation_visual.dart';
 import 'dart:async';
@@ -118,10 +119,26 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
   }
 
   Future<void> showTargetEditDialog({
+    required BuildContext context,
     required String title,
     required int currentValue,
     required void Function(int newValue) onValueSaved,
   }) async {
+    // 1) Ask password first
+    final ok = await showPasswordGate(
+      context,
+      title: 'Modifica protetta',
+      subtitle: 'Autenticati per modificare $title',
+      verify: (pwd) async {
+        // TODO: replace with your real logic (example):
+        // final res = await ApiService.verifyPassword(pwd);
+        // return res.ok;
+        return pwd == 'PMS2025'; // placeholder
+      },
+    );
+    if (!ok) return;
+
+    // 2) Proceed with your existing dialog
     final controller = TextEditingController(text: currentValue.toString());
     int? newValue;
 
@@ -132,10 +149,8 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
-          decoration: InputDecoration(labelText: 'Nuovo valore'),
-          onChanged: (value) {
-            newValue = int.tryParse(value);
-          },
+          decoration: const InputDecoration(labelText: 'Nuovo valore'),
+          onChanged: (value) => newValue = int.tryParse(value),
         ),
         actions: [
           TextButton(
@@ -144,9 +159,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
           ),
           ElevatedButton(
             onPressed: () {
-              if (newValue != null) {
-                onValueSaved(newValue!);
-              }
+              if (newValue != null) onValueSaved(newValue!);
               Navigator.of(context).pop();
             },
             child: const Text('Salva'),
@@ -274,6 +287,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                     child: GestureDetector(
                       onTap: () {
                         showTargetEditDialog(
+                          context: context,
                           title: 'Target Produzione Shift',
                           currentValue: shift_target,
                           onValueSaved: (newVal) async {
@@ -301,6 +315,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
               child: GestureDetector(
                 onTap: () {
                   showTargetEditDialog(
+                    context: context,
                     title: 'Target Yield',
                     currentValue: yield_target,
                     onValueSaved: (newVal) async {

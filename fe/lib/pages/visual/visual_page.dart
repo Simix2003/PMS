@@ -388,18 +388,6 @@ class _VisualPageState extends State<VisualPage> {
     try {
       final visualResponse = await ApiService.fetchVisualDataForEll();
 
-      // 👇 Add this: fetch real-time buffer defects
-      final bufferResponse = await ApiService.fetchBufferDefectSummary(
-        plcIp: '192.168.32.2',
-        db: 19603,
-        byte: 0,
-        length: 21,
-        stringLength: 20,
-        debug: false,
-      );
-
-      print('Buffer response : $bufferResponse');
-
       setState(() {
         In_1 = visualResponse['station_1_in'] ?? 0;
         In_2 = visualResponse['station_2_in'] ?? 0;
@@ -674,8 +662,6 @@ class _VisualPageState extends State<VisualPage> {
             'station2': station2Shifts[index]['yield'],
           };
         });
-
-        print('Merged shift data: $mergedShiftData');
 
         throughputData = shiftThroughput.map<Map<String, int>>((e) {
           final total = (e['total'] ?? 0) as int;
@@ -1104,8 +1090,6 @@ class _VisualPageState extends State<VisualPage> {
       onMessage: (data) {
         if (!mounted) return;
 
-        print('📡 WebSocket message received: $data');
-
         setState(() {
           // ─── Station Metrics ───────────────────────────
           In_1 = toIntSafe(data['station_1_in']);
@@ -1377,8 +1361,6 @@ class _VisualPageState extends State<VisualPage> {
       zone: widget.zone,
       onMessage: (data) {
         if (!mounted) return;
-
-        print('📡 WebSocket message received: $data');
 
         setState(() {
           // ─── Station Metrics ───────────────────────────
@@ -1685,8 +1667,6 @@ class _VisualPageState extends State<VisualPage> {
     final now = DateTime.now();
     final nextHour = DateTime(now.year, now.month, now.day, now.hour + 1);
     final initialDelay = nextHour.difference(now);
-
-    print("⏳ Scheduling first refresh in ${initialDelay.inSeconds} seconds");
 
     Future.delayed(initialDelay, () {
       fetchZoneData();

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../shared/models/globals.dart';
 import '../../shared/services/api_service.dart';
+import '../../shared/widgets/password.dart';
 
 class EscalationButton extends StatelessWidget {
   final int? linkedProductionId;
@@ -166,35 +167,83 @@ class _EscalationDialogState extends State<_EscalationDialog> {
   }
 
   Future<void> _createNewEscalation() async {
-    // FAKING THEM BECAUSE OF RICHARD
-    //TODO: FIX THIS
+    if (_busy) return; // avoid double taps
+
+    // 🔒 Ask password first
+    final ok = await showPasswordGate(
+      context,
+      title: 'Creazione Escalation protetta',
+      subtitle: 'Inserisci la password per procedere',
+      verify: (pwd) async {
+        // TODO: replace with your real API call
+        // return await ApiService.verifyPassword(pwd);
+        return pwd == 'PMS2025'; // placeholder
+      },
+    );
+
+    if (!ok) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Autenticazione annullata o non valida')),
+        );
+      }
+      return;
+    }
+
+    // (Keep your defaults for now)
     _newStation = _defaultStation;
     _newType = _defaultType;
 
+    // ✅ Validate inputs
     if (_newStation == null ||
         _newType == null ||
         _newStatus == null ||
-        _reasonCtrl.text.isEmpty) return;
-    setState(() => _busy = true);
-    final nowIso = DateTime.now().toIso8601String().split('.').first;
+        _reasonCtrl.text.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Compila tutti i campi richiesti')),
+        );
+      }
+      return;
+    }
 
-    await _api.createStop(
-      stationId: stationNameToId[_newStation!]!,
-      startTime: nowIso,
-      operatorId: operatorId,
-      stopType: _newType!,
-      reason: _reasonCtrl.text,
-      status: _newStatus!,
-      linkedProductionId: widget.linkedProductionId,
-    );
-    await _fetchExistingStops();
-    setState(() {
-      _busy = false;
-      _reasonCtrl.clear();
-      _newStation = null;
-      _newType = null;
-      _newStatus = null;
-    });
+    setState(() => _busy = true);
+    try {
+      final nowIso = DateTime.now().toIso8601String().split('.').first;
+
+      await _api.createStop(
+        stationId: stationNameToId[_newStation!]!,
+        startTime: nowIso,
+        operatorId: operatorId,
+        stopType: _newType!,
+        reason: _reasonCtrl.text.trim(),
+        status: _newStatus!,
+        linkedProductionId: widget.linkedProductionId,
+      );
+
+      await _fetchExistingStops();
+
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _reasonCtrl.clear();
+        _newStation = null;
+        _newType = null;
+        _newStatus = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Escalation creata')),
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore creazione: $e')),
+        );
+      }
+    }
   }
 
   Map<String, dynamic> normalizeStop(Map<String, dynamic> stop,

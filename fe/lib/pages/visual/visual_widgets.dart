@@ -2429,12 +2429,8 @@ class YieldComparisonBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('Data received: $data');
     final currentShift = _getCurrentShift();
     final orderedData = reorderShifts(data, currentShift);
-
-    print('orderedData: $orderedData');
-
     return Card(
       color: Colors.white,
       elevation: 6,
@@ -2980,11 +2976,8 @@ class YieldComparisonBarChartLMN extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('Data received: $data');
     final currentShift = _getCurrentShift();
     final orderedData = reorderShifts(data, currentShift);
-
-    print('orderedData: $orderedData');
 
     return Card(
       color: Colors.white,

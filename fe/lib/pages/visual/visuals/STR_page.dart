@@ -165,7 +165,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
   Color getYieldColor(int value, int target) {
     if (value >= target) {
       return widget.okColor; // GREEN
-    } else if (value >= target - 5) {
+    } else if (value >= target - 3) {
       return widget.warningColor; // ORANGE
     } else {
       return widget.errorColor; // RED
@@ -408,15 +408,23 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
                                                 // 🔴 First Circle
                                                 const SizedBox(width: 6),
-                                                Container(
-                                                  width: widget.circleSize,
-                                                  height: widget.circleSize,
-                                                  decoration: BoxDecoration(
-                                                    color: getStationColor(
-                                                        widget.stationStatus[
-                                                                1] ??
-                                                            0),
-                                                    shape: BoxShape.circle,
+                                                Visibility(
+                                                  visible:
+                                                      false, // 👈 TARTARUGA
+                                                  maintainSize:
+                                                      true, // keeps its width/height
+                                                  maintainAnimation: true,
+                                                  maintainState: true,
+                                                  child: Container(
+                                                    width: widget.circleSize,
+                                                    height: widget.circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color: getStationColor(
+                                                          widget.stationStatus[
+                                                                  1] ??
+                                                              0),
+                                                      shape: BoxShape.circle,
+                                                    ),
                                                   ),
                                                 ),
 
@@ -612,15 +620,23 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
                                                 // 🔴 First Circle
                                                 const SizedBox(width: 6),
-                                                Container(
-                                                  width: widget.circleSize,
-                                                  height: widget.circleSize,
-                                                  decoration: BoxDecoration(
-                                                    color: getStationColor(
-                                                        widget.stationStatus[
-                                                                2] ??
-                                                            0),
-                                                    shape: BoxShape.circle,
+                                                Visibility(
+                                                  visible:
+                                                      false, // 👈 TARTARUGA
+                                                  maintainSize:
+                                                      true, // keeps its width/height
+                                                  maintainAnimation: true,
+                                                  maintainState: true,
+                                                  child: Container(
+                                                    width: widget.circleSize,
+                                                    height: widget.circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color: getStationColor(
+                                                          widget.stationStatus[
+                                                                  2] ??
+                                                              0),
+                                                      shape: BoxShape.circle,
+                                                    ),
                                                   ),
                                                 ),
 
@@ -815,15 +831,23 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
                                                 // 🔴 First Circle
                                                 const SizedBox(width: 6),
-                                                Container(
-                                                  width: widget.circleSize,
-                                                  height: widget.circleSize,
-                                                  decoration: BoxDecoration(
-                                                    color: getStationColor(
-                                                        widget.stationStatus[
-                                                                3] ??
-                                                            0),
-                                                    shape: BoxShape.circle,
+                                                Visibility(
+                                                  visible:
+                                                      false, // 👈 TARTARUGA
+                                                  maintainSize:
+                                                      true, // keeps its width/height
+                                                  maintainAnimation: true,
+                                                  maintainState: true,
+                                                  child: Container(
+                                                    width: widget.circleSize,
+                                                    height: widget.circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color: getStationColor(
+                                                          widget.stationStatus[
+                                                                  3] ??
+                                                              0),
+                                                      shape: BoxShape.circle,
+                                                    ),
                                                   ),
                                                 ),
 
@@ -1018,15 +1042,23 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
                                                 // 🔴 First Circle
                                                 const SizedBox(width: 6),
-                                                Container(
-                                                  width: widget.circleSize,
-                                                  height: widget.circleSize,
-                                                  decoration: BoxDecoration(
-                                                    color: getStationColor(
-                                                        widget.stationStatus[
-                                                                4] ??
-                                                            0),
-                                                    shape: BoxShape.circle,
+                                                Visibility(
+                                                  visible:
+                                                      false, // 👈 TARTARUGA
+                                                  maintainSize:
+                                                      true, // keeps its width/height
+                                                  maintainAnimation: true,
+                                                  maintainState: true,
+                                                  child: Container(
+                                                    width: widget.circleSize,
+                                                    height: widget.circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color: getStationColor(
+                                                          widget.stationStatus[
+                                                                  4] ??
+                                                              0),
+                                                      shape: BoxShape.circle,
+                                                    ),
                                                   ),
                                                 ),
 
@@ -1221,15 +1253,23 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
 
                                                 // 🔴 First Circle
                                                 const SizedBox(width: 6),
-                                                Container(
-                                                  width: widget.circleSize,
-                                                  height: widget.circleSize,
-                                                  decoration: BoxDecoration(
-                                                    color: getStationColor(
-                                                        widget.stationStatus[
-                                                                5] ??
-                                                            0),
-                                                    shape: BoxShape.circle,
+                                                Visibility(
+                                                  visible:
+                                                      false, // 👈 TARTARUGA
+                                                  maintainSize:
+                                                      true, // keeps its width/height
+                                                  maintainAnimation: true,
+                                                  maintainState: true,
+                                                  child: Container(
+                                                    width: widget.circleSize,
+                                                    height: widget.circleSize,
+                                                    decoration: BoxDecoration(
+                                                      color: getStationColor(
+                                                          widget.stationStatus[
+                                                                  5] ??
+                                                              0),
+                                                      shape: BoxShape.circle,
+                                                    ),
                                                   ),
                                                 ),
 

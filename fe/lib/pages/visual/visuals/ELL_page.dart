@@ -299,12 +299,12 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                       Row(
                                         children: [
                                           const SizedBox(
-                                            width: 100,
+                                            width: 90,
                                           ), // aligns with the AIN 1 / AIN 2 label
                                           Flexible(
                                             child: Center(
                                               child: Text(
-                                                'IN',
+                                                'IN ELL G + NG (R = 0)',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 16,
@@ -312,11 +312,11 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 70),
+                                          const SizedBox(width: 60),
                                           Flexible(
                                             child: Center(
                                               child: Text(
-                                                'NG TOT',
+                                                'NG TOT (R = 0)',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 16,
@@ -344,13 +344,20 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
 
                                             // 🔴 First Circle
                                             const SizedBox(width: 8),
-                                            Container(
-                                              width: widget.circleSize,
-                                              height: widget.circleSize,
-                                              decoration: BoxDecoration(
-                                                color: getStationColor(
-                                                    widget.station_1_status),
-                                                shape: BoxShape.circle,
+                                            Visibility(
+                                              visible: false, // 👈 TARTARUGA
+                                              maintainSize:
+                                                  true, // keeps its width/height
+                                              maintainAnimation: true,
+                                              maintainState: true,
+                                              child: Container(
+                                                width: widget.circleSize,
+                                                height: widget.circleSize,
+                                                decoration: BoxDecoration(
+                                                  color: getStationColor(
+                                                      widget.station_1_status),
+                                                  shape: BoxShape.circle,
+                                                ),
                                               ),
                                             ),
 
@@ -448,20 +455,12 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                             width: 100,
                                           ), // aligns with the AIN 1 / AIN 2 label
                                           Flexible(
-                                            child: Visibility(
-                                              visible: false,
-                                              maintainSize: true,
-                                              maintainAnimation: true,
-                                              maintainState: true,
-                                              maintainSemantics: true,
-                                              maintainInteractivity: false,
-                                              child: Center(
-                                                child: Text(
-                                                  'IN',
-                                                  style: TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16,
-                                                  ),
+                                            child: Center(
+                                              child: Text(
+                                                'NG Other',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 16,
                                                 ),
                                               ),
                                             ),
@@ -502,58 +501,50 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                             ),
                                             SizedBox(width: 8),
 
-                                            Visibility(
-                                              visible: false,
-                                              maintainSize: true,
-                                              maintainAnimation: true,
-                                              maintainState: true,
-                                              maintainSemantics: true,
-                                              maintainInteractivity: false,
-                                              child: Container(
-                                                width: widget.circleSize,
-                                                height: widget.circleSize,
-                                                decoration: BoxDecoration(
-                                                  color: getStationColor(
-                                                      widget.station_2_status),
-                                                  shape: BoxShape.circle,
+                                            // 🟢 Second Circle
+                                            Container(
+                                              width: widget.circleSize,
+                                              height: widget.circleSize,
+                                              decoration: BoxDecoration(
+                                                color: widget.qg2_ng == 0
+                                                    ? Colors.white
+                                                    : getNgColor(widget.qg2_ng,
+                                                        widget.in_1),
+                                                shape: BoxShape.circle,
+                                                border: Border.all(
+                                                  color: widget.qg2_ng == 0
+                                                      ? Colors.black
+                                                      : Colors.transparent,
+                                                  width: 2,
                                                 ),
                                               ),
                                             ),
 
                                             SizedBox(width: 8),
 
-                                            Visibility(
-                                              child: Flexible(
-                                                child: Card(
-                                                  color: Colors.white,
-                                                  elevation:
-                                                      0, // <-- Removes the default shadow
-                                                  shadowColor: Colors
-                                                      .transparent, // Extra safety: no shadow color
-                                                  child: Container(
-                                                    decoration: BoxDecoration(
-                                                      border: Border.all(
-                                                        color: Colors
-                                                            .transparent, // No border
-                                                        width: 0,
-                                                      ),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12),
+                                            Flexible(
+                                              child: Card(
+                                                color: Colors.white,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    border: Border.all(
+                                                      color: widget.textColor,
+                                                      width: 1,
                                                     ),
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        vertical: 12),
-                                                    child: Center(
-                                                      child: Text(
-                                                        widget.in_2.toString(),
-                                                        style: const TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 32,
-                                                          color: Colors
-                                                              .transparent, // Hide text completely
-                                                        ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(vertical: 12),
+                                                  child: Center(
+                                                    child: Text(
+                                                      widget.qg2_ng.toString(),
+                                                      style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 32,
+                                                        color: widget.textColor,
                                                       ),
                                                     ),
                                                   ),

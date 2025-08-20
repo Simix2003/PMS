@@ -266,7 +266,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
               child: Row(
                 children: [
                   HeaderBox(
-                    title: 'Bussing\nLinea B',
+                    title: 'QG2\nLinea B',
                     target: '',
                     Title: true,
                   ),
@@ -358,25 +358,25 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                     children: [
                                       Row(
                                         children: [
-                                          const SizedBox(width: 100),
+                                          const SizedBox(width: 140),
                                           Flexible(
                                             child: Center(
                                               child: Text(
-                                                'Bussing IN',
+                                                'Moduli Processati Bussing',
                                                 style: TextStyle(
                                                     fontWeight: FontWeight.bold,
-                                                    fontSize: 18),
+                                                    fontSize: 16),
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 70),
+                                          const SizedBox(width: 60),
                                           Flexible(
                                             child: Center(
                                               child: Text(
-                                                'NG Bussing OUT',
+                                                'NG QG2 + NG Bussing',
                                                 style: TextStyle(
                                                     fontWeight: FontWeight.bold,
-                                                    fontSize: 18),
+                                                    fontSize: 16),
                                               ),
                                             ),
                                           ),
@@ -386,19 +386,26 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                       Flexible(
                                         child: Row(
                                           children: [
-                                            Text('AIN 1',
+                                            Text('QG2\nBussing 1',
                                                 style: TextStyle(
                                                     fontWeight: FontWeight.bold,
-                                                    fontSize: 24,
+                                                    fontSize: 18,
                                                     color: Colors.black)),
                                             const SizedBox(width: 8),
-                                            Container(
-                                              width: widget.circleSize,
-                                              height: widget.circleSize,
-                                              decoration: BoxDecoration(
-                                                color: getStationColor(
-                                                    widget.station_1_status),
-                                                shape: BoxShape.circle,
+                                            Visibility(
+                                              visible: false, // 👈 TARTARUGA
+                                              maintainSize:
+                                                  true, // keeps its width/height
+                                              maintainAnimation: true,
+                                              maintainState: true,
+                                              child: Container(
+                                                width: widget.circleSize,
+                                                height: widget.circleSize,
+                                                decoration: BoxDecoration(
+                                                  color: getStationColor(
+                                                      widget.station_1_status),
+                                                  shape: BoxShape.circle,
+                                                ),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
@@ -492,19 +499,26 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                       Flexible(
                                         child: Row(
                                           children: [
-                                            Text('AIN 2',
+                                            Text('QG2\nBussing 2',
                                                 style: TextStyle(
                                                     fontWeight: FontWeight.bold,
-                                                    fontSize: 24,
+                                                    fontSize: 18,
                                                     color: Colors.black)),
                                             const SizedBox(width: 8),
-                                            Container(
-                                              width: widget.circleSize,
-                                              height: widget.circleSize,
-                                              decoration: BoxDecoration(
-                                                color: getStationColor(
-                                                    widget.station_2_status),
-                                                shape: BoxShape.circle,
+                                            Visibility(
+                                              visible: false, // 👈 TARTARUGA
+                                              maintainSize:
+                                                  true, // keeps its width/height
+                                              maintainAnimation: true,
+                                              maintainState: true,
+                                              child: Container(
+                                                width: widget.circleSize,
+                                                height: widget.circleSize,
+                                                decoration: BoxDecoration(
+                                                  color: getStationColor(
+                                                      widget.station_2_status),
+                                                  shape: BoxShape.circle,
+                                                ),
                                               ),
                                             ),
                                             const SizedBox(width: 8),

@@ -396,13 +396,20 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                                                     fontSize: 24,
                                                     color: Colors.black)),
                                             const SizedBox(width: 8),
-                                            Container(
-                                              width: widget.circleSize,
-                                              height: widget.circleSize,
-                                              decoration: BoxDecoration(
-                                                color: getStationColor(
-                                                    widget.station_1_status),
-                                                shape: BoxShape.circle,
+                                            Visibility(
+                                              visible: false, // 👈 TARTARUGA
+                                              maintainSize:
+                                                  true, // keeps its width/height
+                                              maintainAnimation: true,
+                                              maintainState: true,
+                                              child: Container(
+                                                width: widget.circleSize,
+                                                height: widget.circleSize,
+                                                decoration: BoxDecoration(
+                                                  color: getStationColor(
+                                                      widget.station_1_status),
+                                                  shape: BoxShape.circle,
+                                                ),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
@@ -503,13 +510,20 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                                                     fontSize: 24,
                                                     color: Colors.black)),
                                             const SizedBox(width: 8),
-                                            Container(
-                                              width: widget.circleSize,
-                                              height: widget.circleSize,
-                                              decoration: BoxDecoration(
-                                                color: getStationColor(
-                                                    widget.station_2_status),
-                                                shape: BoxShape.circle,
+                                            Visibility(
+                                              visible: false, // 👈 TARTARUGA
+                                              maintainSize:
+                                                  true, // keeps its width/height
+                                              maintainAnimation: true,
+                                              maintainState: true,
+                                              child: Container(
+                                                width: widget.circleSize,
+                                                height: widget.circleSize,
+                                                decoration: BoxDecoration(
+                                                  color: getStationColor(
+                                                      widget.station_2_status),
+                                                  shape: BoxShape.circle,
+                                                ),
                                               ),
                                             ),
                                             const SizedBox(width: 8),
@@ -1355,11 +1369,29 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Icon(Icons.construction,
+                                    size: 64, color: Colors.orange),
+                                SizedBox(height: 12),
+                                Text(
+                                  'Work in Progress',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 32),
+
                             // Horizontal on wide screens; switch to vertical on mobile if you prefer.
-                            LMNLevels(
+                            /*LMNLevels(
                                 lmn01: widget.lmn01,
                                 lmn02: widget.lmn02,
-                                layoutAxis: Axis.vertical),
+                                layoutAxis: Axis.vertical),*/
 
                             Padding(
                               padding: const EdgeInsets.symmetric(

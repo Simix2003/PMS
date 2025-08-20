@@ -645,7 +645,7 @@ def _update_snapshot_ell_new(
 def _update_snapshot_str(
     data: dict,
     station_name: str,
-    esito: int,
+    esito: int,         # kept for signature compatibility; no longer used to gate NG adds
     ts: datetime
 ) -> None:
     """
@@ -653,6 +653,9 @@ def _update_snapshot_str(
     from str_visual_snapshot. PLC resets counters after each module, so we
     sum the deltas manually instead of fixed +1 increments.
     Matches the full aggregation logic from _compute_snapshot_str().
+
+    Updated to treat Cell NG as String-equivalent NG (cell_ngs = cell_NG // 10)
+    in both totals (IN) and NG counts, so yield reflects cells too.
     """
     cfg = ZONE_SOURCES["STR"]
     current_shift_start, _ = get_shift_window(ts)
@@ -672,7 +675,7 @@ def _update_snapshot_str(
     if not st_id:
         return
 
-    # Fetch latest module counts from DB
+    # Fetch latest per-module deltas from DB
     cell_g = cell_ng = string_g = string_ng = 0
     try:
         with get_mysql_connection() as conn:
@@ -686,20 +689,25 @@ def _update_snapshot_str(
                 """, (st_id,))
                 row = cursor.fetchone()
                 if row:
-                    cell_g = row.get("cell_G") or 0
-                    cell_ng = row.get("cell_NG") or 0
-                    string_g = row.get("string_G") or 0
+                    cell_g    = row.get("cell_G")    or 0
+                    cell_ng   = row.get("cell_NG")   or 0
+                    string_g  = row.get("string_G")  or 0
                     string_ng = row.get("string_NG") or 0
     except Exception as e:
         logger.warning(f"STR snapshot DB read failed for {station_name}: {e}")
 
-    cell_ngs = int(cell_ng / 10 )
+    # Convert cell-level NG into string-equivalent NG
+    cell_ngs = int(cell_ng / 10)
 
-    total_processed = string_g + string_ng
+    # Totals per module
+    total_processed = string_g + string_ng + cell_ngs
+    total_ng        = string_ng + cell_ngs
+    # good strings are only the actual OK strings
+    total_good      = string_g
 
-    # Update per-station totals
+    # Update per-station totals (IN and OUT_NG)
     for i in range(1, 6):
-        in_key = f"station_{i}_in"
+        in_key  = f"station_{i}_in"
         out_key = f"station_{i}_out_ng"
         if in_key not in data:
             data[in_key] = 0
@@ -707,39 +715,42 @@ def _update_snapshot_str(
             data[out_key] = 0
         if station_name in cfg[in_key]:
             data[in_key] += total_processed
-        if esito == 6 and station_name in cfg[out_key]:
-            data[out_key] += string_ng
+        if station_name in cfg[out_key]:
+            data[out_key] += total_ng
 
-    # Update yields per station
+    # Update yields per station (yield = good / (good + ng) = (in - ng) / in)
     for i in range(1, 6):
-        good = data.get(f"station_{i}_in", 0) - data.get(f"station_{i}_out_ng", 0)
-        data[f"station_{i}_yield"] = compute_yield(good, data.get(f"station_{i}_out_ng", 0))
+        good_i = data.get(f"station_{i}_in", 0) - data.get(f"station_{i}_out_ng", 0)
+        ng_i   = data.get(f"station_{i}_out_ng", 0)
+        data[f"station_{i}_yield"] = compute_yield(good_i, ng_i)
 
-    # Update shift throughput (total and NG counts for all STR stations)
-    is_in = any(station_name in cfg[f"station_{i}_in"] for i in range(1, 6))
-    is_ng = esito == 6 and any(station_name in cfg[f"station_{i}_out_ng"] for i in range(1, 6))
+    # Flags for membership (not gating by esito anymore)
+    is_in_station = any(station_name in cfg[f"station_{i}_in"] for i in range(1, 6))
+    is_ng_station = any(station_name in cfg[f"station_{i}_out_ng"] for i in range(1, 6))
+
+    # Update shift throughput (total and NG across STR)
     for shift in data.get("shift_throughput", []):
         if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-            if is_in:
+            if is_in_station:
                 shift["total"] += total_processed
-            if is_ng:
-                shift["ng"] += string_ng
+            if is_ng_station and total_ng:
+                shift["ng"] += total_ng
             break
 
     # Update STR aggregate yield (all 5 stations)
     for shift in data.get("str_yield_shifts", []):
         if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-            shift["good"] += string_g
-            shift["ng"] += string_ng
-            shift["scrap"] = shift.get("scrap", 0) + cell_ngs  # scrap totals
-            shift["yield"] = compute_yield(shift["good"], shift["ng"])
+            shift["good"]  += total_good
+            shift["ng"]    += total_ng
+            shift["scrap"]  = shift.get("scrap", 0) + cell_ngs
+            shift["yield"]  = compute_yield(shift["good"], shift["ng"])
             break
 
-    # Update Overall yield (now also all 5 stations, same as STR for now)
+    # Update Overall yield (same numbers as STR aggregate for now)
     for shift in data.get("overall_yield_shifts", []):
         if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-            shift["good"] += string_g
-            shift["ng"] += string_ng
+            shift["good"] += total_good
+            shift["ng"]   += total_ng
             shift["yield"] = compute_yield(shift["good"], shift["ng"])
             break
 
@@ -751,51 +762,49 @@ def _update_snapshot_str(
         lst = data.get(list_key, [])
         for entry in lst:
             if entry["hour"] == hour_label:
-                entry["good"] += add_good
-                entry["ng"] += add_ng
-                entry["yield"] = compute_yield(entry["good"], entry["ng"])
+                entry["good"]  += add_good
+                entry["ng"]    += add_ng
+                entry["yield"]  = compute_yield(entry["good"], entry["ng"])
                 break
         else:
             new_entry = {
-                "hour": hour_label,
+                "hour":  hour_label,
                 "start": hour_start.isoformat(),
-                "end": (hour_start + timedelta(hours=1)).isoformat(),
-                "good": add_good,
-                "ng": add_ng,
+                "end":   (hour_start + timedelta(hours=1)).isoformat(),
+                "good":  add_good,
+                "ng":    add_ng,
             }
             new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"])
             lst.append(new_entry)
         data[list_key] = lst[-8:]  # keep last 8 bins
 
-    if is_in or is_ng:
-        touch("str_yield_last_8h", string_g, string_ng)
-        touch("overall_yield_last_8h", string_g, string_ng)
-        # Update per-station hourly throughput
-    
+    if is_in_station and total_processed:
+        # include cell NG in NG for bins
+        touch("str_yield_last_8h",      total_good, total_ng)
+        touch("overall_yield_last_8h",  total_good, total_ng)
+
+    # Per-station hourly throughput
     per_station_key = "hourly_throughput_per_station"
-    station_idx = list(station_map).index(station_name) + 1  # STR01 → 1, STR05 → 5
+    station_idx = list(station_map).index(station_name) + 1  # STR01 → 1, ... STR05 → 5
 
     if per_station_key not in data:
         data[per_station_key] = {i: [] for i in range(1, 6)}  # 1–5
 
     station_bins = data[per_station_key][station_idx]
-
     for entry in station_bins:
         if entry["hour"] == hour_label:
-            entry["ok"] += string_g
-            entry["ng"] += string_ng
+            entry["ok"] += total_good
+            entry["ng"] += total_ng
             break
     else:
         station_bins.append({
-            "hour": hour_label,
+            "hour":  hour_label,
             "start": hour_start.isoformat(),
-            "end": (hour_start + timedelta(hours=1)).isoformat(),
-            "ok": string_g,
-            "ng": string_ng,
+            "end":   (hour_start + timedelta(hours=1)).isoformat(),
+            "ok":    total_good,
+            "ng":    total_ng,
         })
-
-    # Keep only last 8
-    data[per_station_key][station_idx] = station_bins[-8:]
+    data[per_station_key][station_idx] = station_bins[-8:]  # Keep only last 8
 
 def _update_snapshot_lmn(
     data: dict,

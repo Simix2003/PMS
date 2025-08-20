@@ -304,13 +304,20 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
 
                                             // 🔴 First Circle
                                             const SizedBox(width: 8),
-                                            Container(
-                                              width: widget.circleSize,
-                                              height: widget.circleSize,
-                                              decoration: BoxDecoration(
-                                                color: getStationColor(
-                                                    widget.station_1_status),
-                                                shape: BoxShape.circle,
+                                            Visibility(
+                                              visible: false, // 👈 TARTARUGA
+                                              maintainSize:
+                                                  true, // keeps its width/height
+                                              maintainAnimation: true,
+                                              maintainState: true,
+                                              child: Container(
+                                                width: widget.circleSize,
+                                                height: widget.circleSize,
+                                                decoration: BoxDecoration(
+                                                  color: getStationColor(
+                                                      widget.station_1_status),
+                                                  shape: BoxShape.circle,
+                                                ),
                                               ),
                                             ),
 

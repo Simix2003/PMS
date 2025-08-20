@@ -944,81 +944,86 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                       ),
                                     ),
                                     const SizedBox(width: 16),
+
+                                    // 🚧 Temporary replacement (Work in Progress)
                                     Column(
-                                      children: [
-                                        SizedBox(
-                                          width: 200,
-                                          child: Column(
-                                            children: [
-                                              AnimatedRadialGauge(
-                                                duration: const Duration(
-                                                    milliseconds: 800),
-                                                curve: Curves.easeInOut,
-                                                value: widget.availableTime_1
-                                                    .toDouble(),
-                                                radius: 100,
-                                                axis: GaugeAxis(
-                                                  min: 0,
-                                                  max: 100,
-                                                  degrees: 180,
-                                                  style: const GaugeAxisStyle(
-                                                    thickness: 16,
-                                                    background:
-                                                        Color(0xFFDDDDDD),
-                                                    segmentSpacing: 0,
-                                                  ),
-                                                  progressBar:
-                                                      GaugeRoundedProgressBar(
-                                                    color: () {
-                                                      if (widget
-                                                              .availableTime_1 <=
-                                                          50) {
-                                                        return widget
-                                                            .errorColor;
-                                                      }
-                                                      if (widget
-                                                              .availableTime_1 <=
-                                                          75) {
-                                                        return widget
-                                                            .warningColor;
-                                                      }
-                                                      return widget.okColor;
-                                                    }(),
-                                                  ),
-                                                ),
-                                                builder:
-                                                    (context, child, value) {
-                                                  return Center(
-                                                    child: Text(
-                                                      '${value.toInt()}%',
-                                                      style: const TextStyle(
-                                                        fontSize: 32,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                              const SizedBox(height: 6),
-                                              const Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text('0%',
-                                                      style: TextStyle(
-                                                          fontSize: 14)),
-                                                  Text('100%',
-                                                      style: TextStyle(
-                                                          fontSize: 14)),
-                                                ],
-                                              ),
-                                            ],
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: const [
+                                        Icon(Icons.construction,
+                                            size: 64, color: Colors.orange),
+                                        SizedBox(height: 12),
+                                        Text(
+                                          'Work in Progress',
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black54,
                                           ),
                                         ),
                                       ],
-                                    )
+                                    ),
+
+                                    /* 
+          // ⬇️ Original Gauge kept for later
+          Column(
+            children: [
+              SizedBox(
+                width: 200,
+                child: Column(
+                  children: [
+                    AnimatedRadialGauge(
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.easeInOut,
+                      value: widget.availableTime_1.toDouble(),
+                      radius: 100,
+                      axis: GaugeAxis(
+                        min: 0,
+                        max: 100,
+                        degrees: 180,
+                        style: const GaugeAxisStyle(
+                          thickness: 16,
+                          background: Color(0xFFDDDDDD),
+                          segmentSpacing: 0,
+                        ),
+                        progressBar: GaugeRoundedProgressBar(
+                          color: () {
+                            if (widget.availableTime_1 <= 50) {
+                              return widget.errorColor;
+                            }
+                            if (widget.availableTime_1 <= 75) {
+                              return widget.warningColor;
+                            }
+                            return widget.okColor;
+                          }(),
+                        ),
+                      ),
+                      builder: (context, child, value) {
+                        return Center(
+                          child: Text(
+                            '${value.toInt()}%',
+                            style: const TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('0%', style: TextStyle(fontSize: 14)),
+                        Text('100%', style: TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          */
                                   ],
                                 ),
                               ),
@@ -1042,81 +1047,86 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                       ),
                                     ),
                                     const SizedBox(width: 16),
+
+                                    // 🚧 Temporary replacement (Work in Progress)
                                     Column(
-                                      children: [
-                                        SizedBox(
-                                          width: 200,
-                                          child: Column(
-                                            children: [
-                                              AnimatedRadialGauge(
-                                                duration: const Duration(
-                                                    milliseconds: 800),
-                                                curve: Curves.easeInOut,
-                                                value: widget.availableTime_2
-                                                    .toDouble(),
-                                                radius: 100,
-                                                axis: GaugeAxis(
-                                                  min: 0,
-                                                  max: 100,
-                                                  degrees: 180,
-                                                  style: const GaugeAxisStyle(
-                                                    thickness: 16,
-                                                    background:
-                                                        Color(0xFFDDDDDD),
-                                                    segmentSpacing: 0,
-                                                  ),
-                                                  progressBar:
-                                                      GaugeRoundedProgressBar(
-                                                    color: () {
-                                                      if (widget
-                                                              .availableTime_2 <=
-                                                          50) {
-                                                        return widget
-                                                            .errorColor;
-                                                      }
-                                                      if (widget
-                                                              .availableTime_2 <=
-                                                          75) {
-                                                        return widget
-                                                            .warningColor;
-                                                      }
-                                                      return widget.okColor;
-                                                    }(),
-                                                  ),
-                                                ),
-                                                builder:
-                                                    (context, child, value) {
-                                                  return Center(
-                                                    child: Text(
-                                                      '${value.toInt()}%',
-                                                      style: const TextStyle(
-                                                        fontSize: 32,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                              const SizedBox(height: 6),
-                                              const Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Text('0%',
-                                                      style: TextStyle(
-                                                          fontSize: 14)),
-                                                  Text('100%',
-                                                      style: TextStyle(
-                                                          fontSize: 14)),
-                                                ],
-                                              ),
-                                            ],
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: const [
+                                        Icon(Icons.construction,
+                                            size: 64, color: Colors.orange),
+                                        SizedBox(height: 12),
+                                        Text(
+                                          'Work in Progress',
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black54,
                                           ),
                                         ),
                                       ],
-                                    )
+                                    ),
+
+                                    /*
+          // ⬇️ Original Gauge kept for later
+          Column(
+            children: [
+              SizedBox(
+                width: 200,
+                child: Column(
+                  children: [
+                    AnimatedRadialGauge(
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.easeInOut,
+                      value: widget.availableTime_2.toDouble(),
+                      radius: 100,
+                      axis: GaugeAxis(
+                        min: 0,
+                        max: 100,
+                        degrees: 180,
+                        style: const GaugeAxisStyle(
+                          thickness: 16,
+                          background: Color(0xFFDDDDDD),
+                          segmentSpacing: 0,
+                        ),
+                        progressBar: GaugeRoundedProgressBar(
+                          color: () {
+                            if (widget.availableTime_2 <= 50) {
+                              return widget.errorColor;
+                            }
+                            if (widget.availableTime_2 <= 75) {
+                              return widget.warningColor;
+                            }
+                            return widget.okColor;
+                          }(),
+                        ),
+                      ),
+                      builder: (context, child, value) {
+                        return Center(
+                          child: Text(
+                            '${value.toInt()}%',
+                            style: const TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('0%', style: TextStyle(fontSize: 14)),
+                        Text('100%', style: TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          */
                                   ],
                                 ),
                               ),

@@ -968,6 +968,23 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                                     ),
                                     const SizedBox(width: 16),
                                     Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: const [
+                                        Icon(Icons.construction,
+                                            size: 64, color: Colors.orange),
+                                        SizedBox(height: 12),
+                                        Text(
+                                          'Work in Progress',
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    /*Column(
                                       children: [
                                         SizedBox(
                                           width: 200,
@@ -1041,7 +1058,7 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                                           ),
                                         ),
                                       ],
-                                    )
+                                    )*/
                                   ],
                                 ),
                               ),
@@ -1066,6 +1083,23 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                                     ),
                                     const SizedBox(width: 16),
                                     Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: const [
+                                        Icon(Icons.construction,
+                                            size: 64, color: Colors.orange),
+                                        SizedBox(height: 12),
+                                        Text(
+                                          'Work in Progress',
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    /*Column(
                                       children: [
                                         SizedBox(
                                           width: 200,
@@ -1139,7 +1173,7 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                                           ),
                                         ),
                                       ],
-                                    )
+                                    )*/
                                   ],
                                 ),
                               ),

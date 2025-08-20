@@ -214,28 +214,27 @@ def _update_snapshot_vpf(
         data["station_1_re_entered"] += 1
         return  # ✅ skip all stats
 
-    # 1. Update counters
+    # 1) Counters
     if is_in_station:
         data["station_1_in"] += 1
-
     if esito == 6 and is_qc_station:
         data["station_1_out_ng"] += 1
 
-    # 2. Recompute yield
+    # 2) Recompute yield
     good = data["station_1_in"] - data["station_1_out_ng"]
     data["station_1_yield"] = compute_yield(good, data["station_1_out_ng"])
 
-    # 3. Update shift yield
+    # 3) Update shift yield (per-station)
     for shift in data["station_1_shifts"]:
         if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-            if esito == 6:
+            if esito == 6 and is_qc_station:
                 shift["ng"] += 1
-            else:
+            elif is_in_station:
                 shift["good"] += 1
             shift["yield"] = compute_yield(shift["good"], shift["ng"])
             break
 
-    # 4. Update hourly bins
+    # 4) Hourly bins (yield + throughput)
     hour_start = ts.replace(minute=0, second=0, microsecond=0)
     hour_label = hour_start.strftime("%H:%M")
 
@@ -243,28 +242,48 @@ def _update_snapshot_vpf(
         lst = data[list_key]
         for entry in lst:
             if entry["hour"] == hour_label:
-                if esito == 6:
-                    entry["ng"] += 1
+                if list_key == "last_8h_throughput":
+                    entry["total"] += 1
+                    if esito == 6:
+                        entry["ng"] += 1
                 else:
-                    entry["good"] += 1
-                entry["yield"] = compute_yield(entry["good"], entry["ng"])
+                    if esito == 6:
+                        entry["ng"] += 1
+                    else:
+                        entry["good"] += 1
+                    entry["yield"] = compute_yield(entry["good"], entry["ng"])
                 return
-        # Create new hour bin
+
+        # create new hour bin
         new_entry: dict = {
             "hour": hour_label,
             "start": hour_start.isoformat(),
             "end": (hour_start + timedelta(hours=1)).isoformat(),
-            "good": 1 if esito != 6 else 0,
-            "ng": 1 if esito == 6 else 0,
         }
-        new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"])
-        lst.append(new_entry)
-        lst[:] = lst[-8:]
+        if list_key == "last_8h_throughput":
+            new_entry.update({
+                "total": 1,
+                "ng": 1 if esito == 6 else 0,
+            })
+        else:
+            new_entry.update({
+                "good": 0 if esito == 6 else 1,
+                "ng":   1 if esito == 6 else 0,
+            })
+            new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"])
 
+        lst.append(new_entry)
+        lst[:] = lst[-8:]  # keep last 8
+
+    # Throughput: count any relevant event (in-station OR NG at QC)
     if is_in_station or (esito == 6 and is_qc_station):
+        _touch_hourly("last_8h_throughput")
+
+    # Yield 8h updates only when QC station reports (same as your original idea)
+    if is_qc_station:
         _touch_hourly("station_1_yield_last_8h")
 
-    # 5. Update speed_ratio
+    # 5) Speed ratio
     if cycle_time:
         try:
             h, m, s = cycle_time.split(":")

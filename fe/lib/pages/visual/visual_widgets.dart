@@ -1624,6 +1624,252 @@ class HourlyBarChart extends StatelessWidget {
   }
 }
 
+class HourlyBarChartVPF extends StatelessWidget {
+  final List<Map<String, int>> data;
+  final List<String> hourLabels;
+  final double target;
+
+  const HourlyBarChartVPF({
+    super.key,
+    required this.data,
+    required this.hourLabels,
+    required this.target,
+  });
+
+  double _calculateMaxY() {
+    final totals = data.map((e) => e['ok']! + e['ng']!).toList();
+    final maxData =
+        totals.isNotEmpty ? totals.reduce((a, b) => a > b ? a : b) : 0;
+    return maxData.toDouble() + 30; // Add some padding
+  }
+
+  List<BarChartGroupData> _buildBarGroups(double maxY) {
+    return List.generate(data.length, (index) {
+      final ok = data[index]['ok']!;
+      final ng = data[index]['ng']!;
+      final total = ok + ng;
+
+      return BarChartGroupData(
+        x: index,
+        showingTooltipIndicators: [0, 1],
+        barRods: [
+          BarChartRodData(
+            color: Colors.transparent,
+            fromY: 0,
+            toY: total.toDouble(),
+            width: 28,
+            rodStackItems: [
+              if (ok > 0) BarChartRodStackItem(0, ok.toDouble(), Colors.green),
+              if (ng > 0)
+                BarChartRodStackItem(
+                    ok.toDouble(), total.toDouble(), Colors.red),
+            ],
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
+          ),
+        ],
+      );
+    });
+  }
+
+  List<Map<String, dynamic>> computeShiftBandsFromLabels(
+      List<String> hourLabels) {
+    List<Map<String, dynamic>> bands = [];
+    int? startIdx;
+    String? currentShift;
+
+    String getShift(String hourStr) {
+      final hour = int.parse(hourStr.split(':')[0]);
+      if (hour >= 6 && hour < 14) return 'S1';
+      if (hour >= 14 && hour < 22) return 'S2';
+      return 'S3';
+    }
+
+    for (int i = 0; i < hourLabels.length; i++) {
+      String shift = getShift(hourLabels[i]);
+      if (shift != currentShift) {
+        if (startIdx != null) {
+          bands.add({'start': startIdx, 'end': i - 1, 'shift': currentShift});
+        }
+        startIdx = i;
+        currentShift = shift;
+      }
+    }
+
+    if (startIdx != null && currentShift != null) {
+      bands.add({
+        'start': startIdx,
+        'end': hourLabels.length - 1,
+        'shift': currentShift
+      });
+    }
+
+    return bands;
+  }
+
+  String getCurrentShiftLabel() {
+    final now = TimeOfDay.now();
+    final hour = now.hour;
+    if (hour >= 6 && hour < 14) return 'S1';
+    if (hour >= 14 && hour < 22) return 'S2';
+    return 'S3';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bands = computeShiftBandsFromLabels(hourLabels);
+    final currentShift = getCurrentShiftLabel();
+
+    final maxY = _calculateMaxY();
+
+    return Card(
+      color: Colors.white,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    'Ispezioni Effettuate',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'Target: $target',
+                  style: TextStyle(
+                    color: Colors.orangeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final barSpacing = constraints.maxWidth / hourLabels.length;
+
+                  return Stack(
+                    children: [
+                      // SHIFT BACKGROUND BANDS
+                      for (var band in bands)
+                        Positioned(
+                          left: band['start'] * barSpacing,
+                          width: (band['end'] - band['start'] + 1) * barSpacing,
+                          top: 0,
+                          bottom: 0,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: band['shift'] == currentShift
+                                  ? Colors.white.withOpacity(0.0)
+                                  : Colors.grey.withOpacity(0.18),
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(8),
+                                bottom: Radius.circular(8),
+                              ),
+                            ),
+                            alignment: Alignment.topLeft,
+                            padding: const EdgeInsets.only(top: 4, left: 8),
+                            child: Text(
+                              switch (band['shift']) {
+                                'S1' => 'Shift 1',
+                                'S2' => 'Shift 2',
+                                'S3' => 'Shift 3',
+                                _ => '',
+                              },
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      // BAR CHART ON TOP
+                      BarChart(
+                        BarChartData(
+                          alignment: BarChartAlignment.spaceAround,
+                          maxY: maxY,
+                          barTouchData: BarTouchData(
+                            enabled: true,
+                            touchTooltipData: BarTouchTooltipData(
+                              getTooltipColor: (_) => Colors.transparent,
+                              tooltipPadding: EdgeInsets.zero,
+                              tooltipMargin: 0,
+                              fitInsideHorizontally: true,
+                              fitInsideVertically: true,
+                              getTooltipItem:
+                                  (group, groupIndex, rod, rodIndex) {
+                                final value = rod.toY.toString();
+                                return BarTooltipItem(
+                                  value,
+                                  const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          titlesData: FlTitlesData(
+                            leftTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            rightTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            topTitles: AxisTitles(
+                                sideTitles: SideTitles(showTitles: false)),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (value, meta) {
+                                  final i = value.toInt();
+                                  if (i >= 0 && i < hourLabels.length) {
+                                    return Text(
+                                      hourLabels[i],
+                                      style: const TextStyle(fontSize: 16),
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                },
+                              ),
+                            ),
+                          ),
+                          gridData: FlGridData(show: false),
+                          borderData: FlBorderData(show: false),
+                          barGroups: _buildBarGroups(maxY),
+                          extraLinesData: ExtraLinesData(horizontalLines: [
+                            HorizontalLine(
+                              y: target,
+                              color: Colors.orangeAccent,
+                              strokeWidth: 2,
+                              dashArray: [8, 4],
+                            ),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class HourlyELLBarChart extends StatelessWidget {
   final List<Map<String, int>> data;
   final List<String> hourLabels;
@@ -5282,6 +5528,147 @@ class _SpeedBarState extends State<SpeedBar> {
   }
 }
 
+class MiniSpeedBar extends StatelessWidget {
+  const MiniSpeedBar({
+    super.key,
+    required this.medianSec,
+    required this.currentSec,
+    this.maxSec = 120,
+    this.height = 80, // total widget height
+    this.barThickness = 40, // bar thickness
+    this.textColor = Colors.black,
+    this.showAxisLabels = true,
+    this.showMedianLabel = true,
+    this.animationDuration = const Duration(milliseconds: 400),
+  });
+
+  final double medianSec;
+  final double currentSec;
+  final double maxSec;
+  final double height;
+  final double barThickness;
+  final Color textColor;
+  final bool showAxisLabels;
+  final bool showMedianLabel;
+  final Duration animationDuration;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth;
+        final fracMedian = (medianSec / maxSec).clamp(0.0, 1.0);
+        final fracCurrent = (currentSec / maxSec).clamp(0.0, 1.0);
+        final barTop = (height - barThickness) / 2;
+
+        final medianX = w * fracMedian;
+        final currentX = w * fracCurrent;
+
+        const markerHalf = 6.0; // for 12px marker
+
+        return SizedBox(
+          height: height,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Gradient bar
+              Positioned(
+                left: 0,
+                right: 0,
+                top: barTop,
+                child: Container(
+                  height: barThickness,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    gradient: const LinearGradient(
+                      colors: [
+                        Colors.red,
+                        Colors.yellow,
+                        Colors.green,
+                        Colors.yellow,
+                        Colors.red
+                      ],
+                      stops: [0, 0.3, 0.5, 0.7, 1],
+                    ),
+                    border: Border.all(color: Colors.black, width: 1),
+                  ),
+                ),
+              ),
+
+              // Median line
+              if (medianSec > 0)
+                Positioned(
+                  left: medianX - 0.5,
+                  top: barTop,
+                  bottom: barTop,
+                  child: Container(width: 1, color: Colors.black87),
+                ),
+
+              // Current marker (tiny arrow + optional label)
+              AnimatedPositioned(
+                duration: animationDuration,
+                curve: Curves.easeOutCubic,
+                left: (currentX - markerHalf).clamp(0.0, w - 2 * markerHalf),
+                top: barTop - 20, // just above the bar
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_drop_down,
+                        size: 40, color: const Color(0xFF215F9A)),
+                    if (showAxisLabels)
+                      Text(
+                        '${currentSec.round()}s',
+                        style: TextStyle(fontSize: 16, color: textColor),
+                      ),
+                  ],
+                ),
+              ),
+
+              // Optional tiny axis labels
+              if (showAxisLabels) ...[
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  child: Text('0',
+                      style: TextStyle(fontSize: 16, color: textColor)),
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Text('${maxSec.round()}s',
+                      style: TextStyle(fontSize: 16, color: textColor)),
+                ),
+              ],
+
+              // Optional tiny median label
+              if (showAxisLabels && showMedianLabel && medianSec > 0)
+                Positioned(
+                  left: (medianX - 9999).clamp(0.0, w), // keeps it positionable
+                  top: barTop + barThickness + 2,
+                  child: SizedBox(
+                    width: 0, // anchor; we’ll center with Transform
+                    child: Transform.translate(
+                      offset: const Offset(-30, 0),
+                      child: SizedBox(
+                        width: 60,
+                        child: Center(
+                          child: Text(
+                            'med ${medianSec.round()}s',
+                            style: TextStyle(fontSize: 10, color: textColor),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class DefectBarChartCard extends StatelessWidget {
   final List<Map<String, dynamic>> defects;
 
@@ -5304,6 +5691,20 @@ class DefectBarChartCard extends StatelessWidget {
     "NG10": "Difetti su telaio",
   };
 
+  // 1) Put these near the top of the widget:
+  static const double kCompactBarWidth = 10; // was 18
+  static const double kExpandedBarWidth = 8; // was 22
+  static const double kBarsSpace = 2; // was 1 / 2
+
+  Map<String, Color> _buildColorMap() {
+    final palette = Colors.primaries;
+    final codes = defectDescriptions.keys.toList();
+    return {
+      for (var i = 0; i < codes.length; i++)
+        codes[i]: palette[i % palette.length],
+    };
+  }
+
   List<Map<String, dynamic>> normalizeDefects(List<Map<String, dynamic>> raw) {
     final Map<String, int> inputMap = {
       for (var item in raw) item['label']: item['count'],
@@ -5322,127 +5723,400 @@ class DefectBarChartCard extends StatelessWidget {
     return '${text.substring(0, maxLength - 3)}...';
   }
 
+  void _openExpandedDialog(
+      BuildContext context, List<Map<String, dynamic>> normalized) {
+    final colorOf = _buildColorMap(); // <— same palette
+    final maxY = (normalized
+            .map((d) => d['count'] as int)
+            .fold(0, (a, b) => a > b ? a : b)).toDouble() +
+        1;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final size = MediaQuery.of(ctx).size;
+        return Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: size.width * 0.95,
+                maxHeight: size.height * 0.9,
+                minWidth: 600,
+                minHeight: 400,
+              ),
+              child: Material(
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      // Header row
+                      Row(
+                        children: [
+                          const Text(
+                            'Difetti VPF (R = 0) — Vista estesa',
+                            style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Chiudi',
+                            onPressed: () => Navigator.of(ctx).pop(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Content
+                      Expanded(
+                        child: Row(
+                          children: [
+                            // Big chart
+                            Expanded(
+                              flex: 3,
+                              child: Card(
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: BarChart(
+                                    BarChartData(
+                                      borderData: FlBorderData(show: false),
+                                      gridData: FlGridData(
+                                          show: true, drawVerticalLine: false),
+                                      titlesData: FlTitlesData(
+                                        leftTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            reservedSize: 40,
+                                            getTitlesWidget: (value, meta) =>
+                                                Padding(
+                                              padding: const EdgeInsets.only(
+                                                  right: 6),
+                                              child: Text(
+                                                value.toInt().toString(),
+                                                style: const TextStyle(
+                                                    fontSize: 12),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        bottomTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            getTitlesWidget: (value, meta) {
+                                              final i = value.toInt();
+                                              if (i < 0 ||
+                                                  i >= normalized.length) {
+                                                return const SizedBox.shrink();
+                                              }
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 6),
+                                                child: Text(
+                                                  normalized[i]['label'],
+                                                  style: const TextStyle(
+                                                      fontSize: 10),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        rightTitles: const AxisTitles(
+                                            sideTitles:
+                                                SideTitles(showTitles: false)),
+                                        topTitles: const AxisTitles(
+                                            sideTitles:
+                                                SideTitles(showTitles: false)),
+                                      ),
+                                      barGroups:
+                                          List.generate(normalized.length, (i) {
+                                        final code =
+                                            normalized[i]['label'] as String;
+                                        final count =
+                                            (normalized[i]['count'] as int)
+                                                .toDouble();
+                                        return BarChartGroupData(
+                                          x: i,
+                                          barsSpace:
+                                              kBarsSpace, // keep consistent
+                                          barRods: [
+                                            BarChartRodData(
+                                              toY: count,
+                                              color:
+                                                  colorOf[code], // same color
+                                              width:
+                                                  kExpandedBarWidth, // a bit wider on big view
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                          ],
+                                          showingTooltipIndicators: const [0],
+                                        );
+                                      }),
+                                      maxY: maxY,
+                                      barTouchData: BarTouchData(
+                                        enabled: true,
+                                        touchTooltipData: BarTouchTooltipData(
+                                          getTooltipColor: (_) => Colors.white,
+                                          tooltipBorder: BorderSide(
+                                              color: Colors.black
+                                                  .withOpacity(0.1)),
+                                          tooltipRoundedRadius: 8,
+                                          getTooltipItem: (group, groupIndex,
+                                              rod, rodIndex) {
+                                            final code =
+                                                normalized[group.x.toInt()]
+                                                    ['label'];
+                                            final count =
+                                                normalized[group.x.toInt()]
+                                                    ['count'];
+                                            final descr =
+                                                defectDescriptions[code] ??
+                                                    code;
+                                            return BarTooltipItem(
+                                              '$code — $descr\n$count',
+                                              const TextStyle(
+                                                  color: Colors.black,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            // Big legend
+                            Expanded(
+                              flex: 2,
+                              child: Card(
+                                elevation: 2,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16)),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Legenda',
+                                          style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 8),
+                                      Expanded(
+                                        flex: 2,
+                                        child: ListView.builder(
+                                          itemCount: normalized.length,
+                                          itemBuilder: (_, i) {
+                                            final code = normalized[i]['label']
+                                                as String;
+                                            final description =
+                                                defectDescriptions[code] ??
+                                                    code;
+                                            final count =
+                                                normalized[i]['count'];
+                                            return Row(
+                                              children: [
+                                                Container(
+                                                  width: 14,
+                                                  height: 14,
+                                                  decoration: BoxDecoration(
+                                                    color: colorOf[
+                                                        code], // same color
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            3),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                    child: Text(
+                                                        '$code • $count\n$description')),
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final normalized = normalizeDefects(defects);
-    final colors = List<Color>.generate(
-      normalized.length,
-      (i) => Colors.primaries[i % Colors.primaries.length],
-    );
+    final colorOf = _buildColorMap(); // <— one source of truth
     final maxY = normalized
             .map((d) => d['count'] as int)
             .fold(0, (a, b) => a > b ? a : b)
             .toDouble() +
         1;
 
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 4,
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            /// Left side: Title + BarChart
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      'Difetti VPF ( R = 0 )',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: BarChart(
-                      BarChartData(
-                        borderData: FlBorderData(show: false),
-                        gridData: FlGridData(show: false),
-                        titlesData: FlTitlesData(
-                          leftTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: false)),
-                          bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: false)),
-                          rightTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: false)),
-                          topTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: false)),
-                        ),
-                        barGroups: List.generate(normalized.length, (i) {
-                          final count =
-                              (normalized[i]['count'] as int).toDouble();
-                          return BarChartGroupData(
-                            x: i,
-                            barsSpace: 1,
-                            barRods: [
-                              BarChartRodData(
-                                toY: count,
-                                color: colors[i],
-                                width: 18,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ],
-                            showingTooltipIndicators: [0],
-                          );
-                        }),
-                        maxY: maxY,
-                        barTouchData: BarTouchData(
-                          enabled: true,
-                          touchTooltipData: BarTouchTooltipData(
-                            getTooltipColor: (_) => Colors.transparent,
-                            tooltipRoundedRadius: 6,
-                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                              final code = normalized[group.x.toInt()]['label'];
-                              final count =
-                                  normalized[group.x.toInt()]['count'];
-                              return BarTooltipItem(
-                                '$code\n$count',
-                                const TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 12,
-                                ),
-                              );
-                            },
+    return Stack(
+      children: [
+        Card(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 4,
+          color: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                /// Left side: Title + BarChart
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(
+                            bottom: 12, right: 36), // room for the button
+                        child: Text(
+                          'Difetti VPF ( R = 0 )',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                    ),
+                      Expanded(
+                        child: BarChart(
+                          BarChartData(
+                            borderData: FlBorderData(show: false),
+                            gridData: FlGridData(show: false),
+                            titlesData: FlTitlesData(
+                              leftTitles: AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false)),
+                              bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false)),
+                              rightTitles: AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false)),
+                              topTitles: AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false)),
+                            ),
+                            barGroups: List.generate(normalized.length, (i) {
+                              final code = normalized[i]['label'] as String;
+                              final count =
+                                  (normalized[i]['count'] as int).toDouble();
+                              return BarChartGroupData(
+                                x: i,
+                                barsSpace: kBarsSpace, // <— thinner spacing
+                                barRods: [
+                                  BarChartRodData(
+                                    toY: count,
+                                    color: colorOf[
+                                        code], // <— same color as legend
+                                    width: kCompactBarWidth, // <— thinner bars
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ],
+                                showingTooltipIndicators: const [0],
+                              );
+                            }),
+                            maxY: maxY,
+                            barTouchData: BarTouchData(
+                              enabled: true,
+                              touchTooltipData: BarTouchTooltipData(
+                                getTooltipColor: (_) => Colors.transparent,
+                                tooltipRoundedRadius: 6,
+                                getTooltipItem:
+                                    (group, groupIndex, rod, rodIndex) {
+                                  final code =
+                                      normalized[group.x.toInt()]['label'];
+                                  final count =
+                                      normalized[group.x.toInt()]['count'];
+                                  return BarTooltipItem(
+                                    '$code\n$count',
+                                    const TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 12,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
 
-            const SizedBox(width: 24),
+                const SizedBox(width: 24),
 
-            /// Right side: Legend aligned with top
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: List.generate(normalized.length, (i) {
-                  final code = normalized[i]['label'];
-                  final description = defectDescriptions[code] ?? code;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: LegendItem(
-                      color: colors[i],
-                      label: '$code - ${_truncate(description, 40)}',
-                      textSize: 12,
-                    ),
-                  );
-                }),
-              ),
+                /// Right side: Legend aligned with top
+                // Right legend (uses the same color map)
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: List.generate(normalized.length, (i) {
+                      final code = normalized[i]['label'] as String;
+                      final description = defectDescriptions[code] ?? code;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: LegendItem(
+                          color: colorOf[code]!, // <— same color
+                          label: '$code - ${_truncate(description, 40)}',
+                          textSize: 12,
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+
+        // Top-right Expand button (floating over the Card)
+        Positioned(
+          top: 8,
+          right: 8,
+          child: Material(
+            color: Colors.transparent,
+            child: Tooltip(
+              message: 'Espandi',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => _openExpandedDialog(context, normalized),
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(Icons.open_in_full, size: 20),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

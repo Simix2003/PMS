@@ -447,6 +447,21 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
                         "start": h_start.isoformat(), "end": h_end.isoformat()
                     })
 
+                # -------- last 8 h bins (yield + throughput) -----
+                last_8h_throughput= []
+                for label, h_start, h_end in get_last_8h_bins(now):
+                    # Throughput (distinct entries on station 1 + station 2)
+                    tot  = (count_unique_objects(cursor, cfg["station_1_in"], h_start, h_end, "all")) or 0
+                    ng   = (count_unique_objects(cursor, cfg["station_1_out_ng"], h_start, h_end, "ng")) or 0
+
+                    last_8h_throughput.append({
+                        "hour": label,
+                        "start": h_start.isoformat(),
+                        "end": h_end.isoformat(),
+                        "total": tot,
+                        "ng": ng,
+                    })
+
                 cursor.execute("""
                     SELECT p56.id FROM productions p56
                     WHERE p56.esito = 6 AND p56.station_id = 56
@@ -541,6 +556,7 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
         "station_1_in": s1_in,
         "station_1_out_ng": s1_ng,
         "station_1_re_entered": s1_reEntered,
+        "last_8h_throughput": last_8h_throughput,
         "speed_ratio": speed_ratio,
         "station_1_yield": s1_y,
         "station_1_shifts": s1_yield_shifts,

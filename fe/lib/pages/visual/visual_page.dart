@@ -353,6 +353,18 @@ class _VisualPageState extends State<VisualPage> {
         defectsVPF =
             List<Map<String, dynamic>>.from(response['defects_vpf'] ?? []);
 
+        hourlyThroughput = List<Map<String, dynamic>>.from(
+            response['last_8h_throughput'] ?? []);
+
+        hourlyData = hourlyThroughput.map<Map<String, int>>((e) {
+          final total = (e['total'] ?? 0) as int;
+          final ng = (e['ng'] ?? 0) as int;
+          return {'ok': total - ng, 'ng': ng};
+        }).toList();
+
+        hourLabels =
+            hourlyThroughput.map((e) => e['hour']?.toString() ?? '').toList();
+
         // ─── Equipment Defects (EQ) ─────────────────────
         eqDefects = (response['eq_defects'] != null)
             ? Map<String, Map<String, int>>.from(
@@ -1782,6 +1794,8 @@ class _VisualPageState extends State<VisualPage> {
                                     textColor: textColor,
                                     warningColor: warningColor,
                                     redColor: redColor,
+                                    hourlyData: hourlyData,
+                                    hourLabels: hourLabels,
                                     speedRatioData: speedRatioData,
                                     reEntered_1: reEntered_1,
                                     station1Shifts: station1Shifts,

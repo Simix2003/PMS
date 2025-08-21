@@ -404,7 +404,7 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                                     fontWeight: FontWeight.bold, fontSize: 20),
                               ),
                               const SizedBox(height: 8), // was 32 → tighter
-                              Card(
+                              /*Card(
                                 color: Colors.white,
                                 child: Container(
                                   decoration: BoxDecoration(
@@ -416,6 +416,7 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                                       const EdgeInsets.symmetric(vertical: 10),
                                   child: Center(
                                     child: Text(
+                                      // work in progress
                                       widget.reEntered_1.toString(),
                                       style: TextStyle(
                                           fontWeight: FontWeight.bold,
@@ -424,7 +425,25 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                                     ),
                                   ),
                                 ),
-                              ),
+                              ),*/
+                              Card(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.construction,
+                                        size: 32, color: Colors.orange),
+                                    SizedBox(height: 12),
+                                    Text(
+                                      'Work in Progress',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
                             ],
                           ),
                         ),

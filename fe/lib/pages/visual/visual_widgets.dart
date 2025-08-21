@@ -5633,27 +5633,16 @@ class MiniSpeedBar extends StatelessWidget {
                 ),
               ],
 
-              // Optional tiny median label
-              if (showAxisLabels && showMedianLabel && medianSec > 0)
-                Positioned(
-                  left: (medianX - 9999).clamp(0.0, w), // keeps it positionable
-                  top: barTop + barThickness + 2,
-                  child: SizedBox(
-                    width: 0, // anchor; we’ll center with Transform
-                    child: Transform.translate(
-                      offset: const Offset(-30, 0),
-                      child: SizedBox(
-                        width: 60,
-                        child: Center(
-                          child: Text(
-                            'med ${medianSec.round()}s',
-                            style: TextStyle(fontSize: 10, color: textColor),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+              Positioned(
+                left: (medianX - 20)
+                    .clamp(0.0, w - 40), // shift so it stays visible
+                top: barTop + barThickness + 2,
+                child: Text(
+                  '${medianSec.round()}s',
+                  style: TextStyle(fontSize: 18, color: textColor),
+                  textAlign: TextAlign.center,
                 ),
+              ),
             ],
           ),
         );

@@ -296,80 +296,109 @@ def refresh_fermi_data(zone: str, ts: datetime) -> None:
 
 def refresh_top_defects_qg2(zone: str, ts: datetime) -> None:
     """
-    Refresh top_defects_qg2 for the zone (based on esito=6 in current shift).
+    Refresh top_defects_qg2 per la zona:
+    - Considera esito=6 su stazioni (1,2) nel turno corrente
+    - Raggruppa per categoria difetto
+    - Se esito=6 non ha difetti → 'Mancata Compilazione'
     """
     if zone not in global_state.visual_data:
         logger.warning(f"Cannot refresh top_defects_qg2 for unknown zone: {zone}")
         return
 
     shift_start, shift_end = get_shift_window(ts)
+    label_missing = "Mancata Compilazione"
 
     try:
         top_defects = []
         total_defects = 0
 
-        with get_mysql_connection() as conn:
-            with conn.cursor() as cursor:
-                sql_productions = """
-                    SELECT id, station_id
-                    FROM productions
-                    WHERE esito = 6
-                    AND station_id IN (1, 2)
-                    AND start_time BETWEEN %s AND %s
+        with get_mysql_connection() as conn, conn.cursor() as cursor:
+            # 1) Productions esito=6 su stazioni 1 e 2
+            cursor.execute(
                 """
-                cursor.execute(sql_productions, (shift_start, shift_end))
-                rows = cursor.fetchall()
+                SELECT id, station_id
+                FROM productions
+                WHERE esito = 6
+                  AND station_id IN (1, 2)
+                  AND start_time BETWEEN %s AND %s
+                """,
+                (shift_start, shift_end),
+            )
+            rows = cursor.fetchall()
 
-                production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
-                production_ids_2 = [row['id'] for row in rows if row['station_id'] == 2]
-                all_production_ids = production_ids_1 + production_ids_2
+            production_ids_1 = [r["id"] for r in rows if r["station_id"] == 1]
+            production_ids_2 = [r["id"] for r in rows if r["station_id"] == 2]
+            all_production_ids = production_ids_1 + production_ids_2
 
-                if all_production_ids:
-                    placeholders = ','.join(['%s'] * len(all_production_ids))
-                    sql_defects = f"""
-                        SELECT od.production_id, d.category
-                        FROM object_defects od
-                        JOIN defects d ON od.defect_id = d.id
-                        WHERE od.production_id IN ({placeholders})
-                    """
-                    cursor.execute(sql_defects, all_production_ids)
-                    rows = cursor.fetchall()
+            if not all_production_ids:
+                top_defects = []
+                total_defects = 0
+            else:
+                # 2) Difetti delle produzioni selezionate
+                placeholders = ",".join(["%s"] * len(all_production_ids))
+                sql_defects = f"""
+                    SELECT od.production_id, d.category
+                    FROM object_defects od
+                    JOIN defects d ON od.defect_id = d.id
+                    WHERE od.production_id IN ({placeholders})
+                """
+                cursor.execute(sql_defects, all_production_ids)
+                drows = cursor.fetchall()
 
-                    production_station_map = {pid: 1 for pid in production_ids_1}
-                    production_station_map.update({pid: 2 for pid in production_ids_2})
+                # mappa production -> station
+                production_station_map = {pid: 1 for pid in production_ids_1}
+                production_station_map.update({pid: 2 for pid in production_ids_2})
 
-                    defect_counter = defaultdict(lambda: {1: set(), 2: set()})
-                    for row in rows:
-                        pid = row['production_id']
-                        cat = row['category']
-                        sid = production_station_map.get(pid)
-                        if sid:
-                            defect_counter[cat][sid].add(pid)
+                defect_counter = defaultdict(lambda: {1: set(), 2: set()})
+                had_defect_by_station = {1: set(), 2: set()}
 
-                    full_results = []
-                    for category, stations in defect_counter.items():
-                        ain1 = len(stations[1])
-                        ain2 = len(stations[2])
-                        total = ain1 + ain2
-                        full_results.append({
-                            "label": category,
-                            "ain1": ain1,
-                            "ain2": ain2,
-                            "total": total
-                        })
+                # 3) Conta difetti noti (dedup per produzione)
+                for r in drows:
+                    pid = r["production_id"]
+                    sid = production_station_map.get(pid)
+                    if not sid:
+                        continue
+                    cat = r["category"]
+                    defect_counter[cat][sid].add(pid)
+                    had_defect_by_station[sid].add(pid)
 
-                    total_defects = sum(r["total"] for r in full_results)
-                    top5 = sorted(full_results, key=lambda r: r["total"], reverse=True)[:5]
-                    top_defects = [{"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]} for r in top5]
+                # 4) Aggiungi "Mancata Compilazione" per esito=6 senza difetti
+                missing_ids_1 = set(production_ids_1) - had_defect_by_station[1]
+                if missing_ids_1:
+                    defect_counter[label_missing][1].update(missing_ids_1)
 
-        # ✅ Lock only during shared memory update
+                missing_ids_2 = set(production_ids_2) - had_defect_by_station[2]
+                if missing_ids_2:
+                    defect_counter[label_missing][2].update(missing_ids_2)
+
+                # 5) Aggrega + Top5
+                full_results = []
+                for category, stations in defect_counter.items():
+                    ain1 = len(stations[1])
+                    ain2 = len(stations[2])
+                    total = ain1 + ain2
+                    full_results.append({
+                        "label": category,
+                        "ain1": ain1,
+                        "ain2": ain2,
+                        "total": total
+                    })
+
+                total_defects = sum(r["total"] for r in full_results)
+                top5 = sorted(full_results, key=lambda r: r["total"], reverse=True)[:5]
+                top_defects = [
+                    {"label": r["label"], "ain1": r["ain1"], "ain2": r["ain2"]}
+                    for r in top5
+                ]
+
+        # ✅ Lock solo durante l’aggiornamento in memoria condivisa
         with global_state.zone_locks[zone]:
             data = global_state.visual_data[zone]
             data["top_defects_qg2"] = top_defects
             data["total_defects_qg2"] = total_defects
             payload = copy.deepcopy(data)
 
-        # 🔄 Robust asyncio handling for WebSocket broadcast
+        # 🔄 Broadcast WebSocket
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -485,79 +514,92 @@ def refresh_top_defects_vpf(zone: str, ts: datetime) -> None:
 
 def refresh_top_defects_ell(zone: str, ts: datetime) -> None:
     """
-    Refresh top_defects for the ELL zone, based on esito=6 at station_id in (1, 2, 9)
-    and count per defect category, split into min1 (station 1), min2 (station 2), and ell (station 9).
+    ELL top_defects: esito=6 at stations (1,2,9), grouped by defect category.
+    If a production has esito=6 but no defect recorded -> 'Mancata Compilazione'.
     """
     if zone not in global_state.visual_data:
         logger.warning(f"Cannot refresh top_defects_ell for unknown zone: {zone}")
         return
 
     shift_start, shift_end = get_shift_window(ts)
+    label_missing = "Mancata Compilazione"
+    stations = (1, 2, 9)
     top_defects = []
 
     try:
-        with get_mysql_connection() as conn:
-            with conn.cursor() as cursor:
-                sql_productions = """
-                    SELECT id, station_id
-                    FROM productions
-                    WHERE esito = 6
-                    AND station_id IN (1, 2, 9)
-                    AND start_time BETWEEN %s AND %s
+        with get_mysql_connection() as conn, conn.cursor() as cursor:
+            # 1) esito=6 productions in window
+            cursor.execute(
                 """
-                cursor.execute(sql_productions, (shift_start, shift_end))
-                rows = cursor.fetchall()
+                SELECT id, station_id
+                FROM productions
+                WHERE esito = 6
+                  AND station_id IN (1, 2, 9)
+                  AND start_time BETWEEN %s AND %s
+                """,
+                (shift_start, shift_end),
+            )
+            rows = cursor.fetchall()
 
-                production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
-                production_ids_2 = [row['id'] for row in rows if row['station_id'] == 2]
-                production_ids_9 = [row['id'] for row in rows if row['station_id'] == 9]
+            # split ids by station
+            pids_by_station = {1: [], 2: [], 9: []}
+            for r in rows:
+                sid = r["station_id"]
+                if sid in pids_by_station:
+                    pids_by_station[sid].append(r["id"])
 
-                all_ids = tuple(production_ids_1 + production_ids_2 + production_ids_9)
-                if not all_ids:
-                    top_defects = []
-                else:
-                    sql_defects = """
-                        SELECT od.production_id, d.category
-                        FROM object_defects od
-                        JOIN defects d ON od.defect_id = d.id
-                        WHERE od.production_id IN %s
+            all_ids = tuple(pids_by_station[1] + pids_by_station[2] + pids_by_station[9])
+            if not all_ids:
+                # no esito=6 → nothing to show
+                top_defects = []
+            else:
+                # 2) defects for those productions
+                cursor.execute(
                     """
-                    cursor.execute(sql_defects, (all_ids,))
-                    rows = cursor.fetchall()
+                    SELECT od.production_id, d.category
+                    FROM object_defects od
+                    JOIN defects d ON od.defect_id = d.id
+                    WHERE od.production_id IN %s
+                    """,
+                    (all_ids,),
+                )
+                drows = cursor.fetchall()
 
-                    station_map = {pid: 1 for pid in production_ids_1}
-                    station_map.update({pid: 2 for pid in production_ids_2})
-                    station_map.update({pid: 9 for pid in production_ids_9})
+                # map production -> station
+                station_map = {}
+                for sid in stations:
+                    station_map.update({pid: sid for pid in pids_by_station[sid]})
 
-                    defect_counter = defaultdict(lambda: {1: set(), 2: set(), 9: set()})
-                    for row in rows:
-                        pid = row['production_id']
-                        category = row['category']
-                        sid = station_map.get(pid)
-                        if sid:
-                            defect_counter[category][sid].add(pid)
+                from collections import defaultdict
+                defect_counter = defaultdict(lambda: {1: set(), 2: set(), 9: set()})
+                had_defect_by_station = {1: set(), 2: set(), 9: set()}
 
-                    full_results = []
-                    for category, stations in defect_counter.items():
-                        min1 = len(stations[1])
-                        min2 = len(stations[2])
-                        ell = len(stations[9])
-                        total = min1 + min2 + ell
-                        full_results.append({
-                            "label": category,
-                            "min1": min1,
-                            "min2": min2,
-                            "ell": ell,
-                            "total": total
-                        })
+                # count known defects (dedup per production)
+                for r in drows:
+                    pid = r["production_id"]
+                    sid = station_map.get(pid)
+                    if sid:
+                        cat = r["category"]
+                        defect_counter[cat][sid].add(pid)
+                        had_defect_by_station[sid].add(pid)
 
-                    top5 = sorted(full_results, key=lambda r: r["total"], reverse=True)[:5]
-                    top_defects = [
-                        {"label": r["label"], "min1": r["min1"], "min2": r["min2"], "ell": r["ell"]}
-                        for r in top5
-                    ]
+                # add "Mancata Compilazione" for esito=6 without recorded defects
+                for sid in stations:
+                    missing_ids = set(pids_by_station[sid]) - had_defect_by_station[sid]
+                    if missing_ids:
+                        defect_counter[label_missing][sid].update(missing_ids)
 
-        # ✅ Only lock shared memory during write
+                # aggregate + top5
+                full = []
+                for cat, sts in defect_counter.items():
+                    min1 = len(sts[1]); min2 = len(sts[2]); ell = len(sts[9])
+                    total = min1 + min2 + ell
+                    full.append({"label": cat, "min1": min1, "min2": min2, "ell": ell, "total": total})
+
+                top5 = sorted(full, key=lambda r: r["total"], reverse=True)[:5]
+                top_defects = [{"label": r["label"], "min1": r["min1"], "min2": r["min2"], "ell": r["ell"]} for r in top5]
+
+        # ✅ Write under lock + broadcast
         with global_state.zone_locks[zone]:
             data = global_state.visual_data[zone]
             data["top_defects"] = top_defects

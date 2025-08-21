@@ -874,8 +874,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                         "end": h_end.isoformat(),
                     })
 
-                # -------- top_defects_qg2 calculation from productions + object_defects --------
-                # 1️⃣ Query productions table for esito 6 on stations 1+2+9
+                # 1) productions with esito=6 on stations 1,2,9
                 sql_productions = """
                     SELECT id, station_id
                     FROM productions
@@ -886,18 +885,21 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 cursor.execute(sql_productions, (shift_start, shift_end))
                 rows = cursor.fetchall()
 
-                # Split production IDs by station
-                production_ids_1 = [row['id'] for row in rows if row['station_id'] == 1]
-                production_ids_2= [row['id'] for row in rows if row['station_id'] == 2]
-                production_ids_9 = [row['id'] for row in rows if row['station_id'] == 9]
+                production_ids_by_station = {
+                    1: [r['id'] for r in rows if r['station_id'] == 1],
+                    2: [r['id'] for r in rows if r['station_id'] == 2],
+                    9: [r['id'] for r in rows if r['station_id'] == 9],
+                }
 
-                all_production_ids = tuple(production_ids_1 + production_ids_2 + production_ids_9)
-                if not all_production_ids:
-                    all_production_ids = (0,)
+                all_production_ids = tuple(
+                    production_ids_by_station[1] +
+                    production_ids_by_station[2] +
+                    production_ids_by_station[9]
+                ) or (0,)
 
-                # 2️⃣ Query object_defects JOIN defects
+                # 2) defects for those productions
                 sql_defects = """
-                    SELECT od.production_id, od.defect_id, d.category
+                    SELECT od.production_id, d.category
                     FROM object_defects od
                     JOIN defects d ON od.defect_id = d.id
                     WHERE od.production_id IN %s
@@ -905,38 +907,51 @@ def _compute_snapshot_ell(now: datetime) -> dict:
                 cursor.execute(sql_defects, (all_production_ids,))
                 rows = cursor.fetchall()
 
-                # Build mapping production_id → station_id
-                production_station_map = {pid: 1 for pid in production_ids_1}
-                production_station_map.update({pid: 2 for pid in production_ids_2})
-                production_station_map.update({pid: 9 for pid in production_ids_9})
+                # 3) map prod_id -> station_id
+                production_station_map = {}
+                for st in (1, 2, 9):
+                    production_station_map.update({pid: st for pid in production_ids_by_station[st]})
 
+                from collections import defaultdict
                 defect_counter = defaultdict(lambda: {1: set(), 2: set(), 9: set()})
 
-                for row in rows:
-                    prod_id = row['production_id']
-                    category = row['category']
-                    station_id = production_station_map.get(prod_id)
-                    if station_id:
-                        defect_counter[category][station_id].add(prod_id)
+                # track which productions had at least one defect (per station)
+                had_defect_by_station = {1: set(), 2: set(), 9: set()}
 
-                # Aggregate counts
+                for row in rows:
+                    prod_id   = row['production_id']
+                    category  = row['category']
+                    station_id = production_station_map.get(prod_id)
+                    if not station_id:
+                        continue
+                    defect_counter[category][station_id].add(prod_id)
+                    had_defect_by_station[station_id].add(prod_id)
+
+                # 4) add “Mancata Compilazione” for esito=6 without recorded defects
+                label_missing = "Mancata Compilazione"
+                for st in (1, 2, 9):
+                    missing_ids = set(production_ids_by_station[st]) - had_defect_by_station[st]
+                    if missing_ids:
+                        defect_counter[label_missing][st].update(missing_ids)
+
+                # 5) aggregate + top 5
                 full_results = []
                 for category, stations in defect_counter.items():
                     min1_count = len(stations[1])
                     min2_count = len(stations[2])
-                    ell_count = len(stations[9])
+                    ell_count  = len(stations[9])
                     total = min1_count + min2_count + ell_count
                     full_results.append({
                         "label": category,
                         "min1": min1_count,
                         "min2": min2_count,
-                        "ell": ell_count,
+                        "ell" : ell_count,
                         "total": total
                     })
 
-                # Then get top 5
                 results = sorted(full_results, key=lambda x: x['total'], reverse=True)[:5]
                 top_defects = [{"label": r["label"], "min1": r["min1"], "min2": r["min2"], "ell": r["ell"]} for r in results]
+
 
                         # -------- count re-entered modules in ELL (station 9 + station 3) --------
                 sql_reentered_ell = """

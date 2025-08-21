@@ -48,7 +48,8 @@ zone_locks = {
     "AIN": RLock(),
     "VPF": RLock(),
     "STR": RLock(),
-    "LMN": RLock()
+    "LMN": RLock(),
+    "DELTAMAX": RLock(),
 }
 
 STATION_TO_ZONES = defaultdict(set)  #use set instead of list for unique zones

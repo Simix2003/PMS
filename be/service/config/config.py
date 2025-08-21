@@ -55,8 +55,11 @@ ZONE_SOURCES = { # Later on we will fetch them from MySQL, zones table
 # Default fallback values
 DEFAULT_TARGETS = {
     "yield_target": 90,
-    "shift_target": 366
+    "shift_target": 366,
 }
+
+# Per-zone fallback targets
+DEFAULT_ZONE_TARGETS = {zone: DEFAULT_TARGETS.copy() for zone in ZONE_SOURCES}
 
 PLC_DB_RANGES: dict = {}  # {(ip, slot): {db_number: {"min": x, "max": y}}}
 

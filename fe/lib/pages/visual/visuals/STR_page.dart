@@ -334,7 +334,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       (newVal ~/ 8).toDouble();
                                 });
                                 await ApiService.saveVisualTargets(
-                                    shift_target, yield_target);
+                                    "STR", shift_target, yield_target);
                               },
                             );
                           },
@@ -359,7 +359,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                         onValueSaved: (newVal) async {
                           setState(() => yield_target = newVal);
                           await ApiService.saveVisualTargets(
-                              shift_target, yield_target);
+                              "STR", shift_target, yield_target);
                         },
                       );
                     },

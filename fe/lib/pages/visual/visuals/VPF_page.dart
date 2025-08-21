@@ -200,7 +200,7 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                               hourly_shift_target = (newVal ~/ 8).toDouble();
                             });
                             await ApiService.saveVisualTargets(
-                                shift_target, yield_target);
+                                "VPF", shift_target, yield_target);
                           },
                         );
                       },
@@ -225,7 +225,7 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                     onValueSaved: (newVal) async {
                       setState(() => yield_target = newVal);
                       await ApiService.saveVisualTargets(
-                          shift_target, yield_target);
+                          "VPF", shift_target, yield_target);
                     },
                   );
                 },

@@ -1697,7 +1697,7 @@ class _VisualPageState extends State<VisualPage> {
   }
 
   Future<void> loadTargets() async {
-    final targets = await ApiService.loadVisualTargets();
+    final targets = await ApiService.loadVisualTargets(widget.zone);
     if (targets != null) {
       setState(() {
         shift_target = targets['shift_target'] ?? 366;

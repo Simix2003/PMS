@@ -52,7 +52,7 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'PMS — Production Monitoring System',
+      title: (zone?.isNotEmpty ?? false) ? 'PMS — $zone' : 'PMS',
       locale: const Locale('it', 'IT'),
       supportedLocales: const [Locale('it', 'IT')],
       localizationsDelegates: const [

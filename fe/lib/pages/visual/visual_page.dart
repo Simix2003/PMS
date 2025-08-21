@@ -156,6 +156,7 @@ class _VisualPageState extends State<VisualPage> {
 
   //STR
   Map<int, int> zoneInputs = {},
+      zoneG = {},
       zoneNG = {},
       zoneYield = {},
       zoneScrap = {},
@@ -482,6 +483,7 @@ class _VisualPageState extends State<VisualPage> {
       setState(() {
         final stations = [1, 2, 3, 4, 5];
         zoneInputs.clear();
+        zoneG.clear();
         zoneNG.clear();
         zoneYield.clear();
         zoneScrap.clear();
@@ -490,6 +492,7 @@ class _VisualPageState extends State<VisualPage> {
         // Gather inputs, NG, scrap, yields for all stations
         for (var s in stations) {
           zoneInputs[s] = response['station_${s}_in'] ?? 0;
+          zoneG[s] = response['station_${s}_g'] ?? 0;
           zoneNG[s] = response['station_${s}_out_ng'] ?? 0;
           zoneScrap[s] = ((response['station_${s}_scrap'] ?? 0) / 10).round();
           zoneYield[s] = response['station_${s}_yield'] ?? 100;
@@ -1187,6 +1190,7 @@ class _VisualPageState extends State<VisualPage> {
           // ─── Main station metrics ─────────────────────────────
           final stations = [1, 2, 3, 4, 5];
           zoneInputs.clear();
+          zoneG.clear();
           zoneNG.clear();
           zoneYield.clear();
           zoneScrap.clear();
@@ -1194,6 +1198,7 @@ class _VisualPageState extends State<VisualPage> {
 
           for (var s in stations) {
             zoneInputs[s] = data['station_${s}_in'] ?? 0;
+            zoneG[s] = data['station_${s}_g'] ?? 0;
             zoneNG[s] = data['station_${s}_out_ng'] ?? 0;
             zoneYield[s] = data['station_${s}_yield'] ?? 100;
             zoneScrap[s] = ((data['station_${s}_scrap'] ?? 0) / 10).round();
@@ -1859,6 +1864,8 @@ class _VisualPageState extends State<VisualPage> {
                                             // Station production metrics (maps for flexibility)
                                             stationInputs:
                                                 zoneInputs, // {1: in, 2: in, 3: in, 4: in, 5: in}
+                                            stationG:
+                                                zoneG, // {1: g, 2: g, ...}
                                             stationNG:
                                                 zoneNG, // {1: ng, 2: ng, ...}
                                             stationYield:

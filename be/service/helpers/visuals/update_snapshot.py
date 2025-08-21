@@ -671,10 +671,10 @@ def _update_snapshot_str(
     Incrementally update the in-memory STR snapshot using per-module deltas
     from str_visual_snapshot. PLC resets counters after each module, so we
     sum the deltas manually instead of fixed +1 increments.
-    Matches the full aggregation logic from _compute_snapshot_str().
 
     Updated to treat Cell NG as String-equivalent NG (cell_ngs = cell_NG // 10)
     in both totals (IN) and NG counts, so yield reflects cells too.
+    Also maintains per-station good counters: station_{i}_g
     """
     cfg = ZONE_SOURCES["STR"]
     current_shift_start, _ = get_shift_window(ts)
@@ -719,21 +719,33 @@ def _update_snapshot_str(
     cell_ngs = int(cell_ng / 10)
 
     # Totals per module
-    total_processed = string_g + string_ng + cell_ngs
-    total_ng        = string_ng + cell_ngs
-    # good strings are only the actual OK strings
-    total_good      = string_g
+    total_good      = string_g                       # good strings only
+    total_ng        = string_ng + cell_ngs           # strings NG + cell-derived NG
+    total_processed = total_good + total_ng          # IN = G + NG
+    y_this_module   = compute_yield(total_good, total_ng)
 
-    # Update per-station totals (IN and OUT_NG)
+    # 🔍 Debug print (raw deltas + derived numbers for this module)
+    print(
+        f"[STR] station={station_name} (id={st_id}) | "
+        f"cell_G={cell_g}, cell_NG={cell_ng}, string_G={string_g}, string_NG={string_ng} -> "
+        f"cell_ngs={cell_ngs}, total_good={total_good}, total_ng={total_ng}, "
+        f"total_in={total_processed}, yield={y_this_module}%"
+    )
+
+    # Update per-station totals (IN, OUT_NG, and G)
     for i in range(1, 6):
-        in_key  = f"station_{i}_in"
-        out_key = f"station_{i}_out_ng"
-        if in_key not in data:
-            data[in_key] = 0
-        if out_key not in data:
-            data[out_key] = 0
+        in_key   = f"station_{i}_in"
+        out_key  = f"station_{i}_out_ng"
+        good_key = f"station_{i}_g"
+
+        if in_key not in data:   data[in_key] = 0
+        if out_key not in data:  data[out_key] = 0
+        if good_key not in data: data[good_key] = 0
+
         if station_name in cfg[in_key]:
             data[in_key] += total_processed
+            data[good_key] += total_good   # ✅ mirror of compute_snapshot: track goods per station
+
         if station_name in cfg[out_key]:
             data[out_key] += total_ng
 

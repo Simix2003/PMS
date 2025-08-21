@@ -1,7 +1,7 @@
 // ignore_for_file: must_be_immutable, non_constant_identifier_names, file_names
 
 import 'package:flutter/material.dart';
-import 'package:gauge_indicator/gauge_indicator.dart';
+//import 'package:gauge_indicator/gauge_indicator.dart';
 import 'package:ix_monitor/pages/visual/visual_widgets.dart';
 import '../../../shared/services/api_service.dart';
 import '../../../shared/widgets/password.dart';
@@ -28,6 +28,7 @@ class StrVisualsPage extends StatefulWidget {
 
   // Production data for all 5 stations
   final Map<int, int> stationInputs; // {1: in, 2: in, ...}
+  final Map<int, int> stationG; // {1: g, 2: g, ...}
   final Map<int, int> stationNG; // {1: ng, 2: ng, ...}
   final Map<int, int> stationYield; // {1: %, 2: %, ...}
   final Map<int, int> stationScrap; // {1: scrap, ...} (currently always 0)
@@ -75,6 +76,7 @@ class StrVisualsPage extends StatefulWidget {
     required this.warningColor,
     required this.redColor,
     required this.stationInputs,
+    required this.stationG,
     required this.stationNG,
     required this.stationYield,
     required this.stationScrap,
@@ -494,7 +496,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                                 widget.stationNG[
                                                                         1] ??
                                                                     0,
-                                                                widget.stationInputs[
+                                                                widget.stationG[
                                                                         1] ??
                                                                     0,
                                                               ),
@@ -675,8 +677,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                           vertical: 12),
                                                       child: Center(
                                                         child: Text(
-                                                          widget
-                                                              .stationInputs[2]
+                                                          widget.stationG[2]
                                                               .toString(),
                                                           style: TextStyle(
                                                             fontWeight:
@@ -886,8 +887,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                           vertical: 12),
                                                       child: Center(
                                                         child: Text(
-                                                          widget
-                                                              .stationInputs[3]
+                                                          widget.stationG[3]
                                                               .toString(),
                                                           style: TextStyle(
                                                             fontWeight:
@@ -1097,8 +1097,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                           vertical: 12),
                                                       child: Center(
                                                         child: Text(
-                                                          widget
-                                                              .stationInputs[4]
+                                                          widget.stationG[4]
                                                               .toString(),
                                                           style: TextStyle(
                                                             fontWeight:
@@ -1308,8 +1307,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                           vertical: 12),
                                                       child: Center(
                                                         child: Text(
-                                                          widget
-                                                              .stationInputs[5]
+                                                          widget.stationG[5]
                                                               .toString(),
                                                           style: TextStyle(
                                                             fontWeight:

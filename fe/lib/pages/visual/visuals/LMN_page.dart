@@ -1,7 +1,7 @@
 // ignore_for_file: must_be_immutable, non_constant_identifier_names
 
 import 'package:flutter/material.dart';
-import 'package:gauge_indicator/gauge_indicator.dart';
+//import 'package:gauge_indicator/gauge_indicator.dart';
 import 'package:ix_monitor/pages/visual/visual_widgets.dart';
 import '../../../shared/services/api_service.dart';
 import '../../../shared/widgets/password.dart';

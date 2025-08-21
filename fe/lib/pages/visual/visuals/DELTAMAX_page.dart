@@ -235,7 +235,7 @@ class _DeltamaxVisualsPageState extends State<DeltamaxVisualsPage> {
                               hourly_shift_target = (newVal ~/ 8).toDouble();
                             });
                             await ApiService.saveVisualTargets(
-                                shift_target, yield_target);
+                                "DELTAMAX", shift_target, yield_target);
                           },
                         );
                       },
@@ -260,7 +260,7 @@ class _DeltamaxVisualsPageState extends State<DeltamaxVisualsPage> {
                     onValueSaved: (newVal) async {
                       setState(() => yield_target = newVal);
                       await ApiService.saveVisualTargets(
-                          shift_target, yield_target);
+                          "DELTAMAX", shift_target, yield_target);
                     },
                   );
                 },

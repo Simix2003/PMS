@@ -38,12 +38,13 @@ async def get_visual_data(zone: str = Query(...), useCache: bool = Query(True)):
     return dict(cached_data)
 
 @router.get("/api/visual_targets")
-async def get_visual_targets():
-    targets = load_targets()
+async def get_visual_targets(zone: str = Query(...)):
+    targets = load_targets(zone)
+    shift = targets.get("shift_target", 366)
     return {
         "yield_target": targets.get("yield_target", 90),
-        "shift_target": targets.get("shift_target", 366),
-        "hourly_shift_target": targets.get("shift_target", 366) // 8
+        "shift_target": shift,
+        "hourly_shift_target": shift // 8,
     }
 
 
@@ -54,9 +55,9 @@ class TargetUpdate(BaseModel):
     shift_target: int
 
 @router.post("/api/visual_targets")
-async def set_visual_targets(update: TargetUpdate):
-    save_targets({
+async def set_visual_targets(update: TargetUpdate, zone: str = Query(...)):
+    save_targets(zone, {
         "yield_target": update.yield_target,
-        "shift_target": update.shift_target
+        "shift_target": update.shift_target,
     })
     return {"status": "ok"}

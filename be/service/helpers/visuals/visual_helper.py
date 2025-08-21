@@ -12,23 +12,33 @@ from statistics import median
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from service.connections.mysql import get_mysql_connection
-from service.config.config import TARGETS_FILE, DEFAULT_TARGETS
+from service.config.config import TARGETS_FILE, DEFAULT_ZONE_TARGETS
 from service.state import global_state
 from service.routes.broadcast import broadcast_zone_update
 
 logger = logging.getLogger(__name__)
 
-
-def load_targets():
+def load_targets(zone: str) -> dict:
     try:
         with open(TARGETS_FILE, "r") as f:
-            return json.load(f)
+            all_targets = json.load(f)
     except Exception:
-        return DEFAULT_TARGETS.copy()
+        all_targets = {}
 
-def save_targets(data: dict):
+    if zone in all_targets:
+        return all_targets[zone]
+    return DEFAULT_ZONE_TARGETS.get(zone, {"yield_target": 90, "shift_target": 366}).copy()
+
+def save_targets(zone: str, data: dict) -> None:
+    try:
+        with open(TARGETS_FILE, "r") as f:
+            all_targets = json.load(f)
+    except Exception:
+        all_targets = {}
+
+    all_targets[zone] = data
     with open(TARGETS_FILE, "w") as f:
-        json.dump(data, f)
+        json.dump(all_targets, f)
 
 # ─────────────────────────────────────────────────────────────────────────────
 def get_shift_window(now: datetime):

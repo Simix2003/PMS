@@ -235,7 +235,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                               hourly_shift_target = (newVal ~/ 8).toDouble();
                             });
                             await ApiService.saveVisualTargets(
-                                shift_target, yield_target);
+                                "ELL", shift_target, yield_target);
                           },
                         );
                       },
@@ -260,7 +260,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                     onValueSaved: (newVal) async {
                       setState(() => yield_target = newVal);
                       await ApiService.saveVisualTargets(
-                          shift_target, yield_target);
+                          "ELL", shift_target, yield_target);
                     },
                   );
                 },

@@ -1214,8 +1214,8 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>?> loadVisualTargets() async {
-    final url = Uri.parse('$baseUrl/api/visual_targets');
+  static Future<Map<String, dynamic>?> loadVisualTargets(String zone) async {
+    final url = Uri.parse('$baseUrl/api/visual_targets?zone=$zone');
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
@@ -1227,8 +1227,8 @@ class ApiService {
   }
 
   static Future<bool> saveVisualTargets(
-      int shiftTarget, int yieldTarget) async {
-    final url = Uri.parse('$baseUrl/api/visual_targets');
+      String zone, int shiftTarget, int yieldTarget) async {
+    final url = Uri.parse('$baseUrl/api/visual_targets?zone=$zone');
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},

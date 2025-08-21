@@ -300,7 +300,7 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                               hourly_shift_target = (newVal ~/ 8).toDouble();
                             });
                             await ApiService.saveVisualTargets(
-                                shift_target, yield_target);
+                                "LMN", shift_target, yield_target);
                           },
                         );
                       },
@@ -325,7 +325,7 @@ class _LmnVisualsPageState extends State<LmnVisualsPage> {
                     onValueSaved: (newVal) async {
                       setState(() => yield_target = newVal);
                       await ApiService.saveVisualTargets(
-                          shift_target, yield_target);
+                          "LMN", shift_target, yield_target);
                     },
                   );
                 },

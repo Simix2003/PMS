@@ -158,9 +158,9 @@ class _VisualPageState extends State<VisualPage> {
   Map<int, int> zoneInputs = {},
       zoneG = {},
       zoneNG = {},
-      zoneYield = {},
       zoneScrap = {},
       zoneAvailability = {};
+  Map<int, double> zoneYield = {};
   List<Map<String, dynamic>> strShifts = [];
   List<Map<String, dynamic>> overallShifts = [];
   List<Map<String, dynamic>> yieldLast8h = [];
@@ -494,7 +494,9 @@ class _VisualPageState extends State<VisualPage> {
           zoneInputs[s] = response['station_${s}_in'] ?? 0;
           zoneG[s] = response['station_${s}_g'] ?? 0;
           zoneNG[s] = response['station_${s}_out_ng'] ?? 0;
-          zoneScrap[s] = ((response['station_${s}_scrap'] ?? 0) / 10).round();
+          final raw = (response['station_${s}_scrap'] ?? 0);
+          final scrap = (raw is num) ? raw.toInt() : 0;
+          zoneScrap[s] = scrap ~/ 10;
           zoneYield[s] = response['station_${s}_yield'] ?? 100;
         }
 
@@ -1201,7 +1203,9 @@ class _VisualPageState extends State<VisualPage> {
             zoneG[s] = data['station_${s}_g'] ?? 0;
             zoneNG[s] = data['station_${s}_out_ng'] ?? 0;
             zoneYield[s] = data['station_${s}_yield'] ?? 100;
-            zoneScrap[s] = ((data['station_${s}_scrap'] ?? 0) / 10).round();
+            final raw = (data['station_${s}_scrap'] ?? 0);
+            final scrap = (raw is num) ? raw.toInt() : 0;
+            zoneScrap[s] = scrap ~/ 10;
           }
 
           // ─── Yield (Last 8h) ──────────────────────────────────

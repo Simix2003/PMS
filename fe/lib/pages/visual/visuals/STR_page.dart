@@ -30,7 +30,7 @@ class StrVisualsPage extends StatefulWidget {
   final Map<int, int> stationInputs; // {1: in, 2: in, ...}
   final Map<int, int> stationG; // {1: g, 2: g, ...}
   final Map<int, int> stationNG; // {1: ng, 2: ng, ...}
-  final Map<int, int> stationYield; // {1: %, 2: %, ...}
+  final Map<int, double> stationYield; // {1: 95.0, 2: 97.5, ...}
   final Map<int, int> stationScrap; // {1: scrap, ...} (currently always 0)
 
   // Shift and throughput data
@@ -177,7 +177,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
     );
   }
 
-  Color getYieldColor(int value, int target) {
+  Color getYieldColor(double value, int target) {
     if (value >= target) {
       return widget.okColor; // GREEN
     } else if (value >= target - 3) {
@@ -466,8 +466,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                           horizontal: 2),
                                                       child: Center(
                                                         child: Text(
-                                                          widget
-                                                              .stationInputs[1]
+                                                          widget.stationG[1]
                                                               .toString(),
                                                           style: TextStyle(
                                                             fontWeight:
@@ -1905,7 +1904,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
             Row(
               children: [
                 Flexible(
-                  flex: 3,
+                  flex: 4,
                   child: Container(
                     height: 400,
                     margin: const EdgeInsets.only(right: 6, bottom: 16),
@@ -1931,7 +1930,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        const Text(
+                                        /*const Text(
                                           'Available Time STR01',
                                           style: TextStyle(
                                             fontSize: 18,
@@ -1939,7 +1938,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             color: Colors.black87,
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
+                                        const SizedBox(width: 16),*/
 
                                         // 🚧 Temporary replacement (Work in Progress)
                                         Column(
@@ -1957,59 +1956,58 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             ),
                                           ],
                                         ),
-
                                         /*
-          // ⬇️ Original Gauge kept for later
-          Column(
-            children: [
-              SizedBox(
-                width: 100, // radius * 2
-                child: Column(
-                  children: [
-                    AnimatedRadialGauge(
-                      duration: const Duration(milliseconds: 800),
-                      curve: Curves.easeInOut,
-                      value: (widget.zoneAvailability[1] ?? 0).toDouble(),
-                      radius: 50,
-                      axis: GaugeAxis(
-                        min: 0,
-                        max: 100,
-                        degrees: 180,
-                        style: const GaugeAxisStyle(
-                          thickness: 6,
-                          background: Color(0xFFDDDDDD),
-                          segmentSpacing: 0,
-                        ),
-                        progressBar: GaugeRoundedProgressBar(
-                          color: () {
-                            if ((widget.zoneAvailability[1] ?? 0) <= 50) {
-                              return widget.errorColor;
-                            }
-                            if ((widget.zoneAvailability[1] ?? 0) <= 75) {
-                              return widget.warningColor;
-                            }
-                            return widget.okColor;
-                          }(),
-                        ),
-                      ),
-                      builder: (context, child, value) {
-                        return Center(
-                          child: Text(
-                            '${value.toInt()}%',
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          */
+                                        // ⬇️ Original Gauge kept for later
+                                        Column(
+                                          children: [
+                                            SizedBox(
+                                              width: 100, // radius * 2
+                                              child: Column(
+                                                children: [
+                                                  AnimatedRadialGauge(
+                                                    duration: const Duration(milliseconds: 800),
+                                                    curve: Curves.easeInOut,
+                                                    value: (widget.zoneAvailability[1] ?? 0).toDouble(),
+                                                    radius: 50,
+                                                    axis: GaugeAxis(
+                                                      min: 0,
+                                                      max: 100,
+                                                      degrees: 180,
+                                                      style: const GaugeAxisStyle(
+                                                        thickness: 6,
+                                                        background: Color(0xFFDDDDDD),
+                                                        segmentSpacing: 0,
+                                                      ),
+                                                      progressBar: GaugeRoundedProgressBar(
+                                                        color: () {
+                                                          if ((widget.zoneAvailability[1] ?? 0) <= 50) {
+                                                            return widget.errorColor;
+                                                          }
+                                                          if ((widget.zoneAvailability[1] ?? 0) <= 75) {
+                                                            return widget.warningColor;
+                                                          }
+                                                          return widget.okColor;
+                                                        }(),
+                                                      ),
+                                                    ),
+                                                    builder: (context, child, value) {
+                                                      return Center(
+                                                        child: Text(
+                                                          '${value.toInt()}%',
+                                                          style: const TextStyle(
+                                                            fontSize: 28,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        */
                                       ],
                                     ),
                                   ),
@@ -2026,7 +2024,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        const Text(
+                                        /*const Text(
                                           'Available Time STR02',
                                           style: TextStyle(
                                             fontSize: 18,
@@ -2034,7 +2032,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             color: Colors.black87,
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
+                                        const SizedBox(width: 16),*/
 
                                         // 🚧 Temporary replacement (Work in Progress)
                                         Column(
@@ -2121,7 +2119,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        const Text(
+                                        /*const Text(
                                           'Available Time STR03',
                                           style: TextStyle(
                                             fontSize: 18,
@@ -2129,7 +2127,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             color: Colors.black87,
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
+                                        const SizedBox(width: 16),*/
 
                                         // 🚧 Temporary replacement (Work in Progress)
                                         Column(
@@ -2216,7 +2214,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        const Text(
+                                        /*const Text(
                                           'Available Time STR04',
                                           style: TextStyle(
                                             fontSize: 18,
@@ -2224,7 +2222,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             color: Colors.black87,
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
+                                        const SizedBox(width: 16),*/
 
                                         // 🚧 Temporary replacement (Work in Progress)
                                         Column(
@@ -2311,7 +2309,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        const Text(
+                                        /*const Text(
                                           'Available Time STR05',
                                           style: TextStyle(
                                             fontSize: 18,
@@ -2319,7 +2317,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                             color: Colors.black87,
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
+                                        const SizedBox(width: 16),*/
 
                                         // 🚧 Temporary replacement (Work in Progress)
                                         Column(
@@ -2564,7 +2562,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                   ),
                 ),
                 Flexible(
-                  flex: 3,
+                  flex: 5,
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
                       maxHeight: 400, // Limit overall height
@@ -2637,7 +2635,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                   ),
                 ),
               ),
-              SizedBox(width: 30),
+              SizedBox(width: 50),
               SizedBox(
                 width: 70,
                 child: Text(
@@ -2673,7 +2671,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                 ),
               ),*/
               SizedBox(width: 125),
-              SizedBox(width: 15),
+              SizedBox(width: 80),
               SizedBox(
                 width: 200, // wider for longer label
                 child: Text(

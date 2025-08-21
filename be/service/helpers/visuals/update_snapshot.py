@@ -722,15 +722,7 @@ def _update_snapshot_str(
     total_good      = string_g                       # good strings only
     total_ng        = string_ng + cell_ngs           # strings NG + cell-derived NG
     total_processed = total_good + total_ng          # IN = G + NG
-    y_this_module   = compute_yield(total_good, total_ng)
-
-    # 🔍 Debug print (raw deltas + derived numbers for this module)
-    print(
-        f"[STR] station={station_name} (id={st_id}) | "
-        f"cell_G={cell_g}, cell_NG={cell_ng}, string_G={string_g}, string_NG={string_ng} -> "
-        f"cell_ngs={cell_ngs}, total_good={total_good}, total_ng={total_ng}, "
-        f"total_in={total_processed}, yield={y_this_module}%"
-    )
+    y_this_module   = compute_yield(total_good, total_ng, 1)
 
     # Update per-station totals (IN, OUT_NG, and G)
     for i in range(1, 6):
@@ -753,7 +745,7 @@ def _update_snapshot_str(
     for i in range(1, 6):
         good_i = data.get(f"station_{i}_in", 0) - data.get(f"station_{i}_out_ng", 0)
         ng_i   = data.get(f"station_{i}_out_ng", 0)
-        data[f"station_{i}_yield"] = compute_yield(good_i, ng_i)
+        data[f"station_{i}_yield"] = compute_yield(good_i, ng_i, 1)
 
     # Flags for membership (not gating by esito anymore)
     is_in_station = any(station_name in cfg[f"station_{i}_in"] for i in range(1, 6))
@@ -774,7 +766,7 @@ def _update_snapshot_str(
             shift["good"]  += total_good
             shift["ng"]    += total_ng
             shift["scrap"]  = shift.get("scrap", 0) + cell_ngs
-            shift["yield"]  = compute_yield(shift["good"], shift["ng"])
+            shift["yield"]  = compute_yield(shift["good"], shift["ng"], 1)
             break
 
     # Update Overall yield (same numbers as STR aggregate for now)
@@ -782,7 +774,7 @@ def _update_snapshot_str(
         if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
             shift["good"] += total_good
             shift["ng"]   += total_ng
-            shift["yield"] = compute_yield(shift["good"], shift["ng"])
+            shift["yield"] = compute_yield(shift["good"], shift["ng"], 1)
             break
 
     # Hourly bins (rolling last 8 hours) for both STR and Overall (identical)
@@ -795,7 +787,7 @@ def _update_snapshot_str(
             if entry["hour"] == hour_label:
                 entry["good"]  += add_good
                 entry["ng"]    += add_ng
-                entry["yield"]  = compute_yield(entry["good"], entry["ng"])
+                entry["yield"]  = compute_yield(entry["good"], entry["ng"], 1)
                 break
         else:
             new_entry = {
@@ -805,7 +797,7 @@ def _update_snapshot_str(
                 "good":  add_good,
                 "ng":    add_ng,
             }
-            new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"])
+            new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"], 1)
             lst.append(new_entry)
         data[list_key] = lst[-8:]  # keep last 8 bins
 

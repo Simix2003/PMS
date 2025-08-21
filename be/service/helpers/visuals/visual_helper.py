@@ -164,15 +164,23 @@ def get_last_8h_bins(now: datetime):
         bins.append((label, h_start, h_end))
     return bins
 
-def compute_yield(good: int, ng: int):
+def compute_yield(good: int, ng: int, decimals: int | None = None) -> float:
+    """
+    Compute yield as percentage of good vs (good + ng).
+    - If decimals is None (default) → round to integer (e.g., 95).
+    - If decimals is an int (e.g., 1 or 2) → round to that many decimals (e.g., 95.4 or 95.37).
+    """
     total = good + ng
     if total == 0:
-        return 0  # or return None if you want to hide it from the frontend
-    return round((good / total) * 100)
+        return 0.0  # or return None if you want to hide it
+
+    value = (good / total) * 100
+    if decimals is None:
+        return round(value)
+    return round(value, decimals)
 
 def time_to_seconds(time_val: timedelta) -> int:
     return time_val.seconds if isinstance(time_val, timedelta) else 0
-
 
 def refresh_fermi_data(zone: str, ts: datetime) -> None:
     """

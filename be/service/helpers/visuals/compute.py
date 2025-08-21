@@ -1107,26 +1107,13 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
             cell_ngs = c // 10                    # integer strings from defective cells
             total_ng = n + cell_ngs               # strings NG + cell-derived NG
             total_in = g + total_ng               # processed = good + all NG
-
-            y = compute_yield(g, total_ng)
-
-            # 🔍 Debug print
-            print(f"[Station {idx} / ID={st_id}] "
-                f"G={g}, NG={n}, cell_NG={c}, cell_ngs={cell_ngs}, "
-                f"total_ng={total_ng}, total_in={total_in}, YIELD={y}%")
+            y = compute_yield(g, total_ng, 1)
 
             station_in[f"station_{idx}_in"]       = total_in
             station_g[f"station_{idx}_g"]         = g
             station_ng[f"station_{idx}_out_ng"]   = total_ng
             station_scrap[f"station_{idx}_scrap"] = cell_ngs
             station_yield[f"station_{idx}_yield"] = y
-
-            #[Station 1 / ID=4] G=0, NG=0, cell_NG=0, cell_ngs=0, total_ng=0, total_in=0, YIELD=0%
-            #[Station 2 / ID=5] G=205, NG=8, cell_NG=42, cell_ngs=4, total_ng=12, total_in=217, YIELD=94%
-            #[Station 3 / ID=6] G=120, NG=3, cell_NG=45, cell_ngs=4, total_ng=7, total_in=127, YIELD=94%
-            #[Station 4 / ID=7] G=127, NG=4, cell_NG=24, cell_ngs=2, total_ng=6, total_in=133, YIELD=95%
-            #[Station 5 / ID=8] G=215, NG=3, cell_NG=31, cell_ngs=3, total_ng=6, total_in=221, YIELD=97%
-
 
         # 2) Last 3 shifts (STR yield and Overall yield identical for now)
         str_yield_shifts, overall_yield_shifts, shift_throughput = [], [], []
@@ -1144,7 +1131,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "label": label,
                 "start": st.isoformat(),
                 "end":   et.isoformat(),
-                "yield": compute_yield(good_shift, total_ng_shift),
+                "yield": compute_yield(good_shift, total_ng_shift, 1),
                 "good":  good_shift,
                 "ng":    total_ng_shift,
                 "scrap": cell_ngs_all,
@@ -1155,7 +1142,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "label": label,
                 "start": st.isoformat(),
                 "end":   et.isoformat(),
-                "yield": compute_yield(good_shift, total_ng_shift),
+                "yield": compute_yield(good_shift, total_ng_shift, 1),
                 "good":  good_shift,
                 "ng":    total_ng_shift,
             })
@@ -1201,7 +1188,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "end":   he.isoformat(),
                 "good":  good_bin,
                 "ng":    total_ng_bin,
-                "yield": compute_yield(good_bin, total_ng_bin),
+                "yield": compute_yield(good_bin, total_ng_bin, 1),
             })
 
             # Overall Yield (same)
@@ -1211,7 +1198,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                 "end":   he.isoformat(),
                 "good":  good_bin,
                 "ng":    total_ng_bin,
-                "yield": compute_yield(good_bin, total_ng_bin),
+                "yield": compute_yield(good_bin, total_ng_bin, 1),
             })
 
         # 4) Stops / fermi (unchanged logic, kept as-is)

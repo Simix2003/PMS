@@ -484,7 +484,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                           Flexible(
                                             child: Center(
                                               child: Text(
-                                                'NG ELL',
+                                                'NG ELL (R = 0)',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 16,

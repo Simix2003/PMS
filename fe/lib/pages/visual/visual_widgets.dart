@@ -5527,7 +5527,7 @@ class MiniSpeedBar extends StatelessWidget {
     required this.medianSec,
     required this.currentSec,
     this.maxSec = 120,
-    this.height = 80, // total widget height
+    this.height = 60, // total widget height
     this.barThickness = 40, // bar thickness
     this.textColor = Colors.black,
     this.showAxisLabels = true,

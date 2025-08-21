@@ -1,4 +1,4 @@
-// ignore_for_file: must_be_immutable, non_constant_identifier_names, file_names
+// ignore_for_file: must_be_immutable, non_constant_identifier_names, file_names, use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:ix_monitor/pages/visual/visual_widgets.dart';
@@ -23,6 +23,8 @@ class VpfVisualsPage extends StatefulWidget {
   final int currentYield_1;
   final List<Map<String, int>> hourlyData;
   final List<String> hourLabels;
+  final List<Map<String, int>> throughputData;
+  final List<String> shiftLabels;
   final List<Map<String, dynamic>> speedRatioData;
   final List<Map<String, dynamic>> station1Shifts;
   final List<Map<String, dynamic>> yieldLast8h_1;
@@ -49,6 +51,8 @@ class VpfVisualsPage extends StatefulWidget {
     required this.currentYield_1,
     required this.hourlyData,
     required this.hourLabels,
+    required this.throughputData,
+    required this.shiftLabels,
     required this.speedRatioData,
     required this.station1Shifts,
     required this.counts,
@@ -263,221 +267,214 @@ class _VpfVisualsPageState extends State<VpfVisualsPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.max,
                   children: [
-                    // ── Row titles (aligned with two card columns)
-                    Row(
-                      children: [
-                        const SizedBox(width: 100), // aligns with VPF label
-                        const Expanded(
-                          child: Center(
-                            child: Text(
-                              'Moduli Ispezionati',
-                              style: TextStyle(fontSize: 16),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 70),
-                        const Expanded(
-                          child: Center(
-                            child: Text(
-                              'Moduli OUT NG',
-                              style: TextStyle(fontSize: 16),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-
-                    // ── First row of cards (VPF + counts + NG circle)
-                    Row(
-                      children: [
-                        const Text(
-                          'VPF',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 24,
-                              color: Colors.black),
-                        ),
-                        const SizedBox(width: 8),
-
-                        // hidden circle -> don't reserve space
-                        Offstage(
-                          offstage: true,
-                          child: Container(
-                            width: widget.circleSize,
-                            height: widget.circleSize,
-                            decoration: BoxDecoration(
-                              color: getStationColor(widget.station_1_status),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-
-                        // inspected count
-                        Expanded(
-                          child: Card(
-                            color: Colors.white,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                    color: widget.textColor, width: 1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              child: Center(
-                                child: Text(
-                                  widget.In_1.toString(),
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 32,
-                                      color: widget.textColor),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(width: 16),
-
-                        // NG circle + NG value
-                        Container(
-                          width: widget.circleSize,
-                          height: widget.circleSize,
-                          decoration: BoxDecoration(
-                            color: widget.ngOut_1 == 0
-                                ? Colors.white
-                                : getNgColor(widget.ngOut_1, widget.In_1),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: widget.ngOut_1 == 0
-                                  ? Colors.black
-                                  : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-
-                        Expanded(
-                          child: Card(
-                            color: Colors.white,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                    color: widget.textColor, width: 1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              child: Center(
-                                child: Text(
-                                  widget.ngOut_1.toString(),
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 32,
-                                      color: widget.textColor),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // ── KPI row: Moduli Rientrati + Tempo di Ispezione
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Moduli Rientrati
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const Text(
-                                'Moduli Rientrati',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 20),
-                              ),
-                              const SizedBox(height: 8), // was 32 → tighter
-                              /*Card(
-                                color: Colors.white,
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                        color: widget.textColor, width: 1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 10),
-                                  child: Center(
-                                    child: Text(
-                                      // work in progress
-                                      widget.reEntered_1.toString(),
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 32,
-                                          color: widget.textColor),
+                    Flexible(
+                      child: Row(
+                        children: [
+                          // LEFT side (all your VPF content stacked in a Column)
+                          Flexible(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // ── Row titles
+                                Row(
+                                  children: [
+                                    const SizedBox(width: 100),
+                                    const Expanded(
+                                      child: Center(
+                                        child: Text(
+                                          'Moduli Ispezionati',
+                                          style: TextStyle(fontSize: 16),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              ),*/
-                              Card(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(Icons.construction,
-                                        size: 32, color: Colors.orange),
-                                    SizedBox(height: 12),
-                                    Text(
-                                      'Work in Progress',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.black54,
+                                    const SizedBox(width: 70),
+                                    const Expanded(
+                                      child: Center(
+                                        child: Text(
+                                          'Moduli OUT NG',
+                                          style: TextStyle(fontSize: 16),
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
-                              )
-                            ],
-                          ),
-                        ),
 
-                        const SizedBox(width: 12),
+                                // ── First row of cards (VPF + counts + NG circle)
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'VPF',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 24,
+                                          color: Colors.black),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Offstage(
+                                      offstage: true,
+                                      child: Container(
+                                        width: widget.circleSize,
+                                        height: widget.circleSize,
+                                        decoration: BoxDecoration(
+                                          color: getStationColor(
+                                              widget.station_1_status),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Card(
+                                        color: Colors.white,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                                color: widget.textColor,
+                                                width: 1),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 10),
+                                          child: Center(
+                                            child: Text(
+                                              widget.In_1.toString(),
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 32,
+                                                  color: widget.textColor),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Container(
+                                      width: widget.circleSize,
+                                      height: widget.circleSize,
+                                      decoration: BoxDecoration(
+                                        color: widget.ngOut_1 == 0
+                                            ? Colors.white
+                                            : getNgColor(
+                                                widget.ngOut_1, widget.In_1),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: widget.ngOut_1 == 0
+                                              ? Colors.black
+                                              : Colors.transparent,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Card(
+                                        color: Colors.white,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                                color: widget.textColor,
+                                                width: 1),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 10),
+                                          child: Center(
+                                            child: Text(
+                                              widget.ngOut_1.toString(),
+                                              style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 32,
+                                                  color: widget.textColor),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
 
-                        // Tempo di Ispezione
-                        Expanded(
-                          flex: 2,
-                          child: Column(
-                            children: [
-                              const Text(
-                                'Tempo di Ispezione',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 20),
-                              ),
-                              // keep it compact; SpeedBar should size itself
-                              MiniSpeedBar(
-                                medianSec: widget.speedRatioData[0]
-                                    ['medianSec'],
-                                currentSec: widget.speedRatioData[0]
-                                    ['currentSec'],
-                                textColor: widget.textColor,
-                              ),
-                            ],
+                                // ── KPI row
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          const Text(
+                                            'Moduli Rientrati',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 20),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Card(
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: const [
+                                                Icon(Icons.construction,
+                                                    size: 24,
+                                                    color: Colors.orange),
+                                                SizedBox(height: 8),
+                                                Text(
+                                                  'Work in Progress',
+                                                  style: TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: Colors.black54,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Column(
+                                        children: [
+                                          const Text(
+                                            'Tempo di Ispezione',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 18),
+                                          ),
+                                          MiniSpeedBar(
+                                            medianSec: widget.speedRatioData[0]
+                                                ['medianSec'],
+                                            currentSec: widget.speedRatioData[0]
+                                                ['currentSec'],
+                                            textColor: widget.textColor,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+
+                          const SizedBox(width: 8),
+
+                          // RIGHT side (throughput chart)
+                          ThroughputBarChart(
+                            data: widget.throughputData,
+                            labels: widget.shiftLabels,
+                            globalTarget: shift_target.toDouble(),
+                          ),
+                        ],
+                      ),
                     ),
-
-                    const SizedBox(height: 8),
-
-                    // ── Produzione Cumulativa (hourly) fills remaining space
-                    Expanded(
+                    Flexible(
                       child: HourlyBarChartVPF(
                         data: widget.hourlyData,
                         hourLabels: widget.hourLabels,

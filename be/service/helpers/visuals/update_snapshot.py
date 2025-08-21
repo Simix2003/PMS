@@ -234,6 +234,14 @@ def _update_snapshot_vpf(
             shift["yield"] = compute_yield(shift["good"], shift["ng"])
             break
 
+    for shift in data["shift_throughput"]:
+        if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+            if is_in_station:
+                shift["total"] += 1
+            if esito == 6 and is_qc_station:
+                shift["ng"] += 1
+            break
+
     # 4) Hourly bins (yield + throughput)
     hour_start = ts.replace(minute=0, second=0, microsecond=0)
     hour_label = hour_start.strftime("%H:%M")

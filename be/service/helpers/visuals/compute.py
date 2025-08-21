@@ -436,6 +436,19 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
                         "yield": compute_yield(s1_g, s1_n), "good": s1_g, "ng": s1_n
                     })
 
+                shift_throughput = []
+                for label, start, end in get_previous_shifts(now):
+                    # throughput
+                    tot = (count_unique_objects(cursor, cfg["station_1_in"], start, end, "all"))
+                    ng = s1_n
+                    shift_throughput.append({
+                        "label": label,
+                        "start": start.isoformat(),
+                        "end": end.isoformat(),
+                        "total": tot,
+                        "ng": ng
+                    })
+
                 s1_y8h = []
                 for label, h_start, h_end in get_last_8h_bins(now):
                     s1_in_  = count_unique_objects(cursor, cfg["station_1_in"],  h_start, h_end, "all") or 0
@@ -557,6 +570,7 @@ def _compute_snapshot_vpf(now: datetime) -> dict:
         "station_1_out_ng": s1_ng,
         "station_1_re_entered": s1_reEntered,
         "last_8h_throughput": last_8h_throughput,
+        "shift_throughput": shift_throughput,
         "speed_ratio": speed_ratio,
         "station_1_yield": s1_y,
         "station_1_shifts": s1_yield_shifts,

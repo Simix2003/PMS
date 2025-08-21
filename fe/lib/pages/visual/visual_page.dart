@@ -346,6 +346,9 @@ class _VisualPageState extends State<VisualPage> {
         station1Shifts =
             List<Map<String, dynamic>>.from(response['station_1_shifts'] ?? []);
 
+        shiftThroughput =
+            List<Map<String, dynamic>>.from(response['shift_throughput'] ?? []);
+
         // ─── Speed Ratio Chart ──────────────────────────
         speedRatioData =
             List<Map<String, dynamic>>.from(response['speed_ratio'] ?? []);
@@ -353,6 +356,15 @@ class _VisualPageState extends State<VisualPage> {
         // ─── Defects Chart (VPF) ────────────────────────
         defectsVPF =
             List<Map<String, dynamic>>.from(response['defects_vpf'] ?? []);
+
+        throughputData = shiftThroughput.map<Map<String, int>>((e) {
+          final total = (e['total'] ?? 0) as int;
+          final ng = (e['ng'] ?? 0) as int;
+          return {'ok': total - ng, 'ng': ng};
+        }).toList();
+
+        shiftLabels =
+            shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
 
         hourlyThroughput = List<Map<String, dynamic>>.from(
             response['last_8h_throughput'] ?? []);
@@ -1049,9 +1061,21 @@ class _VisualPageState extends State<VisualPage> {
           station1Shifts =
               List<Map<String, dynamic>>.from(data['station_1_shifts'] ?? []);
 
+          shiftThroughput =
+              List<Map<String, dynamic>>.from(data['shift_throughput'] ?? []);
+
           // ─── Speed Ratio Chart ──────────────────────────
           speedRatioData =
               List<Map<String, dynamic>>.from(data['speed_ratio'] ?? []);
+
+          throughputData = shiftThroughput.map<Map<String, int>>((e) {
+            final total = (e['total'] ?? 0) as int;
+            final ng = (e['ng'] ?? 0) as int;
+            return {'ok': total - ng, 'ng': ng};
+          }).toList();
+
+          shiftLabels =
+              shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
 
           // ─── Defects Chart (VPF) ────────────────────────
           defectsVPF =
@@ -1785,6 +1809,8 @@ class _VisualPageState extends State<VisualPage> {
                                     redColor: redColor,
                                     hourlyData: hourlyData,
                                     hourLabels: hourLabels,
+                                    throughputData: throughputData,
+                                    shiftLabels: shiftLabels,
                                     speedRatioData: speedRatioData,
                                     reEntered_1: reEntered_1,
                                     station1Shifts: station1Shifts,

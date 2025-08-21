@@ -929,7 +929,7 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
                 # 4) add “Mancata Compilazione” for esito=6 without recorded defects
                 label_missing = "Mancata Compilazione"
-                for st in (1, 2, 9):
+                for st in (1, 2):
                     missing_ids = set(production_ids_by_station[st]) - had_defect_by_station[st]
                     if missing_ids:
                         defect_counter[label_missing][st].update(missing_ids)

@@ -155,8 +155,12 @@ class _VisualPageState extends State<VisualPage> {
   );
 
   //STR
-  Map<int, int> zoneInputs = {}, zoneG = {}, zoneNG = {}, zoneAvailability = {};
-  Map<int, double> zoneYield = {}, zoneScrap = {};
+  Map<int, double> zoneInputs = {};
+  Map<int, double> zoneG = {};
+  Map<int, double> zoneNG = {};
+  Map<int, double> zoneScrap = {};
+  Map<int, double> zoneYield = {};
+  Map<int, int> zoneAvailability = {};
   List<Map<String, dynamic>> strShifts = [];
   List<Map<String, dynamic>> overallShifts = [];
   List<Map<String, dynamic>> yieldLast8h = [];
@@ -483,6 +487,12 @@ class _VisualPageState extends State<VisualPage> {
     }
   }
 
+  double _asDouble(dynamic v, [double fallback = 0.0]) =>
+      (v is num) ? v.toDouble() : fallback;
+
+  int _asInt(dynamic v, [int fallback = 0]) =>
+      (v is num) ? v.toInt() : int.tryParse(v?.toString() ?? '') ?? fallback;
+
   Future<void> fetchStrZoneData() async {
     try {
       final response =
@@ -495,17 +505,19 @@ class _VisualPageState extends State<VisualPage> {
         zoneNG.clear();
         zoneYield.clear();
         zoneScrap.clear();
-        zoneAvailability.clear(); // <-- NEW: to store availability per station
+        zoneAvailability.clear();
 
         // Gather inputs, NG, scrap, yields for all stations
-        for (var s in stations) {
-          zoneInputs[s] = response['station_${s}_in'] ?? 0;
-          zoneG[s] = response['station_${s}_g'] ?? 0;
-          zoneNG[s] = response['station_${s}_out_ng'] ?? 0;
-          final raw = (response['station_${s}_scrap'] ?? 0);
-          final scrap = (raw is num) ? raw.toDouble() : 0.0;
-          zoneScrap[s] = scrap / 10.0;
-          zoneYield[s] = response['station_${s}_yield'] ?? 100;
+        for (final s in stations) {
+          zoneInputs[s] = _asDouble(response['station_${s}_in']);
+          zoneG[s] = _asDouble(response['station_${s}_g']);
+          zoneNG[s] = _asDouble(response['station_${s}_out_ng']);
+
+          // ⚠️ Do NOT divide by 10 here: backend already returns decimals (e.g., 0.7).
+          zoneScrap[s] = _asDouble(response['station_${s}_scrap']);
+
+          // Yield comes as number; default to 100.0 if missing
+          zoneYield[s] = _asDouble(response['station_${s}_yield'], 100.0);
         }
 
         // Yield history (last 8h bins + overall)
@@ -514,40 +526,39 @@ class _VisualPageState extends State<VisualPage> {
         overallYieldLast8h = List<Map<String, dynamic>>.from(
             response['overall_yield_last_8h'] ?? []);
 
-        // Shift yields (STR global + overall)
+        // Shift yields (STR vs overall)
         strShifts =
             List<Map<String, dynamic>>.from(response['str_yield_shifts'] ?? []);
         overallShifts = List<Map<String, dynamic>>.from(
             response['overall_yield_shifts'] ?? []);
 
         mergedShiftData = List.generate(strShifts.length, (i) {
-          final strYield = strShifts[i]['yield'] ?? 100;
+          final strYield = _asDouble(strShifts[i]['yield'], 100.0);
           final overallYield = (i < overallShifts.length)
-              ? overallShifts[i]['yield'] ?? 100
-              : 100;
+              ? _asDouble(overallShifts[i]['yield'], 100.0)
+              : 100.0;
 
           return {
-            'shift': strShifts[i]['label'],
-            'STR_Yield': strYield, // STR Yield (dark blue bar)
-            'Overall_Yield': overallYield, // Overall Yield (light blue bar)
-            'good': strShifts[i]['good'] ?? 0,
-            'ng': strShifts[i]['ng'] ?? 0,
+            'shift': strShifts[i]['label']?.toString() ?? '',
+            'STR_Yield': strYield,
+            'Overall_Yield': overallYield,
+            'good': _asInt(strShifts[i]['good']),
+            'ng': _asInt(strShifts[i]['ng']),
           };
         });
 
-        // Throughput per shift (total vs NG)
+        // Throughput per shift (total vs NG) → keep charts as ints
         shiftThroughput =
             List<Map<String, dynamic>>.from(response['shift_throughput'] ?? []);
         throughputData = shiftThroughput.map<Map<String, int>>((e) {
-          final total = (e['total'] ?? 0) as int;
-          final ng = (e['ng'] ?? 0) as int;
+          final total = _asInt(e['total']);
+          final ng = _asInt(e['ng']);
           return {'ok': total - ng, 'ng': ng};
         }).toList();
         shiftLabels =
             shiftThroughput.map((e) => e['label']?.toString() ?? '').toList();
 
-        // Hourly data from 8h yield bins (good vs NG)
-        // Per-Station Hourly Throughput ─────────────────────────────────────
+        // Per-Station Hourly Throughput (keep ints for bars)
         final perStationHourly = Map<String, dynamic>.from(
           response['hourly_throughput_per_station'] ?? {},
         );
@@ -561,74 +572,66 @@ class _VisualPageState extends State<VisualPage> {
           hourlyThroughputPerStation[station] =
               rawList.map<Map<String, int>>((e) {
             return {
-              'ok': (e['ok'] ?? 0) as int,
-              'ng': (e['ng'] ?? 0) as int,
+              'ok': _asInt(e['ok']),
+              'ng': _asInt(e['ng']),
             };
           }).toList();
         }
 
-        // Fallback: update hourLabels from station 1 if not already set
+        // Fallback: hour labels
         if (hourLabels.isEmpty &&
-            hourlyThroughputPerStation[1]?.isNotEmpty == true) {
+            (hourlyThroughputPerStation[1]?.isNotEmpty ?? false)) {
           hourLabels = List<String>.from(
             perStationHourly['1']!.map((e) => e['hour']?.toString() ?? ''),
           );
         }
 
-        //  Top Defects QG2  ───────────────────────────────────────────────
+        // Top Defects QG2
         final topDefectsRaw =
             List<Map<String, dynamic>>.from(response['top_defects_qg2'] ?? []);
-
         defectLabels = [];
         Counts = [];
         for (final d in topDefectsRaw) {
           defectLabels.add(d['label']?.toString() ?? '');
-          Counts.add(int.tryParse(d['total'].toString()) ?? 0); // ← use TOTAL
+          Counts.add(_asInt(d['total']));
         }
-        qg2_defects_value = response['total_defects_qg2'] ?? 0;
+        qg2_defects_value = _asInt(response['total_defects_qg2']);
 
-        //  Top Defects VPF  ───────────────────────────────────────────────
+        // Top Defects VPF
         final topDefectsVPF =
             List<Map<String, dynamic>>.from(response['top_defects_vpf'] ?? []);
-
         defectVPFLabels = [];
         VpfDefectsCounts = [];
         for (final d in topDefectsVPF) {
           defectVPFLabels.add(d['label']?.toString() ?? '');
-          VpfDefectsCounts.add(
-              int.tryParse(d['total'].toString()) ?? 0); // ← use TOTAL
+          VpfDefectsCounts.add(_asInt(d['total']));
         }
 
-        // Fermi data (downtime + per-station availability)
+        // Fermi / Availability
         final fermiRaw =
             List<Map<String, dynamic>>.from(response['fermi_data'] ?? []);
         dataFermi = [];
-        availableTime = 0; // keep total if still sent
+        availableTime = 0;
 
         for (final entry in fermiRaw) {
-          // Case 1: Stop details (has causale + station)
           if (entry.containsKey("causale") && entry.containsKey("station")) {
             dataFermi.add([
-              entry['causale']?.toString() ?? '', // Tipo Fermata (Reason)
-              entry['station']?.toString() ?? '', // Macchina
-              entry['count']?.toString() ?? '0', // Frequenza
-              entry['time']?.toString() ?? '0', // Fermo Cumulato (min)
+              entry['causale']?.toString() ?? '',
+              entry['station']?.toString() ?? '',
+              entry['count']?.toString() ?? '0',
+              entry['time']?.toString() ?? '0',
             ]);
           }
 
-          // Case 2: Availability entries (Available_Time_STRxx)
           if (entry.keys.any((k) => k.startsWith("Available_Time_"))) {
             final key = entry.keys.first;
             final stationName = key.replaceFirst("Available_Time_", "");
             final stationId = _stationIdFromName(stationName);
-            final avail = int.tryParse(entry[key].toString()) ?? 0;
-            zoneAvailability[stationId] = avail;
+            zoneAvailability[stationId] = _asInt(entry[key]);
           }
 
-          // Case 3: Overall availability
           if (entry.containsKey("Available_Time_Total")) {
-            availableTime =
-                int.tryParse(entry["Available_Time_Total"].toString()) ?? 0;
+            availableTime = _asInt(entry["Available_Time_Total"]);
           }
         }
 
@@ -636,9 +639,7 @@ class _VisualPageState extends State<VisualPage> {
       });
     } catch (e) {
       print("❌ Error fetching zone data: $e");
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
     }
   }
 

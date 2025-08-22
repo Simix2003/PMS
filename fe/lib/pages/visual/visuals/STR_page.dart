@@ -27,9 +27,9 @@ class StrVisualsPage extends StatefulWidget {
   final Color redColor;
 
   // Production data for all 5 stations
-  final Map<int, int> stationInputs; // {1: in, 2: in, ...}
-  final Map<int, int> stationG; // {1: g, 2: g, ...}
-  final Map<int, int> stationNG; // {1: ng, 2: ng, ...}
+  final Map<int, double> stationInputs; // {1: in, 2: in, ...}
+  final Map<int, double> stationG; // {1: g, 2: g, ...}
+  final Map<int, double> stationNG; // {1: ng, 2: ng, ...}
   final Map<int, double> stationYield; // {1: 95.0, 2: 97.5, ...}
   final Map<int, double> stationScrap; // {1: scrap, ...} (currently always 0)
 
@@ -187,23 +187,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
     }
   }
 
-  Color getNgColor(int ngCount, int inCount) {
-    if (inCount == 0) {
-      return widget.redColor; // fallback to red if division by zero
-    }
-
-    final percent = (ngCount / inCount) * 100;
-
-    if (percent > 5) {
-      return widget.redColor; // RED
-    } else if (percent >= 2) {
-      return widget.errorColor; // ORANGE
-    } else {
-      return widget.okColor; // GREEN
-    }
-  }
-
-  Color getNgColor_double(double ngCount, num inCount) {
+  Color getNgColor_double(num ngCount, num inCount) {
     if (inCount == 0) {
       return widget.redColor; // fallback to red if division by zero
     }
@@ -507,7 +491,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                                     0) ==
                                                                 0
                                                             ? Colors.white
-                                                            : getNgColor(
+                                                            : getNgColor_double(
                                                                 widget.stationNG[
                                                                         1] ??
                                                                     0,
@@ -717,7 +701,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                                     0) ==
                                                                 0
                                                             ? Colors.white
-                                                            : getNgColor(
+                                                            : getNgColor_double(
                                                                 widget.stationNG[
                                                                         2] ??
                                                                     0,
@@ -927,7 +911,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                                     0) ==
                                                                 0
                                                             ? Colors.white
-                                                            : getNgColor(
+                                                            : getNgColor_double(
                                                                 widget.stationNG[
                                                                         3] ??
                                                                     0,
@@ -1137,7 +1121,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                                     0) ==
                                                                 0
                                                             ? Colors.white
-                                                            : getNgColor(
+                                                            : getNgColor_double(
                                                                 widget.stationNG[
                                                                         4] ??
                                                                     0,
@@ -1347,7 +1331,7 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                                     0) ==
                                                                 0
                                                             ? Colors.white
-                                                            : getNgColor(
+                                                            : getNgColor_double(
                                                                 widget.stationNG[
                                                                         5] ??
                                                                     0,

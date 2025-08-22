@@ -945,11 +945,11 @@ class ApiService {
         'station_5_out_ng': data['station_5_out_ng'] ?? 0,
 
         // Scrap
-        'station_1_scrap': data['station_1_scrap'] ?? 0,
-        'station_2_scrap': data['station_2_scrap'] ?? 0,
-        'station_3_scrap': data['station_3_scrap'] ?? 0,
-        'station_4_scrap': data['station_4_scrap'] ?? 0,
-        'station_5_scrap': data['station_5_scrap'] ?? 0,
+        'station_1_scrap': data['station_1_scrap'] ?? 0.0,
+        'station_2_scrap': data['station_2_scrap'] ?? 0.0,
+        'station_3_scrap': data['station_3_scrap'] ?? 0.0,
+        'station_4_scrap': data['station_4_scrap'] ?? 0.0,
+        'station_5_scrap': data['station_5_scrap'] ?? 0.0,
 
         // Yields (default to 100%)
         'station_1_yield': data['station_1_yield'] ?? 100,

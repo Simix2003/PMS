@@ -1148,7 +1148,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
 
             station_in[f"station_{idx}_in"]       = total_in
             station_g[f"station_{idx}_g"]         = g
-            station_ng[f"station_{idx}_out_ng"]   = total_ng
+            station_ng[f"station_{idx}_out_ng"]   = n
             station_scrap[f"station_{idx}_scrap"] = cell_ngs
             station_yield[f"station_{idx}_yield"] = y
 

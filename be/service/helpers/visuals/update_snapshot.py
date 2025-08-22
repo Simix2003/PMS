@@ -672,170 +672,173 @@ def _update_snapshot_ell_new(
 def _update_snapshot_str(
     data: dict,
     station_name: str,
-    esito: int,         # kept for signature compatibility; no longer used to gate NG adds
+    esito: int,      # kept for signature compatibility; unused
     ts: datetime
 ) -> None:
     """
-    Incrementally update the in-memory STR snapshot using per-module deltas
-    from str_visual_snapshot. PLC resets counters after each module, so we
-    sum the deltas manually instead of fixed +1 increments.
-
-    Updated to treat Cell NG as String-equivalent NG (cell_ngs = cell_NG // 10)
-    in both totals (IN) and NG counts, so yield reflects cells too.
-    Also maintains per-station good counters: station_{i}_g
+    Incrementally update the in-memory STR snapshot using per-module deltas.
+    Mirrors _compute_snapshot_str semantics:
+      - Scrap = cell_NG / 10.0   (float)
+      - station_*_out_ng holds ONLY string_NG
+      - station_*_scrap holds cell-derived NG
+      - station_*_in = good + string_NG + scrap
+      - station_*_yield computed on (good vs (string_NG + scrap))
     """
     cfg = ZONE_SOURCES["STR"]
     current_shift_start, _ = get_shift_window(ts)
     hour = ts.hour
+    current_shift_label = "S1" if 6 <= hour < 14 else ("S2" if 14 <= hour < 22 else "S3")
 
-    # Determine current shift label (S1/S2/S3)
-    if 6 <= hour < 14:
-        current_shift_label = "S1"
-    elif 14 <= hour < 22:
-        current_shift_label = "S2"
-    else:
-        current_shift_label = "S3"
-
-    # Station name → station_id
+    # Station name → station_id / index
     station_map = {"STR01": 4, "STR02": 5, "STR03": 6, "STR04": 7, "STR05": 8}
     st_id = station_map.get(station_name)
     if not st_id:
         return
+    station_idx = list(station_map).index(station_name) + 1  # STR01→1 … STR05→5
 
-    # Fetch latest per-module deltas from DB
+    # Fetch latest per-module deltas
     cell_g = cell_ng = string_g = string_ng = 0
     try:
-        with get_mysql_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    SELECT cell_G, cell_NG, string_G, string_NG
-                    FROM str_visual_snapshot
-                    WHERE station_id=%s
-                    ORDER BY timestamp DESC
-                    LIMIT 1
-                """, (st_id,))
-                row = cursor.fetchone()
-                if row:
-                    cell_g    = row.get("cell_G")    or 0
-                    cell_ng   = row.get("cell_NG")   or 0
-                    string_g  = row.get("string_G")  or 0
-                    string_ng = row.get("string_NG") or 0
+        with get_mysql_connection() as conn, conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT cell_G, cell_NG, string_G, string_NG
+                FROM str_visual_snapshot
+                WHERE station_id=%s
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """, (st_id,))
+            row = cursor.fetchone()
+            if row:
+                cell_g    = row.get("cell_G")    or 0
+                cell_ng   = row.get("cell_NG")   or 0
+                string_g  = row.get("string_G")  or 0
+                string_ng = row.get("string_NG") or 0
     except Exception as e:
         logger.warning(f"STR snapshot DB read failed for {station_name}: {e}")
 
-    # Convert cell-level NG into string-equivalent NG
-    cell_ngs = int(cell_ng / 10)
+    # Convert cell-level NG into string-equivalent NG (float, not int!)
+    cell_ngs = float(cell_ng) / 10.0
 
-    # Totals per module
-    total_good      = string_g                       # good strings only
-    total_ng        = string_ng + cell_ngs           # strings NG + cell-derived NG
-    total_processed = total_good + total_ng          # IN = G + NG
-    y_this_module   = compute_yield(total_good, total_ng, 1)
+    # Per-module totals matching compute_snapshot
+    total_good           = float(string_g)
+    total_string_ng_only = float(string_ng)       # station_*_out_ng
+    total_ng_for_yield   = total_string_ng_only + cell_ngs
+    total_processed      = total_good + total_ng_for_yield
 
-    # Update per-station totals (IN, OUT_NG, and G)
+    # Ensure keys exist and are floats
     for i in range(1, 6):
-        in_key   = f"station_{i}_in"
-        out_key  = f"station_{i}_out_ng"
-        good_key = f"station_{i}_g"
+        for key in (f"station_{i}_in", f"station_{i}_out_ng",
+                    f"station_{i}_g",  f"station_{i}_scrap",
+                    f"station_{i}_yield"):
+            if key not in data:
+                # initialize numeric fields as float to avoid int/float mixups
+                data[key] = 0.0 if key.endswith(("_in", "_out_ng", "_g", "_scrap", "_yield")) else 0.0
 
-        if in_key not in data:   data[in_key] = 0
-        if out_key not in data:  data[out_key] = 0
-        if good_key not in data: data[good_key] = 0
+    # Update per-station totals
+    in_key    = f"station_{station_idx}_in"
+    out_key   = f"station_{station_idx}_out_ng"   # ONLY string NG
+    good_key  = f"station_{station_idx}_g"
+    scrap_key = f"station_{station_idx}_scrap"
 
-        if station_name in cfg[in_key]:
-            data[in_key] += total_processed
-            data[good_key] += total_good   # ✅ mirror of compute_snapshot: track goods per station
+    # Match compute_snapshot membership via cfg
+    if station_name in cfg[in_key]:
+        data[in_key]   = float(data.get(in_key, 0.0))   + total_processed
+        data[good_key] = float(data.get(good_key, 0.0)) + total_good
+        data[scrap_key]= float(data.get(scrap_key, 0.0))+ cell_ngs
 
-        if station_name in cfg[out_key]:
-            data[out_key] += total_ng
+    if station_name in cfg[out_key]:
+        data[out_key]  = float(data.get(out_key, 0.0))  + total_string_ng_only
 
-    # Update yields per station (yield = good / (good + ng) = (in - ng) / in)
+    # Recompute per-station yields with (good vs string_NG + scrap)
     for i in range(1, 6):
-        good_i = data.get(f"station_{i}_in", 0) - data.get(f"station_{i}_out_ng", 0)
-        ng_i   = data.get(f"station_{i}_out_ng", 0)
-        data[f"station_{i}_yield"] = compute_yield(good_i, ng_i, 1)
+        in_i    = float(data.get(f"station_{i}_in", 0.0))
+        ng_i    = float(data.get(f"station_{i}_out_ng", 0.0))
+        scrap_i = float(data.get(f"station_{i}_scrap", 0.0))
+        total_ng_i = ng_i + scrap_i
+        good_i  = in_i - total_ng_i  # equals string_G
+        data[f"station_{i}_yield"] = compute_yield(good_i, total_ng_i, 1)
 
-    # Flags for membership (not gating by esito anymore)
+    # Flags for membership (unchanged)
     is_in_station = any(station_name in cfg[f"station_{i}_in"] for i in range(1, 6))
     is_ng_station = any(station_name in cfg[f"station_{i}_out_ng"] for i in range(1, 6))
 
-    # Update shift throughput (total and NG across STR)
+    # Update shift throughput (good + all NG), and NG includes scrap (like compute_snapshot)
     for shift in data.get("shift_throughput", []):
         if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-            if is_in_station:
-                shift["total"] += total_processed
-            if is_ng_station and total_ng:
-                shift["ng"] += total_ng
+            if is_in_station and total_processed:
+                shift["total"] = float(shift.get("total", 0.0)) + total_processed
+            if is_ng_station and total_ng_for_yield:
+                shift["ng"]    = float(shift.get("ng", 0.0))    + total_ng_for_yield
+            # keep shift["scrap"] too if present
+            if is_in_station and cell_ngs:
+                shift["scrap"] = float(shift.get("scrap", 0.0)) + cell_ngs
             break
 
-    # Update STR aggregate yield (all 5 stations)
+    # Update STR aggregate yield (zone)
     for shift in data.get("str_yield_shifts", []):
         if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-            shift["good"]  += total_good
-            shift["ng"]    += total_ng
-            shift["scrap"]  = shift.get("scrap", 0) + cell_ngs
-            shift["yield"]  = compute_yield(shift["good"], shift["ng"], 1)
-            break
-
-    # Update Overall yield (same numbers as STR aggregate for now)
-    for shift in data.get("overall_yield_shifts", []):
-        if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
-            shift["good"] += total_good
-            shift["ng"]   += total_ng
+            shift["good"]  = float(shift.get("good", 0.0))  + total_good
+            shift["ng"]    = float(shift.get("ng", 0.0))    + total_ng_for_yield
+            shift["scrap"] = float(shift.get("scrap", 0.0)) + cell_ngs
             shift["yield"] = compute_yield(shift["good"], shift["ng"], 1)
             break
 
-    # Hourly bins (rolling last 8 hours) for both STR and Overall (identical)
+    # Update Overall yield (same numbers as STR for now)
+    for shift in data.get("overall_yield_shifts", []):
+        if shift["label"] == current_shift_label and shift["start"] == current_shift_start.isoformat():
+            shift["good"]  = float(shift.get("good", 0.0)) + total_good
+            shift["ng"]    = float(shift.get("ng", 0.0))   + total_ng_for_yield
+            shift["yield"] = compute_yield(shift["good"], shift["ng"], 1)
+            break
+
+    # Hourly bins (rolling last 8 hours) — include scrap in NG (like compute_snapshot)
     hour_start = ts.replace(minute=0, second=0, microsecond=0)
     hour_label = hour_start.strftime("%H:%M")
 
-    def touch(list_key: str, add_good: int, add_ng: int):
+    def touch(list_key: str, add_good: float, add_ng: float):
         lst = data.get(list_key, [])
         for entry in lst:
             if entry["hour"] == hour_label:
-                entry["good"]  += add_good
-                entry["ng"]    += add_ng
-                entry["yield"]  = compute_yield(entry["good"], entry["ng"], 1)
+                entry["good"]  = float(entry.get("good", 0.0)) + add_good
+                entry["ng"]    = float(entry.get("ng", 0.0))   + add_ng
+                entry["yield"] = compute_yield(entry["good"], entry["ng"], 1)
                 break
         else:
             new_entry = {
                 "hour":  hour_label,
                 "start": hour_start.isoformat(),
                 "end":   (hour_start + timedelta(hours=1)).isoformat(),
-                "good":  add_good,
-                "ng":    add_ng,
+                "good":  float(add_good),
+                "ng":    float(add_ng),
             }
             new_entry["yield"] = compute_yield(new_entry["good"], new_entry["ng"], 1)
             lst.append(new_entry)
-        data[list_key] = lst[-8:]  # keep last 8 bins
+        data[list_key] = lst[-8:]
 
     if is_in_station and total_processed:
-        # include cell NG in NG for bins
-        touch("str_yield_last_8h",      total_good, total_ng)
-        touch("overall_yield_last_8h",  total_good, total_ng)
+        touch("str_yield_last_8h",     total_good, total_ng_for_yield)
+        touch("overall_yield_last_8h", total_good, total_ng_for_yield)
 
-    # Per-station hourly throughput
+    # Per-station hourly throughput (include scrap in NG like compute_snapshot)
     per_station_key = "hourly_throughput_per_station"
-    station_idx = list(station_map).index(station_name) + 1  # STR01 → 1, ... STR05 → 5
-
     if per_station_key not in data:
-        data[per_station_key] = {i: [] for i in range(1, 6)}  # 1–5
+        data[per_station_key] = {i: [] for i in range(1, 6)}
 
     station_bins = data[per_station_key][station_idx]
     for entry in station_bins:
         if entry["hour"] == hour_label:
-            entry["ok"] += total_good
-            entry["ng"] += total_ng
+            entry["ok"] = float(entry.get("ok", 0.0)) + total_good
+            entry["ng"] = float(entry.get("ng", 0.0)) + total_ng_for_yield
             break
     else:
         station_bins.append({
             "hour":  hour_label,
             "start": hour_start.isoformat(),
             "end":   (hour_start + timedelta(hours=1)).isoformat(),
-            "ok":    total_good,
-            "ng":    total_ng,
+            "ok":    float(total_good),
+            "ng":    float(total_ng_for_yield),
         })
-    data[per_station_key][station_idx] = station_bins[-8:]  # Keep only last 8
+    data[per_station_key][station_idx] = station_bins[-8:]
 
 def _update_snapshot_lmn(
     data: dict,

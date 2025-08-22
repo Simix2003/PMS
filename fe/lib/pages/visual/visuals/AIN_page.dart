@@ -401,7 +401,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                       Flexible(
                                         child: Row(
                                           children: [
-                                            Text('QG2\nBussing 1',
+                                            Text('QG2 e\nBussing 1',
                                                 style: TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 18,
@@ -514,7 +514,7 @@ class _AinVisualsPageState extends State<AinVisualsPage> {
                                       Flexible(
                                         child: Row(
                                           children: [
-                                            Text('QG2\nBussing 2',
+                                            Text('QG2 e\nBussing 2',
                                                 style: TextStyle(
                                                     fontWeight: FontWeight.bold,
                                                     fontSize: 18,

@@ -1,4 +1,4 @@
-// ignore_for_file: must_be_immutable, non_constant_identifier_names, file_names
+// ignore_for_file: must_be_immutable, non_constant_identifier_names, file_names, use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 //import 'package:gauge_indicator/gauge_indicator.dart';
@@ -31,7 +31,7 @@ class StrVisualsPage extends StatefulWidget {
   final Map<int, int> stationG; // {1: g, 2: g, ...}
   final Map<int, int> stationNG; // {1: ng, 2: ng, ...}
   final Map<int, double> stationYield; // {1: 95.0, 2: 97.5, ...}
-  final Map<int, int> stationScrap; // {1: scrap, ...} (currently always 0)
+  final Map<int, double> stationScrap; // {1: scrap, ...} (currently always 0)
 
   // Shift and throughput data
   final List<Map<String, int>> throughputData;
@@ -188,6 +188,22 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
   }
 
   Color getNgColor(int ngCount, int inCount) {
+    if (inCount == 0) {
+      return widget.redColor; // fallback to red if division by zero
+    }
+
+    final percent = (ngCount / inCount) * 100;
+
+    if (percent > 5) {
+      return widget.redColor; // RED
+    } else if (percent >= 2) {
+      return widget.errorColor; // ORANGE
+    } else {
+      return widget.okColor; // GREEN
+    }
+  }
+
+  Color getNgColor_double(double ngCount, num inCount) {
     if (inCount == 0) {
       return widget.redColor; // fallback to red if division by zero
     }
@@ -555,24 +571,24 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                   decoration: BoxDecoration(
                                                     color: (widget.stationScrap[
                                                                     1] ??
-                                                                0) ==
-                                                            0
+                                                                0.0) <=
+                                                            0.0
                                                         ? Colors.white
-                                                        : getNgColor(
+                                                        : getNgColor_double(
                                                             widget.stationScrap[
                                                                     1] ??
-                                                                0,
+                                                                0.0,
                                                             widget.stationInputs[
                                                                     1] ??
-                                                                0,
+                                                                0.0,
                                                           ),
                                                     shape: BoxShape.circle,
                                                     border: Border.all(
                                                       color:
                                                           (widget.stationScrap[
                                                                           1] ??
-                                                                      0) ==
-                                                                  0
+                                                                      0.0) <=
+                                                                  0.0
                                                               ? Colors.black
                                                               : Colors
                                                                   .transparent,
@@ -765,24 +781,24 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                   decoration: BoxDecoration(
                                                     color: (widget.stationScrap[
                                                                     2] ??
-                                                                0) ==
-                                                            0
+                                                                0.0) <=
+                                                            0.0
                                                         ? Colors.white
-                                                        : getNgColor(
+                                                        : getNgColor_double(
                                                             widget.stationScrap[
                                                                     2] ??
-                                                                0,
+                                                                0.0,
                                                             widget.stationInputs[
                                                                     2] ??
-                                                                0,
+                                                                0.0,
                                                           ),
                                                     shape: BoxShape.circle,
                                                     border: Border.all(
                                                       color:
                                                           (widget.stationScrap[
                                                                           2] ??
-                                                                      0) ==
-                                                                  0
+                                                                      0.0) <=
+                                                                  0.0
                                                               ? Colors.black
                                                               : Colors
                                                                   .transparent,
@@ -975,24 +991,24 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                   decoration: BoxDecoration(
                                                     color: (widget.stationScrap[
                                                                     3] ??
-                                                                0) ==
-                                                            0
+                                                                0.0) <=
+                                                            0.0
                                                         ? Colors.white
-                                                        : getNgColor(
+                                                        : getNgColor_double(
                                                             widget.stationScrap[
                                                                     3] ??
-                                                                0,
+                                                                0.0,
                                                             widget.stationInputs[
                                                                     3] ??
-                                                                0,
+                                                                0.0,
                                                           ),
                                                     shape: BoxShape.circle,
                                                     border: Border.all(
                                                       color:
                                                           (widget.stationScrap[
                                                                           3] ??
-                                                                      0) ==
-                                                                  0
+                                                                      0.0) <=
+                                                                  0.0
                                                               ? Colors.black
                                                               : Colors
                                                                   .transparent,
@@ -1185,24 +1201,24 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                   decoration: BoxDecoration(
                                                     color: (widget.stationScrap[
                                                                     4] ??
-                                                                0) ==
-                                                            0
+                                                                0.0) <=
+                                                            0.0
                                                         ? Colors.white
-                                                        : getNgColor(
+                                                        : getNgColor_double(
                                                             widget.stationScrap[
                                                                     4] ??
-                                                                0,
+                                                                0.0,
                                                             widget.stationInputs[
                                                                     4] ??
-                                                                0,
+                                                                0.0,
                                                           ),
                                                     shape: BoxShape.circle,
                                                     border: Border.all(
                                                       color:
                                                           (widget.stationScrap[
                                                                           4] ??
-                                                                      0) ==
-                                                                  0
+                                                                      0.0) <=
+                                                                  0.0
                                                               ? Colors.black
                                                               : Colors
                                                                   .transparent,
@@ -1395,24 +1411,24 @@ class _StrVisualsPageState extends State<StrVisualsPage> {
                                                   decoration: BoxDecoration(
                                                     color: (widget.stationScrap[
                                                                     5] ??
-                                                                0) ==
-                                                            0
+                                                                0.0) <=
+                                                            0.0
                                                         ? Colors.white
-                                                        : getNgColor(
+                                                        : getNgColor_double(
                                                             widget.stationScrap[
                                                                     5] ??
-                                                                0,
+                                                                0.0,
                                                             widget.stationInputs[
                                                                     5] ??
-                                                                0,
+                                                                0.0,
                                                           ),
                                                     shape: BoxShape.circle,
                                                     border: Border.all(
                                                       color:
                                                           (widget.stationScrap[
                                                                           5] ??
-                                                                      0) ==
-                                                                  0
+                                                                      0.0) <=
+                                                                  0.0
                                                               ? Colors.black
                                                               : Colors
                                                                   .transparent,

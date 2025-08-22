@@ -319,7 +319,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                           Flexible(
                                             child: Center(
                                               child: Text(
-                                                'IN ELL G + NG (R = 0)',
+                                                'IN ELL (G + NG) (R = 0)',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 16,
@@ -472,7 +472,7 @@ class _EllVisualsPageState extends State<EllVisualsPage> {
                                           Flexible(
                                             child: Center(
                                               child: Text(
-                                                'NG Other',
+                                                'NG Other (R = 0)',
                                                 style: TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 16,

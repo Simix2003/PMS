@@ -174,20 +174,20 @@ def get_last_8h_bins(now: datetime):
         bins.append((label, h_start, h_end))
     return bins
 
-def compute_yield(good: int, ng: int, decimals: int | None = None) -> float:
+def compute_yield(good: float, ng: float, decimals: Optional[int] = None) -> float:
     """
-    Compute yield as percentage of good vs (good + ng).
-    - If decimals is None (default) → round to integer (e.g., 95).
-    - If decimals is an int (e.g., 1 or 2) → round to that many decimals (e.g., 95.4 or 95.37).
+    Compute yield (%) = good / (good + ng) * 100.
+    - decimals=None  → round to integer percentage (e.g., 95).
+    - decimals=1/2… → round to that many decimals (e.g., 95.4 or 95.37).
     """
+    good = float(good)
+    ng = float(ng)
     total = good + ng
-    if total == 0:
-        return 0.0  # or return None if you want to hide it
+    if total <= 0:
+        return 0.0
 
-    value = (good / total) * 100
-    if decimals is None:
-        return round(value)
-    return round(value, decimals)
+    value = (good / total) * 100.0
+    return round(value) if decimals is None else round(value, decimals)
 
 def time_to_seconds(time_val: timedelta) -> int:
     return time_val.seconds if isinstance(time_val, timedelta) else 0

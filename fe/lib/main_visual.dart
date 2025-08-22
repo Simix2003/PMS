@@ -9,12 +9,11 @@ import 'pages/loading_Screen/loading_screen.dart';
 
 /// 🔒 Allowed zones (add/remove as needed)
 const Set<String> kAllowedZones = {
+  'STR',
   'AIN',
   'ELL',
-  'VPF',
-  'STR',
   'LMN',
-  'DELTAMAX'
+  'VPF',
 };
 
 void main() async {
@@ -88,7 +87,7 @@ class ZonePickerHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final zones = kAllowedZones.toList()..sort();
+    final zones = kAllowedZones.toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -399,17 +398,17 @@ class _Footer extends StatelessWidget {
 IconData _iconFor(String zone) {
   switch (zone) {
     case 'AIN':
-      return Icons.sensors;
+      return Icons.precision_manufacturing;
     case 'ELL':
       return Icons.precision_manufacturing;
     case 'VPF':
-      return Icons.dashboard_customize;
+      return Icons.precision_manufacturing;
     case 'STR':
-      return Icons.view_stream;
+      return Icons.precision_manufacturing;
     case 'LMN':
-      return Icons.memory;
+      return Icons.precision_manufacturing;
     case 'DELTAMAX':
-      return Icons.stacked_bar_chart;
+      return Icons.precision_manufacturing;
     default:
       return Icons.factory_outlined;
   }

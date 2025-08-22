@@ -704,6 +704,10 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
 
                 value_gauge_1 = round((multi_entry / s2_in) * 100, 2) if s2_in else 0.0
+                print('value_gauge_1', value_gauge_1)
+                print('multi_entry', multi_entry)
+                print('s2_in', s2_in)
+                #Formula: (Moduli entrati più volte in ELL / Moduli entrati in RMI ) per 100
 
                 # ---- Gauge 2 ---------------------------------------------------------------
                 # Step 1 — Get all object_ids that passed station_1_in >1 times
@@ -745,6 +749,10 @@ def _compute_snapshot_ell(now: datetime) -> dict:
 
                     good_final = cursor.fetchone()["good_final"] or 0
                     value_gauge_2 = round((good_final / multi_entry_count) * 100, 2)
+                    # ( Moduli entrati più volte con ultimo esito == 1 / Moduli entrati più volte in ELL ) per 100
+                    print('value_gauge_2', value_gauge_2)
+                    print('good_final', good_final)
+                    print('multi_entry_count', multi_entry_count)
 
                 # --- NG Counters ---
                 s1_ng = count_unique_objects(cursor, cfg["station_1_out_ng"], shift_start, shift_end, "ng")
@@ -1133,7 +1141,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
             n = _sum_for_window(cur, "string_NG", st_id, shift_start, shift_end)
             c = _sum_for_window(cur, "cell_NG",  st_id, shift_start, shift_end)
 
-            cell_ngs = c // 10                    # integer strings from defective cells
+            cell_ngs = c / 10                    # integer strings from defective cells
             total_ng = n + cell_ngs               # strings NG + cell-derived NG
             total_in = g + total_ng               # processed = good + all NG
             y = compute_yield(g, total_ng, 1)
@@ -1150,7 +1158,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
             good_shift   = sum(_sum_for_window(cur, "string_G", sid, st, et) for sid in STATION_IDS)
             ng_shift     = sum(_sum_for_window(cur, "string_NG", sid, st, et) for sid in STATION_IDS)
             cell_total   = sum(_sum_for_window(cur, "cell_NG",  sid, st, et) for sid in STATION_IDS)
-            cell_ngs_all = cell_total // 10
+            cell_ngs_all = cell_total / 10
 
             total_ng_shift = ng_shift + cell_ngs_all
             total_proc     = good_shift + total_ng_shift
@@ -1193,7 +1201,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
             good_bin   = sum(_sum_for_window(cur, "string_G", sid, hs, he) for sid in STATION_IDS)
             ng_bin     = sum(_sum_for_window(cur, "string_NG", sid, hs, he) for sid in STATION_IDS)
             cell_bin   = sum(_sum_for_window(cur, "cell_NG",  sid, hs, he) for sid in STATION_IDS)
-            cell_ngs_b = cell_bin // 10
+            cell_ngs_b = cell_bin / 10
 
             total_ng_bin = ng_bin + cell_ngs_b
 
@@ -1207,7 +1215,7 @@ def _compute_snapshot_str(now: datetime | None) -> dict:
                     "start": hs.isoformat(),
                     "end":   he.isoformat(),
                     "ok":    g_s,
-                    "ng":    n_s + (c_s // 10),
+                    "ng":    n_s + (c_s / 10),
                 })
 
             # STR Yield (zone)
